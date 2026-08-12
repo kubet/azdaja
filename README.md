@@ -47,7 +47,7 @@ The jcode adapter uses its stable Harness API over an owner-only Unix socket and
 ### Direct product loop
 
 ```bash
-azdaja solo "question about this input" -f ./large.txt   --model gpt-5.4 --sub-model gpt-5.4
+azdaja solo "question about this input" -f ./large.txt   --model gpt-5.6-luna --sub-model gpt-5.6-luna
 ```
 
 ### Persistent evaluator
@@ -110,7 +110,7 @@ Monty 0.0.21 is experimental and snapshot-format-bound. Snapshots are unencrypte
 
 ```toml
 sub_llm_cmd = "jcode-api"
-default_model = "gpt-5.4"
+default_model = "gpt-5.6-luna"
 jcode_provider = "openai"
 jcode_reasoning = "medium"
 output_cap = 8192

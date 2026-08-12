@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-MODEL = "gpt-5.4"
+MODEL = "gpt-5.6-luna"
 REASONING = "medium"
 ARMS = ("jcode-native", "jcode-azdaja", "prime-agent")
 JCODE_PROVIDER = "openai"

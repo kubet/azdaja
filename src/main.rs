@@ -186,7 +186,7 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
         ),
         "gemini" => ("gemini --model {model} -p \"\"", "gemini-2.5-flash"),
         "opencode" => ("opencode --pure run --model {model}", "openai/gpt-5.4-mini"),
-        _ => ("jcode-api", "gpt-5.4"),
+        _ => ("jcode-api", "gpt-5.6-luna"),
     }
 }
 #[derive(Serialize, Deserialize)]

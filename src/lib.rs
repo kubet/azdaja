@@ -48,7 +48,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             sub_llm_cmd: "jcode-api".into(),
-            default_model: "gpt-5.4-mini".into(),
+            default_model: "gpt-5.6-luna".into(),
             output_cap: 8192,
             max_depth: 1,
             sub_timeout: 300,
@@ -1410,6 +1410,21 @@ impl JcodeSession {
         // cancel-before-archive cleanup rather than trying to reuse the poisoned protocol state.
         self.cancel_before_archive = true;
     }
+    fn clear_history(&mut self) -> Result<()> {
+        // Keep the already-configured transport/session, but do not make a semantic worker pay for
+        // or reason over the root planner conversation. `clear` is an acknowledged control-plane
+        // request in the stable harness API and preserves the selected model/session attachment.
+        let result = (|| {
+            let sid = self.session.clone();
+            let id = self.send(serde_json::json!({"req":"clear","session_id":sid}))?;
+            self.reply_with_timeout(id, "ok", Duration::from_secs(2))?;
+            Ok(())
+        })();
+        if result.is_err() {
+            self.discard();
+        }
+        result
+    }
     fn turn(&mut self, prompt: &str) -> Result<ModelReply> {
         let result = self.turn_inner(prompt);
         if result.is_err() {
@@ -1584,6 +1599,7 @@ impl RootDriver {
                 .api
                 .take()
                 .ok_or_else(|| anyhow!("root subscription session unavailable"))?;
+            api.clear_history()?;
             api.timeout = Duration::from_secs(self.cfg.sub_timeout.min(35));
             let mut slot = SOLO_SHARED_JCODE.lock().unwrap();
             if slot.is_some() {
