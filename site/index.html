@@ -2,13 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0908">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f2e4b7">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <meta name="description" content="Azdaja is a minimal recursive language model layer for contexts too large to hold.">
-  <meta property="og:title" content="Azdaja — think beyond the context window">
-  <meta property="og:description" content="A minimal recursive language model layer. Private preview.">
+  <meta name="description" content="Azdaja — a minimal recursive language model layer for contexts too large to hold.">
+  <meta property="og:title" content="Azdaja">
+  <meta property="og:description" content="Think beyond the context window.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://azdaja.dev/">
   <meta property="og:image" content="https://azdaja.dev/og-card.jpg">
@@ -16,71 +15,36 @@
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <title>Azdaja — think beyond the context window</title>
-  <link rel="icon" type="image/png" href="/icon-384.png">
+  <link rel="icon" href="/icon-384.png" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <div class="grain" aria-hidden="true"></div>
-  <header class="masthead">
-    <a class="wordmark" href="#top" aria-label="Azdaja, home">AZDAJA</a>
-    <div class="status"><i aria-hidden="true"></i> private preview</div>
-  </header>
+  <main>
+    <header>
+      <span>АЖДАЈА</span>
+      <i aria-hidden="true"></i>
+      <span>PRIVATE PREVIEW</span>
+    </header>
 
-  <main id="top">
-    <section class="hero" aria-labelledby="title">
-      <div class="halo" aria-hidden="true"></div>
+    <section class="hero">
+      <img class="mark" src="/azdaja-mark.webp" width="720" height="1080" alt="Azdaja dragon sigil">
       <div class="copy">
-        <p class="kicker"><span>01</span> Recursive language models, without the ritual</p>
-        <h1 id="title">Think beyond the<br><em>context window.</em></h1>
-        <p class="lede">Azdaja keeps the corpus outside the model, gives it a live Python-subset REPL, and lets it decide how to reason. Less context. More signal.</p>
-
-        <div class="installer" aria-label="Install command">
-          <div class="terminal-top">
-            <span>install / macOS &amp; Linux</span>
-            <span class="preview-label">preview</span>
-          </div>
-          <div class="command-row">
-            <code id="install-command"><span>$</span> curl -fsSL https://azdaja.dev/install | sh</code>
-            <button id="copy-install" type="button" disabled aria-label="Installer sealed during private preview">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2m-8-10H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H8Z"/></svg>
-              <span>sealed</span>
-            </button>
-          </div>
+        <p class="eyebrow">RECURSIVE LANGUAGE MODEL</p>
+        <h1>Think beyond<br>the context window.</h1>
+        <p class="summary">A minimal Python-subset layer that keeps the corpus outside the model and lets the model decide how to reason over it.</p>
+        <div class="install" aria-label="Preview install command">
+          <code><b>$</b> curl -fsSL https://azdaja.dev/install | sh</code>
+          <span>SEALED</span>
         </div>
-        <p class="fine-print">Installer access opens when the evidence does. Preview routing is subscription OAuth only; no metered API-key fallback.</p>
+        <p class="note">Subscription OAuth only. Public access opens when the evidence does.</p>
       </div>
-
-      <figure class="sigil" aria-label="Azdaja dragon sigil">
-        <img src="/azdaja-mark.webp" width="720" height="1080" alt="A black and crimson dragon coiled around an Orthodox spear above the word Azdaja">
-      </figure>
     </section>
 
-    <section class="principles" aria-label="Design principles">
-      <article>
-        <span class="number">I</span>
-        <div><h2>One small surface</h2><p>A familiar Python subset, <code>llm</code>, <code>llm_batch</code>, and a final answer. Nothing strategy-shaped.</p></div>
-      </article>
-      <article>
-        <span class="number">II</span>
-        <div><h2>Context stays outside</h2><p>Inspect, transform, and recurse over the source without flooding the root model with raw input.</p></div>
-      </article>
-      <article>
-        <span class="number">III</span>
-        <div><h2>Proof before proclamation</h2><p>Private until repeated, same-model benchmarks demonstrate real accuracy, latency, and token gains.</p></div>
-      </article>
-    </section>
-
-    <section class="definition" aria-labelledby="definition-title">
-      <p id="definition-title">aždaja <span>/ǎʒ.da.ja/</span></p>
-      <blockquote>the dragon beneath<br>the context window.</blockquote>
-      <div class="rule" aria-hidden="true"><i></i></div>
-    </section>
+    <footer>
+      <span>Belgrade · 2026</span>
+      <span>Proof before proclamation.</span>
+    </footer>
   </main>
-
-  <footer>
-    <p>AZDAJA <span>·</span> forged for long context</p>
-    <a href="https://azdaja.dev/">azdaja.dev</a>
-  </footer>
 </body>
 </html>
