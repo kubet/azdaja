@@ -417,7 +417,7 @@ if os.getenv('RLM_DEPTH') == '0':
                 'rendered character length', 'candidate-union audit', 'short evidence code',
                 'rotated/reversed order', 'hard logical child-call budget',
                 'os, re, json, math, collections, and datetime', 'csv and other imports',
-                'globals, locals, callable', 'final(answer) is always defined', 'validate ids and schemas',
+                'globals, locals, callable', 'final(answer) is always defined', 'validate ids/schemas',
                 'at most 220 nonblank lines', 'must be at most 64 in this cell', 'you have at most 4 root turns')
     sample_ok = 'schema-canary' in sample and len(sample) <= 4096 and 'TAIL_NOT_IN_SAMPLE' not in p
     if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')

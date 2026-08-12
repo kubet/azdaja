@@ -944,7 +944,7 @@ fn call_many_items(
                         // turn or the observed long hang after `clear` on subscription sessions.
                         for _ in 0..2 {
                             let attempt: Result<ModelReply> = (|| {
-                                let mut api = JcodeSession::open_for_batch(cfg, model)?;
+                                let mut api=JcodeSession::open_for_batch(cfg,model,prompts[i].chars().count())?;
                                 let wire = format!(
                                     "[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",
                                     depth + 1,
@@ -1224,8 +1224,9 @@ fn jcode_root_timeout(cfg: &Config) -> Duration {
     Duration::from_secs(cfg.sub_timeout.min(90))
 }
 #[cfg(unix)]
-fn jcode_batch_timeout(cfg: &Config) -> Duration {
-    Duration::from_secs(cfg.sub_timeout.min(20))
+fn jcode_batch_timeout(cfg: &Config, prompt_chars: usize) -> Duration {
+    let cap = if prompt_chars >= 8_000 { 60 } else { 15 };
+    Duration::from_secs(cfg.sub_timeout.min(cap))
 }
 
 #[cfg(unix)]
@@ -1312,8 +1313,8 @@ impl JcodeSession {
     fn open_for_root(cfg: &Config, model: &str) -> Result<Self> {
         Self::open_with_timeout(cfg, model, jcode_root_timeout(cfg))
     }
-    fn open_for_batch(cfg: &Config, model: &str) -> Result<Self> {
-        Self::open_with_timeout(cfg, model, jcode_batch_timeout(cfg))
+    fn open_for_batch(cfg: &Config, model: &str, prompt_chars: usize) -> Result<Self> {
+        Self::open_with_timeout(cfg, model, jcode_batch_timeout(cfg, prompt_chars))
     }
     fn open_with_timeout(cfg: &Config, model: &str, timeout: Duration) -> Result<Self> {
         let socket = ensure_jcode_bridge(cfg)?;
@@ -1795,11 +1796,13 @@ mod unit_tests {
             sub_timeout: 300,
             ..Config::default()
         };
-        assert_eq!(jcode_batch_timeout(&cfg), Duration::from_secs(20));
+        assert_eq!(jcode_batch_timeout(&cfg, 20_000), Duration::from_secs(60));
+        assert_eq!(jcode_batch_timeout(&cfg, 2_000), Duration::from_secs(15));
         assert_eq!(jcode_root_timeout(&cfg), Duration::from_secs(90));
         assert_eq!(cfg.sub_timeout, 300);
         cfg.sub_timeout = 12;
-        assert_eq!(jcode_batch_timeout(&cfg), Duration::from_secs(12));
+        assert_eq!(jcode_batch_timeout(&cfg, 20_000), Duration::from_secs(12));
+        assert_eq!(jcode_batch_timeout(&cfg, 2_000), Duration::from_secs(12));
         assert_eq!(jcode_root_timeout(&cfg), Duration::from_secs(12));
     }
 
