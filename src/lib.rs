@@ -937,6 +937,14 @@ fn call_many_items(
                     };
                     #[cfg(unix)]
                     let result = if batch && cfg.sub_llm_cmd == "jcode-api" {
+                        let shared=SOLO_SHARED_JCODE.lock().unwrap().take();
+                        if let Some(mut api)=shared {
+                            let wire=format!("[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",depth+1,cfg.max_depth,prompts[i]);
+                            match api.turn(&wire) {
+                                Ok(reply)=>{if trace_model_reply(&reply,depth+1).is_err(){let _=trace_model_failure(depth+1);} Ok(reply.text)},
+                                Err(error)=>{api.discard();let _=trace_model_failure(depth+1);Err(error)}
+                            }
+                        } else {
                         // Transport owns one bounded retry for a transient provider failure;
                         // solve code owns contract validation and never repeats valid work. Cleanup
                         // completes before the short backoff, so the retry cannot race a poisoned
@@ -976,7 +984,8 @@ fn call_many_items(
                                 }
                             }
                         }
-                        result.unwrap_or_else(|| Err(anyhow!("provider call did not run")))
+                        result.unwrap_or_else(||Err(anyhow!("provider call did not run")))
+                        }
                     } else {
                         call_model(&prompts[i], model, cfg, depth + 1)
                     };
@@ -1243,6 +1252,8 @@ struct JcodeSession {
     timeout: Duration,
     cancel_before_archive: bool,
 }
+#[cfg(unix)]
+static SOLO_SHARED_JCODE: std::sync::Mutex<Option<JcodeSession>> = std::sync::Mutex::new(None);
 #[cfg(unix)]
 impl JcodeSession {
     fn send(&mut self, value: serde_json::Value) -> Result<u64> {
@@ -1560,6 +1571,22 @@ impl RootDriver {
         self.history.push_str(&r.text);
         self.history.push_str("\n\nUser:\n");
         Ok(r)
+    }
+    pub fn lend_to_solo(&mut self) -> Result<()> {
+        #[cfg(unix)]
+        if self.cfg.sub_llm_cmd == "jcode-api" {
+            let mut api = self
+                .api
+                .take()
+                .ok_or_else(|| anyhow!("root subscription session unavailable"))?;
+            api.timeout = Duration::from_secs(self.cfg.sub_timeout.min(35));
+            let mut slot = SOLO_SHARED_JCODE.lock().unwrap();
+            if slot.is_some() {
+                bail!("solo subscription session already lent")
+            }
+            *slot = Some(api);
+        }
+        Ok(())
     }
 }
 

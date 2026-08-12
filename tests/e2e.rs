@@ -699,7 +699,7 @@ fn cumulative_llm_budget_stops_repeated_calls_in_one_cell() {
 
 #[cfg(unix)]
 #[test]
-fn solo_jcode_archives_root_before_recursive_sessions_and_finishes_one_turn() {
+fn solo_jcode_reuses_root_session_for_one_semantic_wave() {
     use std::io::{BufRead, BufReader, Write as _};
     use std::os::unix::net::UnixListener;
     use std::thread;
@@ -708,103 +708,64 @@ fn solo_jcode_archives_root_before_recursive_sessions_and_finishes_one_turn() {
     let socket = t.join("api.sock");
     let listener = UnixListener::bind(&socket).unwrap();
     let server = thread::spawn(move || {
+        // RootDriver probes bridge liveness, then opens one protocol stream. The semantic wave
+        // must be a second turn on that same session, not another subscription session.
+        let (probe, _) = listener.accept().unwrap();
+        drop(probe);
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
         let mut events = Vec::new();
-        for (session_number, sid) in ["root", "direct", "batch"].into_iter().enumerate() {
-            // JcodeSession::open first probes bridge liveness, then opens the protocol stream.
-            let (probe, _) = listener.accept().unwrap();
-            drop(probe);
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut reader = BufReader::new(stream.try_clone().unwrap());
-            let mut archived = false;
-            loop {
-                let mut line = String::new();
-                if reader.read_line(&mut line).unwrap() == 0 {
-                    events.push(format!("close:{sid}"));
-                    break;
-                }
-                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
-                let id = request["id"].as_u64().unwrap();
-                let req = request["req"].as_str().unwrap();
-                let frames = match req {
-                    "hello" => vec![serde_json::json!({
-                        "v": 1, "reply_to": id, "ev": "hello_ok", "version": 1,
-                        "server": "fake"
-                    })],
-                    "create_session" => {
-                        if session_number > 0 {
-                            assert_eq!(
-                                &events[..4],
-                                ["create:root", "turn:root", "archive:root", "close:root"],
-                                "a recursive session opened while the root was still live"
-                            );
-                        }
-                        events.push(format!("create:{sid}"));
-                        vec![serde_json::json!({
-                            "v": 1, "reply_to": id, "ev": "attached",
-                            "session": {"session_id": sid, "status": "idle"}
-                        })]
-                    }
-                    "set_model" => {
-                        assert_eq!(request["model"], "openai-oauth:mock");
-                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
-                    }
-                    "get_runtime_info" => vec![serde_json::json!({
-                        "v": 1, "reply_to": id, "ev": "runtime_info",
-                        "session_id": sid, "provider": "OpenAI", "model": "mock"
-                    })],
-                    "set_reasoning_effort" => {
-                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
-                    }
-                    "send_message" => {
-                        events.push(format!("turn:{sid}"));
-                        let content = request["content"].as_str().unwrap();
-                        let answer = match session_number {
-                            0 => {
-                                assert!(content.contains("Question: question"));
-                                assert!(!content.contains("azdaja recursion depth 1/1"));
-                                "```python\ndirect = llm('direct child')\nbatch = llm_batch(['batch child'], None, 1)\nFINAL(direct + ':' + batch[0])\n```"
-                            }
-                            1 => {
-                                assert!(content.starts_with(
-                                    "[azdaja recursion depth 1/1: do not invoke azdaja recursively.]"
-                                ));
-                                assert!(content.ends_with("direct child"));
-                                "DIRECT_OK"
-                            }
-                            2 => {
-                                assert!(content.starts_with(
-                                    "[azdaja recursion depth 1/1: do not invoke azdaja recursively.]"
-                                ));
-                                assert!(content.ends_with("batch child"));
-                                "BATCH_OK"
-                            }
-                            _ => unreachable!(),
-                        };
-                        vec![
-                            serde_json::json!({
-                                "v":1,"ev":"model_info","session_id":sid,
-                                "provider":"OpenAI","model":"mock"
-                            }),
-                            serde_json::json!({
-                                "v":1,"ev":"text_delta","session_id":sid,"text":answer
-                            }),
-                            serde_json::json!({"v":1,"ev":"turn_done","session_id":sid}),
-                        ]
-                    }
-                    "archive_session" => {
-                        archived = true;
-                        events.push(format!("archive:{sid}"));
-                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
-                    }
-                    other => panic!("unexpected {other}"),
-                };
-                for frame in frames {
-                    serde_json::to_writer(&mut stream, &frame).unwrap();
-                    stream.write_all(b"\n").unwrap();
-                    stream.flush().unwrap();
-                }
+        let mut turns = 0;
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap() == 0 {
+                events.push("close:root".to_owned());
+                break;
             }
-            assert!(archived, "{sid} closed without being archived");
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let id = request["id"].as_u64().unwrap();
+            let req = request["req"].as_str().unwrap();
+            let frames = match req {
+                "hello" => vec![
+                    serde_json::json!({"v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"}),
+                ],
+                "create_session" => {
+                    events.push("create:root".to_owned());
+                    vec![
+                        serde_json::json!({"v":1,"reply_to":id,"ev":"attached","session":{"session_id":"root","status":"idle"}}),
+                    ]
+                }
+                "set_model" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
+                "get_runtime_info" => vec![
+                    serde_json::json!({"v":1,"reply_to":id,"ev":"runtime_info","session_id":"root","provider":"OpenAI","model":"mock"}),
+                ],
+                "set_reasoning_effort" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
+                "send_message" => {
+                    turns += 1;
+                    events.push(format!("turn:{turns}"));
+                    let answer = if turns == 1 {
+                        "```python\nitems=[{\"id\":\"R1\",\"evidence\":\"ordinary note\"}]\nlabels=semantic_manifest(items,\"binary annotation\",[\"ham\",\"spam\"])\nFINAL(labels[\"R1\"])\n```"
+                    } else {
+                        assert_eq!(turns, 2, "unexpected third model turn");
+                        "R1|ham"
+                    };
+                    vec![
+                        serde_json::json!({"v":1,"ev":"model_info","session_id":"root","provider":"OpenAI","model":"mock"}),
+                        serde_json::json!({"v":1,"ev":"text_delta","session_id":"root","text":answer}),
+                        serde_json::json!({"v":1,"ev":"turn_done","session_id":"root"}),
+                    ]
+                }
+                "archive_session" => {
+                    events.push("archive:root".to_owned());
+                    vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                }
+                other => panic!("unexpected {other}"),
+            };
+            for frame in frames {
+                serde_json::to_writer(&mut stream, &frame).unwrap();
+                stream.write_all(b"\n").unwrap();
+                stream.flush().unwrap();
+            }
         }
         events
     });
@@ -818,7 +779,6 @@ fn solo_jcode_archives_root_before_recursive_sessions_and_finishes_one_turn() {
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
         .env("AZDAJA_JCODE_API_SOCKET", &socket)
-        .env("AZDAJA_SOLO_MAX_TURNS", "1")
         .output()
         .unwrap();
     assert!(
@@ -827,25 +787,15 @@ fn solo_jcode_archives_root_before_recursive_sessions_and_finishes_one_turn() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "DIRECT_OK:BATCH_OK"
-    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham");
     assert_eq!(
         server.join().unwrap(),
         [
             "create:root",
-            "turn:root",
+            "turn:1",
+            "turn:2",
             "archive:root",
-            "close:root",
-            "create:direct",
-            "turn:direct",
-            "archive:direct",
-            "close:direct",
-            "create:batch",
-            "turn:batch",
-            "archive:batch",
-            "close:batch",
+            "close:root"
         ]
     );
     fs::remove_dir_all(t).unwrap();
