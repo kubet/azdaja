@@ -410,7 +410,9 @@ def semantic_manifest(items, task, labels):
         + "Task: " + task + "\nAllowed labels: " + label_text + "\n"
         + "Silently perform two checks before answering: first classify every item, then counter-review every "
         + "deceptive, terse, automated, callback/service, missed-call, billing, adult/personal-mimic, truncated, "
-        + "and boundary item against the dataset annotation convention. Resolve the check internally.\n"
+        + "and boundary item against the dataset annotation convention. For spam/ham corpora, distinguish genuine "
+        + "contextual personal conversation from an unsolicited synthetic adult/dating opener: a personal-looking "
+        + "one-line bait can be spam without a link, phone number, price, or explicit offer. Resolve the check internally.\n"
         + "Return exactly one line per supplied ID: ID|LABEL. No reason, state, confidence, prose, or markdown. "
         + "Never omit, merge, or renumber an occurrence.\n"
     )
