@@ -419,7 +419,7 @@ def semantic_manifest(items, task, labels):
         + "terse, automated, callback/service, billing, adult/personal-mimic, and boundary cases. Mark "
         + "review whenever an alternate allowed label is plausible. Never omit or merge an occurrence.\n"
     )
-    prompts, expected = _az_pack(items, head, 30000)
+    prompts, expected = _az_pack(items, head, 14000)
     raw = llm_batch(prompts)
     if len(raw) != len(prompts):
         raise AssertionError("primary response count")
@@ -468,7 +468,7 @@ def semantic_manifest(items, task, labels):
             + "Return exactly one line per ID: ID|LABEL|final|REASON. Use a tiny reason code, no other prose, "
             + "and do not assume a personal-looking, automated, callback, billing, or service message is benign.\n"
         )
-        review_prompts, review_expected = _az_pack(review_items, review_head, 30000)
+        review_prompts, review_expected = _az_pack(review_items, review_head, 14000)
         review_raw = llm_batch(review_prompts)
         if len(review_raw) != len(review_prompts):
             raise AssertionError("review response count")
