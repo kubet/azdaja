@@ -12,12 +12,15 @@ use std::{
     collections::VecDeque,
     env,
     fs::{self, File, OpenOptions},
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(unix)]
+use std::os::unix::{fs::OpenOptionsExt, net::UnixStream};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const MONTY_VERSION: &str = "0.0.21";
@@ -37,15 +40,26 @@ pub struct Config {
     pub cell_timeout: u64,
     pub idle_timeout: u64,
     pub clean_patterns: Vec<String>,
+    pub jcode_provider: String,
+    pub jcode_reasoning: String,
+    pub max_calls_per_cell: usize,
 }
 impl Default for Config {
     fn default() -> Self {
         Self {
-        sub_llm_cmd: "jcode run --no-update --quiet --model {model} Read_the_complete_UTF-8_prompt_at_{prompt_file}_and_return_only_its_answer".into(),
-        default_model: "claude-haiku-4-5".into(), output_cap:8192, max_depth:1,
-        sub_timeout:300, max_sessions:4, cell_timeout:30, idle_timeout:1800,
-        clean_patterns:vec![r"(?m)^\[(?:read|write|bash|grep|glob|edit)\].*\n?".into(),r"(?m)^\[Tokens\].*\n?".into(),r"(?m)^\s*→.*\n?".into()],
-    }
+            sub_llm_cmd: "jcode-api".into(),
+            default_model: "gpt-5.4-mini".into(),
+            output_cap: 8192,
+            max_depth: 1,
+            sub_timeout: 300,
+            max_sessions: 4,
+            cell_timeout: 30,
+            idle_timeout: 1800,
+            clean_patterns: Vec::new(),
+            jcode_provider: "openai".into(),
+            jcode_reasoning: "medium".into(),
+            max_calls_per_cell: 64,
+        }
     }
 }
 impl Config {
@@ -76,8 +90,8 @@ impl Config {
         if self.sub_timeout == 0 || self.cell_timeout == 0 || self.idle_timeout == 0 {
             bail!("timeouts must be positive")
         }
-        if self.max_sessions == 0 {
-            bail!("max_sessions must be positive")
+        if self.max_sessions == 0 || self.max_calls_per_cell == 0 {
+            bail!("session and call limits must be positive")
         }
         for p in &self.clean_patterns {
             Regex::new(p).with_context(|| format!("invalid clean pattern: {p}"))?;
@@ -98,6 +112,12 @@ fn now() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+fn now_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
 }
 fn home() -> Option<PathBuf> {
     env::var_os("HOME")
@@ -397,13 +417,11 @@ fn parse_call(
     } else {
         vec![as_string(first, "prompt")?]
     };
-    let model = kw(kwargs, "model").or(args.get(1)).and_then(|o| {
-        if let MontyObject::String(s) = o {
-            Some(s.clone())
-        } else {
-            None
-        }
-    });
+    let model = match kw(kwargs, "model").or(args.get(1)) {
+        None | Some(MontyObject::None) => None,
+        Some(MontyObject::String(s)) => Some(s.clone()),
+        Some(_) => bail!("model must be a string or None"),
+    };
     let ctx = if batch {
         String::new()
     } else {
@@ -423,17 +441,17 @@ fn parse_call(
             }
         })
         .collect();
-    let workers = kw(kwargs, "workers")
-        .or(args.get(2))
-        .and_then(|o| {
-            if let MontyObject::Int(n) = o {
-                usize::try_from(*n).ok()
-            } else {
-                None
+    let workers = match kw(kwargs, "workers").or(args.get(2)) {
+        None => 2,
+        Some(MontyObject::Int(n)) => {
+            let n = usize::try_from(*n).map_err(|_| anyhow!("workers must be between 1 and 32"))?;
+            if !(1..=32).contains(&n) {
+                bail!("workers must be between 1 and 32")
             }
-        })
-        .unwrap_or(8)
-        .clamp(1, 32);
+            n
+        }
+        Some(_) => bail!("workers must be an integer"),
+    };
     Ok((prompts, model, workers))
 }
 fn external(
@@ -443,6 +461,7 @@ fn external(
     cfg: &Config,
     default_model: &str,
     final_out: &mut Option<Final>,
+    call_count: &mut usize,
 ) -> Result<MontyObject> {
     match name {
         "FINAL" => {
@@ -475,6 +494,14 @@ fn external(
                 .as_deref()
                 .filter(|s| !s.is_empty())
                 .unwrap_or(default_model);
+            *call_count = call_count.saturating_add(prompts.len());
+            if *call_count > cfg.max_calls_per_cell {
+                bail!(
+                    "llm call budget exceeded: {} > {}",
+                    *call_count,
+                    cfg.max_calls_per_cell
+                )
+            }
             let values = call_many(&prompts, model, workers, cfg)?;
             if batch {
                 Ok(MontyObject::List(
@@ -583,6 +610,7 @@ fn run_cell(
         .collect();
     let mut printed = BoundedOutput::new(cfg.output_cap);
     let mut final_out = None;
+    let mut call_count = 0usize;
     let mut progress = match repl.feed_start(code, inputs, PrintWriter::Callback(&mut printed)) {
         Ok(p) => p,
         Err(e) => {
@@ -615,6 +643,7 @@ fn run_cell(
                     cfg,
                     default_model,
                     &mut final_out,
+                    &mut call_count,
                 )
                 .map_err(MontyException::runtime_error);
                 let resumed = match result {
@@ -657,6 +686,98 @@ fn run_cell(
                 return (p.into_repl(), printed.finish(), false, final_out);
             }
         }
+    }
+}
+
+pub struct SoloSession {
+    repl: Option<MontyRepl>,
+    sub_model: String,
+    answer: Option<String>,
+}
+impl SoloSession {
+    pub fn new(cfg: &Config, sub_model: Option<String>) -> Result<Self> {
+        let tracker = ResourceTracker::new(
+            ResourceLimits::default().max_duration(Duration::from_secs(cfg.cell_timeout)),
+        );
+        let mut repl = MontyRepl::new("azdaja", tracker, CompileOptions::default());
+        repl.feed_run(PRELUDE, vec![], PrintWriter::Disabled)
+            .context("Monty capability canary failed")?;
+        Ok(Self {
+            repl: Some(repl),
+            sub_model: sub_model.unwrap_or_else(|| cfg.default_model.clone()),
+            answer: None,
+        })
+    }
+    pub fn load(&mut self, path: &Path, var: &str, cfg: &Config) -> Result<String> {
+        if !Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*$")
+            .unwrap()
+            .is_match(var)
+        {
+            bail!("invalid variable name")
+        }
+        let text = fs::read_to_string(path)
+            .with_context(|| format!("input is not UTF-8: {}", path.display()))?;
+        let chars = text.chars().count();
+        let lines = text.lines().count();
+        let repl = self
+            .repl
+            .as_mut()
+            .ok_or_else(|| anyhow!("solo session is busy"))?;
+        repl.tracker_mut()
+            .set_max_duration(Duration::from_secs(cfg.cell_timeout));
+        repl.feed_run(
+            &format!("{var} = __azdaja_loaded"),
+            vec![("__azdaja_loaded".into(), MontyObject::String(text))],
+            PrintWriter::Disabled,
+        )?;
+        Ok(format!(
+            "loaded '{var}' : str, {chars} chars, {lines} lines"
+        ))
+    }
+    pub fn exec(&mut self, code: &str, cfg: &Config) -> Result<ExecResult> {
+        let repl = self
+            .repl
+            .take()
+            .ok_or_else(|| anyhow!("solo session is busy"))?;
+        let (mut repl, mut output, success, mut final_out) =
+            run_cell(repl, code, cfg, &self.sub_model);
+        if success
+            && final_out.is_none()
+            && Regex::new(r"(?m)^\s*FINAL\s*=").unwrap().is_match(code)
+            && let Ok(value) = repl.feed_run("FINAL", vec![], PrintWriter::Disabled)
+            && !matches!(value, MontyObject::None | MontyObject::Function { .. })
+        {
+            final_out = Some(Final::Value(value))
+        }
+        let mut finalized = false;
+        if let Some(final_value) = final_out {
+            let value = match final_value {
+                Final::Value(v) => Some(v),
+                Final::Var(name) => match repl.feed_run(&name, vec![], PrintWriter::Disabled) {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        output.push_str(&format!("\n{e}"));
+                        None
+                    }
+                },
+            };
+            if let Some(v) = value {
+                self.answer = Some(v.to_string());
+                finalized = true
+            }
+        }
+        self.repl = Some(repl);
+        Ok(ExecResult {
+            output: cap(&output, cfg.output_cap),
+            success,
+            finalized,
+        })
+    }
+    pub fn final_answer(&self, cfg: &Config) -> Result<String> {
+        self.answer
+            .as_deref()
+            .map(|s| cap(s, cfg.output_cap))
+            .ok_or_else(|| anyhow!("session has no final answer"))
     }
 }
 
@@ -756,12 +877,21 @@ pub fn call_many(
     if prompts.is_empty() {
         return Ok(Vec::new());
     }
+    if prompts.len() > cfg.max_calls_per_cell {
+        bail!(
+            "llm call budget exceeded: {} > {}",
+            prompts.len(),
+            cfg.max_calls_per_cell
+        )
+    }
     let slots = std::sync::Mutex::new((0usize, vec![None; prompts.len()]));
     let error = std::sync::Mutex::new(None);
     thread::scope(|scope| {
         for _ in 0..workers.min(prompts.len()) {
             scope.spawn(|| {
+                #[cfg(unix)] let mut api=if cfg.sub_llm_cmd=="jcode-api"{match JcodeSession::open(cfg,model){Ok(api)=>Some(api),Err(e)=>{*error.lock().unwrap()=Some(e);return}}}else{None};let mut api_used=false;
                 loop {
+                    if error.lock().unwrap().is_some() {break}
                     let i = {
                         let mut s = slots.lock().unwrap();
                         if s.0 >= prompts.len() {
@@ -770,7 +900,8 @@ pub fn call_many(
                         s.0 += 1;
                         s.0 - 1
                     };
-                    match call_model(&prompts[i], model, cfg, depth + 1) {
+                    let result:Result<String>=(||{#[cfg(unix)] if let Some(api)=&mut api{if api_used{api.clear()?}api_used=true;let wire=format!("[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",depth+1,cfg.max_depth,prompts[i]);let reply=api.turn(&wire)?;trace_model_reply(&reply,depth+1)?;return Ok(reply.text)}call_model(&prompts[i],model,cfg,depth+1)})();
+                    match result {
                         Ok(v) => slots.lock().unwrap().1[i] = Some(v),
                         Err(e) => {
                             *error.lock().unwrap() = Some(e);
@@ -792,7 +923,525 @@ pub fn call_many(
         .map(Option::unwrap)
         .collect())
 }
-pub fn call_model(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Result<String> {
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct ModelUsage {
+    pub input: u64,
+    pub output: u64,
+    pub cache_read: u64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelReply {
+    pub text: String,
+    pub usage: ModelUsage,
+    pub provider: String,
+    pub model: String,
+    pub latency_ms: u128,
+}
+
+#[cfg(unix)]
+#[derive(Debug)]
+struct BridgePaths {
+    socket: PathBuf,
+    pidfile: PathBuf,
+    home: PathBuf,
+    run: PathBuf,
+    marker: PathBuf,
+}
+#[cfg(unix)]
+fn stable_path_hash(path: &Path) -> u64 {
+    use std::os::unix::ffi::OsStrExt;
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in path.as_os_str().as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+#[cfg(unix)]
+fn short_runtime_dir(state: &Path, uid: u32) -> PathBuf {
+    PathBuf::from("/tmp")
+        .join(format!("azdaja-{uid}"))
+        .join(format!("r-{:016x}", stable_path_hash(state)))
+}
+#[cfg(unix)]
+fn secure_owned_runtime_dir(path: &Path) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    match fs::symlink_metadata(path) {
+        Ok(meta) => {
+            if !meta.file_type().is_dir()
+                || meta.file_type().is_symlink()
+                || meta.uid() != unsafe { libc::geteuid() }
+            {
+                bail!("unsafe private runtime directory: {}", path.display())
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => fs::create_dir(path)?,
+        Err(error) => return Err(error.into()),
+    }
+    chmod(path, 0o700)
+}
+#[cfg(unix)]
+fn bridge_paths() -> Result<BridgePaths> {
+    use std::os::unix::ffi::OsStrExt;
+    let state = state_home()?;
+    let private = state.join("jcode-api");
+    secure_dir(&private)?;
+    let runtime = short_runtime_dir(&state, unsafe { libc::geteuid() });
+    let runtime_root = runtime
+        .parent()
+        .ok_or_else(|| anyhow!("invalid private runtime path"))?;
+    secure_owned_runtime_dir(runtime_root)?;
+    secure_owned_runtime_dir(&runtime)?;
+    let run = runtime.join("run");
+    secure_owned_runtime_dir(&run)?;
+    let socket = runtime.join("api.sock");
+    if socket.as_os_str().as_bytes().len() >= 100 {
+        bail!("private Jcode API socket path is unexpectedly long")
+    }
+    let marker = private.join("runtime-dir");
+    atomic_write(&marker, runtime.as_os_str().as_bytes())?;
+    let home = private.join("home");
+    secure_dir(&home)?;
+    Ok(BridgePaths {
+        socket,
+        pidfile: private.join("bridge.pid"),
+        home,
+        run,
+        marker,
+    })
+}
+#[cfg(unix)]
+fn socket_alive(path: &Path) -> bool {
+    UnixStream::connect(path).is_ok()
+}
+#[cfg(unix)]
+fn ensure_jcode_bridge(cfg: &Config) -> Result<PathBuf> {
+    if let Some(path) = env::var_os("AZDAJA_JCODE_API_SOCKET") {
+        let path = PathBuf::from(path);
+        if socket_alive(&path) {
+            return Ok(path);
+        }
+        bail!("AZDAJA_JCODE_API_SOCKET is not accepting connections")
+    }
+    if cfg.jcode_provider != "openai" {
+        bail!("jcode-api currently requires subscription provider 'openai'")
+    }
+    let paths = bridge_paths()?;
+    if socket_alive(&paths.socket) {
+        return Ok(paths.socket);
+    }
+    let _guard = lock_path(&state_home()?.join("jcode-api.lock"))?;
+    if socket_alive(&paths.socket) {
+        return Ok(paths.socket);
+    }
+    let _ = fs::remove_file(&paths.socket);
+    let user_home = env::var_os("HOME")
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("HOME is required for subscription OAuth"))?;
+    let auth = user_home.join(".jcode/openai-auth.json");
+    if !auth.is_file() {
+        bail!(
+            "OpenAI subscription OAuth login missing: {}",
+            auth.display()
+        )
+    }
+    use std::os::unix::fs::MetadataExt;
+    let auth_meta = fs::metadata(&auth)?;
+    if auth_meta.mode() & 0o077 != 0 || auth_meta.uid() != unsafe { libc::geteuid() } {
+        bail!("OpenAI OAuth credential must be owner-only and owned by the current user")
+    }
+    let auth_link = paths.home.join("openai-auth.json");
+    if let Ok(meta) = fs::symlink_metadata(&auth_link) {
+        if !meta.file_type().is_symlink() {
+            bail!("refusing non-symlink credential in private Jcode home")
+        }
+        if fs::canonicalize(&auth_link)? != fs::canonicalize(&auth)? {
+            bail!("private Jcode OAuth link targets a different credential")
+        }
+    } else {
+        std::os::unix::fs::symlink(&auth, &auth_link)?
+    }
+    let mut cmd = Command::new("jcode");
+    cmd.args(["api-bridge", "--api-socket"])
+        .arg(&paths.socket)
+        .args([
+            "--no-update",
+            "--quiet",
+            "--provider",
+            "openai",
+            "--disable-base-tools",
+        ])
+        .env_clear();
+    for key in [
+        "HOME",
+        "PATH",
+        "USER",
+        "LOGNAME",
+        "SHELL",
+        "TMPDIR",
+        "LANG",
+        "LC_ALL",
+        "TERM",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_CACHE_HOME",
+    ] {
+        if let Some(value) = env::var_os(key) {
+            cmd.env(key, value);
+        }
+    }
+    cmd.env("JCODE_HOME", &paths.home)
+        .env("JCODE_RUNTIME_DIR", &paths.run)
+        .env("JCODE_API_SOCKET", &paths.socket)
+        .env("JCODE_SOCKET", paths.run.join("j.sock"))
+        .env("JCODE_NO_TELEMETRY", "1")
+        .env("JCODE_TOOL_PROFILE", "none")
+        .env("JCODE_RUN_MCP", "0")
+        .env("JCODE_RUN_AUTO_POKE", "0")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    use std::os::unix::process::CommandExt;
+    cmd.process_group(0);
+    let mut child = cmd
+        .spawn()
+        .context("failed to start private Jcode API bridge")?;
+    atomic_write(&paths.pidfile, child.id().to_string().as_bytes())?;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
+        if socket_alive(&paths.socket) {
+            return Ok(paths.socket);
+        }
+        if let Some(status) = child.try_wait()? {
+            bail!(
+                "private Jcode API bridge exited before readiness ({status}); inspect {}",
+                paths.home.join("logs").display()
+            )
+        }
+        thread::sleep(Duration::from_millis(25))
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    bail!(
+        "private Jcode API bridge did not become ready; inspect {} (runtime marker {})",
+        paths.home.join("logs").display(),
+        paths.marker.display()
+    )
+}
+
+#[cfg(unix)]
+struct JcodeSession {
+    stream: UnixStream,
+    reader: BufReader<UnixStream>,
+    next_id: u64,
+    session: String,
+    usage: ModelUsage,
+    provider: String,
+    model: String,
+    requested_model: String,
+    timeout: Duration,
+}
+#[cfg(unix)]
+impl JcodeSession {
+    fn send(&mut self, value: serde_json::Value) -> Result<u64> {
+        let id = self.next_id;
+        self.next_id += 1;
+        let mut obj = value
+            .as_object()
+            .cloned()
+            .ok_or_else(|| anyhow!("request must be object"))?;
+        obj.insert("v".into(), 1.into());
+        obj.insert("id".into(), id.into());
+        serde_json::to_writer(&mut self.stream, &obj)?;
+        self.stream.write_all(b"\n")?;
+        self.stream.flush()?;
+        Ok(id)
+    }
+    fn frame(&mut self) -> Result<serde_json::Value> {
+        let mut line = String::new();
+        const MAX_FRAME: u64 = 16 * 1024 * 1024;
+        let read = self
+            .reader
+            .by_ref()
+            .take(MAX_FRAME + 1)
+            .read_line(&mut line);
+        match read {
+            Ok(0) => bail!("jcode API bridge closed"),
+            Ok(n) if n as u64 > MAX_FRAME || !line.ends_with('\n') => {
+                bail!("jcode API frame exceeds 16 MiB or is unterminated")
+            }
+            Ok(_) => {}
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                bail!("jcode subscription turn timed out")
+            }
+            Err(e) => return Err(e).context("reading jcode API frame"),
+        };
+        serde_json::from_str(&line).context("invalid jcode API frame")
+    }
+    fn reply(&mut self, id: u64, kind: &str) -> Result<serde_json::Value> {
+        let deadline = Instant::now() + self.timeout;
+        loop {
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .ok_or_else(|| anyhow!("jcode API request timed out"))?;
+            self.stream.set_read_timeout(Some(remaining))?;
+            let f = self.frame()?;
+            if f.get("reply_to").and_then(serde_json::Value::as_u64) == Some(id) {
+                if f.get("ev").and_then(serde_json::Value::as_str) == Some("error") {
+                    bail!(
+                        "jcode API: {}",
+                        f.get("message")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("error")
+                    )
+                }
+                if f.get("ev").and_then(serde_json::Value::as_str) == Some(kind) {
+                    return Ok(f);
+                }
+            }
+        }
+    }
+    fn open(cfg: &Config, model: &str) -> Result<Self> {
+        let socket = ensure_jcode_bridge(cfg)?;
+        let stream = UnixStream::connect(&socket)?;
+        stream.set_read_timeout(Some(Duration::from_secs(cfg.sub_timeout)))?;
+        stream.set_write_timeout(Some(Duration::from_secs(10)))?;
+        let reader = BufReader::new(stream.try_clone()?);
+        let mut this = Self {
+            stream,
+            reader,
+            next_id: 1,
+            session: String::new(),
+            usage: ModelUsage::default(),
+            provider: String::new(),
+            model: String::new(),
+            requested_model: model.to_owned(),
+            timeout: Duration::from_secs(cfg.sub_timeout),
+        };
+        let id=this.send(serde_json::json!({"req":"hello","min_version":1,"max_version":1,"client":format!("azdaja/{VERSION}")}))?;
+        this.reply(id, "hello_ok")?;
+        let id = this
+            .send(serde_json::json!({"req":"create_session","working_dir":env::current_dir()?}))?;
+        let f = this.reply(id, "attached")?;
+        this.session = f
+            .pointer("/session/session_id")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow!("jcode API omitted session id"))?
+            .into();
+        let id=this.send(serde_json::json!({"req":"set_model","session_id":this.session,"model":format!("openai-oauth:{model}")}))?;
+        this.reply(id, "ok")?;
+        let id =
+            this.send(serde_json::json!({"req":"get_runtime_info","session_id":this.session}))?;
+        let rt = this.reply(id, "runtime_info")?;
+        let provider = rt
+            .get("provider")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
+        let resolved = rt
+            .get("model")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
+        if provider != "OpenAI" || resolved != model {
+            bail!("subscription route mismatch: provider={provider:?} model={resolved:?}")
+        }
+        // The explicit `openai-oauth:` selector is the fail-closed transport pin.
+        this.provider = "OpenAI OAuth".into();
+        this.model = resolved.into();
+        let id=this.send(serde_json::json!({"req":"set_reasoning_effort","session_id":this.session,"effort":cfg.jcode_reasoning}))?;
+        this.reply(id, "ok")?;
+        Ok(this)
+    }
+    fn clear(&mut self) -> Result<()> {
+        let sid = self.session.clone();
+        let id = self.send(serde_json::json!({"req":"clear","session_id":sid}))?;
+        self.reply(id, "ok")?;
+        Ok(())
+    }
+    fn turn(&mut self, prompt: &str) -> Result<ModelReply> {
+        let started = Instant::now();
+        self.usage = ModelUsage::default();
+        let sid = self.session.clone();
+        self.send(
+            serde_json::json!({"req":"send_message","session_id":sid,"content":prompt,"images":[]}),
+        )?;
+        let mut text = String::new();
+        let deadline = started + self.timeout;
+        loop {
+            let remaining = match deadline.checked_duration_since(Instant::now()) {
+                Some(v) => v,
+                None => {
+                    let sid = self.session.clone();
+                    let _ = self.send(serde_json::json!({"req":"cancel","session_id":sid}));
+                    bail!("jcode subscription turn timed out")
+                }
+            };
+            self.stream.set_read_timeout(Some(remaining))?;
+            let f = match self.frame() {
+                Ok(f) => f,
+                Err(e) => {
+                    let sid = self.session.clone();
+                    let _ = self.send(serde_json::json!({"req":"cancel","session_id":sid}));
+                    return Err(e);
+                }
+            };
+            if f.get("session_id").and_then(serde_json::Value::as_str) != Some(&self.session) {
+                continue;
+            }
+            match f.get("ev").and_then(serde_json::Value::as_str) {
+                Some("text_delta") => {
+                    let delta = f
+                        .get("text")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("");
+                    if text.len().saturating_add(delta.len()) > 16 * 1024 * 1024 {
+                        bail!("jcode model response exceeds 16 MiB")
+                    }
+                    text.push_str(delta)
+                }
+                Some("token_usage") => {
+                    self.usage.input = f
+                        .get("input")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(0);
+                    self.usage.output = f
+                        .get("output")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(0);
+                    self.usage.cache_read = f
+                        .get("cache_read_input")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(0)
+                }
+                Some("permission_request") => {
+                    let rid = f
+                        .get("request_id")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("");
+                    let id=self.send(serde_json::json!({"req":"permission_response","session_id":self.session,"request_id":rid,"decision":"deny"}))?;
+                    self.reply(id, "ok")?;
+                }
+                Some("model_info") => {
+                    self.provider = f
+                        .get("provider")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("")
+                        .into();
+                    self.model = f
+                        .get("model")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("")
+                        .into()
+                }
+                Some("error") => bail!(
+                    "jcode API: {}",
+                    f.get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("error")
+                ),
+                Some("turn_done") => {
+                    if (self.provider != "OpenAI" && self.provider != "OpenAI OAuth")
+                        || self.model != self.requested_model
+                    {
+                        bail!(
+                            "subscription turn reported unexpected route provider={:?} model={:?}, expected OpenAI OAuth/{:?}",
+                            self.provider,
+                            self.model,
+                            self.requested_model
+                        )
+                    }
+                    return Ok(ModelReply {
+                        text: text.trim().into(),
+                        usage: self.usage.clone(),
+                        provider: self.provider.clone(),
+                        model: self.model.clone(),
+                        latency_ms: started.elapsed().as_millis(),
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+}
+#[cfg(unix)]
+impl Drop for JcodeSession {
+    fn drop(&mut self) {
+        let sid = self.session.clone();
+        if !sid.is_empty()
+            && let Ok(id) = self.send(serde_json::json!({"req":"archive_session","session_id":sid}))
+        {
+            let _ = self.reply(id, "ok");
+        }
+    }
+}
+
+pub struct RootDriver {
+    cfg: Config,
+    model: String,
+    #[cfg(unix)]
+    api: Option<JcodeSession>,
+    history: String,
+}
+impl RootDriver {
+    pub fn start(cfg: &Config, model: &str) -> Result<Self> {
+        #[cfg(unix)]
+        let api = if cfg.sub_llm_cmd == "jcode-api" {
+            Some(JcodeSession::open(cfg, model)?)
+        } else {
+            None
+        };
+        Ok(Self {
+            cfg: cfg.clone(),
+            model: model.into(),
+            #[cfg(unix)]
+            api,
+            history: String::new(),
+        })
+    }
+    pub fn turn(&mut self, prompt: &str) -> Result<ModelReply> {
+        #[cfg(unix)]
+        if let Some(api) = &mut self.api {
+            let reply = api.turn(prompt)?;
+            trace_model_reply(&reply, 0)?;
+            return Ok(reply);
+        }
+        self.history.push_str(prompt);
+        let r = call_model_reply(&self.history, &self.model, &self.cfg, 0)?;
+        self.history.push_str("\n\nAssistant:\n");
+        self.history.push_str(&r.text);
+        self.history.push_str("\n\nUser:\n");
+        Ok(r)
+    }
+}
+
+fn trace_model_reply(reply: &ModelReply, depth: u32) -> Result<()> {
+    if let Some(path) = env::var_os("AZDAJA_MODEL_TRACE") {
+        let row = serde_json::json!({"timestamp_ms":now_ms(),"depth":depth,"provider":reply.provider,"model":reply.model,"input_tokens":reply.usage.input,"output_tokens":reply.usage.output,"cache_read_tokens":reply.usage.cache_read,"latency_ms":reply.latency_ms});
+        let mut bytes = serde_json::to_vec(&row)?;
+        bytes.push(b'\n');
+        let mut options = OpenOptions::new();
+        options.create(true).append(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = file.metadata()?.permissions().mode() & 0o777;
+            if mode & 0o077 != 0 {
+                file.set_permissions(fs::Permissions::from_mode(0o600))?
+            }
+        }
+        file.write_all(&bytes)?
+    }
+    Ok(())
+}
+pub fn call_model_reply(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Result<ModelReply> {
     let wire = if depth > 0 {
         format!(
             "[azdaja recursion depth {depth}/{}: do not invoke azdaja recursively.]\n\n{prompt}",
@@ -801,6 +1450,31 @@ pub fn call_model(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Result
     } else {
         prompt.to_owned()
     };
+    if cfg.sub_llm_cmd == "jcode-api" {
+        #[cfg(unix)]
+        {
+            let reply = JcodeSession::open(cfg, model)?.turn(&wire)?;
+            trace_model_reply(&reply, depth)?;
+            return Ok(reply);
+        }
+        #[cfg(not(unix))]
+        bail!("jcode-api transport requires Unix")
+    }
+    let started = Instant::now();
+    let reply = ModelReply {
+        text: call_model_command(&wire, model, cfg, depth)?,
+        usage: ModelUsage::default(),
+        provider: String::new(),
+        model: model.into(),
+        latency_ms: started.elapsed().as_millis(),
+    };
+    trace_model_reply(&reply, depth)?;
+    Ok(reply)
+}
+pub fn call_model(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Result<String> {
+    Ok(call_model_reply(prompt, model, cfg, depth)?.text)
+}
+fn call_model_command(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Result<String> {
     let prompt_path = if cfg.sub_llm_cmd.contains("{prompt_file}") {
         let dir = state_home()?.join("prompts");
         secure_dir(&dir)?;
@@ -813,7 +1487,7 @@ pub fn call_model(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Result
             let path = dir.join(format!("{}-{nanos}-{salt}.txt", std::process::id()));
             if let Ok(mut file) = OpenOptions::new().write(true).create_new(true).open(&path) {
                 chmod(&path, 0o600)?;
-                file.write_all(wire.as_bytes())?;
+                file.write_all(prompt.as_bytes())?;
                 made = Some(path);
                 break;
             }
@@ -822,7 +1496,7 @@ pub fn call_model(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Result
     } else {
         None
     };
-    let result = call_model_inner(&wire, prompt_path.as_deref(), model, cfg, depth);
+    let result = call_model_inner(prompt, prompt_path.as_deref(), model, cfg, depth);
     if let Some(path) = prompt_path {
         let _ = fs::remove_file(path);
     }
@@ -956,4 +1630,21 @@ assert datetime.date(2026, 1, 2).isoformat() == "2026-01-02"
         bail!("Monty canary failed: {}", result.output)
     }
     Ok(())
+}
+
+#[cfg(all(test, unix))]
+mod unit_tests {
+    use super::*;
+
+    #[test]
+    fn private_bridge_socket_is_short_and_state_specific() {
+        let long_a = PathBuf::from("/very/long").join("a".repeat(1_000));
+        let long_b = PathBuf::from("/very/long").join("b".repeat(1_000));
+        let a = short_runtime_dir(&long_a, 501).join("api.sock");
+        let b = short_runtime_dir(&long_b, 501).join("api.sock");
+        use std::os::unix::ffi::OsStrExt;
+        assert!(a.as_os_str().as_bytes().len() < 100, "{}", a.display());
+        assert_ne!(a, b);
+        assert!(a.starts_with("/tmp/azdaja-501"));
+    }
 }

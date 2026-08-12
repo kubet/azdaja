@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use azdaja::{
-    Config, DEFAULT_CONFIG, MONTY_VERSION, SKILL, VERSION, call_model, capability_check, exec,
-    final_answer, kill, list, load, start,
+    Config, DEFAULT_CONFIG, MONTY_VERSION, RootDriver, SKILL, SoloSession, VERSION, call_model,
+    capability_check, exec, final_answer, kill, list, load, start,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -12,8 +12,27 @@ use std::{
     process::ExitCode,
 };
 
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+
 const CANARY_PROMPT: &str = "Reverse the six-letter ASCII string AJADZA. Reply with the reversed string only, no punctuation.";
 const CANARY_ANSWER: &str = "AZDAJA";
+
+fn private_append(path: &Path) -> Result<fs::File> {
+    let mut o = fs::OpenOptions::new();
+    o.create(true).append(true);
+    #[cfg(unix)]
+    o.mode(0o600);
+    let f = o.open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if f.metadata()?.permissions().mode() & 0o077 != 0 {
+            f.set_permissions(fs::Permissions::from_mode(0o600))?
+        }
+    }
+    Ok(f)
+}
 
 fn help() {
     println!(
@@ -167,10 +186,7 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
         ),
         "gemini" => ("gemini --model {model} -p \"\"", "gemini-2.5-flash"),
         "opencode" => ("opencode --pure run --model {model}", "openai/gpt-5.4-mini"),
-        _ => (
-            "jcode run --no-update --quiet --model {model} Read_the_complete_UTF-8_prompt_at_{prompt_file}_and_return_only_its_answer",
-            "claude-haiku-4-5",
-        ),
+        _ => ("jcode-api", "gpt-5.4"),
     }
 }
 #[derive(Serialize, Deserialize)]
@@ -344,13 +360,15 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
         i += 2
     }
     let file = PathBuf::from(file.ok_or_else(|| anyhow!("solo requires -f"))?);
-    let sid = start(cfg, sub)?;
+    let mut session = SoloSession::new(cfg, sub)?;
     let result = (|| {
-        let metadata = load(&sid, &file, "ctx", cfg)?;
+        let metadata = session.load(&file, "ctx", cfg)?;
         let root_model = model.as_deref().unwrap_or(&cfg.default_model);
         let mut prompt = format!(
-            "You are the root of a recursive language model. The raw input is stored only as variable ctx in a persistent Python session; you see metadata only. Question: {question}\n{metadata}\nReturn exactly one fenced Python cell. Use ordinary Python, llm/llm_batch, and finish with FINAL or FINAL_VAR. Never ask for the raw file."
+            "You are the root of a recursive language model. The raw input is stored only as variable ctx in a persistent Python REPL; you see trustworthy metadata only. Question: {question}\n{metadata}\nReturn exactly one fenced Python cell. Use ordinary Python plus llm/llm_batch. You may submit multiple cells: after each non-final cell, its capped output is returned while state is preserved. Set FINAL or FINAL_VAR only when ready. Regex backtracking and advanced features are bounded; ordinary string operations remain available. Each cell may make at most {} total llm calls (batch items count individually). Never ask for the raw file.",
+            cfg.max_calls_per_cell
         );
+        let mut driver = RootDriver::start(cfg, root_model)?;
         let fence = Regex::new(r"(?s)```(?:python)?\s*(.*?)```").unwrap();
         let max_turns = env::var("AZDAJA_SOLO_MAX_TURNS")
             .ok()
@@ -359,36 +377,42 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
             .clamp(1, 24);
         let trace = env::var_os("AZDAJA_SOLO_TRACE").map(PathBuf::from);
         for turn in 0..max_turns {
-            let reply = call_model(&prompt, root_model, cfg, 0)?;
+            let model_reply = driver.turn(&prompt)?;
+            let reply = model_reply.text;
             if let Some(path) = &trace {
                 use std::io::Write;
-                let mut f = fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(path)?;
-                writeln!(f, "\n=== turn {turn} reply ===\n{reply}")?;
+                let mut f = private_append(path)?;
+                writeln!(
+                    f,
+                    "\n=== turn {turn} provider={:?} model={:?} input={} output={} cache_read={} latency_ms={} ===\n{reply}",
+                    model_reply.provider,
+                    model_reply.model,
+                    model_reply.usage.input,
+                    model_reply.usage.output,
+                    model_reply.usage.cache_read,
+                    model_reply.latency_ms
+                )?;
             }
             let code = fence
                 .captures(&reply)
                 .map(|c| c[1].to_owned())
                 .unwrap_or(reply);
-            let r = exec(&sid, &code, cfg)?;
+            let r = session.exec(&code, cfg)?;
             if let Some(path) = &trace {
                 use std::io::Write;
-                let mut f = fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(path)?;
+                let mut f = private_append(path)?;
                 writeln!(f, "=== code ===\n{code}\n=== result ===\n{}", r.output)?;
             }
             if r.finalized {
-                return final_answer(&sid, cfg);
+                return session.final_answer(cfg);
             }
-            prompt.push_str(&format!("\n\nYour cell:\n```python\n{code}\n```\nCapped result:\n{}\nReturn the next fenced Python cell; finish with FINAL.",r.output));
+            prompt = format!(
+                "Capped result from the cell:\n{}\nReturn exactly the next fenced Python cell; finish with FINAL only when ready.",
+                r.output
+            );
         }
         bail!("solo exceeded {max_turns} root turns")
     })();
-    let _ = kill(&sid);
     println!("{}", result?);
     Ok(())
 }

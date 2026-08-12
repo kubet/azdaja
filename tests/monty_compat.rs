@@ -51,6 +51,9 @@ max_sessions=2
 cell_timeout=5
 idle_timeout=1800
 clean_patterns=[]
+jcode_provider="openai"
+jcode_reasoning="medium"
+max_calls_per_cell=64
 "#,
     )
     .unwrap();

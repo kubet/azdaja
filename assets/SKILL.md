@@ -10,31 +10,20 @@ Keep the input in azdaja. Do not `cat` or otherwise read the raw file into your 
 ```bash
 {{BIN}} start
 {{BIN}} load <session-id> <path> <variable>
-printf '%s' '<python code>' | {{BIN}} exec <session-id>
+cat <<'PY' | {{BIN}} exec <session-id>
+<python code>
+PY
 {{BIN}} final <session-id>
 {{BIN}} kill <session-id>
 ```
 
-`start` creates a persistent Monty/Python session. `load` places a UTF-8 file in a variable and returns metadata only. `exec` reads Python on stdin and returns capped output. `final` retrieves the answer saved by the code. `kill` deletes the session; `list` shows live session IDs.
+`start` creates a persistent Monty/Python REPL. `load` places a UTF-8 file in a variable and returns trustworthy character/line metadata only. Each `exec` reads one Python cell on stdin; state survives across cells and capped cell output comes back for inspection. `final` retrieves the saved answer. `kill` deletes the session; `list` shows live session IDs. Monty is a Python subset: prefer explicit lists/loops over generators (`yield` is unsupported), and remember that regex backtracking is bounded.
 
 Inside `exec`, use ordinary Python plus:
 
 - `llm(prompt, model=None, ctx="")` — one model call; `ctx` is appended to the prompt.
-- `llm_batch(prompts, model=None, workers=8)` — ordered parallel model calls.
+- `llm_batch(prompts, model=None, workers=2)` — ordered parallel model calls. `llm` and batch items share the cumulative per-cell call budget (64 by default); submit another cell to continue with preserved state.
 - `FINAL(answer)` — save the answer.
 - `FINAL_VAR("name")` — save a variable by name.
 
 End by calling `FINAL(...)` or `FINAL_VAR(...)`. Output is capped, so assign large intermediate results to variables and inspect small slices.
-
-Example (illustrates the interface, not a required strategy):
-
-```bash
-{{BIN}} start
-{{BIN}} load SESSION app.log ctx
-cat <<'PY' | {{BIN}} exec SESSION
-hits = [line for line in ctx.splitlines() if "ERROR" in line]
-checks = llm_batch(["Classify this log line:\n" + line for line in hits])
-FINAL({"error_count": len(hits), "classes": checks})
-PY
-{{BIN}} final SESSION
-```

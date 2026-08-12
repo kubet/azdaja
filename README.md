@@ -6,7 +6,7 @@
 
 Aždaja (roughly *azh-DAH-yah*) is the many-headed Serbian dragon: one persistent body, parallel model-call heads, and an appetite for contexts too large for one window.
 
-> **Status: experimental v0.1.** The engine and jcode path are end-to-end tested. Monty 0.0.21 calls itself experimental, its snapshot format is version-bound, and the first benchmark pilot did **not** beat native jcode. The numbers are published below rather than hidden.
+> **Status: private and unreleased.** The engine and subscription-OAuth jcode path are end-to-end tested. Monty 0.0.21 calls itself experimental, its snapshot format is version-bound, and no performance-superiority claim has been established.
 
 ## Thesis
 
@@ -16,7 +16,7 @@ The evaluated namespace is exactly ordinary Monty/Python plus:
 
 ```python
 llm(prompt, model=None, ctx="")
-llm_batch(prompts, model=None, workers=8)
+llm_batch(prompts, model=None, workers=2)
 FINAL(answer)
 FINAL_VAR("variable_name")
 ```
@@ -41,7 +41,7 @@ azdaja doctor --caps   # offline embedded capability manifest
 azdaja uninstall --harness jcode
 ```
 
-jcode 0.75.3 does not accept a prompt on stdin. Its installed adapter uses a mode-0600 temporary prompt file, keeping long prompts and shell metacharacters out of argv. Other adapters use stdin. Command templates are split into argv without a shell; `{model}` and `{prompt_file}` are substituted inside existing arguments.
+The default jcode adapter uses the stable v1 Harness API over an owner-only Unix socket. It sends prompts directly, streams structured token usage, reuses a private bridge, disables model-facing base tools for subcalls, and pins `openai-oauth:<model>` so it cannot fall back to a metered API key. The bridge starts with an environment allowlist and a shared owner-only OAuth credential file. Arbitrary command adapters remain available as an explicit fallback; their templates are split into argv without a shell.
 
 ## Manual use
 
@@ -65,7 +65,7 @@ For a demo or benchmark where azdaja drives the root loop too:
 
 ```bash
 azdaja solo "question about this input" -f ./large.txt \
-  --model claude-haiku-4-5 --sub-model claude-haiku-4-5
+  --model gpt-5.4 --sub-model gpt-5.4
 ```
 
 Normal use keeps the existing harness as root; `solo` is not the product boundary.
@@ -75,15 +75,18 @@ Normal use keeps the existing harness as root; `solo` is not the product boundar
 The installed binary reads the `config.toml` beside itself. Development builds use `$AZDAJA_CONFIG`, then a config beside the executable, then `$XDG_CONFIG_HOME/azdaja/config.toml`, then embedded defaults.
 
 ```toml
-sub_llm_cmd = "jcode run --no-update --quiet --model {model} Read_the_complete_UTF-8_prompt_at_{prompt_file}_and_return_only_its_answer"
-default_model = "claude-haiku-4-5"
+sub_llm_cmd = "jcode-api"
+default_model = "gpt-5.4"
+jcode_provider = "openai" # ChatGPT subscription OAuth, not openai-api
+jcode_reasoning = "medium"
 output_cap = 8192
 max_depth = 1
 sub_timeout = 300
 max_sessions = 4
 cell_timeout = 30
 idle_timeout = 1800
-clean_patterns = [] # regexes for adapter banners; shipped jcode config includes known patterns
+max_calls_per_cell = 64
+clean_patterns = []
 ```
 
 Depth is enforced in the invoking process through `RLM_DEPTH` and repeated as an explicit instruction to sub-agents. A daemon-backed harness may not propagate the environment to its tool subprocesses, so depth is not a security boundary.
@@ -95,7 +98,7 @@ Depth is enforced in the invoking process through `RLM_DEPTH` and repeated as an
 - `load` never emits file contents automatically, but this is not information-flow control: code can `print(ctx)`, send slices through `llm`, or call `FINAL(ctx)`. One response is capped; disclosure accumulated across repeated calls is unbounded.
 - Snapshot replacement is atomic against ordinary process crashes on Unix, but files are not `fsync`ed and are not promised to survive power loss. Windows replacement currently has a smaller remove/rename crash window. A process crash can leave a mode-0600 prompt file until the next age-based reap.
 - Unix timeouts kill and join the local adapter process group; Windows kills only the direct child. A remote turn owned by a daemon-backed harness may continue after its local client dies.
-- There is no Monty memory ceiling or total sub-call/cost budget. Batch concurrency is clamped to 32, but code can allocate memory or make repeated calls until the OS/provider limit. Large non-string bare-expression reprs may allocate before display capping.
+- There is no Monty memory ceiling. Batch concurrency is clamped to 32 and each cell has a cumulative sub-call limit (64 by default); provider-side token or monetary budgets remain external. Large non-string bare-expression reprs may allocate before display capping.
 - In-process Monty is a real language sandbox, not a process-containment boundary. Upstream recommends its worker pool for hostile code because interpreter/allocator defects can still abort the host.
 - `install --harness all` stages and replaces each harness independently; it is not one cross-harness transaction and concurrent installers are unsupported.
 - Monty implements a Python subset. The tested RLM idioms and regex probes are in `tests/monty_compat.rs`; notable gaps remain (for example external callbacks inside `map`, `re.VERBOSE`, third-party packages, and parts of the stdlib).
@@ -108,7 +111,7 @@ python3 bench/perf.py --binary target/release/azdaja \
   --repeats 20 --output bench/results/macos-arm64.json
 ```
 
-The test suite covers separate-process persistence, metadata-only loading, mode-0600 state/prompt files, Unicode cell/final cap semantics, partial-state preservation after exceptions, `FINAL`/`FINAL_VAR`, depth refusal, ordered batch calls, cell timeout, Unix process-tree timeout, exact >ARG_MAX prompt-file transport, argv injection, filesystem/environment/module denial, path/symlink validation, concurrent session limits, solo root/sub orchestration, failed-canary rollback, staged reinstall, safe-uninstall refusal, ten RLM idioms, and regex lookaround/backreference/finditer/flags.
+The suite covers separate-process persistence, metadata-only loading, mode-0600 state/prompt files, Unicode caps, partial-state preservation, `FINAL`/`FINAL_VAR`, depth and cumulative call budgets, ordered batch calls, timeouts, direct Harness API framing, explicit OAuth model pinning, streamed usage, sub-session reuse, >ARG_MAX command fallback, argv injection, sandbox denials, path/symlink validation, concurrent limits, live in-process solo state, root/sub orchestration, installer rollback/idempotence, ten RLM idioms, and regex compatibility probes.
 
 ### Snapshot benchmark
 
@@ -122,17 +125,11 @@ Release build, M2 MacBook Air, macOS 26.5.1, 20 serial repetitions. `snapshot ex
 
 The planned p95 `<100 ms @100 MB` gate **failed**. Median load passed; full snapshot exec did not. Monty snapshots are uncompressed (~100,002,009 bytes for the 100 MB case) and peak RSS is roughly 3.1× payload. Raw JSON is committed in `bench/results/macos-arm64.json`.
 
-### Harness pilot
+### Harness benchmark status
 
-One run on the generated 1.08 MB semantic-incident fixture. All arms answered 6/6 correctly. This is a smoke test, not a statistically controlled quality claim; Prime used a different model and all transports had warm subscription daemons.
+The earlier semantic-incident pilot was rejected: it was a saturated marker-extraction task, forced azdaja to make an extra call, used mismatched models, and compared unrelated OOLONG rows in follow-up experiments. Its numbers are not evidence and have been removed.
 
-| Arm | Model | Correct | Wall | max RSS |
-|---|---|---:|---:|---:|
-| jcode native | Claude Haiku 4.5 | yes | **5.75 s** | 283.9 MB |
-| azdaja `solo` through jcode | Claude Haiku 4.5 root + sub | yes | 29.89 s | 286.0 MB |
-| Prime Agent 0.7.0 | GPT-5.4 | yes | 19.70 s | **182.6 MB** |
-
-Native jcode won this task decisively. azdaja was slower than Prime here too, though model/provider mismatch makes that comparison directional only. Prime reported 59,840 summed tokens and $0.0604 API-equivalent cost; the jcode text adapter does not expose structured total usage to azdaja. The exact serial runner, fixture generator, gold scorer, outputs, timings, versions, and manually collated summary are in `bench/`; rerun with `bench/e2e-pilot.sh`.
+The private benchmark work now uses official OOLONG fixtures, identical prompts and questions per arm, strict exact scoring, fresh sessions, serial execution, and the same GPT-5.4 subscription-OAuth route. No release or performance claim is permitted until repeated unseen tasks establish accuracy noninferiority and meaningful token, latency, and cost advantages.
 
 ## Non-goals
 

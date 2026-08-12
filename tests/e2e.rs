@@ -37,6 +37,9 @@ max_sessions = {max}
 cell_timeout = 2
 idle_timeout = 1800
 clean_patterns = []
+jcode_provider = "openai"
+jcode_reasoning = "medium"
+max_calls_per_cell = 64
 "#
         ),
     )
@@ -351,7 +354,7 @@ fn solo_drives_root_and_recursive_subcall_end_to_end() {
         r#"import os,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    if 'Capped result:' in p: print('```python\nFINAL("done:" + sub)\n```')
+    if 'Capped result from the cell:' in p: print('```python\nFINAL("done:" + sub)\n```')
     else: print('```python\nsub = llm("classify")\n```')
 else: print('SUB_OK')
 "#,
@@ -373,6 +376,16 @@ else: print('SUB_OK')
         String::from_utf8_lossy(&o.stderr)
     );
     assert!(String::from_utf8_lossy(&o.stdout).contains("done:SUB_OK"));
+    let sessions = fs::read_dir(t.join("state"))
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter(|e| {
+            e.file_name().to_string_lossy().len() == 16 && e.file_type().is_ok_and(|t| t.is_dir())
+        })
+        .count();
+    assert_eq!(sessions, 0, "solo should retain Monty only in-process");
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -387,7 +400,7 @@ fn shipped_cleaners_strip_jcode_banners_and_ansi() {
         fs::set_permissions(&mock, fs::Permissions::from_mode(0o755)).unwrap();
     }
     let cfg = t.join("config.toml");
-    let text=include_str!("../assets/config.toml").replace("jcode run --no-update --quiet --model {model} Read_the_complete_UTF-8_prompt_at_{prompt_file}_and_return_only_its_answer",mock.to_str().unwrap());
+    let text=include_str!("../assets/config.toml").replace("sub_llm_cmd = \"jcode-api\"",&format!("sub_llm_cmd = {:?}",mock.to_str().unwrap())).replace("clean_patterns = []","clean_patterns = ['(?m)^\\[(?:read|write|bash|grep|glob|edit)\\].*\\n?', '(?m)^\\[Tokens\\].*\\n?', '(?m)^\\s*→.*\\n?']");
     fs::write(&cfg, text).unwrap();
     let id = sid(&t, &cfg);
     let out = ok(run(&t, &cfg, &["exec", &id], "llm('x')\n"));
@@ -407,7 +420,7 @@ fn install_is_verified_idempotent_and_owned() {
     let t = temp("install");
     let bin = t.join("bin");
     fs::create_dir(&bin).unwrap();
-    let mock = bin.join("jcode");
+    let mock = bin.join("claude");
     fs::write(&mock,r#"#!/bin/sh
 for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_only_its_answer) p=${a#*_at_}; p=${p%_and_return*}; cat "$p";; esac; done
 "#).unwrap();
@@ -417,10 +430,10 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
         fs::set_permissions(&mock, fs::Permissions::from_mode(0o755)).unwrap();
     }
     let cfg = config(&t, "cat", 512, 1, 3, 4);
-    let dst = t.join(".jcode/skills/azdaja");
+    let dst = t.join(".claude/skills/azdaja");
     let bad = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["install", "--harness", "jcode"])
+        .args(["install", "--harness", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -436,7 +449,7 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_azdaja"));
     let o = cmd
         .env_remove("RLM_DEPTH")
-        .args(["install", "--harness", "jcode"])
+        .args(["install", "--harness", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -457,7 +470,7 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
     fs::write(dst.join("config.toml"), &edited_config).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["install", "--harness", "jcode"])
+        .args(["install", "--harness", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -475,7 +488,7 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
     fs::write(dst.join("unknown"), "x").unwrap();
     let refused = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["uninstall", "--harness", "jcode"])
+        .args(["uninstall", "--harness", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -487,7 +500,7 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
     fs::write(dst.join("SKILL.md"), "changed").unwrap();
     let refused = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["uninstall", "--harness", "jcode"])
+        .args(["uninstall", "--harness", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -497,7 +510,7 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
     fs::write(dst.join("SKILL.md"), original_skill).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["uninstall", "--harness", "jcode"])
+        .args(["uninstall", "--harness", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -505,5 +518,145 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
         .unwrap();
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     assert!(!dst.exists());
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn cumulative_llm_budget_stops_repeated_calls_in_one_cell() {
+    let t = temp("call-budget");
+    let cfg = config(&t, "cat", 1024, 1, 3, 4);
+    let id = sid(&t, &cfg);
+    let result = run(
+        &t,
+        &cfg,
+        &["exec", &id],
+        "for i in range(65):\n    x = llm('x')\n",
+    );
+    assert!(!result.status.success());
+    let out = String::from_utf8(result.stdout).unwrap();
+    assert!(out.contains("llm call budget exceeded: 65 > 64"), "{out}");
+    ok(run(&t, &cfg, &["kill", &id], ""));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn jcode_api_transport_reuses_worker_session_and_streams_usage() {
+    use std::io::{BufRead, BufReader, Write as _};
+    use std::os::unix::net::UnixListener;
+    use std::thread;
+    let t = temp("jcode-api");
+    let socket = t.join("api.sock");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = thread::spawn(move || {
+        let _ = listener.accept().unwrap();
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut send_count = 0;
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap() == 0 {
+                break;
+            }
+            let f: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let id = f["id"].as_u64().unwrap();
+            let req = f["req"].as_str().unwrap();
+            let frames: Vec<serde_json::Value> = match req {
+                "hello" => vec![
+                    serde_json::json!({"v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"}),
+                ],
+                "create_session" => vec![
+                    serde_json::json!({"v":1,"reply_to":id,"ev":"attached","session":{"session_id":"s1","status":"idle"}}),
+                ],
+                "get_runtime_info" => vec![
+                    serde_json::json!({"v":1,"reply_to":id,"ev":"runtime_info","session_id":"s1","provider":"OpenAI","model":"gpt-5.4","routes":[{"model":"gpt-5.4","provider":"OpenAI","api_method":"openai-oauth","available":true,"detail":"OAuth"}]}),
+                ],
+                "set_model" => {
+                    assert_eq!(f["model"], "openai-oauth:gpt-5.4");
+                    vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                }
+                "set_reasoning_effort" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
+                "send_message" => {
+                    send_count += 1;
+                    let suffix = if send_count == 1 {
+                        "direct secret prompt"
+                    } else {
+                        "second"
+                    };
+                    assert!(f["content"].as_str().unwrap().ends_with(suffix));
+                    vec![
+                        serde_json::json!({"v":1,"ev":"message_accepted","session_id":"s1"}),
+                        serde_json::json!({"v":1,"ev":"model_info","session_id":"s1","provider":"OpenAI","model":"gpt-5.4"}),
+                        serde_json::json!({"v":1,"ev":"text_delta","session_id":"s1","text":if send_count==1{"DIRECT_OK"}else{"SECOND_OK"}}),
+                        serde_json::json!({"v":1,"ev":"token_usage","session_id":"s1","input":11,"output":2,"cache_read_input":3}),
+                        serde_json::json!({"v":1,"ev":"turn_done","session_id":"s1"}),
+                    ]
+                }
+                "clear" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
+                "archive_session" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
+                x => panic!("unexpected {x}"),
+            };
+            for frame in frames {
+                serde_json::to_writer(&mut stream, &frame).unwrap();
+                stream.write_all(b"\n").unwrap();
+                stream.flush().unwrap()
+            }
+        }
+    });
+    let cfg = config(&t, "jcode-api", 1024, 1, 3, 4);
+    let id = sid(&t, &cfg);
+    let mut c = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+    c.args(["exec", &id])
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_API_SOCKET", &socket)
+        .env("AZDAJA_MODEL_TRACE", t.join("usage.jsonl"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = c.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(
+            b"print(llm_batch(['direct secret prompt','second'],model='gpt-5.4',workers=1))\n",
+        )
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("DIRECT_OK") && stdout.contains("SECOND_OK"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(t.join("usage.jsonl"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+    }
+    let usage_rows = fs::read_to_string(t.join("usage.jsonl")).unwrap();
+    let usages: Vec<serde_json::Value> = usage_rows
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(usages.len(), 2);
+    let usage = &usages[0];
+    assert_eq!(usage["provider"], "OpenAI");
+    assert_eq!(usage["model"], "gpt-5.4");
+    assert_eq!(usage["input_tokens"], 11);
+    assert_eq!(usage["output_tokens"], 2);
+    assert_eq!(usage["cache_read_tokens"], 3);
+    assert!(usage["latency_ms"].as_u64().is_some());
+    server.join().unwrap();
     fs::remove_dir_all(t).unwrap();
 }
