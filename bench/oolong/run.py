@@ -65,6 +65,7 @@ CONTROLLER_ENV_ALLOWLIST = (
     "AZDAJA_HOME",
     "AZDAJA_CONFIG",
     "AZDAJA_MODEL_TRACE",
+    "AZDAJA_TRACE_RESPONSES",
     "AZDAJA_SOLO_TRACE",
     "PRIME_AGENT_KERNEL_VENV",
 )
@@ -748,6 +749,7 @@ def arm_for(
         env["AZDAJA_HOME"] = str(run_dir / "azdaja-state")
         env["AZDAJA_CONFIG"] = str(staged_config)
         env["AZDAJA_MODEL_TRACE"] = str(traces["azdaja_model_trace"])
+        env["AZDAJA_TRACE_RESPONSES"] = "1"
         env["AZDAJA_SOLO_TRACE"] = str(traces["azdaja_solo_trace"])
         assert_env_allowlisted(env)
         # The context is the sole file in root; pass only its randomized basename.

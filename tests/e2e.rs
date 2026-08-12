@@ -414,11 +414,11 @@ if os.getenv('RLM_DEPTH') == '0':
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
     required = ('schema-targeted solve now', 'do not spend a root turn inspecting again',
                 'exact observed schema', 'each source occurrence counts', 'integer multiplicity',
-                'rendered character length', 'two independently phrased', 'confidence value',
-                'disagreements', 'hard logical child-call budget',
+                'rendered character length', 'candidate-union audit', 'short evidence code',
+                'rotated/reversed order', 'hard logical child-call budget',
                 'os, re, json, math, collections, and datetime', 'csv and other imports',
-                'no yield or generators', 'no % string formatting', 'strict json', 'cardinality',
-                'at most 64 in this cell', 'at most 4 root turns')
+                'globals, locals, callable', 'final(answer) is always defined', 'validate ids and schemas',
+                'at most 220 nonblank lines', 'must be at most 64 in this cell', 'you have at most 4 root turns')
     sample_ok = 'schema-canary' in sample and len(sample) <= 4096 and 'TAIL_NOT_IN_SAMPLE' not in p
     if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
     else: print('```python\nFINAL("done:" + llm("classify"))\n```')
@@ -448,7 +448,12 @@ else: print('SUB_OK')
         String::from_utf8_lossy(&o.stdout),
         String::from_utf8_lossy(&o.stderr)
     );
-    assert!(String::from_utf8_lossy(&o.stdout).contains("done:SUB_OK"));
+    assert!(
+        String::from_utf8_lossy(&o.stdout).contains("done:SUB_OK"),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
     let sessions = fs::read_dir(t.join("state"))
         .ok()
         .into_iter()
@@ -581,9 +586,10 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
     assert!(skill.contains("Each source occurrence is an aggregation unit"));
     assert!(skill.contains("retaining every source ID or an integer multiplicity"));
     assert!(skill.contains("actual rendered character length"));
-    assert!(skill.contains("two independently phrased classification passes"));
+    assert!(skill.contains("sparse two-sided candidate-union audit"));
     assert!(skill.contains("hard logical child-call budget"));
-    assert!(skill.contains("no `yield` or generators"));
+    assert!(skill.contains("`yield`/generators"));
+    assert!(skill.contains("`FINAL(answer)` is always defined"));
     assert!(skill.contains("`csv` and other imports are unavailable"));
     let edited_config = fs::read_to_string(&cfg).unwrap().replace(
         "sub_llm_cmd = \"cat\"",
@@ -658,6 +664,160 @@ fn cumulative_llm_budget_stops_repeated_calls_in_one_cell() {
     let out = String::from_utf8(result.stdout).unwrap();
     assert!(out.contains("llm call budget exceeded: 65 > 64"), "{out}");
     ok(run(&t, &cfg, &["kill", &id], ""));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn solo_jcode_archives_root_before_recursive_sessions_and_finishes_one_turn() {
+    use std::io::{BufRead, BufReader, Write as _};
+    use std::os::unix::net::UnixListener;
+    use std::thread;
+
+    let t = temp("sjr");
+    let socket = t.join("api.sock");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = thread::spawn(move || {
+        let mut events = Vec::new();
+        for (session_number, sid) in ["root", "direct", "batch"].into_iter().enumerate() {
+            // JcodeSession::open first probes bridge liveness, then opens the protocol stream.
+            let (probe, _) = listener.accept().unwrap();
+            drop(probe);
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut archived = false;
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 {
+                    events.push(format!("close:{sid}"));
+                    break;
+                }
+                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let id = request["id"].as_u64().unwrap();
+                let req = request["req"].as_str().unwrap();
+                let frames = match req {
+                    "hello" => vec![serde_json::json!({
+                        "v": 1, "reply_to": id, "ev": "hello_ok", "version": 1,
+                        "server": "fake"
+                    })],
+                    "create_session" => {
+                        if session_number > 0 {
+                            assert_eq!(
+                                &events[..4],
+                                ["create:root", "turn:root", "archive:root", "close:root"],
+                                "a recursive session opened while the root was still live"
+                            );
+                        }
+                        events.push(format!("create:{sid}"));
+                        vec![serde_json::json!({
+                            "v": 1, "reply_to": id, "ev": "attached",
+                            "session": {"session_id": sid, "status": "idle"}
+                        })]
+                    }
+                    "set_model" => {
+                        assert_eq!(request["model"], "openai-oauth:mock");
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    "get_runtime_info" => vec![serde_json::json!({
+                        "v": 1, "reply_to": id, "ev": "runtime_info",
+                        "session_id": sid, "provider": "OpenAI", "model": "mock"
+                    })],
+                    "set_reasoning_effort" => {
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    "send_message" => {
+                        events.push(format!("turn:{sid}"));
+                        let content = request["content"].as_str().unwrap();
+                        let answer = match session_number {
+                            0 => {
+                                assert!(content.contains("Question: question"));
+                                assert!(!content.contains("azdaja recursion depth 1/1"));
+                                "```python\ndirect = llm('direct child')\nbatch = llm_batch(['batch child'], None, 1)\nFINAL(direct + ':' + batch[0])\n```"
+                            }
+                            1 => {
+                                assert!(content.starts_with(
+                                    "[azdaja recursion depth 1/1: do not invoke azdaja recursively.]"
+                                ));
+                                assert!(content.ends_with("direct child"));
+                                "DIRECT_OK"
+                            }
+                            2 => {
+                                assert!(content.starts_with(
+                                    "[azdaja recursion depth 1/1: do not invoke azdaja recursively.]"
+                                ));
+                                assert!(content.ends_with("batch child"));
+                                "BATCH_OK"
+                            }
+                            _ => unreachable!(),
+                        };
+                        vec![
+                            serde_json::json!({
+                                "v":1,"ev":"model_info","session_id":sid,
+                                "provider":"OpenAI","model":"mock"
+                            }),
+                            serde_json::json!({
+                                "v":1,"ev":"text_delta","session_id":sid,"text":answer
+                            }),
+                            serde_json::json!({"v":1,"ev":"turn_done","session_id":sid}),
+                        ]
+                    }
+                    "archive_session" => {
+                        archived = true;
+                        events.push(format!("archive:{sid}"));
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    other => panic!("unexpected {other}"),
+                };
+                for frame in frames {
+                    serde_json::to_writer(&mut stream, &frame).unwrap();
+                    stream.write_all(b"\n").unwrap();
+                    stream.flush().unwrap();
+                }
+            }
+            assert!(archived, "{sid} closed without being archived");
+        }
+        events
+    });
+
+    let cfg = config(&t, "jcode-api", 2048, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "deterministic context").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args(["solo", "question", "-f", input.to_str().unwrap()])
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_API_SOCKET", &socket)
+        .env("AZDAJA_SOLO_MAX_TURNS", "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "DIRECT_OK:BATCH_OK"
+    );
+    assert_eq!(
+        server.join().unwrap(),
+        [
+            "create:root",
+            "turn:root",
+            "archive:root",
+            "close:root",
+            "create:direct",
+            "turn:direct",
+            "archive:direct",
+            "close:direct",
+            "create:batch",
+            "turn:batch",
+            "archive:batch",
+            "close:batch",
+        ]
+    );
     fs::remove_dir_all(t).unwrap();
 }
 

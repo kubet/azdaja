@@ -111,7 +111,7 @@ python3 bench/perf.py --binary target/release/azdaja \
   --repeats 20 --output bench/results/macos-arm64.json
 ```
 
-The suite covers separate-process persistence, metadata-only loading, mode-0600 state/prompt files, Unicode caps, partial-state preservation, `FINAL`/`FINAL_VAR`, depth and cumulative call budgets, ordered batch calls, timeouts, direct Harness API framing, explicit OAuth model pinning, streamed usage, sub-session reuse, >ARG_MAX command fallback, argv injection, sandbox denials, path/symlink validation, concurrent limits, live in-process solo state, root/sub orchestration, installer rollback/idempotence, ten RLM idioms, and regex compatibility probes.
+The suite covers separate-process persistence, metadata-only loading, mode-0600 state/prompt files, Unicode caps, partial-state preservation, `FINAL`/`FINAL_VAR`, depth and cumulative call budgets, ordered batch calls, timeouts, direct Harness API framing, explicit OAuth model pinning, streamed usage, fresh per-item batch sessions and partial recovery, >ARG_MAX command fallback, argv injection, sandbox denials, path/symlink validation, concurrent limits, live in-process solo state, root/sub orchestration, installer rollback/idempotence, ten RLM idioms, and regex compatibility probes.
 
 ### Snapshot benchmark
 

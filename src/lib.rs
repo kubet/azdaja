@@ -1220,8 +1220,12 @@ fn ensure_jcode_bridge(cfg: &Config) -> Result<PathBuf> {
 }
 
 #[cfg(unix)]
+fn jcode_root_timeout(cfg: &Config) -> Duration {
+    Duration::from_secs(cfg.sub_timeout.min(90))
+}
+#[cfg(unix)]
 fn jcode_batch_timeout(cfg: &Config) -> Duration {
-    Duration::from_secs(cfg.sub_timeout.min(60))
+    Duration::from_secs(cfg.sub_timeout.min(20))
 }
 
 #[cfg(unix)]
@@ -1306,7 +1310,7 @@ impl JcodeSession {
         Self::open_with_timeout(cfg, model, Duration::from_secs(cfg.sub_timeout))
     }
     fn open_for_root(cfg: &Config, model: &str) -> Result<Self> {
-        Self::open_with_timeout(cfg, model, Duration::from_secs(cfg.sub_timeout.min(90)))
+        Self::open_with_timeout(cfg, model, jcode_root_timeout(cfg))
     }
     fn open_for_batch(cfg: &Config, model: &str) -> Result<Self> {
         Self::open_with_timeout(cfg, model, jcode_batch_timeout(cfg))
@@ -1556,7 +1560,10 @@ fn trace_model_failure(depth: u32) -> Result<()> {
 
 fn trace_model_reply(reply: &ModelReply, depth: u32) -> Result<()> {
     if let Some(path) = env::var_os("AZDAJA_MODEL_TRACE") {
-        let row = serde_json::json!({"timestamp_ms":now_ms(),"depth":depth,"provider":reply.provider,"model":reply.model,"input_tokens":reply.usage.input,"output_tokens":reply.usage.output,"cache_read_tokens":reply.usage.cache_read,"latency_ms":reply.latency_ms});
+        let mut row = serde_json::json!({"timestamp_ms":now_ms(),"depth":depth,"provider":reply.provider,"model":reply.model,"input_tokens":reply.usage.input,"output_tokens":reply.usage.output,"cache_read_tokens":reply.usage.cache_read,"latency_ms":reply.latency_ms});
+        if depth > 0 && env::var("AZDAJA_TRACE_RESPONSES").as_deref() == Ok("1") {
+            row["response"] = serde_json::Value::String(reply.text.clone());
+        }
         let mut bytes = serde_json::to_vec(&row)?;
         bytes.push(b'\n');
         let mut options = OpenOptions::new();
@@ -1788,14 +1795,12 @@ mod unit_tests {
             sub_timeout: 300,
             ..Config::default()
         };
-        assert_eq!(jcode_batch_timeout(&cfg), Duration::from_secs(60));
-        assert_eq!(
-            Duration::from_secs(cfg.sub_timeout.min(90)),
-            Duration::from_secs(90)
-        );
+        assert_eq!(jcode_batch_timeout(&cfg), Duration::from_secs(20));
+        assert_eq!(jcode_root_timeout(&cfg), Duration::from_secs(90));
         assert_eq!(cfg.sub_timeout, 300);
         cfg.sub_timeout = 12;
         assert_eq!(jcode_batch_timeout(&cfg), Duration::from_secs(12));
+        assert_eq!(jcode_root_timeout(&cfg), Duration::from_secs(12));
     }
 
     #[test]
