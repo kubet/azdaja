@@ -1240,7 +1240,7 @@ struct JcodeSession {
     model: String,
     requested_model: String,
     timeout: Duration,
-    archive_on_drop: bool,
+    cancel_before_archive: bool,
 }
 #[cfg(unix)]
 impl JcodeSession {
@@ -1284,8 +1284,13 @@ impl JcodeSession {
         };
         serde_json::from_str(&line).context("invalid jcode API frame")
     }
-    fn reply(&mut self, id: u64, kind: &str) -> Result<serde_json::Value> {
-        let deadline = Instant::now() + self.timeout;
+    fn reply_with_timeout(
+        &mut self,
+        id: u64,
+        kind: &str,
+        timeout: Duration,
+    ) -> Result<serde_json::Value> {
+        let deadline = Instant::now() + timeout;
         loop {
             let remaining = deadline
                 .checked_duration_since(Instant::now())
@@ -1306,6 +1311,9 @@ impl JcodeSession {
                 }
             }
         }
+    }
+    fn reply(&mut self, id: u64, kind: &str) -> Result<serde_json::Value> {
+        self.reply_with_timeout(id, kind, self.timeout)
     }
     fn open(cfg: &Config, model: &str) -> Result<Self> {
         Self::open_with_timeout(cfg, model, Duration::from_secs(cfg.sub_timeout))
@@ -1332,7 +1340,7 @@ impl JcodeSession {
             model: String::new(),
             requested_model: model.to_owned(),
             timeout,
-            archive_on_drop: false,
+            cancel_before_archive: true,
         };
         let id=this.send(serde_json::json!({"req":"hello","min_version":1,"max_version":1,"client":format!("azdaja/{VERSION}")}))?;
         this.reply(id, "hello_ok")?;
@@ -1365,13 +1373,13 @@ impl JcodeSession {
         this.model = resolved.into();
         let id=this.send(serde_json::json!({"req":"set_reasoning_effort","session_id":this.session,"effort":cfg.jcode_reasoning}))?;
         this.reply(id, "ok")?;
-        this.archive_on_drop = true;
+        this.cancel_before_archive = false;
         Ok(this)
     }
     fn discard(&mut self) {
-        // A failed turn can leave unread frames on the stream. Do not archive over
-        // that poisoned protocol state; closing it is the only safe way to reuse this worker.
-        self.archive_on_drop = false;
+        // A failed turn can leave unread frames on the stream. Mark it for an ordered, bounded
+        // cancel-before-archive cleanup rather than trying to reuse the poisoned protocol state.
+        self.cancel_before_archive = true;
     }
     fn turn(&mut self, prompt: &str) -> Result<ModelReply> {
         let result = self.turn_inner(prompt);
@@ -1390,23 +1398,11 @@ impl JcodeSession {
         let mut text = String::new();
         let deadline = started + self.timeout;
         loop {
-            let remaining = match deadline.checked_duration_since(Instant::now()) {
-                Some(v) => v,
-                None => {
-                    let sid = self.session.clone();
-                    let _ = self.send(serde_json::json!({"req":"cancel","session_id":sid}));
-                    bail!("jcode subscription turn timed out")
-                }
-            };
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .ok_or_else(|| anyhow!("jcode subscription turn timed out"))?;
             self.stream.set_read_timeout(Some(remaining))?;
-            let f = match self.frame() {
-                Ok(f) => f,
-                Err(e) => {
-                    let sid = self.session.clone();
-                    let _ = self.send(serde_json::json!({"req":"cancel","session_id":sid}));
-                    return Err(e);
-                }
-            };
+            let f = self.frame()?;
             if f.get("session_id").and_then(serde_json::Value::as_str) != Some(&self.session) {
                 continue;
             }
@@ -1489,11 +1485,21 @@ impl JcodeSession {
 impl Drop for JcodeSession {
     fn drop(&mut self) {
         let sid = self.session.clone();
-        if self.archive_on_drop
-            && !sid.is_empty()
-            && let Ok(id) = self.send(serde_json::json!({"req":"archive_session","session_id":sid}))
-        {
-            let _ = self.reply(id, "ok");
+        if sid.is_empty() {
+            return;
+        }
+        // Cleanup is control-plane work, not another model turn. In particular, never reuse the
+        // prompt-sized turn timeout here: a missing archive acknowledgement used to add 15--55
+        // seconds to an otherwise completed batch item. A failed/poisoned stream still gets an
+        // ordered best-effort cancel + archive before it is closed so the bridge does not retain an
+        // active subscription session indefinitely.
+        const CLEANUP_TIMEOUT: Duration = Duration::from_secs(1);
+        let _ = self.stream.set_write_timeout(Some(CLEANUP_TIMEOUT));
+        if self.cancel_before_archive {
+            let _ = self.send(serde_json::json!({"req":"cancel","session_id":sid}));
+        }
+        if let Ok(id) = self.send(serde_json::json!({"req":"archive_session","session_id":sid})) {
+            let _ = self.reply_with_timeout(id, "ok", CLEANUP_TIMEOUT);
         }
     }
 }
@@ -1804,6 +1810,39 @@ mod unit_tests {
         assert_eq!(jcode_batch_timeout(&cfg, 20_000), Duration::from_secs(12));
         assert_eq!(jcode_batch_timeout(&cfg, 2_000), Duration::from_secs(12));
         assert_eq!(jcode_root_timeout(&cfg), Duration::from_secs(12));
+    }
+
+    #[test]
+    fn jcode_drop_uses_cleanup_deadline_not_turn_deadline() {
+        let (stream, peer) = UnixStream::pair().unwrap();
+        let reader = BufReader::new(stream.try_clone().unwrap());
+        let server = thread::spawn(move || {
+            let mut peer = BufReader::new(peer);
+            let mut request = String::new();
+            peer.read_line(&mut request).unwrap();
+            assert!(request.contains("archive_session"));
+            // Keep the socket open without acknowledging the archive. The client's cleanup
+            // deadline, rather than EOF, must release Drop.
+            request.clear();
+            assert_eq!(peer.read_line(&mut request).unwrap(), 0);
+        });
+        let api = JcodeSession {
+            stream,
+            reader,
+            next_id: 1,
+            session: "slow-archive".into(),
+            usage: ModelUsage::default(),
+            provider: "OpenAI OAuth".into(),
+            model: "mock".into(),
+            requested_model: "mock".into(),
+            timeout: Duration::from_secs(55),
+            cancel_before_archive: false,
+        };
+        let started = Instant::now();
+        drop(api);
+        let elapsed = started.elapsed();
+        assert!(elapsed < Duration::from_secs(3), "{elapsed:?}");
+        server.join().unwrap();
     }
 
     #[test]

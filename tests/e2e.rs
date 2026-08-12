@@ -1047,6 +1047,9 @@ fn jcode_batch_retries_with_fresh_sessions_then_marks_failure_and_continues() {
                             ]
                         }
                     }
+                    "cancel" => {
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
                     "archive_session" => {
                         archives.push(sid.clone());
                         vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
@@ -1096,6 +1099,6 @@ fn jcode_batch_retries_with_fresh_sessions_then_marks_failure_and_continues() {
 
     let (messages, archives) = server.join().unwrap();
     assert_eq!(messages.len(), 4);
-    assert_eq!(archives, ["s1", "s4"]);
+    assert_eq!(archives, ["s1", "s2", "s3", "s4"]);
     fs::remove_dir_all(t).unwrap();
 }
