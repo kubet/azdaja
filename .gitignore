@@ -3,3 +3,6 @@
 /bench/results/*.jsonl
 /bench/results/*.trace
 .DS_Store
+/bench/results/*-artifacts/
+__pycache__/
+*.pyc

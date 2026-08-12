@@ -1,0 +1,14 @@
+{
+  "source": "oolongbench/oolong-synth",
+  "split": "validation",
+  "offset": 650,
+  "context_len": 1048576,
+  "context_window_id": 10012,
+  "question": "In the above data, which of the labels is the least common? Give your final answer in the form 'Label: answer' where answer is one of the labels: ham, spam.",
+  "answer": "['ham']",
+  "context_file": "context-1048576.txt",
+  "context_sha256": "78e61364029606a211e8d6fced3fefea42f37651bc2c4b84ef54856e1e70f4fe",
+  "context_bytes": 2693859,
+  "context_chars": 2689330,
+  "context_lines": 17477
+}

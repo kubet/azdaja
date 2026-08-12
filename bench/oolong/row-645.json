@@ -1,0 +1,18 @@
+{
+  "id": 117010248,
+  "context_len": 131072,
+  "dataset": "spam",
+  "context_window_id": 10004,
+  "question": "For the following question, only consider the subset of instances that occur in May of any year. Among instances occuring in May, how many data points should be classified as label 'ham'? Give your final answer in the form 'Answer: number'.",
+  "task_group": "timeline",
+  "task": "TASK_TYPE.NUMERIC_ONE_CLASS",
+  "answer": "[132]",
+  "source": "oolongbench/oolong-synth",
+  "split": "validation",
+  "offset": 645,
+  "context_file": "context-131072.txt",
+  "context_sha256": "05e4419a7280c91b3bbf1ea97629bfc235ee0eb23e67e1f0eeb21fc38b485bf2",
+  "context_bytes": 331575,
+  "context_chars": 331050,
+  "context_lines": 2185
+}

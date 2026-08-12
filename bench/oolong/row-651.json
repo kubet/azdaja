@@ -1,0 +1,17 @@
+{
+  "source": "oolongbench/oolong-synth",
+  "split": "validation",
+  "offset": 651,
+  "context_len": 1048576,
+  "context_window_id": 10012,
+  "question": "In the above data, how many data points should be classified as label 'ham'? Give your final answer in the form 'Answer: number'.",
+  "answer": "[8638]",
+  "dataset": "spam",
+  "task_group": "counting",
+  "task": "TASK_TYPE.NUMERIC_ONE_CLASS",
+  "context_file": "context-1048576.txt",
+  "context_sha256": "78e61364029606a211e8d6fced3fefea42f37651bc2c4b84ef54856e1e70f4fe",
+  "context_bytes": 2693859,
+  "context_chars": 2689330,
+  "context_lines": 17477
+}
