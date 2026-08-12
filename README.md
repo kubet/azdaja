@@ -77,11 +77,11 @@ start  load  exec  final  list  kill  solo  doctor  install  uninstall
 
 Private diagnostic on official OOLONG row 645, identical hidden context/question, GPT-5.4, reasoning `medium`, fresh serial sessions, subscription OAuth, and strict exact scoring:
 
-| Arm | Output | Correct | Wall time |
-|---|---:|:---:|---:|
-| Prime Agent | `Answer: 132` | yes | 109.9s |
-| Native jcode | `Answer: 133` | no | 64.6s |
-| Azdaja one-wave v25 | `Answer: 133` | no | **33.1s** |
+| Arm | Output | Correct | Wall time | Provider tokens |
+|---|---:|:---:|---:|---:|
+| Prime Agent | `Answer: 132` | yes | 109.9s | 87,213 |
+| Native jcode | `Answer: 133` | no | 64.6s | 190,356 |
+| Azdaja one-wave v25 | `Answer: 133` | no | **33.1s** | **15,336** |
 
 The new architecture is 3.32× faster than Prime on this diagnostic, but it is not yet an accuracy win. Azdaja remains private until repeated blind tasks show exactness plus stable latency and token advantages.
 
