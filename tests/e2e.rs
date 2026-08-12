@@ -418,7 +418,7 @@ if os.getenv('RLM_DEPTH') == '0':
                 'retry only an unresolved shard once', 'at most one targeted',
                 'two explicit complement certificates', 'json azdaja_error',
                 'os, re, json, math, collections, datetime', 'globals/locals/callable',
-                'preferably under 140 nonblank lines', 'child-call budget: 64')
+                'keep code under 100 nonblank lines', 'split the ordered response by view before validation', 'child-call budget: 64')
     sample_ok = 'schema-canary' in sample and len(sample) <= 4096 and 'TAIL_NOT_IN_SAMPLE' not in p
     if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
     else: print('```python\nFINAL("done:" + llm("classify"))\n```')

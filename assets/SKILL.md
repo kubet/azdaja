@@ -26,7 +26,7 @@ Inside `exec`, use ordinary Python plus:
 - `FINAL(answer)` — save the answer.
 - `FINAL_VAR("name")` — save a variable by name.
 
-Monty deliberately has no filesystem, process, environment, or network access. The only available modules are already imported as `os`, `re`, `json`, `math`, `collections`, and `datetime` (`os` host access is denied); `csv` and other imports are unavailable. `globals`, `locals`, `callable`, `eval`, `exec`, `yield`/generators, and `%` formatting are unavailable. `llm` returns one string, `llm_batch` returns an ordered list of strings, and `FINAL(answer)` is always defined—call it directly without introspection. Keep the schema-targeted cell compact (prefer at most 140 nonblank lines).
+Monty deliberately has no filesystem, process, environment, or network access. The only available modules are already imported as `os`, `re`, `json`, `math`, `collections`, and `datetime` (`os` host access is denied); `csv` and other imports are unavailable. `globals`, `locals`, `callable`, `eval`, `exec`, `yield`/generators, and string `%` formatting are unavailable; use f-strings, including for padded IDs. `llm` returns one string, `llm_batch` returns an ordered list of strings, and `FINAL(answer)` is always defined—call it directly without introspection. Keep the schema-targeted cell compact (prefer at most 140 nonblank lines).
 
 For exact semantic counts and aggregates:
 
