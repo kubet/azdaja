@@ -942,7 +942,12 @@ fn call_many_items(
                             let wire=format!("[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",depth+1,cfg.max_depth,prompts[i]);
                             match api.turn(&wire) {
                                 Ok(reply)=>{if trace_model_reply(&reply,depth+1).is_err(){let _=trace_model_failure(depth+1);} Ok(reply.text)},
-                                Err(error)=>{api.discard();let _=trace_model_failure(depth+1);Err(error)}
+                                Err(error)=>{
+                                    api.discard();let _=trace_model_failure(depth+1);
+                                    thread::sleep(Duration::from_secs(2));
+                                    let retry=(||{let mut fresh=JcodeSession::open_for_batch(cfg,model,prompts[i].chars().count())?;match fresh.turn(&wire){Ok(reply)=>Ok(reply),Err(error)=>{fresh.discard();Err(error)}}})();
+                                    match retry { Ok(reply)=>{if trace_model_reply(&reply,depth+1).is_err(){let _=trace_model_failure(depth+1);} Ok(reply.text)}, Err(retry_error)=>{let _=trace_model_failure(depth+1);Err(anyhow!("shared turn failed: {error:#}; retry failed: {retry_error:#}"))} }
+                                }
                             }
                         } else {
                         // Transport owns one bounded retry for a transient provider failure;
