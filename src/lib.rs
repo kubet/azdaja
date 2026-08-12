@@ -1225,7 +1225,7 @@ fn jcode_root_timeout(cfg: &Config) -> Duration {
 }
 #[cfg(unix)]
 fn jcode_batch_timeout(cfg: &Config, prompt_chars: usize) -> Duration {
-    let cap = if prompt_chars >= 8_000 { 60 } else { 15 };
+    let cap = if prompt_chars >= 8_000 { 55 } else { 15 };
     Duration::from_secs(cfg.sub_timeout.min(cap))
 }
 
@@ -1796,7 +1796,7 @@ mod unit_tests {
             sub_timeout: 300,
             ..Config::default()
         };
-        assert_eq!(jcode_batch_timeout(&cfg, 20_000), Duration::from_secs(60));
+        assert_eq!(jcode_batch_timeout(&cfg, 20_000), Duration::from_secs(55));
         assert_eq!(jcode_batch_timeout(&cfg, 2_000), Duration::from_secs(15));
         assert_eq!(jcode_root_timeout(&cfg), Duration::from_secs(90));
         assert_eq!(cfg.sub_timeout, 300);
