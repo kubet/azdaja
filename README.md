@@ -81,11 +81,11 @@ Private diagnostic on official OOLONG row 645, identical hidden context/question
 |---|---:|:---:|---:|---:|
 | Prime Agent | `Answer: 132` | yes | 109.9s | 87,213 |
 | Native jcode | `Answer: 133` | no | 64.6s | 190,356 |
-| Azdaja one-wave v25 | `Answer: 133` | no | **33.1s** | **15,336** |
+| Azdaja one-wave v26 | `Answer: 132` | **yes** | **45.1s** | **16,097** |
 
-The new architecture is 3.32× faster than Prime on this diagnostic, but it is not yet an accuracy win. Azdaja remains private until repeated blind tasks show exactness plus stable latency and token advantages.
+On this diagnostic, Azdaja is 2.44× faster than Prime and uses 81.5% fewer provider tokens while matching the strict answer. This is one clean run, not a general superiority claim; repeated blind tasks remain required before release.
 
-The relevant improvement is architectural: the earlier 277.5s multi-pass path was replaced by one compact root plan and one full-coverage semantic wave. A clean v25 trajectory spent 9.2s in root planning and 13.7s in semantic classification, with no provider error row.
+The relevant improvement is architectural: the earlier 277.5s multi-pass path was replaced by one compact root plan and one full-coverage semantic wave on the same subscription session. The clean v26 trajectory spent 12.8s in root planning and 22.1s in semantic classification, with no provider error row.
 
 ## Guarantees
 
