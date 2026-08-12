@@ -1,79 +1,16 @@
 @charset "UTF-8";
-
-@font-face{font-family:Cormorant;src:url('/fonts/cormorant-regular.woff2') format('woff2');font-style:normal;font-weight:400;font-display:swap}
-@font-face{font-family:Cormorant;src:url('/fonts/cormorant-italic.woff2') format('woff2');font-style:italic;font-weight:400;font-display:swap}
-@font-face{font-family:Uncial;src:url('/fonts/uncial.woff2') format('woff2');font-style:normal;font-weight:400;font-display:swap}
-
-:root{--desk:#d8d4ca;--paper:#f3efe5;--ink:#201b15;--red:#9b2c23;--faint:#b7aa91}
+@font-face{font-family:Cormorant;src:url('/fonts/cormorant-regular.woff2') format('woff2');font-weight:400;font-display:swap}
+:root{--paper:#ebe8df;--ink:#181613;--red:#992b22}
 *{box-sizing:border-box}
 html,body{min-height:100%}
-html{background:var(--desk)}
-body{
-  margin:0;
-  color:var(--ink);
-  background:
-    radial-gradient(ellipse at center,rgba(255,255,255,.42),transparent 68%),
-    var(--desk);
-  font-family:Cormorant,Georgia,serif;
-  -webkit-font-smoothing:antialiased;
-}
-body::after{
-  content:"";position:fixed;inset:0;pointer-events:none;opacity:.035;mix-blend-mode:multiply;
-  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")
-}
+html{background:var(--paper)}
+body{margin:0;color:var(--ink);background:var(--paper);font-family:Cormorant,Georgia,serif;-webkit-font-smoothing:antialiased}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.025;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 ::selection{background:var(--red);color:var(--paper)}
-main{min-height:100svh;display:grid;place-items:center;padding:26px}
-.leaf{
-  position:relative;
-  width:min(100%,780px);
-  min-height:calc(100svh - 52px);
-  padding:clamp(48px,7vh,76px) clamp(30px,8vw,92px) 46px;
-  overflow:hidden;
-  text-align:center;
-  background:
-    linear-gradient(90deg,rgba(92,69,38,.035),transparent 5%,transparent 95%,rgba(92,69,38,.035)),
-    radial-gradient(circle at 13% 17%,rgba(154,83,52,.035),transparent 14%),
-    radial-gradient(circle at 88% 82%,rgba(106,74,36,.035),transparent 17%),
-    var(--paper);
-  box-shadow:0 1px 2px rgba(38,27,15,.2),0 18px 60px rgba(38,27,15,.12)
-}
-.leaf::before{
-  content:"";position:absolute;inset:19px;border:1px solid rgba(81,59,35,.17);pointer-events:none
-}
-.miniature{
-  width:230px;height:126px;margin:0 auto 20px;padding:8px 15px;
-  border:1px solid var(--red);outline:1px solid rgba(32,27,21,.75);outline-offset:4px;
-  display:grid;grid-template-columns:22px 1fr 22px;align-items:center
-}
-.miniature img{width:116px;height:109px;justify-self:center;object-fit:cover;object-position:50% 9%;filter:saturate(.82) contrast(1.08)}
-.miniature i{width:13px;height:13px;border:1px solid var(--red);transform:rotate(45deg);justify-self:center;position:relative}
-.miniature i::after{content:"";position:absolute;inset:3px;background:var(--ink)}
-.rubric{margin:0 0 26px;color:var(--red);font:400 .67rem/1.3 Uncial,serif;letter-spacing:.13em}
-h1{margin:0;font-size:clamp(3.55rem,8.4vw,6.35rem);font-weight:400;line-height:.82;letter-spacing:-.048em}
-h1>span{color:var(--red);font-family:Uncial,serif;font-size:.88em}
-.text{max-width:540px;margin:35px auto 0;font-size:1.22rem;line-height:1.35;text-align:justify;text-align-last:center}
-.text>span{float:left;margin:-.12em .1em -.14em 0;color:var(--red);font:400 2.65em/.92 Uncial,serif}
-.ornament{width:120px;height:21px;margin:28px auto 22px;position:relative}
-.ornament::before,.ornament::after{content:"";position:absolute;top:10px;width:50px;height:1px;background:var(--faint)}
-.ornament::before{left:0}.ornament::after{right:0}
-.ornament b{position:absolute;left:56px;top:6px;width:9px;height:9px;background:var(--red);transform:rotate(45deg)}
-code{display:block;font:600 .7rem/1.5 "SFMono-Regular",Consolas,monospace;white-space:nowrap}
+main{width:min(100% - 40px,760px);min-height:100svh;margin:auto;padding:42px 0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+img{width:clamp(92px,11vw,142px);height:auto;max-height:213px;margin-bottom:31px;object-fit:contain;filter:saturate(.86) contrast(1.04)}
+h1{margin:0;font-size:clamp(3.7rem,8.1vw,6.8rem);font-weight:400;line-height:.83;letter-spacing:-.06em}
+h1::first-letter{color:var(--red)}
+code{margin-top:39px;padding-top:15px;border-top:1px solid rgba(24,22,19,.55);font:600 .67rem/1.4 "SFMono-Regular",Consolas,monospace;white-space:nowrap}
 code::first-letter{color:var(--red)}
-small{display:block;margin-top:10px;color:var(--red);font:400 .55rem/1 Uncial,serif;letter-spacing:.18em}
-
-@media(max-width:600px){
-  main{padding:0}
-  .leaf{width:100%;min-height:100svh;padding:44px 27px 34px;box-shadow:none}
-  .leaf::before{inset:12px}
-  .miniature{width:178px;height:96px;margin-bottom:18px;padding:6px 11px;grid-template-columns:16px 1fr 16px;outline-offset:3px}
-  .miniature img{width:91px;height:82px}
-  .miniature i{width:10px;height:10px}
-  .rubric{margin-bottom:23px;font-size:.57rem}
-  h1{font-size:clamp(3.2rem,15.6vw,4.2rem);line-height:.84}
-  .text{margin-top:29px;font-size:1.05rem;line-height:1.38}
-  .ornament{margin:22px auto 18px}
-  code{max-width:100%;font-size:.59rem;overflow:hidden;text-overflow:ellipsis}
-}
-@media(max-height:720px) and (min-width:601px){
-  .leaf{padding-top:36px;padding-bottom:30px}.miniature{height:106px}.miniature img{height:89px}.rubric{margin-bottom:18px}.text{margin-top:25px}.ornament{margin-top:19px;margin-bottom:15px}
-}
+@media(max-width:520px){main{width:calc(100% - 30px);padding:30px 0}img{width:86px;max-height:129px;margin-bottom:26px}h1{font-size:clamp(3.45rem,16.6vw,4.45rem);line-height:.84}code{max-width:100%;margin-top:34px;font-size:.59rem;overflow:hidden;text-overflow:ellipsis}}
