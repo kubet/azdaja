@@ -966,7 +966,7 @@ fn jcode_api_batch_uses_one_fresh_session_per_item_and_streams_usage() {
 
 #[cfg(unix)]
 #[test]
-fn jcode_batch_uses_one_physical_turn_per_item_and_preserves_failures() {
+fn jcode_batch_retries_provider_once_then_preserves_failure() {
     use std::io::{BufRead, BufReader, Write as _};
     use std::os::unix::net::UnixListener;
     use std::thread;
@@ -977,7 +977,7 @@ fn jcode_batch_uses_one_physical_turn_per_item_and_preserves_failures() {
     let server = thread::spawn(move || {
         let mut all_messages = Vec::new();
         let mut archives = Vec::new();
-        for session_number in 1..=3 {
+        for session_number in 1..=4 {
             // JcodeSession::open first probes bridge liveness, then opens the protocol stream.
             let (probe, _) = listener.accept().unwrap();
             drop(probe);
@@ -1018,7 +1018,7 @@ fn jcode_batch_uses_one_physical_turn_per_item_and_preserves_failures() {
                         assert_eq!(session_messages, 1, "batch session received a second turn");
                         let content = request["content"].as_str().unwrap().to_owned();
                         all_messages.push(content.clone());
-                        if session_number == 2 {
+                        if session_number == 2 || session_number == 3 {
                             assert!(content.ends_with("bad"));
                             vec![serde_json::json!({
                                 "v": 1, "ev": "error", "session_id": &sid,
@@ -1028,7 +1028,7 @@ fn jcode_batch_uses_one_physical_turn_per_item_and_preserves_failures() {
                             let (suffix, answer) = if session_number == 1 {
                                 ("first", "FIRST_OK")
                             } else {
-                                assert_eq!(session_number, 3);
+                                assert_eq!(session_number, 4);
                                 ("third", "THIRD_OK")
                             };
                             assert!(content.ends_with(suffix), "{content}");
@@ -1095,7 +1095,7 @@ fn jcode_batch_uses_one_physical_turn_per_item_and_preserves_failures() {
     assert!(out.contains("injected provider failure"), "{out}");
 
     let (messages, archives) = server.join().unwrap();
-    assert_eq!(messages.len(), 3);
-    assert_eq!(archives, ["s1", "s2", "s3"]);
+    assert_eq!(messages.len(), 4);
+    assert_eq!(archives, ["s1", "s2", "s3", "s4"]);
     fs::remove_dir_all(t).unwrap();
 }

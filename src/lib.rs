@@ -937,37 +937,46 @@ fn call_many_items(
                     };
                     #[cfg(unix)]
                     let result = if batch && cfg.sub_llm_cmd == "jcode-api" {
-                        // Each logical item owns exactly one physical provider turn. The solve
-                        // cell may retry an explicitly unresolved shard once; a hidden transport
-                        // retry would multiply deadlines and contend with cancellation cleanup.
-                        let attempt: Result<ModelReply> = (|| {
-                            let mut api=JcodeSession::open_for_batch(cfg,model,prompts[i].chars().count())?;
-                            let wire = format!(
-                                "[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",
-                                depth + 1,
-                                cfg.max_depth,
-                                prompts[i]
-                            );
-                            match api.turn(&wire) {
-                                Ok(reply) => Ok(reply),
+                        // Transport owns one bounded retry for a transient provider failure;
+                        // solve code owns contract validation and never repeats valid work. Cleanup
+                        // completes before the short backoff, so the retry cannot race a poisoned
+                        // subscription session.
+                        let mut result = None;
+                        for physical_attempt in 0..2 {
+                            if physical_attempt == 1 {
+                                thread::sleep(Duration::from_secs(2));
+                            }
+                            let attempt: Result<ModelReply> = (|| {
+                                let mut api=JcodeSession::open_for_batch(cfg,model,prompts[i].chars().count())?;
+                                let wire = format!(
+                                    "[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",
+                                    depth + 1,
+                                    cfg.max_depth,
+                                    prompts[i]
+                                );
+                                match api.turn(&wire) {
+                                    Ok(reply) => Ok(reply),
+                                    Err(error) => {
+                                        api.discard();
+                                        Err(error)
+                                    }
+                                }
+                            })();
+                            match attempt {
+                                Ok(reply) => {
+                                    if trace_model_reply(&reply, depth + 1).is_err() {
+                                        let _ = trace_model_failure(depth + 1);
+                                    }
+                                    result = Some(Ok(reply.text));
+                                    break;
+                                }
                                 Err(error) => {
-                                    api.discard();
-                                    Err(error)
-                                }
-                            }
-                        })();
-                        match attempt {
-                            Ok(reply) => {
-                                if trace_model_reply(&reply, depth + 1).is_err() {
                                     let _ = trace_model_failure(depth + 1);
+                                    result = Some(Err(error));
                                 }
-                                Ok(reply.text)
-                            }
-                            Err(error) => {
-                                let _ = trace_model_failure(depth + 1);
-                                Err(error)
                             }
                         }
+                        result.unwrap_or_else(|| Err(anyhow!("provider call did not run")))
                     } else {
                         call_model(&prompts[i], model, cfg, depth + 1)
                     };
