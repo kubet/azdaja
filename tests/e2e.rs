@@ -401,6 +401,42 @@ fn concurrent_starts_respect_limit() {
 }
 
 #[test]
+fn solo_fixed_manifest_prelude_owns_provider_plumbing() {
+    let t = temp("solo-manifest");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        r#"import os,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[{"id":"R1","evidence":"ordinary note"},{"id":"R2","evidence":"ambiguous service"}]\nlabels=semantic_manifest(items,"binary annotation",["ham","spam"])\nFINAL(labels["R1"]+":"+labels["R2"])\n```')
+elif 'Blindly adjudicate' in p:
+    print('R2|spam|final|service')
+else:
+    print('R1|ham|final|ordinary\nR2|ham|review|boundary')
+"#,
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "binary annotation", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham:spam");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
 fn solo_prompt_guides_exact_aggregation_in_one_root_turn() {
     let t = temp("solo");
     let mock = t.join("solo.py");
@@ -413,12 +449,11 @@ if os.getenv('RLM_DEPTH') == '0':
     end = '--- END UNTRUSTED SCHEMA SAMPLE ---'
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
     required = ('parse only the observed schema', 'every source occurrence', 'integer multiplicity',
-                'rendered character length', 'complete manifest',
-                'id|actual_label|final', 'omission is unresolved',
-                'retry only an unresolved shard once', 'at most one targeted',
-                'no second full pass', 'json azdaja_error',
-                'os, re, json, math, collections, datetime', 'globals/locals/callable',
-                'keep code under 90 nonblank lines', 'parse each shard independently', 'child-call budget: 64')
+                'semantic_manifest(items, task, labels)', 'complete disjoint primary round',
+                'strict coverage', 'one failed-shard retry', 'boundary-only adjudication',
+                'two-key dicts named id and evidence', 'call the helper exactly once',
+                'never call llm/llm_batch directly', 'os, re, json, math, collections, datetime',
+                'globals/locals/callable', 'keep code under 50 nonblank lines')
     sample_ok = 'schema-canary' in sample and len(sample) <= 4096 and 'TAIL_NOT_IN_SAMPLE' not in p
     if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
     else: print('```python\nFINAL("done:" + llm("classify"))\n```')
