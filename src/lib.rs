@@ -1316,6 +1316,17 @@ impl JcodeSession {
     fn reply(&mut self, id: u64, kind: &str) -> Result<serde_json::Value> {
         self.reply_with_timeout(id, kind, self.timeout)
     }
+    fn reply_before(
+        &mut self,
+        id: u64,
+        kind: &str,
+        deadline: Instant,
+    ) -> Result<serde_json::Value> {
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .ok_or_else(|| anyhow!("jcode session setup timed out"))?;
+        self.reply_with_timeout(id, kind, remaining)
+    }
     fn open(cfg: &Config, model: &str) -> Result<Self> {
         Self::open_with_timeout(cfg, model, Duration::from_secs(cfg.sub_timeout))
     }
@@ -1343,21 +1354,22 @@ impl JcodeSession {
             timeout,
             cancel_before_archive: true,
         };
+        let setup_deadline = Instant::now() + Duration::from_secs(8);
         let id=this.send(serde_json::json!({"req":"hello","min_version":1,"max_version":1,"client":format!("azdaja/{VERSION}")}))?;
-        this.reply(id, "hello_ok")?;
+        this.reply_before(id, "hello_ok", setup_deadline)?;
         let id = this
             .send(serde_json::json!({"req":"create_session","working_dir":env::current_dir()?}))?;
-        let f = this.reply(id, "attached")?;
+        let f = this.reply_before(id, "attached", setup_deadline)?;
         this.session = f
             .pointer("/session/session_id")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| anyhow!("jcode API omitted session id"))?
             .into();
         let id=this.send(serde_json::json!({"req":"set_model","session_id":this.session,"model":format!("openai-oauth:{model}")}))?;
-        this.reply(id, "ok")?;
+        this.reply_before(id, "ok", setup_deadline)?;
         let id =
             this.send(serde_json::json!({"req":"get_runtime_info","session_id":this.session}))?;
-        let rt = this.reply(id, "runtime_info")?;
+        let rt = this.reply_before(id, "runtime_info", setup_deadline)?;
         let provider = rt
             .get("provider")
             .and_then(serde_json::Value::as_str)
@@ -1373,7 +1385,7 @@ impl JcodeSession {
         this.provider = "OpenAI OAuth".into();
         this.model = resolved.into();
         let id=this.send(serde_json::json!({"req":"set_reasoning_effort","session_id":this.session,"effort":cfg.jcode_reasoning}))?;
-        this.reply(id, "ok")?;
+        this.reply_before(id, "ok", setup_deadline)?;
         this.cancel_before_archive = false;
         Ok(this)
     }
