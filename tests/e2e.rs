@@ -413,12 +413,12 @@ if os.getenv('RLM_DEPTH') == '0':
     end = '--- END UNTRUSTED SCHEMA SAMPLE ---'
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
     required = ('parse only the observed schema', 'every source occurrence', 'integer multiplicity',
-                'rendered character length', 'two independent full-coverage views',
-                'every survivor must occur exactly once', 'sparse absence is never evidence',
+                'rendered character length', 'complete manifest',
+                'id|actual_label|final', 'omission is unresolved',
                 'retry only an unresolved shard once', 'at most one targeted',
-                'two explicit complement certificates', 'json azdaja_error',
+                'no second full pass', 'json azdaja_error',
                 'os, re, json, math, collections, datetime', 'globals/locals/callable',
-                'keep code under 100 nonblank lines', 'split the ordered response by view before validation', 'child-call budget: 64')
+                'keep code under 90 nonblank lines', 'parse each shard independently', 'child-call budget: 64')
     sample_ok = 'schema-canary' in sample and len(sample) <= 4096 and 'TAIL_NOT_IN_SAMPLE' not in p
     if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
     else: print('```python\nFINAL("done:" + llm("classify"))\n```')
@@ -582,9 +582,9 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
     assert!(skill.contains("Each source occurrence is an aggregation unit"));
     assert!(skill.contains("retaining every source ID or an integer multiplicity"));
     assert!(skill.contains("actual rendered character length"));
-    assert!(skill.contains("two independent full-coverage views"));
+    assert!(skill.contains("complete manifest"));
     assert!(skill.contains("Omission is unresolved"));
-    assert!(skill.contains("two explicit complement certificates"));
+    assert!(skill.contains("No second full pass"));
     assert!(skill.contains("`yield`/generators"));
     assert!(skill.contains("`FINAL(answer)` is always defined"));
     assert!(skill.contains("`csv` and other imports are unavailable"));
