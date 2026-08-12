@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "date": "2026-08-12",
+  "fixture": "semantic-incidents (generated, 1,080,942 bytes)",
+  "runs": 1,
+  "warning": "Pilot only: n=1; Prime used a different model; subscription transports and warm daemons make cost/latency non-comparable.",
+  "arms": [
+    {
+      "arm": "jcode native",
+      "model": "claude-haiku-4-5",
+      "correct": true,
+      "wall_seconds": 5.75,
+      "max_rss_bytes": 283869184,
+      "reported_upload_tokens": 24329,
+      "reported_download_tokens": 133
+    },
+    {
+      "arm": "azdaja solo in jcode",
+      "model": "claude-haiku-4-5 root + sub",
+      "correct": true,
+      "wall_seconds": 29.89,
+      "max_rss_bytes": 285999104,
+      "tokens": null,
+      "note": "jcode text adapter does not expose structured usage to azdaja"
+    },
+    {
+      "arm": "Prime Agent",
+      "model": "openai-codex/gpt-5.4",
+      "correct": true,
+      "wall_seconds": 19.7,
+      "max_rss_bytes": 182648832,
+      "reported_total_tokens_sum": 59840,
+      "reported_cost_usd_sum": 0.0603675
+    }
+  ]
+}

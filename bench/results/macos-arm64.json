@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "azdaja": "azdaja 0.1.0 (monty 0.0.21)",
+  "host": {
+    "os": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu": "arm"
+  },
+  "results": [
+    {
+      "size_mb": 1,
+      "repeats": 20,
+      "load_ms": {
+        "median": 7.781146094202995,
+        "p95": 9.12862503901124
+      },
+      "snapshot_exec_ms": {
+        "median": 7.075207773596048,
+        "p95": 9.391041938215494
+      },
+      "direct_python_read_ms": {
+        "median": 22.064624587073922,
+        "p95": 28.63970911130309
+      },
+      "snapshot_bytes": 1002008,
+      "peak_rss_bytes": 11567104
+    },
+    {
+      "size_mb": 10,
+      "repeats": 20,
+      "load_ms": {
+        "median": 15.692290849983692,
+        "p95": 17.49975001439452
+      },
+      "snapshot_exec_ms": {
+        "median": 16.478978795930743,
+        "p95": 18.817916978150606
+      },
+      "direct_python_read_ms": {
+        "median": 28.367978986352682,
+        "p95": 31.395374797284603
+      },
+      "snapshot_bytes": 10002009,
+      "peak_rss_bytes": 38600704
+    },
+    {
+      "size_mb": 100,
+      "repeats": 20,
+      "load_ms": {
+        "median": 91.8894587084651,
+        "p95": 135.7936249114573
+      },
+      "snapshot_exec_ms": {
+        "median": 105.45620834454894,
+        "p95": 193.89120768755674
+      },
+      "direct_python_read_ms": {
+        "median": 36.59210400655866,
+        "p95": 58.627833146601915
+      },
+      "snapshot_bytes": 100002009,
+      "peak_rss_bytes": 308576256
+    }
+  ]
+}

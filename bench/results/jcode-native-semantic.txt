@@ -1,0 +1,16 @@
+
+[read] /Users/vukasinkubet/dev/azdaja/bench/fixtures/semantic-incidents.txt
+
+[Tokens] upload: 10244 download: 63 cache_read: 0 cache_write: 0
+
+  →     1	=== INC-101 ===
+
+- INC-101: credential expiry
+- INC-102: network saturation
+- INC-103: storage exhaustion
+- INC-104: credential expiry
+- INC-105: storage exhaustion
+- INC-106: network saturation
+
+**Counts:** credential expiry 2, network saturation 2, storage exhaustion 2.
+[Tokens] upload: 14085 download: 70 cache_read: 9984 cache_write: 0
