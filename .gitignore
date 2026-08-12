@@ -1,0 +1,5 @@
+/target
+/bench/fixtures/semantic-incidents.txt
+/bench/results/*.jsonl
+/bench/results/*.trace
+.DS_Store

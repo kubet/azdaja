@@ -1,0 +1,14 @@
+# The one provider boundary. Prompt is always sent on stdin, never argv.
+sub_llm_cmd = "jcode run --no-update --quiet --model {model} Read_the_complete_UTF-8_prompt_at_{prompt_file}_and_return_only_its_answer"
+default_model = "claude-haiku-4-5"
+output_cap = 8192
+max_depth = 1
+sub_timeout = 300
+max_sessions = 4
+cell_timeout = 30
+idle_timeout = 1800
+clean_patterns = [
+  '(?m)^\[(?:read|write|bash|grep|glob|edit)\].*\n?',
+  '(?m)^\[Tokens\].*\n?',
+  '(?m)^\s*→.*\n?',
+]
