@@ -411,7 +411,7 @@ p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
     print('```python\nitems=[{"id":"R1","evidence":"ordinary note"},{"id":"R2","evidence":"ambiguous service"}]\nlabels=semantic_manifest(items,"binary annotation",["ham","spam"])\nFINAL(labels["R1"]+":"+labels["R2"])\n```')
 else:
-    print('R1|ham|final|ordinary\nR2|spam|final|service')
+    print('R1|ham\nR2|spam')
 "#,
     )
     .unwrap();

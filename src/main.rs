@@ -345,7 +345,7 @@ def _az_error(s):
     except:
         return False
 
-def _az_parse_manifest(raw, expected, labels, final_only):
+def _az_parse_labels(raw, expected, labels):
     if _az_error(raw):
         raise AssertionError("provider error")
     expected_set = set(expected)
@@ -355,21 +355,15 @@ def _az_parse_manifest(raw, expected, labels, final_only):
         if not line:
             continue
         parts = line.split("|")
-        if len(parts) != 4:
-            raise AssertionError("malformed manifest")
+        if len(parts) != 2:
+            raise AssertionError("malformed label manifest")
         rid = parts[0].strip()
         label = parts[1].strip()
-        state = parts[2].strip()
-        reason = parts[3].strip()
-        if rid not in expected_set or rid in seen:
-            raise AssertionError("invalid manifest ID")
-        if label not in labels or state not in ("final", "review") or not reason:
-            raise AssertionError("invalid manifest value")
-        if final_only and state != "final":
-            raise AssertionError("unresolved adjudication")
-        seen[rid] = (label, state, reason)
+        if rid not in expected_set or rid in seen or label not in labels:
+            raise AssertionError("invalid label manifest")
+        seen[rid] = label
     if set(seen.keys()) != expected_set:
-        raise AssertionError("incomplete manifest")
+        raise AssertionError("incomplete label manifest")
     return seen
 
 def _az_pack(items, head, limit):
@@ -417,8 +411,8 @@ def semantic_manifest(items, task, labels):
         + "Silently perform two checks before answering: first classify every item, then counter-review every "
         + "deceptive, terse, automated, callback/service, missed-call, billing, adult/personal-mimic, truncated, "
         + "and boundary item against the dataset annotation convention. Resolve the check internally.\n"
-        + "Return exactly one line per supplied ID: ID|LABEL|final|REASON. Use a tiny REASON code and no other "
-        + "prose. Never omit, merge, or renumber an occurrence.\n"
+        + "Return exactly one line per supplied ID: ID|LABEL. No reason, state, confidence, prose, or markdown. "
+        + "Never omit, merge, or renumber an occurrence.\n"
     )
     prompts, expected = _az_pack(items, head, 40000)
     if len(prompts) != 1:
@@ -427,15 +421,15 @@ def semantic_manifest(items, task, labels):
     if len(raw) != 1:
         raise AssertionError("semantic response count")
     try:
-        manifest = _az_parse_manifest(raw[0], expected[0], labels, True)
+        manifest=_az_parse_labels(raw[0],expected[0],labels)
     except:
         retry = llm_batch(prompts, None, 1)
         if len(retry) != 1:
             raise AssertionError("semantic retry count")
-        manifest = _az_parse_manifest(retry[0], expected[0], labels, True)
+        manifest=_az_parse_labels(retry[0],expected[0],labels)
     out = {}
     for rid in manifest:
-        out[rid] = manifest[rid][0]
+        out[rid]=manifest[rid]
     if set(out.keys()) != ids:
         raise AssertionError("final coverage")
     return out
