@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#e8ddc4">
-  <meta name="description" content="Azdaja — think beyond the context window.">
+  <meta name="description" content="Azdaja — a minimal recursive language model layer for any agent that can run a command.">
   <meta property="og:title" content="Azdaja">
   <meta property="og:description" content="Think beyond the context window.">
   <meta property="og:type" content="website">
@@ -20,8 +20,13 @@
   <main>
     <img src="/azdaja-mark.webp" width="360" height="540" alt="Azdaja dragon">
     <h1>Think beyond<br>the context window</h1>
-    <p><span class="init">A</span> <span>recursive language model<br>for texts too large to hold.</span></p>
+    <div class="copy">
+      <p>Aždaja (roughly azh-DAH-yah) is the many-headed Serbian dragon: one persistent body, parallel model-call heads, and an appetite for contexts too large for one window.</p>
+      <p>One binary, for any agent that can run a command. It loads a file into a persistent Python session; the model sees only metadata, writes code to read and question it, and calls sub-models in parallel from inside the sandbox. No chunking, no retrieval, no index — the strategy belongs to the model.</p>
+      <p>Point it at the hundred-megabyte log, the whole codebase, the transcript that never fit. It reads what it needs, fans out heads where it must, and comes back with one answer.</p>
+    </div>
     <code>$ curl -fsSL https://azdaja.dev/install | sh</code>
+    <footer>Private preview · MIT</footer>
   </main>
 </body>
 </html>
