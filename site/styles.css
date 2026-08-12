@@ -17,5 +17,6 @@ h1{margin:0;color:var(--red);font-size:clamp(1.3rem,2.6vw,1.7rem);font-weight:40
 .copy p+p::first-letter{color:var(--red)}
 code{margin-top:clamp(30px,5svh,46px);color:rgba(36,28,18,.8);font:600 .67rem/1.4 "SFMono-Regular",Consolas,monospace;white-space:nowrap}
 code::first-letter{color:var(--red)}
-footer{margin-top:14px;color:var(--red);font-size:.6rem;letter-spacing:.3em;text-transform:uppercase}
+footer{margin-top:14px;font-size:.72rem;letter-spacing:.08em}
+footer a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
 @media(max-width:520px){main{width:calc(100% - 34px);padding:36px 0 44px}img{width:108px;margin-bottom:24px}h1{font-size:1.18rem;letter-spacing:.17em}.copy{margin-top:24px}.copy p{font-size:1.05rem}code{max-width:100%;margin-top:36px;font-size:.59rem;overflow:hidden;text-overflow:ellipsis}}
