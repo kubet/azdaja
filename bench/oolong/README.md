@@ -8,7 +8,9 @@ Private development fixtures from `oolongbench/oolong-synth`, validation split. 
 
 Every row binds its context filename, SHA-256, byte, character, and line counts. `run.py` fails closed on mismatches, API-key-like environment variables, ambiguous OAuth routing, wrong output format, stale skill config, or a missing explicit inference acknowledgement.
 
-The controller executes arms serially in a deterministic shuffled order with fresh homes/sessions and GPT-5.4 at medium reasoning over ChatGPT subscription OAuth. Every arm is instructed to use only the supplied context, with no network, external dataset, or precomputed-label lookup. Native jcode and Prime receive their ordinary file-analysis tools. The azdaja treatment explicitly activates the installed skill; task payload, fixture, question, model, reasoning, scorer, and timeout remain identical. Results must disclose this treatment difference. Raw trajectories in a persistent `--work-dir` are sensitive and private.
+The controller executes arms serially in a deterministic shuffled order with fresh homes/sessions and GPT-5.4 at medium reasoning over ChatGPT subscription OAuth. Each arm receives a random read-only context filename and the same official question; wrapper instructions differ by product and are hashed. Native jcode and Prime retain their ordinary file-analysis tools. The azdaja arm invokes the staged `solo` product directly, eliminating an unrelated outer-agent loop while preserving the same model, reasoning level, fixture, scorer, and timeout.
+
+Retained artifacts are owner-only, credential-redacted stdout/stderr and azdaja model/solo traces; copied OAuth homes, task copies, histories, and runtime state are deleted after each arm. The tool-event scan catches obvious network or external-dataset commands but is **post-hoc detection, not OS containment**. Until the native-tool processes run behind an enforceable filesystem/network sandbox or broker, these runs are diagnostic and cannot support a superiority claim.
 
 Example (performs subscription inference):
 

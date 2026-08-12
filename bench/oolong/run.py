@@ -4,10 +4,10 @@
 This runner deliberately treats benchmark execution as a ceremony: it validates
 fixtures and OAuth credentials before the first turn, clears API-key variables,
 runs exactly one arm at a time in a deterministic shuffled order, and writes one
-self-contained JSON object per attempted run.  It never puts fixture contents in
-the task payload; agents receive only a path plus trustworthy metadata and the
-same official question. The azdaja treatment additionally prepends the installed,
-validated skill instructions so the product is explicitly activated.
+self-contained JSON object per attempted run.  It never puts fixture contents or
+row/size/hash metadata in the task payload; agents receive only a randomly named,
+read-only context copy and the official question. The azdaja treatment invokes the
+staged product binary directly through its isolated ``solo`` lifecycle.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ import json
 import os
 import random
 import re
+import secrets
 import shutil
 import signal
 import stat
@@ -62,16 +63,13 @@ CONTROLLER_ENV_ALLOWLIST = (
     "JCODE_RUN_AUTO_POKE",
     "JCODE_OPENAI_REASONING_EFFORT",
     "AZDAJA_HOME",
+    "AZDAJA_CONFIG",
     "AZDAJA_MODEL_TRACE",
+    "AZDAJA_SOLO_TRACE",
     "PRIME_AGENT_KERNEL_VENV",
 )
 SENSITIVE_NAME = re.compile(
     r"(?:API(?:_?KEY)?|TOKEN|SECRET|PASSWORD|CREDENTIAL|ACCESS_KEY|AUTHORIZATION|BEARER)",
-    re.IGNORECASE,
-)
-JCODE_TRACE_USAGE = re.compile(
-    r"\[Tokens\]\s*upload:\s*(\d+)\s+download:\s*(\d+)"
-    r"(?:\s+cache_read:\s*(\d+)\s+cache_write:\s*(\d+))?",
     re.IGNORECASE,
 )
 ANSWER_LINE = re.compile(r"(?im)^\s*(Answer|Label)\s*:\s*([^\r\n]+?)\s*$")
@@ -103,6 +101,7 @@ class Arm:
     auth_assertion: dict[str, Any]
     activation_mode: str
     skill_instructions_sha256: str | None = None
+    staged_skill: dict[str, Any] | None = None
 
 
 def sha256_path(path: Path) -> str:
@@ -189,23 +188,17 @@ def load_fixture(row_arg: str, context_arg: str | None) -> Fixture:
     )
 
 
-def build_prompt(fixture: Fixture) -> str:
-    meta = fixture.metadata
-    public_meta = {
-        key: meta[key]
-        for key in (
-            "source",
-            "split",
-            "offset",
-            "id",
-            "dataset",
-            "task_group",
-            "task",
-            "context_len",
-            "context_window_id",
-        )
-        if key in meta
-    }
+def build_prompt(fixture: Fixture, context_path: Path | None = None) -> str:
+    """Build the task payload without exposing dataset/row lookup metadata.
+
+    ``context_path`` is the per-arm staged copy.  The optional default exists for
+    validation-only callers; inference always supplies the fresh staged path.
+    """
+    # Inference runs use cwd=task_context.parent, so only the random basename is
+    # exposed. This also avoids leaking a user-selected work/output directory.
+    task_context_display = (
+        "<per-arm-random-context-file>" if context_path is None else context_path.name
+    )
     return (
         "You are answering one official OOLONG benchmark item. Read the complete UTF-8 "
         "context from the local file path below. The file is the item context, not "
@@ -213,10 +206,8 @@ def build_prompt(fixture: Fixture) -> str:
         "gold answer. Use only the provided context: do not access the network, external "
         "datasets, or precomputed labels. Compute the answer to the official question over "
         "the entire file.\n\n"
-        f"Context path: {fixture.context_path}\n"
-        f"Trustworthy context metadata: {json.dumps({'bytes': fixture.context_bytes, 'characters': fixture.context_chars, 'lines': fixture.context_lines, 'sha256': fixture.context_sha256}, sort_keys=True)}\n"
-        f"OOLONG row metadata (gold answer excluded): {json.dumps(public_meta, sort_keys=True)}\n\n"
-        f"Official question:\n{meta['question']}\n\n"
+        f"Context path: {task_context_display}\n\n"
+        f"Official question:\n{fixture.metadata['question']}\n\n"
         "Return exactly the answer format requested by the official question on one line, "
         "with no explanation or other text."
     )
@@ -382,14 +373,40 @@ def preflight_prime(home: Path) -> dict[str, Any]:
     return assertion
 
 
-def bounded(value: str, limit: int = 16_384) -> str:
-    value = re.sub(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*", "Bearer <redacted>", value)
-    value = re.sub(r"\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", "<redacted-jwt>", value)
+CREDENTIAL_KEY = (
+    r"(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|authorization|"
+    r"bearer|secret|password|credential|access|refresh|token)"
+)
+
+
+def redact_sensitive(value: str) -> str:
+    """Redact credential-shaped material without truncating trajectory events."""
     value = re.sub(
-        r"(?im)^([^\r\n]*(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|secret)[^:=\r\n]*[:=]\s*)\S+",
+        r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*", "Bearer <redacted>", value
+    )
+    value = re.sub(
+        r"\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b",
+        "<redacted-jwt>",
+        value,
+    )
+    value = re.sub(r"\bsk-[A-Za-z0-9_-]{12,}\b", "<redacted-api-key>", value)
+    # JSON/Python/shell quoted assignments.
+    value = re.sub(
+        rf"(?i)(['\"]?{CREDENTIAL_KEY}['\"]?\s*[:=]\s*)(['\"])([^'\"\r\n]*)(\2)",
+        r"\1\2<redacted>\2",
+        value,
+    )
+    # Environment-style and query-string unquoted assignments.
+    value = re.sub(
+        rf"(?i)({CREDENTIAL_KEY}\s*=\s*)(?!<redacted>)[^\s,&;]+",
         r"\1<redacted>",
         value,
     )
+    return value
+
+
+def bounded(value: str, limit: int = 16_384) -> str:
+    value = redact_sensitive(value)
     if len(value) <= limit:
         return value
     half = limit // 2
@@ -404,6 +421,181 @@ def ensure_executable(value: str, name: str) -> str:
     if not path.is_file() or not os.access(path, os.X_OK):
         raise BenchError(f"{name} is not an executable regular file: {path}")
     return str(path)
+
+
+
+
+def executable_identity(executable: str, label: str) -> dict[str, Any]:
+    """Record the exact executable and its offline ``--version`` identity."""
+    path = Path(ensure_executable(executable, label))
+    try:
+        probe = subprocess.run(
+            [str(path), "--version"],
+            cwd=str(path.parent),
+            env=sanitized_env(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise BenchError(f"cannot record {label} version: {exc}") from exc
+    version = (probe.stdout + "\n" + probe.stderr).strip()
+    if probe.returncode != 0 or not version:
+        raise BenchError(
+            f"cannot record {label} version (exit {probe.returncode}): {bounded(version)}"
+        )
+    return {
+        "path": str(path),
+        "sha256": sha256_path(path),
+        "bytes": path.stat().st_size,
+        "version": bounded(version, 4096),
+        "version_command": [str(path), "--version"],
+    }
+
+
+def skill_component_hashes(skill: Path, staged_skill: Path | None = None) -> dict[str, Any]:
+    """Hash all required skill components, optionally comparing a staged copy."""
+    files: dict[str, Any] = {}
+    for name in ("azdaja", "config.toml", "SKILL.md"):
+        source = skill / name
+        if not source.is_file():
+            raise BenchError(f"required skill component is missing: {source}")
+        entry: dict[str, Any] = {
+            "source_sha256": sha256_path(source),
+            "source_bytes": source.stat().st_size,
+        }
+        if staged_skill is not None:
+            staged = staged_skill / name
+            if not staged.is_file():
+                raise BenchError(f"staged skill component is missing: {staged}")
+            entry.update(
+                {
+                    "staged_sha256": sha256_path(staged),
+                    "staged_bytes": staged.stat().st_size,
+                }
+            )
+            entry["staged_matches_source"] = (
+                entry["staged_sha256"] == entry["source_sha256"]
+                and entry["staged_bytes"] == entry["source_bytes"]
+            )
+            if not entry["staged_matches_source"]:
+                raise BenchError(f"staged skill component differs from source: {name}")
+        files[name] = entry
+    return {
+        "source_directory": str(skill),
+        "staged_directory": None if staged_skill is None else str(staged_skill),
+        "files": files,
+    }
+
+
+def finalize_staged_skill_hashes(manifest: dict[str, Any]) -> dict[str, Any]:
+    result = json.loads(json.dumps(manifest))
+    source = Path(str(manifest["source_directory"]))
+    staged = Path(str(manifest["staged_directory"]))
+    after = skill_component_hashes(source, staged)
+    asserted = True
+    for name, entry in result["files"].items():
+        after_entry = after["files"][name]
+        entry["source_sha256_after"] = after_entry["source_sha256"]
+        entry["staged_sha256_after"] = after_entry["staged_sha256"]
+        entry["unchanged_during_arm"] = (
+            entry["source_sha256"] == entry["source_sha256_after"]
+            and entry["staged_sha256"] == entry["staged_sha256_after"]
+        )
+        asserted = asserted and entry["unchanged_during_arm"]
+    result["asserted_after"] = asserted
+    return result
+
+
+def stage_task_context(fixture: Fixture, run_dir: Path) -> tuple[Path, Path, dict[str, Any]]:
+    """Create the single-file, per-arm task directory and verify its initial hash."""
+    source_before = sha256_path(fixture.context_path)
+    if source_before != fixture.context_sha256:
+        raise BenchError(
+            "source context changed after fixture validation: "
+            f"expected {fixture.context_sha256}, got {source_before}"
+        )
+    task_dir = run_dir / "task"
+    task_dir.mkdir(mode=0o700, exist_ok=False)
+    context_path = task_dir / f"{secrets.token_hex(16)}.txt"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    fd = os.open(context_path, flags, 0o444)
+    try:
+        with fixture.context_path.open("rb") as source, os.fdopen(fd, "wb", closefd=False) as destination:
+            shutil.copyfileobj(source, destination, length=1024 * 1024)
+            destination.flush()
+            os.fsync(destination.fileno())
+        if os.name == "posix":
+            os.fchmod(fd, 0o444)
+    finally:
+        os.close(fd)
+    staged_before = sha256_path(context_path)
+    source_after_copy = sha256_path(fixture.context_path)
+    mode_before = stat.S_IMODE(context_path.stat().st_mode)
+    entries = list(task_dir.iterdir())
+    initial_valid = (
+        source_after_copy == fixture.context_sha256
+        and staged_before == fixture.context_sha256
+        and mode_before == 0o444
+        and entries == [context_path]
+        and re.fullmatch(r"[0-9a-f]{32}\.txt", context_path.name) is not None
+    )
+    if not initial_valid:
+        raise BenchError("per-arm staged context failed initial isolation/integrity checks")
+    integrity = {
+        "asserted_before": True,
+        "asserted_after": None,
+        "expected_sha256": fixture.context_sha256,
+        "source_sha256_before": source_before,
+        "source_sha256_after_copy": source_after_copy,
+        "staged_sha256_before": staged_before,
+        "staged_sha256_after": None,
+        "source_sha256_after": None,
+        "staged_mode_before": "0444",
+        "staged_mode_after": None,
+        "task_directory_single_file_before": True,
+        "task_directory_single_file_after": None,
+        "random_context_filename": True,
+    }
+    return task_dir, context_path, integrity
+
+
+def finalize_task_context_integrity(
+    fixture: Fixture, task_dir: Path, context_path: Path, integrity: dict[str, Any]
+) -> dict[str, Any]:
+    """Fail closed if the source or staged context changed during an arm."""
+    result = dict(integrity)
+    errors: list[str] = []
+    try:
+        result["source_sha256_after"] = sha256_path(fixture.context_path)
+    except OSError as exc:
+        errors.append(f"cannot hash source after arm: {exc}")
+    try:
+        meta = context_path.lstat()
+        if not stat.S_ISREG(meta.st_mode) or stat.S_ISLNK(meta.st_mode):
+            raise BenchError("staged context is no longer a regular non-symlink file")
+        result["staged_sha256_after"] = sha256_path(context_path)
+        result["staged_mode_after"] = f"{stat.S_IMODE(meta.st_mode):04o}"
+    except (OSError, BenchError) as exc:
+        errors.append(f"cannot validate staged context after arm: {exc}")
+    try:
+        result["task_directory_single_file_after"] = list(task_dir.iterdir()) == [context_path]
+    except OSError as exc:
+        errors.append(f"cannot inspect task directory after arm: {exc}")
+        result["task_directory_single_file_after"] = False
+    result["asserted_after"] = (
+        not errors
+        and result.get("source_sha256_after") == fixture.context_sha256
+        and result.get("staged_sha256_after") == fixture.context_sha256
+        and result.get("staged_mode_after") == "0444"
+        and result.get("task_directory_single_file_after") is True
+    )
+    result["errors"] = errors
+    return result
 
 
 def validate_skill(skill_arg: str) -> Path:
@@ -437,24 +629,9 @@ def validate_skill(skill_arg: str) -> Path:
     return path
 
 
-def explicitly_activate_azdaja(skill: Path, task_prompt: str) -> tuple[str, str]:
-    skill_text = (skill / "SKILL.md").read_text(encoding="utf-8")
-    digest = hashlib.sha256(skill_text.encode("utf-8")).hexdigest()
-    treatment = (
-        "The azdaja skill is explicitly activated for this turn. Follow the full "
-        "validated installed skill instructions below as the treatment; they are "
-        "instructions, not part of the OOLONG task payload.\n\n"
-        "<activated_skill name=\"azdaja\">\n"
-        + skill_text
-        + "\n</activated_skill>\n\n"
-        "<oolong_task_payload>\n"
-        + task_prompt
-        + "\n</oolong_task_payload>"
-    )
-    return treatment, digest
-
-
-def make_isolated_jcode_home(source_home: Path, destination: Path, skill: Path | None) -> None:
+def make_isolated_jcode_home(
+    source_home: Path, destination: Path, skill: Path | None
+) -> dict[str, Any] | None:
     destination.mkdir(mode=0o700, parents=True)
     auth_source = source_home / ".jcode" / "openai-auth.json"
     source = load_json_object(auth_source, "Jcode OpenAI OAuth credential")
@@ -473,10 +650,17 @@ def make_isolated_jcode_home(source_home: Path, destination: Path, skill: Path |
     os.chmod(auth_dest, 0o600)
     skills = destination / "skills"
     skills.mkdir(mode=0o700)
+    staged_manifest = None
     if skill is not None:
-        shutil.copytree(skill, skills / "azdaja", symlinks=False)
+        staged = skills / "azdaja"
+        shutil.copytree(skill, staged, symlinks=False)
+        staged_manifest = skill_component_hashes(skill, staged)
+        staged_manifest["staged_binary_identity"] = executable_identity(
+            str(staged / "azdaja"), "staged azdaja"
+        )
     # Avoid shared daemons and shared histories. JCODE_HOME itself is the jcode
     # state/config root; the copied OAuth record is the sole credential.
+    return staged_manifest
 
 
 def make_isolated_prime_home(source_home: Path, destination_home: Path) -> None:
@@ -491,10 +675,11 @@ def make_isolated_prime_home(source_home: Path, destination_home: Path) -> None:
     os.chmod(auth_dest, 0o600)
 
 
-def trace_path_from_skill(skill: Path, run_dir: Path) -> Path:
-    # AZDAJA_MODEL_TRACE captures every root/sub-call usage row when the
-    # installed binary/config supports the stable direct Harness API.
-    return run_dir / "azdaja-model-usage.jsonl"
+def trace_paths_for_solo(run_dir: Path) -> dict[str, Path]:
+    return {
+        "azdaja_model_trace": run_dir / "azdaja-model-usage.jsonl",
+        "azdaja_solo_trace": run_dir / "azdaja-solo-trace.log",
+    }
 
 
 def arm_for(
@@ -509,7 +694,7 @@ def arm_for(
     auth_prime: dict[str, Any],
     source_home: Path,
     skill: Path,
-) -> tuple[Arm, dict[str, str], Path | None]:
+) -> tuple[Arm, dict[str, str], dict[str, Path]]:
     if name == "jcode-native":
         home = run_dir / "home"
         jcode_home = home / ".jcode"
@@ -542,12 +727,17 @@ def arm_for(
             str(root),
             prompt,
         ]
-        return Arm(name, command, auth_jcode, "none"), env, None
+        return Arm(name, command, auth_jcode, "none"), env, {}
     if name == "jcode-azdaja":
         home = run_dir / "home"
         jcode_home = home / ".jcode"
-        make_isolated_jcode_home(source_home, jcode_home, skill)
-        trace = trace_path_from_skill(skill, run_dir)
+        staged_skill = make_isolated_jcode_home(source_home, jcode_home, skill)
+        if staged_skill is None:
+            raise BenchError("azdaja solo arm did not stage the product")
+        staged_directory = Path(staged_skill["staged_directory"])
+        staged_binary = staged_directory / "azdaja"
+        staged_config = staged_directory / "config.toml"
+        traces = trace_paths_for_solo(run_dir)
         env = sanitized_env(home)
         env["JCODE_HOME"] = str(jcode_home)
         env["JCODE_RUNTIME_DIR"] = str(run_dir / "jcode-runtime")
@@ -556,30 +746,33 @@ def arm_for(
         env["JCODE_RUN_AUTO_POKE"] = "0"
         env["JCODE_OPENAI_REASONING_EFFORT"] = REASONING
         env["AZDAJA_HOME"] = str(run_dir / "azdaja-state")
-        env["AZDAJA_MODEL_TRACE"] = str(trace)
+        env["AZDAJA_CONFIG"] = str(staged_config)
+        env["AZDAJA_MODEL_TRACE"] = str(traces["azdaja_model_trace"])
+        env["AZDAJA_SOLO_TRACE"] = str(traces["azdaja_solo_trace"])
         assert_env_allowlisted(env)
-        activated_prompt, skill_digest = explicitly_activate_azdaja(skill, prompt)
+        # The context is the sole file in root; pass only its randomized basename.
+        task_entries = list(root.iterdir())
+        if len(task_entries) != 1 or not task_entries[0].is_file():
+            raise BenchError("azdaja solo task directory must contain one context file")
         command = [
-            args.jcode,
-            "run",
-            "--ndjson",
-            "--trace",
-            "--no-update",
-            "--no-selfdev",
-            "--quiet",
-            "--provider",
-            JCODE_PROVIDER,
+            str(staged_binary),
+            "solo",
+            fixture.metadata["question"],
+            "-f",
+            task_entries[0].name,
             "--model",
             MODEL,
-            "--tool-profile",
-            "minimal",
-            "--tools",
-            "read,bash,grep",
-            "--cwd",
-            str(root),
-            activated_prompt,
+            "--sub-model",
+            MODEL,
         ]
-        return Arm(name, command, auth_jcode, "explicit_skill", skill_digest), env, trace
+        return Arm(
+            name,
+            command,
+            auth_jcode,
+            "direct_solo_product",
+            None,
+            staged_skill,
+        ), env, traces
     if name == "prime-agent":
         home = run_dir / "prime-home"
         make_isolated_prime_home(source_home, home)
@@ -613,7 +806,7 @@ def arm_for(
             "--",
             prompt,
         ]
-        return Arm(name, command, auth_prime, "none"), env, None
+        return Arm(name, command, auth_prime, "none"), env, {}
     raise AssertionError(name)
 
 
@@ -630,88 +823,415 @@ def json_objects(text: str) -> Iterable[dict[str, Any]]:
             yield value
 
 
+def empty_usage() -> dict[str, int | None]:
+    return {
+        "input_tokens": None,
+        "output_tokens": None,
+        "cache_read_tokens": None,
+        "cache_write_tokens": None,
+        "total_tokens": None,
+    }
+
+
+def _nonnegative_int(value: Any) -> int | None:
+    return value if type(value) is int and value >= 0 else None
+
+
 def sum_usage_fields(objects: Iterable[dict[str, Any]], *, prime: bool) -> dict[str, int | None]:
-    if prime:
-        # message_end is cumulative for that message; summing message_end events
-        # counts each assistant provider turn once while ignoring streaming deltas.
-        selected = [
-            obj
-            for obj in objects
-            if obj.get("type") == "message_end"
-            and isinstance(obj.get("message"), dict)
-            and obj["message"].get("role") == "assistant"
-        ]
-        usages = [obj["message"].get("usage") for obj in selected]
-        usages = [u for u in usages if isinstance(u, dict)]
-        if not usages:
-            return {"input_tokens": None, "output_tokens": None, "cache_read_tokens": None, "cache_write_tokens": None, "total_tokens": None}
-        result = {
-            "input_tokens": sum(int(u.get("input", 0) or 0) for u in usages),
-            "output_tokens": sum(int(u.get("output", 0) or 0) for u in usages),
-            "cache_read_tokens": sum(int(u.get("cacheRead", 0) or 0) for u in usages),
-            "cache_write_tokens": sum(int(u.get("cacheWrite", 0) or 0) for u in usages),
+    if not prime:
+        return empty_usage()
+    # Prime Agent's assistant message_end event is the authoritative provider
+    # record for one turn.  Its input excludes cache buckets, so totalTokens is
+    # input + output + cacheRead + cacheWrite (unlike Jcode's OpenAI counters).
+    selected = [
+        obj
+        for obj in objects
+        if obj.get("type") == "message_end"
+        and isinstance(obj.get("message"), dict)
+        and obj["message"].get("role") == "assistant"
+    ]
+    if not selected:
+        return empty_usage()
+    totals = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+    }
+    for obj in selected:
+        usage = obj["message"].get("usage")
+        if not isinstance(usage, dict):
+            return empty_usage()
+        values = {
+            "input_tokens": _nonnegative_int(usage.get("input")),
+            "output_tokens": _nonnegative_int(usage.get("output")),
+            "cache_read_tokens": _nonnegative_int(usage.get("cacheRead")),
+            "cache_write_tokens": _nonnegative_int(usage.get("cacheWrite")),
         }
-        result["total_tokens"] = result["input_tokens"] + result["output_tokens"]
-        return result
-    return {"input_tokens": None, "output_tokens": None, "cache_read_tokens": None, "cache_write_tokens": None, "total_tokens": None}
+        if any(value is None for value in values.values()):
+            return empty_usage()
+        component_total = sum(int(value) for value in values.values())
+        provider_value = usage.get(
+            "totalTokens", usage.get("total_tokens", usage.get("total"))
+        )
+        if provider_value is None:
+            provider_total = component_total
+        else:
+            provider_total = _nonnegative_int(provider_value)
+            if provider_total is None or provider_total != component_total:
+                return empty_usage()
+        for key, value in values.items():
+            totals[key] += int(value)
+        totals["total_tokens"] += provider_total
+    return totals
 
 
 def parse_jcode_usage(stdout: str, stderr: str) -> dict[str, int | None]:
-    done_usage: dict[str, Any] | None = None
-    for obj in json_objects(stdout):
-        if (obj.get("type") or obj.get("ev")) == "done" and isinstance(obj.get("usage"), dict):
-            done_usage = obj["usage"]
-    if done_usage is not None:
-        input_tokens = int(done_usage.get("input_tokens", 0) or 0)
-        output_tokens = int(done_usage.get("output_tokens", 0) or 0)
-        cache_read = int(done_usage.get("cache_read_input_tokens", 0) or 0)
-        cache_write = int(done_usage.get("cache_creation_input_tokens", 0) or 0)
-        return {
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "cache_read_tokens": cache_read,
-            "cache_write_tokens": cache_write,
-            "total_tokens": input_tokens + output_tokens,
-        }
-    found = JCODE_TRACE_USAGE.findall(stdout + "\n" + stderr)
-    if not found:
-        return {"input_tokens": None, "output_tokens": None, "cache_read_tokens": None, "cache_write_tokens": None, "total_tokens": None}
-    input_tokens = sum(int(x[0]) for x in found)
-    output_tokens = sum(int(x[1]) for x in found)
-    cache_read = sum(int(x[2] or 0) for x in found)
-    cache_write = sum(int(x[3] or 0) for x in found)
-    return {
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "cache_read_tokens": cache_read,
-        "cache_write_tokens": cache_write,
-        "total_tokens": input_tokens + output_tokens,
+    del stderr  # Human trace lines and the final done event are not authoritative.
+    events = [obj for obj in json_objects(stdout) if obj.get("type") == "tokens"]
+    if not events:
+        return empty_usage()
+    result = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
     }
+    for event in events:
+        input_tokens = _nonnegative_int(event.get("input"))
+        output_tokens = _nonnegative_int(event.get("output"))
+        if input_tokens is None or output_tokens is None:
+            return empty_usage()
+        cache_read_raw = event.get("cache_read_input", 0)
+        cache_write_raw = event.get("cache_creation_input", 0)
+        cache_read = 0 if cache_read_raw is None else _nonnegative_int(cache_read_raw)
+        cache_write = 0 if cache_write_raw is None else _nonnegative_int(cache_write_raw)
+        if cache_read is None or cache_write is None:
+            return empty_usage()
+        result["input_tokens"] += input_tokens
+        result["output_tokens"] += output_tokens
+        result["cache_read_tokens"] += cache_read
+        result["cache_write_tokens"] += cache_write
+        # Jcode/OpenAI input already includes cached input; do not double count it.
+        result["total_tokens"] += input_tokens + output_tokens
+    return result
 
 
 def parse_azdaja_usage(path: Path | None) -> dict[str, Any] | None:
+    """Strictly sum every model-trace row, including depth zero and recursion.
+
+    The trace is the sole usage authority for direct solo execution. A provider
+    error row, malformed JSON, or incomplete/invalid usage row invalidates the
+    entire trace rather than allowing a favorable partial total.
+    """
     if path is None or not path.exists():
         return None
-    rows = list(json_objects(path.read_text(encoding="utf-8", errors="replace")))
-    if not rows:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
         return None
-    return {
+    raw_rows = [line for line in lines if line.strip()]
+    if not raw_rows:
+        return None
+    rows: list[dict[str, Any]] = []
+    for line in raw_rows:
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(row, dict) or "error" in row:
+            return None
+        depth = _nonnegative_int(row.get("depth"))
+        input_tokens = _nonnegative_int(row.get("input_tokens"))
+        output_tokens = _nonnegative_int(row.get("output_tokens"))
+        cache_read_raw = row.get("cache_read_tokens", 0)
+        cache_write_raw = row.get("cache_write_tokens", 0)
+        cache_read = 0 if cache_read_raw is None else _nonnegative_int(cache_read_raw)
+        cache_write = 0 if cache_write_raw is None else _nonnegative_int(cache_write_raw)
+        timestamp_ms = _nonnegative_int(row.get("timestamp_ms"))
+        latency_ms = _nonnegative_int(row.get("latency_ms"))
+        provider = row.get("provider")
+        model = row.get("model")
+        if (
+            None in (
+                depth,
+                input_tokens,
+                output_tokens,
+                cache_read,
+                cache_write,
+                timestamp_ms,
+                latency_ms,
+            )
+            or not isinstance(provider, str)
+            or not provider.strip()
+            or not isinstance(model, str)
+            or not model.strip()
+        ):
+            return None
+        rows.append(
+            {
+                "depth": depth,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cache_read_tokens": cache_read,
+                "cache_write_tokens": cache_write,
+                "provider": provider,
+                "model": model,
+            }
+        )
+    result: dict[str, Any] = {
         "calls": len(rows),
-        "input_tokens": sum(int(row.get("input_tokens", 0) or 0) for row in rows),
-        "output_tokens": sum(int(row.get("output_tokens", 0) or 0) for row in rows),
-        "cache_read_tokens": sum(int(row.get("cache_read_tokens", 0) or 0) for row in rows),
-        "routes": sorted({f"{row.get('provider', '')}/{row.get('model', '')}" for row in rows}),
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "routes": sorted({f"{row['provider']}/{row['model']}" for row in rows}),
+        "depth_counts": {},
+        "depth_usage": {},
+        "all_rows_valid": True,
+    }
+    for row in rows:
+        depth_key = str(row["depth"])
+        result["depth_counts"][depth_key] = result["depth_counts"].get(depth_key, 0) + 1
+        bucket = result["depth_usage"].setdefault(
+            depth_key,
+            {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_read_tokens": 0,
+                "cache_write_tokens": 0,
+                "total_tokens": 0,
+            },
+        )
+        for key in (
+            "input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+        ):
+            result[key] += row[key]
+            bucket[key] += row[key]
+        # Direct OpenAI usage includes cache-read in input. Cache buckets remain
+        # visible but are not added a second time to total.
+        turn_total = row["input_tokens"] + row["output_tokens"]
+        result["total_tokens"] += turn_total
+        bucket["total_tokens"] += turn_total
+    return result
+
+
+def usage_fields_from_azdaja(trace_usage: dict[str, Any] | None) -> dict[str, int | None]:
+    if trace_usage is None:
+        return empty_usage()
+    fields = {
+        key: trace_usage.get(key)
+        for key in empty_usage()
+    }
+    if any(_nonnegative_int(value) is None for value in fields.values()):
+        return empty_usage()
+    return {key: int(value) for key, value in fields.items()}
+
+
+def direct_solo_usage_evidence(
+    usage: dict[str, int | None], trace_usage: dict[str, Any] | None
+) -> dict[str, Any]:
+    missing = [key for key in empty_usage() if usage.get(key) is None]
+    reasons: list[str] = []
+    if trace_usage is None:
+        reasons.append("missing, malformed, incomplete, or error-bearing azdaja model trace")
+    elif trace_usage.get("all_rows_valid") is not True:
+        reasons.append("azdaja model trace was not wholly valid")
+    if missing and not reasons:
+        reasons.append("azdaja trace usage is incomplete")
+    return {
+        "valid": not reasons and not missing,
+        "missing_fields": missing,
+        "reasons": reasons,
+        "required_authority": "all valid AZDAJA_MODEL_TRACE rows at every depth",
+        "calls_included": 0 if trace_usage is None else trace_usage.get("calls", 0),
+        "depth_counts": {} if trace_usage is None else trace_usage.get("depth_counts", {}),
     }
 
 
-def combine_usage(root_usage: dict[str, int | None], azdaja_usage: dict[str, Any] | None) -> dict[str, int | None]:
+def combine_usage(
+    root_usage: dict[str, int | None],
+    azdaja_usage: dict[str, Any] | None,
+    *,
+    require_subusage: bool = False,
+) -> dict[str, int | None]:
+    if any(root_usage.get(key) is None for key in empty_usage()):
+        return empty_usage()
+    if require_subusage and azdaja_usage is None:
+        return empty_usage()
+    if azdaja_usage is not None and any(
+        azdaja_usage.get(key) is None for key in empty_usage()
+    ):
+        return empty_usage()
     result: dict[str, int | None] = {}
-    for key in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"):
-        root_value = root_usage.get(key)
-        sub_value = 0 if azdaja_usage is None else int(azdaja_usage.get(key, 0) or 0)
-        result[key] = None if root_value is None else int(root_value) + sub_value
-    result["total_tokens"] = None if result["input_tokens"] is None or result["output_tokens"] is None else int(result["input_tokens"])+int(result["output_tokens"])
+    for key in empty_usage():
+        root_value = int(root_usage[key])  # established non-None above
+        sub_value = 0 if azdaja_usage is None else int(azdaja_usage[key])
+        result[key] = root_value + sub_value
     return result
+
+
+def usage_evidence_assertion(
+    usage: dict[str, int | None], *, root_usage: dict[str, int | None], subusage_required: bool,
+    azdaja_usage: dict[str, Any] | None
+) -> dict[str, Any]:
+    missing = [key for key in empty_usage() if usage.get(key) is None]
+    reasons: list[str] = []
+    if any(root_usage.get(key) is None for key in empty_usage()):
+        reasons.append("missing or malformed authoritative root usage")
+    if subusage_required and azdaja_usage is None:
+        reasons.append("missing or malformed authoritative azdaja sub-call usage")
+    if missing and not reasons:
+        reasons.append("combined usage is incomplete")
+    return {
+        "valid": not missing and not reasons,
+        "missing_fields": missing,
+        "reasons": reasons,
+        "required_authority": (
+            "jcode type=tokens events plus azdaja trace"
+            if subusage_required
+            else "provider usage events"
+        ),
+    }
+
+
+NETWORK_ACCESS = re.compile(
+    r"(?ix)(?:"
+    r"\b(?:curl|wget|aria2c|ftp|sftp|scp|ssh|telnet|ncat|netcat)\b|"
+    r"\bgit\s+(?:clone|fetch|pull)\b|"
+    r"\b(?:pip|pip3|uv\s+pip|npm|pnpm|yarn)\s+(?:install|add)\b|"
+    r"\b(?:requests|httpx|aiohttp|urllib\.request)\s*\.|"
+    r"\b(?:urlopen|urlretrieve|socket\.create_connection|fetch)\s*\(|"
+    r"\b(?:read_csv|read_json|read_parquet)\s*\(\s*['\"]https?://"
+    r")"
+)
+EXTERNAL_DATASET_ACCESS = re.compile(
+    r"(?ix)(?:"
+    r"\b(?:load_dataset|hf_hub_download|snapshot_download)\s*\(|"
+    r"\b(?:huggingface_hub|kagglehub|kaggle|tensorflow_datasets)\b|"
+    r"(?:^|[/\\])\.cache[/\\](?:huggingface|datasets)(?:[/\\]|$)|"
+    r"oolongbench[/\\]oolong-synth"
+    r")"
+)
+PATH_TOKEN = re.compile(r"(?<![A-Za-z0-9_])(?:~|\.\.)?/[A-Za-z0-9_.~+@%:=,\\/-]+")
+DATA_PATH_SUFFIXES = {
+    ".txt", ".json", ".jsonl", ".csv", ".tsv", ".parquet", ".arrow",
+    ".feather", ".sqlite", ".db", ".pkl", ".pickle", ".gz", ".zip",
+}
+
+
+def _tool_invocations(name: str, stdout: str) -> list[tuple[str, str]]:
+    """Return executed tool name/payload pairs without scanning tool outputs."""
+    invocations: list[tuple[str, str]] = []
+    if name.startswith("jcode"):
+        current_name: str | None = None
+        chunks: list[str] = []
+        for obj in json_objects(stdout):
+            typ = obj.get("type")
+            if typ == "tool_start":
+                current_name = str(obj.get("name", "unknown"))
+                chunks = []
+                for key in ("arguments", "args", "input", "command", "code"):
+                    if key in obj:
+                        value = obj[key]
+                        chunks.append(value if isinstance(value, str) else json.dumps(value, sort_keys=True))
+            elif typ == "tool_input":
+                value = obj.get("delta", obj.get("input", obj.get("arguments", "")))
+                chunks.append(value if isinstance(value, str) else json.dumps(value, sort_keys=True))
+            elif typ == "tool_exec":
+                tool_name = str(obj.get("name", current_name or "unknown"))
+                direct: list[str] = []
+                for key in ("arguments", "args", "input", "command", "code"):
+                    if key in obj:
+                        value = obj[key]
+                        direct.append(value if isinstance(value, str) else json.dumps(value, sort_keys=True))
+                invocations.append((tool_name, "".join(chunks) + "\n" + "\n".join(direct)))
+                current_name = None
+                chunks = []
+        return invocations
+    for obj in json_objects(stdout):
+        if obj.get("type") != "tool_execution_start":
+            continue
+        tool_name = str(obj.get("toolName", obj.get("name", "unknown")))
+        value = obj.get("args", obj.get("arguments", obj.get("input", "")))
+        payload = value if isinstance(value, str) else json.dumps(value, sort_keys=True)
+        invocations.append((tool_name, payload))
+    return invocations
+
+
+def _external_data_paths(
+    payload: str, task_dir: Path, context_path: Path, forbidden_paths: Iterable[Path]
+) -> list[str]:
+    allowed_root = task_dir.resolve(strict=False)
+    allowed_context = context_path.resolve(strict=False)
+    forbidden = {path.resolve(strict=False) for path in forbidden_paths}
+    categories: list[str] = []
+    for raw in PATH_TOKEN.findall(payload):
+        token = raw.rstrip("'\"`)]};,")
+        if token.startswith("../"):
+            categories.append("parent-directory path")
+            continue
+        try:
+            candidate = Path(token).expanduser().resolve(strict=False)
+        except (OSError, RuntimeError):
+            continue
+        if candidate == allowed_context or candidate == allowed_root or allowed_root in candidate.parents:
+            continue
+        if candidate in forbidden:
+            categories.append("fixture source path outside isolated task directory")
+            continue
+        lowered_parts = {part.lower() for part in candidate.parts}
+        looks_like_data = (
+            candidate.suffix.lower() in DATA_PATH_SUFFIXES
+            or bool(lowered_parts & {"dataset", "datasets", "oolong", "huggingface", "kaggle"})
+        )
+        if looks_like_data:
+            categories.append("data path outside isolated task directory")
+    return categories
+
+
+def scan_tool_policy(
+    name: str,
+    stdout: str,
+    *,
+    task_dir: Path,
+    context_path: Path,
+    forbidden_paths: Iterable[Path] = (),
+) -> dict[str, Any]:
+    """Invalidate obvious executed network or external-dataset accesses."""
+    invocations = _tool_invocations(name, stdout)
+    violations: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for tool_name, payload in invocations:
+        categories: list[str] = []
+        if NETWORK_ACCESS.search(payload):
+            categories.append("network access")
+        if EXTERNAL_DATASET_ACCESS.search(payload):
+            categories.append("external dataset API")
+        categories.extend(_external_data_paths(payload, task_dir, context_path, forbidden_paths))
+        digest = hashlib.sha256(payload.encode("utf-8", errors="replace")).hexdigest()
+        for category in categories:
+            key = (tool_name, category, digest)
+            if key in seen:
+                continue
+            seen.add(key)
+            violations.append(
+                {"tool": tool_name, "category": category, "payload_sha256": digest}
+            )
+    return {
+        "asserted": not violations,
+        "events_scanned": len(invocations),
+        "violations": violations,
+        "policy": "no network or external dataset access in executed tool command/code events",
+        "enforcement": "post-hoc event detection only; not OS-level containment",
+        "containment_asserted": False,
+    }
 
 
 def extract_final(name: str, stdout: str) -> str:
@@ -749,8 +1269,52 @@ def extract_final(name: str, stdout: str) -> str:
     return (completed or assembled or stdout).strip()
 
 
-def runtime_assertion(name: str, stdout: str) -> dict[str, Any]:
-    if name.startswith("jcode"):
+def direct_solo_lifecycle_assertion(
+    *,
+    exit_code: int | None,
+    timed_out: bool,
+    response: str,
+    trace_usage: dict[str, Any] | None,
+) -> dict[str, Any]:
+    depth_zero_calls = (
+        0 if trace_usage is None else int(trace_usage.get("depth_counts", {}).get("0", 0))
+    )
+    process_result = exit_code == 0 and not timed_out and bool(response.strip())
+    return {
+        "asserted": process_result and depth_zero_calls >= 1,
+        "process_result_asserted": process_result,
+        "exit_code": exit_code,
+        "timed_out": timed_out,
+        "nonempty_result": bool(response.strip()),
+        "valid_depth_zero_model_calls": depth_zero_calls,
+        "requirement": "successful nonempty solo process result and >=1 valid depth-0 model trace row",
+    }
+
+
+def runtime_assertion(
+    name: str, stdout: str, azdaja_usage: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    if name == "jcode-azdaja":
+        routes = [] if azdaja_usage is None else azdaja_usage.get("routes", [])
+        parsed_routes: list[dict[str, str]] = []
+        valid = bool(routes)
+        for route in routes:
+            provider, separator, model = str(route).rpartition("/")
+            parsed_routes.append({"provider": provider, "model": model})
+            valid = (
+                valid
+                and bool(separator)
+                and provider.lower().startswith("openai")
+                and model == MODEL
+            )
+        return {
+            "asserted": valid,
+            "routes": parsed_routes,
+            "expected_provider": "OpenAI subscription OAuth",
+            "expected_model": MODEL,
+            "authority": "strict AZDAJA_MODEL_TRACE",
+        }
+    if name == "jcode-native":
         done = None
         for obj in json_objects(stdout):
             if (obj.get("type") or obj.get("ev")) == "done":
@@ -975,17 +1539,80 @@ def cleanup_run(arm_name: str, args: argparse.Namespace, env: dict[str, str], ru
     return errors
 
 
-def public_command(command: list[str]) -> list[str]:
-    # Prompt contains only public path/metadata/question, but storing it duplicates
-    # noise in every row. Preserve exact argv structure with a digest placeholder.
+def capture_trace_artifact(path: Path) -> dict[str, Any]:
+    meta = path.lstat()
+    if stat.S_ISLNK(meta.st_mode) or not stat.S_ISREG(meta.st_mode):
+        raise BenchError(f"azdaja trace is not a regular non-symlink file: {path}")
+    # Solo traces include generated code/results. Preserve the full trace but
+    # apply the same non-truncating credential redaction as stdout/stderr.
+    content = path.read_text(encoding="utf-8")
+    redacted = redact_sensitive(content)
+    if redacted != content:
+        path.write_text(redacted, encoding="utf-8")
+    if os.name == "posix":
+        os.chmod(path, 0o600)
+    return {
+        "path": str(path),
+        "sha256": sha256_path(path),
+        "bytes": path.stat().st_size,
+        "mode": "0600",
+        "contains_private_raw_trajectory": False,
+        "credential_redacted": True,
+        "sensitivity": "complete azdaja trace with credential-shaped values redacted",
+    }
+
+
+def purge_transient_run_state(
+    run_dir: Path, retained_names: set[str], errors: list[str]
+) -> dict[str, Any]:
+    """Delete credential homes, task copies, histories, and all non-artifacts."""
+    for child in list(run_dir.iterdir()):
+        if child.name in retained_names:
+            continue
+        try:
+            metadata = child.lstat()
+            if stat.S_ISDIR(metadata.st_mode) and not stat.S_ISLNK(metadata.st_mode):
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        except OSError as exc:
+            errors.append(
+                f"transient state deletion failed for {child.name!r}: "
+                f"{type(exc).__name__}: {exc}"
+            )
+    try:
+        survivors = sorted(child.name for child in run_dir.iterdir())
+    except OSError as exc:
+        errors.append(f"cannot audit retained artifacts: {type(exc).__name__}: {exc}")
+        survivors = []
+    unexpected = sorted(set(survivors) - retained_names)
+    missing_credentials = not (run_dir / "home").exists() and not (run_dir / "prime-home").exists()
+    if unexpected:
+        errors.append(f"unexpected retained run state: {unexpected}")
+    if not missing_credentials:
+        errors.append("credential-bearing isolated home survived cleanup")
+    return {
+        "asserted": not unexpected and missing_credentials,
+        "credential_homes_deleted": missing_credentials,
+        "retained_entries": survivors,
+        "retention_allowlist": sorted(retained_names),
+    }
+
+
+def public_command(command: list[str], prompt_index: int = -1) -> list[str]:
+    # Preserve argv structure while replacing the question/prompt with a digest.
     result = list(command)
     if result:
-        result[-1] = f"<prompt sha256={hashlib.sha256(result[-1].encode()).hexdigest()}>"
+        result[prompt_index] = (
+            f"<prompt sha256={hashlib.sha256(result[prompt_index].encode()).hexdigest()}>"
+        )
     return result
 
 
 def write_private_artifact(path: Path, content: str) -> dict[str, Any]:
-    data = content.encode("utf-8")
+    # Retain the complete event stream for usage/tool audits, but never raw
+    # credential-shaped values.  Unlike bounded(), this does not truncate.
+    data = redact_sensitive(content).encode("utf-8")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     fd = os.open(path, flags, 0o600)
     try:
@@ -1005,8 +1632,9 @@ def write_private_artifact(path: Path, content: str) -> dict[str, Any]:
         "sha256": hashlib.sha256(data).hexdigest(),
         "bytes": len(data),
         "mode": "0600",
-        "contains_private_raw_trajectory": True,
-        "sensitivity": "may contain model/tool data; OAuth credentials are file-only and absent from the child environment",
+        "contains_private_raw_trajectory": False,
+        "credential_redacted": True,
+        "sensitivity": "complete model/tool event stream with credential-shaped values redacted",
     }
 
 
@@ -1030,7 +1658,7 @@ def run_one(
     repetition: int,
     ordinal: int,
     fixture: Fixture,
-    prompt: str,
+    prompt: str | None,
     args: argparse.Namespace,
     root: Path,
     source_home: Path,
@@ -1039,73 +1667,228 @@ def run_one(
     auth_prime: dict[str, Any],
     work_root: Path,
 ) -> dict[str, Any]:
+    del root, prompt  # Inference prompts/cwd are always rebuilt from the staged copy.
     run_dir = work_root / f"r{repetition:03d}-{ordinal:03d}-{arm_name}"
     try:
         run_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
     except FileExistsError as exc:
         raise BenchError(f"fresh run directory already exists: {run_dir}") from exc
-    arm, env, model_trace = arm_for(
-        arm_name,
-        prompt=prompt,
-        args=args,
-        root=root,
-        fixture=fixture,
-        run_dir=run_dir,
-        auth_jcode=auth_jcode,
-        auth_prime=auth_prime,
-        source_home=source_home,
-        skill=skill,
-    )
-    started_at = time.time()
-    exit_code, stdout, stderr, timed_out, latency = execute(arm.command, env, args.timeout, root)
+
+    arm: Arm | None = None
+    env: dict[str, str] = {}
+    trace_paths: dict[str, Path] = {}
+    task_dir: Path | None = None
+    task_context: Path | None = None
+    context_integrity: dict[str, Any] | None = None
+    staged_skill: dict[str, Any] | None = None
+    task_prompt = ""
+    stdout = ""
+    stderr = ""
+    exit_code: int | None = None
+    timed_out = False
+    latency = 0.0
+    execution_error: str | None = None
+    cleanup_errors: list[str] = []
+    trajectory_artifacts: dict[str, Any] = {}
+    retained_names: set[str] = set()
+    trace_captured: set[str] = set()
+
     try:
-        trajectory_artifacts = {
-            "stdout": write_private_artifact(run_dir / "stdout.ndjson", stdout),
-            "stderr": write_private_artifact(run_dir / "stderr.log", stderr),
-        }
-        if model_trace is not None and model_trace.exists():
-            if os.name == "posix":
-                os.chmod(model_trace, 0o600)
-            trajectory_artifacts["azdaja_model_trace"] = {
-                "path": str(model_trace),
-                "sha256": sha256_path(model_trace),
-                "bytes": model_trace.stat().st_size,
-                "mode": "0600",
-                "contains_private_raw_trajectory": True,
-                "sensitivity": "provider/model/token usage metadata",
-            }
+        task_dir, task_context, context_integrity = stage_task_context(fixture, run_dir)
+        task_prompt = build_prompt(fixture, task_context)
+        arm, env, trace_paths = arm_for(
+            arm_name,
+            prompt=task_prompt,
+            args=args,
+            root=task_dir,
+            fixture=fixture,
+            run_dir=run_dir,
+            auth_jcode=auth_jcode,
+            auth_prime=auth_prime,
+            source_home=source_home,
+            skill=skill,
+        )
+        started_at = time.time()
+        try:
+            exit_code, stdout, stderr, timed_out, latency = execute(
+                arm.command, env, args.timeout, task_dir
+            )
+        except Exception as exc:
+            execution_error = f"{type(exc).__name__}: {exc}"
+            stderr = execution_error
+        context_integrity = finalize_task_context_integrity(
+            fixture, task_dir, task_context, context_integrity
+        )
+        if arm.staged_skill is not None:
+            staged_skill = finalize_staged_skill_hashes(arm.staged_skill)
+
+        trajectory_artifacts["stdout"] = write_private_artifact(
+            run_dir / "stdout.ndjson", stdout
+        )
+        retained_names.add("stdout.ndjson")
+        trajectory_artifacts["stderr"] = write_private_artifact(
+            run_dir / "stderr.log", stderr
+        )
+        retained_names.add("stderr.log")
     finally:
-        cleanup_errors = cleanup_run(arm_name, args, env, run_dir)
+        if arm is not None:
+            cleanup_errors.extend(cleanup_run(arm_name, args, env, run_dir))
+        # Hash traces only after their owning bridge/server has been stopped, so
+        # retained digests describe final immutable captures.
+        for trace_name, trace_path in trace_paths.items():
+            if not trace_path.exists():
+                continue
+            try:
+                trajectory_artifacts[trace_name] = capture_trace_artifact(trace_path)
+                retained_names.add(trace_path.name)
+                trace_captured.add(trace_name)
+            except (OSError, UnicodeError, BenchError) as exc:
+                cleanup_errors.append(f"unsafe {trace_name}: {exc}")
+        retention = purge_transient_run_state(run_dir, retained_names, cleanup_errors)
+
     response = extract_final(arm_name, stdout)
-    route = runtime_assertion(arm_name, stdout)
-    score = strict_score(response, fixture) if exit_code == 0 and not timed_out else {
-        "correct": False,
-        "strict_exact": True,
-        "expected": fixture.expected_canonical,
-        "parsed_value": None,
-        "parse_error": "turn timed out" if timed_out else f"process exited {exit_code}",
-    }
-    if arm_name == "prime-agent":
-        usage = sum_usage_fields(json_objects(stdout), prime=True)
-    else:
-        usage = parse_jcode_usage(stdout, stderr)
-    azdaja_usage = parse_azdaja_usage(model_trace)
-    effective_usage = combine_usage(usage, azdaja_usage)
-    product_execution_asserted = arm_name != "jcode-azdaja" or (run_dir / "azdaja-state").is_dir()
-    failure: dict[str, Any] | None = None
-    if timed_out or exit_code != 0 or not score["correct"] or not route["asserted"] or not product_execution_asserted:
-        kind = "timeout" if timed_out else ("process_exit" if exit_code != 0 else ("strict_score" if not score["correct"] else ("route_assertion" if not route["asserted"] else "activation_assertion")))
-        failure = {
-            "kind": kind,
-            "message": (
-                "provider/model/API route did not match the OAuth subscription arm"
-                if kind == "route_assertion"
-                else ("explicit azdaja treatment did not execute the product" if kind == "activation_assertion" else score["parse_error"])
+    model_trace = trace_paths.get("azdaja_model_trace")
+    azdaja_usage = (
+        parse_azdaja_usage(model_trace)
+        if "azdaja_model_trace" in trace_captured
+        else None
+    )
+    route = runtime_assertion(arm_name, stdout, azdaja_usage)
+    score = (
+        strict_score(response, fixture)
+        if execution_error is None and exit_code == 0 and not timed_out
+        else {
+            "correct": False,
+            "strict_exact": True,
+            "expected": fixture.expected_canonical,
+            "parsed_value": None,
+            "parse_error": (
+                execution_error
+                if execution_error is not None
+                else ("turn timed out" if timed_out else f"process exited {exit_code}")
             ),
+        }
+    )
+    if arm_name == "jcode-azdaja":
+        root_usage = usage_fields_from_azdaja(
+            None
+            if azdaja_usage is None
+            else azdaja_usage.get("depth_usage", {}).get("0")
+        )
+        effective_usage = usage_fields_from_azdaja(azdaja_usage)
+        efficiency_evidence = direct_solo_usage_evidence(
+            effective_usage, azdaja_usage
+        )
+        lifecycle = direct_solo_lifecycle_assertion(
+            exit_code=exit_code,
+            timed_out=timed_out,
+            response=response,
+            trace_usage=azdaja_usage,
+        )
+        expected_traces = {"azdaja_model_trace", "azdaja_solo_trace"}
+    else:
+        if arm_name == "prime-agent":
+            root_usage = sum_usage_fields(json_objects(stdout), prime=True)
+        else:
+            root_usage = parse_jcode_usage(stdout, stderr)
+        effective_usage = combine_usage(root_usage, None)
+        efficiency_evidence = usage_evidence_assertion(
+            effective_usage,
+            root_usage=root_usage,
+            subusage_required=False,
+            azdaja_usage=None,
+        )
+        lifecycle = {
+            "asserted": True,
+            "requirement": "not applicable: non-product control arm",
+        }
+        expected_traces = set()
+    trace_capture_assertion = {
+        "asserted": expected_traces.issubset(trace_captured),
+        "required": sorted(expected_traces),
+        "captured": sorted(trace_captured),
+        "missing": sorted(expected_traces - trace_captured),
+    }
+    product_execution_asserted = bool(lifecycle["asserted"])
+    tool_policy = scan_tool_policy(
+        arm_name,
+        stdout,
+        task_dir=task_dir,
+        context_path=task_context,
+        forbidden_paths=(fixture.row_path, fixture.context_path),
+    )
+    skill_integrity_asserted = staged_skill is None or staged_skill.get("asserted_after") is True
+    context_integrity_asserted = bool(
+        context_integrity
+        and context_integrity.get("asserted_before")
+        and context_integrity.get("asserted_after")
+    )
+
+    failure: dict[str, Any] | None = None
+    if execution_error is not None:
+        failure = {"kind": "execution", "message": execution_error, "stderr": bounded(stderr)}
+    elif timed_out:
+        failure = {"kind": "timeout", "message": score["parse_error"], "stderr": bounded(stderr)}
+    elif exit_code != 0:
+        failure = {"kind": "process_exit", "message": score["parse_error"], "stderr": bounded(stderr)}
+    elif not score["correct"]:
+        failure = {"kind": "strict_score", "message": score["parse_error"], "stderr": bounded(stderr)}
+    elif not route["asserted"]:
+        failure = {
+            "kind": "route_assertion",
+            "message": "provider/model/API route did not match the OAuth subscription arm",
+            "stderr": bounded(stderr),
+        }
+    elif not product_execution_asserted:
+        failure = {
+            "kind": "product_lifecycle",
+            "message": "direct azdaja solo lifecycle lacked a successful result or valid depth-0 model call",
+            "stderr": bounded(stderr),
+        }
+    elif not trace_capture_assertion["asserted"]:
+        failure = {
+            "kind": "trace_capture",
+            "message": f"required product traces were not captured: {trace_capture_assertion['missing']}",
+            "stderr": bounded(stderr),
+        }
+    elif not context_integrity_asserted:
+        failure = {
+            "kind": "context_integrity",
+            "message": "source/staged context SHA, mode, or single-file task isolation changed",
+            "stderr": bounded(stderr),
+        }
+    elif not skill_integrity_asserted:
+        failure = {
+            "kind": "skill_integrity",
+            "message": "staged skill binary/config/SKILL changed during the arm",
+            "stderr": bounded(stderr),
+        }
+    elif not tool_policy["asserted"]:
+        failure = {
+            "kind": "tool_policy",
+            "message": "executed tool code/command showed network or external dataset access",
+            "stderr": bounded(stderr),
+        }
+    elif not efficiency_evidence["valid"]:
+        failure = {
+            "kind": "usage_evidence",
+            "message": "; ".join(efficiency_evidence["reasons"]),
             "stderr": bounded(stderr),
         }
     elif cleanup_errors:
         failure = {"kind": "cleanup", "message": "; ".join(cleanup_errors), "stderr": bounded(stderr)}
+
+    assert arm is not None and task_dir is not None and task_context is not None
+    executable_identities = getattr(args, "executable_identities", {})
+    arm_executables: dict[str, Any] = {}
+    executable_key = "jcode" if arm_name.startswith("jcode") else "prime-agent"
+    if executable_key in executable_identities:
+        arm_executables[executable_key] = executable_identities[executable_key]
+    if arm_name == "jcode-azdaja" and "azdaja" in executable_identities:
+        arm_executables["azdaja"] = executable_identities["azdaja"]
+    direct_solo = arm_name == "jcode-azdaja"
+    treatment_input = fixture.metadata["question"] if direct_solo else arm.command[-1]
+    command_prompt_index = 2 if direct_solo else -1
     return {
         "schema_version": SCHEMA_VERSION,
         "benchmark": "oolong",
@@ -1124,40 +1907,59 @@ def run_one(
         "model": MODEL,
         "reasoning": REASONING,
         "auth_assertion": arm.auth_assertion,
-        "credential_sandbox": "oauth-only isolated HOME; no API-key environment variables",
+        "credential_sandbox": "oauth-only isolated HOME deleted after trajectory capture/daemon cleanup; no API-key environment variables",
+        "credential_cleanup_assertion": retention,
         "runtime_route_assertion": route,
+        "tool_access_policy_assertion": tool_policy,
         "environment_allowlist": list(ENV_ALLOWLIST),
         "controller_environment_allowlist": list(CONTROLLER_ENV_ALLOWLIST),
         "controller_environment_used": sorted(set(env) - set(ENV_ALLOWLIST)),
         "fresh_session": True,
         "serial": True,
         "activation_mode": arm.activation_mode,
-        "task_payload_identical_across_arms": True,
+        "hidden_context_and_official_question_identical_across_arms": True,
+        "arm_wrapper_prompts_identical": False,
         "skill_instructions_sha256": arm.skill_instructions_sha256,
+        "staged_skill": staged_skill,
+        "product_lifecycle_assertion": lifecycle,
         "product_execution_asserted": product_execution_asserted,
-        "command": public_command(arm.command),
-        "task_prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
-        "treatment_prompt_sha256": hashlib.sha256(arm.command[-1].encode("utf-8")).hexdigest(),
+        "trace_capture_assertion": trace_capture_assertion,
+        "executables": arm_executables,
+        "command": public_command(arm.command, command_prompt_index),
+        "official_question_sha256": hashlib.sha256(
+            fixture.metadata["question"].encode("utf-8")
+        ).hexdigest(),
+        "task_prompt_sha256": (
+            None
+            if direct_solo
+            else hashlib.sha256(task_prompt.encode("utf-8")).hexdigest()
+        ),
+        "treatment_prompt_sha256": hashlib.sha256(
+            treatment_input.encode("utf-8")
+        ).hexdigest(),
         "fixture": {
             "row": str(fixture.row_path),
             "context": str(fixture.context_path),
-            "source": fixture.metadata.get("source"),
-            "split": fixture.metadata.get("split"),
-            "offset": fixture.metadata.get("offset"),
             "row_sha256": fixture.row_sha256,
             "context_sha256": fixture.context_sha256,
             "context_bytes": fixture.context_bytes,
             "context_chars": fixture.context_chars,
             "context_lines": fixture.context_lines,
         },
-        "root_usage": usage,
+        "task_context_integrity": context_integrity,
+        "root_usage": root_usage,
         "azdaja_model_usage": azdaja_usage,
         "usage": effective_usage,
-        "usage_accounting":"OpenAI subset: total=input+output; cache-read is already included in input and is reported separately",
+        "efficiency_evidence": efficiency_evidence,
+        "usage_accounting": (
+            "Prime: provider totalTokens=input+output+cacheRead+cacheWrite; "
+            "Jcode/direct OpenAI: total=input+output with cache-read/write reported subsets"
+        ),
         "response": bounded(response),
         "score": score,
         "trajectory_artifacts": trajectory_artifacts,
-        "trajectory_persistence":"persistent","trajectory_run_directory":str(run_dir.parent),
+        "trajectory_persistence": "allowlisted artifacts only",
+        "trajectory_run_directory": str(run_dir),
         "cleanup_errors": cleanup_errors,
         "failure": failure,
     }
@@ -1222,6 +2024,18 @@ def main(argv: list[str] | None = None) -> int:
     args.jcode = ensure_executable(args.jcode, "jcode") if any(a.startswith("jcode") for a in args.arms) else args.jcode
     args.prime_agent = ensure_executable(args.prime_agent, "prime-agent") if "prime-agent" in args.arms else args.prime_agent
     skill = validate_skill(args.azdaja_skill) if "jcode-azdaja" in args.arms else Path(args.azdaja_skill)
+    executable_identities: dict[str, Any] = {}
+    if any(a.startswith("jcode") for a in args.arms):
+        executable_identities["jcode"] = executable_identity(args.jcode, "jcode")
+    if "prime-agent" in args.arms:
+        executable_identities["prime-agent"] = executable_identity(
+            args.prime_agent, "prime-agent"
+        )
+    if "jcode-azdaja" in args.arms:
+        executable_identities["azdaja"] = executable_identity(
+            str(skill / "azdaja"), "azdaja"
+        )
+    args.executable_identities = executable_identities
 
     # All assertions complete before the first inference command.
     auth_jcode = preflight_jcode(source_home, args.jcode) if any(a.startswith("jcode") for a in args.arms) else {}
@@ -1230,8 +2044,6 @@ def main(argv: list[str] | None = None) -> int:
         kernel_python = source_home / ".prime" / "agent" / "kernel-venv" / "bin" / "python"
         if not kernel_python.is_file() or not os.access(kernel_python, os.X_OK):
             raise BenchError(f"Prime Agent kernel venv is not ready: {kernel_python}")
-    prompt = build_prompt(fixture)
-
     order: list[tuple[int, str]] = []
     rng = random.Random(args.seed)
     for repetition in range(1, args.repetitions + 1):
@@ -1253,7 +2065,7 @@ def main(argv: list[str] | None = None) -> int:
                 repetition=repetition,
                 ordinal=ordinal,
                 fixture=fixture,
-                prompt=prompt,
+                prompt=None,
                 args=args,
                 root=root,
                 source_home=source_home,

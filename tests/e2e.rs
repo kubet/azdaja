@@ -149,9 +149,64 @@ fn output_cap_is_unicode_exact_and_errors_preserve_state() {
     assert_eq!(bad.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&bad.stdout).contains("ZeroDivisionError"));
     assert_eq!(ok(run(&t, &cfg, &["exec", &id], "x\n")).trim(), "73");
+    let failed_final = run(&t, &cfg, &["exec", &id], "FINAL('wrong')\n1/0\n");
+    assert_eq!(failed_final.status.code(), Some(1));
+    let absent = run(&t, &cfg, &["final", &id], "");
+    assert_eq!(absent.status.code(), Some(2));
     ok(run(&t, &cfg, &["exec", &id], "FINAL('λ'*10000)\n"));
     let final_out = ok(run(&t, &cfg, &["final", &id], ""));
     assert!(final_out.chars().count() <= 256 && final_out.contains("chars elided"));
+    ok(run(&t, &cfg, &["kill", &id], ""));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn batch_preserves_ordered_successes_across_timeout_but_single_call_fails_closed() {
+    let t = temp("partial-batch");
+    let script = t.join("selective.sh");
+    fs::write(
+        &script,
+        r#"#!/bin/sh
+input=$(cat)
+case "$input" in
+  *timeout*) sleep 5;;
+  *first*) sleep 0.2; printf FIRST_OK;;
+  *third*) printf THIRD_OK;;
+  *fail*) echo intentional >&2; exit 9;;
+esac
+"#,
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let cfg = config(&t, script.to_str().unwrap(), 2048, 1, 1, 4);
+    let id = sid(&t, &cfg);
+    let started = Instant::now();
+    let out = ok(run(
+        &t,
+        &cfg,
+        &["exec", &id],
+        "print(llm_batch(['first','timeout','third'],None,2))\n",
+    ));
+    assert!(started.elapsed() < Duration::from_secs(3));
+    let first = out.find("FIRST_OK").unwrap();
+    let failed = out
+        .find(r#"{"azdaja_error":"provider_call_failed_retry_item""#)
+        .unwrap();
+    let third = out.find("THIRD_OK").unwrap();
+    assert!(first < failed && failed < third, "{out}");
+    assert!(out.contains("timed out after 1s"), "{out}");
+
+    let single = run(&t, &cfg, &["exec", &id], "llm('fail')\n");
+    assert_eq!(single.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&single.stdout).contains("intentional"),
+        "{}",
+        String::from_utf8_lossy(&single.stdout)
+    );
     ok(run(&t, &cfg, &["kill", &id], ""));
     fs::remove_dir_all(t).unwrap();
 }
@@ -346,7 +401,7 @@ fn concurrent_starts_respect_limit() {
 }
 
 #[test]
-fn solo_drives_root_and_recursive_subcall_end_to_end() {
+fn solo_prompt_guides_exact_aggregation_in_one_root_turn() {
     let t = temp("solo");
     let mock = t.join("solo.py");
     fs::write(
@@ -354,15 +409,33 @@ fn solo_drives_root_and_recursive_subcall_end_to_end() {
         r#"import os,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    if 'Capped result from the cell:' in p: print('```python\nFINAL("done:" + sub)\n```')
-    else: print('```python\nsub = llm("classify")\n```')
+    begin = '--- BEGIN UNTRUSTED SCHEMA SAMPLE (repr, at most 4096 output characters) ---'
+    end = '--- END UNTRUSTED SCHEMA SAMPLE ---'
+    sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
+    required = ('schema-targeted solve now', 'do not spend a root turn inspecting again',
+                'exact observed schema', 'each source occurrence counts', 'integer multiplicity',
+                'rendered character length', 'two independently phrased', 'confidence value',
+                'disagreements', 'hard logical child-call budget',
+                'os, re, json, math, collections, and datetime', 'csv and other imports',
+                'no yield or generators', 'no % string formatting', 'strict json', 'cardinality',
+                'at most 64 in this cell', 'at most 4 root turns')
+    sample_ok = 'schema-canary' in sample and len(sample) <= 4096 and 'TAIL_NOT_IN_SAMPLE' not in p
+    if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
+    else: print('```python\nFINAL("done:" + llm("classify"))\n```')
 else: print('SUB_OK')
 "#,
     )
     .unwrap();
     let cfg = config(&t, &format!("python3 {}", mock.display()), 1024, 1, 3, 4);
     let input = t.join("input.txt");
-    fs::write(&input, "raw context").unwrap();
+    fs::write(
+        &input,
+        format!(
+            "schema-canary\n{{\"id\":1,\"body\":\"hello\"}}\n{}TAIL_NOT_IN_SAMPLE",
+            "x".repeat(8000)
+        ),
+    )
+    .unwrap();
     let o = run(
         &t,
         &cfg,
@@ -386,6 +459,48 @@ else: print('SUB_OK')
         })
         .count();
     assert_eq!(sessions, 0, "solo should retain Monty only in-process");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_defaults_to_four_bounded_root_turns() {
+    let t = temp("solo-turn-limit");
+    let calls = t.join("root-calls");
+    let mock = t.join("never-final.py");
+    fs::write(
+        &mock,
+        r#"import os,sys
+if os.getenv('RLM_DEPTH') == '0':
+    with open(sys.argv[1], 'a') as f: f.write('root\n')
+    print('```python\nx = 1\n```')
+else:
+    print('unexpected child call')
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        1024,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "raw context").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "question", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("solo exceeded 4 root turns"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 4);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -463,6 +578,13 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
     assert!(skill.contains("azdaja 0.1.0") && skill.contains(dst.join("azdaja").to_str().unwrap()));
+    assert!(skill.contains("Each source occurrence is an aggregation unit"));
+    assert!(skill.contains("retaining every source ID or an integer multiplicity"));
+    assert!(skill.contains("actual rendered character length"));
+    assert!(skill.contains("two independently phrased classification passes"));
+    assert!(skill.contains("hard logical child-call budget"));
+    assert!(skill.contains("no `yield` or generators"));
+    assert!(skill.contains("`csv` and other imports are unavailable"));
     let edited_config = fs::read_to_string(&cfg).unwrap().replace(
         "sub_llm_cmd = \"cat\"",
         &format!("sub_llm_cmd = {:?}", mock.to_str().unwrap()),
@@ -541,7 +663,7 @@ fn cumulative_llm_budget_stops_repeated_calls_in_one_cell() {
 
 #[cfg(unix)]
 #[test]
-fn jcode_api_transport_reuses_worker_session_and_streams_usage() {
+fn jcode_api_batch_uses_one_fresh_session_per_item_and_streams_usage() {
     use std::io::{BufRead, BufReader, Write as _};
     use std::os::unix::net::UnixListener;
     use std::thread;
@@ -549,59 +671,83 @@ fn jcode_api_transport_reuses_worker_session_and_streams_usage() {
     let socket = t.join("api.sock");
     let listener = UnixListener::bind(&socket).unwrap();
     let server = thread::spawn(move || {
-        let _ = listener.accept().unwrap();
-        let (mut stream, _) = listener.accept().unwrap();
-        let mut reader = BufReader::new(stream.try_clone().unwrap());
-        let mut send_count = 0;
-        loop {
-            let mut line = String::new();
-            if reader.read_line(&mut line).unwrap() == 0 {
-                break;
-            }
-            let f: serde_json::Value = serde_json::from_str(&line).unwrap();
-            let id = f["id"].as_u64().unwrap();
-            let req = f["req"].as_str().unwrap();
-            let frames: Vec<serde_json::Value> = match req {
-                "hello" => vec![
-                    serde_json::json!({"v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"}),
-                ],
-                "create_session" => vec![
-                    serde_json::json!({"v":1,"reply_to":id,"ev":"attached","session":{"session_id":"s1","status":"idle"}}),
-                ],
-                "get_runtime_info" => vec![
-                    serde_json::json!({"v":1,"reply_to":id,"ev":"runtime_info","session_id":"s1","provider":"OpenAI","model":"gpt-5.4","routes":[{"model":"gpt-5.4","provider":"OpenAI","api_method":"openai-oauth","available":true,"detail":"OAuth"}]}),
-                ],
-                "set_model" => {
-                    assert_eq!(f["model"], "openai-oauth:gpt-5.4");
-                    vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+        let mut turns_per_session = Vec::new();
+        for session_number in 1..=2 {
+            // JcodeSession::open first probes bridge liveness, then opens the protocol stream.
+            let (probe, _) = listener.accept().unwrap();
+            drop(probe);
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let sid = format!("s{session_number}");
+            let mut turn_count = 0;
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 {
+                    break;
                 }
-                "set_reasoning_effort" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
-                "send_message" => {
-                    send_count += 1;
-                    let suffix = if send_count == 1 {
-                        "direct secret prompt"
-                    } else {
-                        "second"
-                    };
-                    assert!(f["content"].as_str().unwrap().ends_with(suffix));
-                    vec![
-                        serde_json::json!({"v":1,"ev":"message_accepted","session_id":"s1"}),
-                        serde_json::json!({"v":1,"ev":"model_info","session_id":"s1","provider":"OpenAI","model":"gpt-5.4"}),
-                        serde_json::json!({"v":1,"ev":"text_delta","session_id":"s1","text":if send_count==1{"DIRECT_OK"}else{"SECOND_OK"}}),
-                        serde_json::json!({"v":1,"ev":"token_usage","session_id":"s1","input":11,"output":2,"cache_read_input":3}),
-                        serde_json::json!({"v":1,"ev":"turn_done","session_id":"s1"}),
-                    ]
+                let f: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let id = f["id"].as_u64().unwrap();
+                let req = f["req"].as_str().unwrap();
+                let frames: Vec<serde_json::Value> = match req {
+                    "hello" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
+                    })],
+                    "create_session" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"attached",
+                        "session":{"session_id":&sid,"status":"idle"}
+                    })],
+                    "get_runtime_info" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"runtime_info","session_id":&sid,
+                        "provider":"OpenAI","model":"gpt-5.4"
+                    })],
+                    "set_model" => {
+                        assert_eq!(f["model"], "openai-oauth:gpt-5.4");
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    "set_reasoning_effort" => {
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    "send_message" => {
+                        turn_count += 1;
+                        assert_eq!(turn_count, 1, "batch session received a second turn");
+                        let (suffix, text) = if session_number == 1 {
+                            ("direct secret prompt", "DIRECT_OK")
+                        } else {
+                            ("second", "SECOND_OK")
+                        };
+                        assert!(f["content"].as_str().unwrap().ends_with(suffix));
+                        vec![
+                            serde_json::json!({
+                                "v":1,"ev":"message_accepted","session_id":&sid
+                            }),
+                            serde_json::json!({
+                                "v":1,"ev":"model_info","session_id":&sid,
+                                "provider":"OpenAI","model":"gpt-5.4"
+                            }),
+                            serde_json::json!({
+                                "v":1,"ev":"text_delta","session_id":&sid,"text":text
+                            }),
+                            serde_json::json!({
+                                "v":1,"ev":"token_usage","session_id":&sid,
+                                "input":11,"output":2,"cache_read_input":3
+                            }),
+                            serde_json::json!({"v":1,"ev":"turn_done","session_id":&sid}),
+                        ]
+                    }
+                    "archive_session" => {
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    x => panic!("unexpected {x}; batch sessions must never be cleared"),
+                };
+                for frame in frames {
+                    serde_json::to_writer(&mut stream, &frame).unwrap();
+                    stream.write_all(b"\n").unwrap();
+                    stream.flush().unwrap()
                 }
-                "clear" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
-                "archive_session" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
-                x => panic!("unexpected {x}"),
-            };
-            for frame in frames {
-                serde_json::to_writer(&mut stream, &frame).unwrap();
-                stream.write_all(b"\n").unwrap();
-                stream.flush().unwrap()
             }
+            turns_per_session.push(turn_count);
         }
+        turns_per_session
     });
     let cfg = config(&t, "jcode-api", 1024, 1, 3, 4);
     let id = sid(&t, &cfg);
@@ -657,6 +803,139 @@ fn jcode_api_transport_reuses_worker_session_and_streams_usage() {
     assert_eq!(usage["output_tokens"], 2);
     assert_eq!(usage["cache_read_tokens"], 3);
     assert!(usage["latency_ms"].as_u64().is_some());
-    server.join().unwrap();
+    assert_eq!(server.join().unwrap(), [1, 1]);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn jcode_batch_retries_with_fresh_sessions_then_marks_failure_and_continues() {
+    use std::io::{BufRead, BufReader, Write as _};
+    use std::os::unix::net::UnixListener;
+    use std::thread;
+
+    let t = temp("jpb");
+    let socket = t.join("api.sock");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = thread::spawn(move || {
+        let mut all_messages = Vec::new();
+        let mut archives = Vec::new();
+        for session_number in 1..=4 {
+            // JcodeSession::open first probes bridge liveness, then opens the protocol stream.
+            let (probe, _) = listener.accept().unwrap();
+            drop(probe);
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let sid = format!("s{session_number}");
+            let mut session_messages = 0;
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 {
+                    break;
+                }
+                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let id = request["id"].as_u64().unwrap();
+                let req = request["req"].as_str().unwrap();
+                let frames = match req {
+                    "hello" => vec![serde_json::json!({
+                        "v": 1, "reply_to": id, "ev": "hello_ok", "version": 1,
+                        "server": "fake"
+                    })],
+                    "create_session" => vec![serde_json::json!({
+                        "v": 1, "reply_to": id, "ev": "attached",
+                        "session": {"session_id": &sid, "status": "idle"}
+                    })],
+                    "set_model" => {
+                        assert_eq!(request["model"], "openai-oauth:gpt-5.4");
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    "get_runtime_info" => vec![serde_json::json!({
+                        "v": 1, "reply_to": id, "ev": "runtime_info",
+                        "session_id": &sid, "provider": "OpenAI", "model": "gpt-5.4"
+                    })],
+                    "set_reasoning_effort" => {
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    "send_message" => {
+                        session_messages += 1;
+                        assert_eq!(session_messages, 1, "batch session received a second turn");
+                        let content = request["content"].as_str().unwrap().to_owned();
+                        all_messages.push(content.clone());
+                        if session_number == 2 || session_number == 3 {
+                            assert!(content.ends_with("bad"));
+                            vec![serde_json::json!({
+                                "v": 1, "ev": "error", "session_id": &sid,
+                                "message": "injected provider failure"
+                            })]
+                        } else {
+                            let (suffix, answer) = if session_number == 1 {
+                                ("first", "FIRST_OK")
+                            } else {
+                                assert_eq!(session_number, 4);
+                                ("third", "THIRD_OK")
+                            };
+                            assert!(content.ends_with(suffix), "{content}");
+                            vec![
+                                serde_json::json!({
+                                    "v":1,"ev":"model_info","session_id":&sid,
+                                    "provider":"OpenAI","model":"gpt-5.4"
+                                }),
+                                serde_json::json!({
+                                    "v":1,"ev":"text_delta","session_id":&sid,"text":answer
+                                }),
+                                serde_json::json!({"v":1,"ev":"turn_done","session_id":&sid}),
+                            ]
+                        }
+                    }
+                    "archive_session" => {
+                        archives.push(sid.clone());
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    other => panic!(
+                        "unexpected {other}; batch sessions must receive one turn and no clear"
+                    ),
+                };
+                for frame in frames {
+                    serde_json::to_writer(&mut stream, &frame).unwrap();
+                    stream.write_all(b"\n").unwrap();
+                    stream.flush().unwrap();
+                }
+            }
+        }
+        (all_messages, archives)
+    });
+
+    let cfg = config(&t, "jcode-api", 2048, 1, 2, 4);
+    let id = sid(&t, &cfg);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+    command
+        .args(["exec", &id])
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_API_SOCKET", &socket)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"print(llm_batch(['first','bad','third'],model='gpt-5.4',workers=1))\n")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    let out = ok(output);
+    let first = out.find("FIRST_OK").unwrap();
+    let failed = out
+        .find(r#"{"azdaja_error":"provider_call_failed_retry_item""#)
+        .unwrap();
+    let third = out.find("THIRD_OK").unwrap();
+    assert!(first < failed && failed < third, "{out}");
+    assert!(out.contains("injected provider failure"), "{out}");
+
+    let (messages, archives) = server.join().unwrap();
+    assert_eq!(messages.len(), 4);
+    assert_eq!(archives, ["s1", "s4"]);
     fs::remove_dir_all(t).unwrap();
 }

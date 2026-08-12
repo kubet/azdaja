@@ -502,15 +502,20 @@ fn external(
                     cfg.max_calls_per_cell
                 )
             }
-            let values = call_many(&prompts, model, workers, cfg)?;
+            let values = call_many_items(&prompts, model, workers, cfg, batch)?;
             if batch {
                 Ok(MontyObject::List(
-                    values.into_iter().map(MontyObject::String).collect(),
+                    values
+                        .into_iter()
+                        .map(|result| MontyObject::String(batch_item_value(result)))
+                        .collect(),
                 ))
             } else {
-                Ok(MontyObject::String(
-                    values.into_iter().next().unwrap_or_default(),
-                ))
+                match values.into_iter().next() {
+                    Some(Ok(value)) => Ok(MontyObject::String(value)),
+                    Some(Err(error)) => bail!("{error}"),
+                    None => Ok(MontyObject::String(String::new())),
+                }
             }
         }
         _ => bail!("unknown external function: {name}"),
@@ -741,6 +746,7 @@ impl SoloSession {
             .ok_or_else(|| anyhow!("solo session is busy"))?;
         let (mut repl, mut output, success, mut final_out) =
             run_cell(repl, code, cfg, &self.sub_model);
+        let mut success = success;
         if success
             && final_out.is_none()
             && Regex::new(r"(?m)^\s*FINAL\s*=").unwrap().is_match(code)
@@ -750,13 +756,14 @@ impl SoloSession {
             final_out = Some(Final::Value(value))
         }
         let mut finalized = false;
-        if let Some(final_value) = final_out {
+        if success && let Some(final_value) = final_out {
             let value = match final_value {
                 Final::Value(v) => Some(v),
                 Final::Var(name) => match repl.feed_run(&name, vec![], PrintWriter::Disabled) {
                     Ok(v) => Some(v),
                     Err(e) => {
                         output.push_str(&format!("\n{e}"));
+                        success = false;
                         None
                     }
                 },
@@ -788,6 +795,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
     let model = meta.sub_model.as_deref().unwrap_or(&cfg.default_model);
     let repl = load_repl(&dir)?;
     let (mut repl, mut output, success, mut final_out) = run_cell(repl, code, cfg, model);
+    let mut success = success;
     // Paper-style trajectories sometimes assign `FINAL = answer` instead of calling it.
     if success
         && final_out.is_none()
@@ -798,20 +806,21 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         final_out = Some(Final::Value(value));
     }
     let mut finalized = false;
-    if let Some(final_value) = final_out {
+    if success && let Some(final_value) = final_out {
         let value = match final_value {
             Final::Value(v) => Some(v),
             Final::Var(name) => match repl.feed_run(&name, vec![], PrintWriter::Disabled) {
                 Ok(v) => Some(v),
                 Err(e) => {
                     output.push_str(&format!("\n{e}"));
+                    success = false;
                     None
                 }
             },
         };
         if let Some(v) = value {
             atomic_write(&dir.join("final"), v.to_string().as_bytes())?;
-            finalized = true;
+            finalized = true
         }
     }
     save_repl(&dir, &repl)?;
@@ -861,12 +870,32 @@ pub fn cap(s: &str, limit: usize) -> String {
     format!("{a}{marker}{b}")
 }
 
-pub fn call_many(
+pub const LLM_BATCH_ERROR_KIND: &str = "provider_call_failed_retry_item";
+
+type CallItemResult = std::result::Result<String, String>;
+
+fn batch_item_value(result: CallItemResult) -> String {
+    match result {
+        Ok(value) => value,
+        Err(error) => {
+            let compact = error.split_whitespace().collect::<Vec<_>>().join(" ");
+            let message: String = compact.chars().take(1024).collect();
+            serde_json::json!({
+                "azdaja_error": LLM_BATCH_ERROR_KIND,
+                "message": message,
+            })
+            .to_string()
+        }
+    }
+}
+
+fn call_many_items(
     prompts: &[String],
     model: &str,
     workers: usize,
     cfg: &Config,
-) -> Result<Vec<String>> {
+    batch: bool,
+) -> Result<Vec<CallItemResult>> {
     let depth = env::var("RLM_DEPTH")
         .ok()
         .and_then(|s| s.parse::<u32>().ok())
@@ -884,43 +913,103 @@ pub fn call_many(
             cfg.max_calls_per_cell
         )
     }
-    let slots = std::sync::Mutex::new((0usize, vec![None; prompts.len()]));
-    let error = std::sync::Mutex::new(None);
+    if !(1..=32).contains(&workers) {
+        bail!("workers must be between 1 and 32")
+    }
+    let results = std::sync::Mutex::new((
+        0usize,
+        std::iter::repeat_with(|| None)
+            .take(prompts.len())
+            .collect::<Vec<Option<CallItemResult>>>(),
+    ));
     thread::scope(|scope| {
         for _ in 0..workers.min(prompts.len()) {
             scope.spawn(|| {
-                #[cfg(unix)] let mut api=if cfg.sub_llm_cmd=="jcode-api"{match JcodeSession::open(cfg,model){Ok(api)=>Some(api),Err(e)=>{*error.lock().unwrap()=Some(e);return}}}else{None};let mut api_used=false;
                 loop {
-                    if error.lock().unwrap().is_some() {break}
                     let i = {
-                        let mut s = slots.lock().unwrap();
-                        if s.0 >= prompts.len() {
+                        let mut state = results.lock().unwrap();
+                        if state.0 >= prompts.len() {
                             break;
                         }
-                        s.0 += 1;
-                        s.0 - 1
+                        let i = state.0;
+                        state.0 += 1;
+                        i
                     };
-                    let result:Result<String>=(||{#[cfg(unix)] if let Some(api)=&mut api{if api_used{api.clear()?}api_used=true;let wire=format!("[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",depth+1,cfg.max_depth,prompts[i]);let reply=api.turn(&wire)?;trace_model_reply(&reply,depth+1)?;return Ok(reply.text)}call_model(&prompts[i],model,cfg,depth+1)})();
-                    match result {
-                        Ok(v) => slots.lock().unwrap().1[i] = Some(v),
-                        Err(e) => {
-                            *error.lock().unwrap() = Some(e);
-                            break;
+                    #[cfg(unix)]
+                    let result = if batch && cfg.sub_llm_cmd == "jcode-api" {
+                        let mut value = None;
+                        let mut last_error = None;
+                        // Independent prompts always get fresh sessions. Reopening once can
+                        // recover a transient failure without risking unread frames from a prior
+                        // turn or the observed long hang after `clear` on subscription sessions.
+                        for _ in 0..2 {
+                            let attempt: Result<ModelReply> = (|| {
+                                let mut api = JcodeSession::open_for_batch(cfg, model)?;
+                                let wire = format!(
+                                    "[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",
+                                    depth + 1,
+                                    cfg.max_depth,
+                                    prompts[i]
+                                );
+                                match api.turn(&wire) {
+                                    Ok(reply) => Ok(reply),
+                                    Err(error) => {
+                                        api.discard();
+                                        Err(error)
+                                    }
+                                }
+                            })();
+                            match attempt {
+                                Ok(reply) => {
+                                    if trace_model_reply(&reply, depth + 1).is_err() {
+                                        let _ = trace_model_failure(depth + 1);
+                                    }
+                                    value = Some(reply.text);
+                                    break;
+                                }
+                                Err(error) => {
+                                    let _ = trace_model_failure(depth + 1);
+                                    last_error = Some(error);
+                                }
+                            }
                         }
+                        value.ok_or_else(|| {
+                            last_error.unwrap_or_else(|| anyhow!("jcode provider call failed"))
+                        })
+                    } else {
+                        call_model(&prompts[i], model, cfg, depth + 1)
+                    };
+                    #[cfg(not(unix))]
+                    let result = call_model(&prompts[i], model, cfg, depth + 1);
+                    if (!batch || cfg.sub_llm_cmd != "jcode-api") && result.is_err() {
+                        let _ = trace_model_failure(depth + 1);
                     }
+                    results.lock().unwrap().1[i] =
+                        Some(result.map_err(|error| format!("{error:#}")));
                 }
             });
         }
     });
-    if let Some(e) = error.into_inner().unwrap() {
-        return Err(e);
-    }
-    Ok(slots
+    Ok(results
         .into_inner()
         .unwrap()
         .1
         .into_iter()
-        .map(Option::unwrap)
+        .map(|result| {
+            result.unwrap_or_else(|| Err("llm_batch worker did not produce a result".into()))
+        })
+        .collect())
+}
+
+pub fn call_many(
+    prompts: &[String],
+    model: &str,
+    workers: usize,
+    cfg: &Config,
+) -> Result<Vec<String>> {
+    Ok(call_many_items(prompts, model, workers, cfg, true)?
+        .into_iter()
+        .map(batch_item_value)
         .collect())
 }
 
@@ -1131,6 +1220,11 @@ fn ensure_jcode_bridge(cfg: &Config) -> Result<PathBuf> {
 }
 
 #[cfg(unix)]
+fn jcode_batch_timeout(cfg: &Config) -> Duration {
+    Duration::from_secs(cfg.sub_timeout.min(60))
+}
+
+#[cfg(unix)]
 struct JcodeSession {
     stream: UnixStream,
     reader: BufReader<UnixStream>,
@@ -1141,6 +1235,7 @@ struct JcodeSession {
     model: String,
     requested_model: String,
     timeout: Duration,
+    archive_on_drop: bool,
 }
 #[cfg(unix)]
 impl JcodeSession {
@@ -1208,9 +1303,18 @@ impl JcodeSession {
         }
     }
     fn open(cfg: &Config, model: &str) -> Result<Self> {
+        Self::open_with_timeout(cfg, model, Duration::from_secs(cfg.sub_timeout))
+    }
+    fn open_for_root(cfg: &Config, model: &str) -> Result<Self> {
+        Self::open_with_timeout(cfg, model, Duration::from_secs(cfg.sub_timeout.min(90)))
+    }
+    fn open_for_batch(cfg: &Config, model: &str) -> Result<Self> {
+        Self::open_with_timeout(cfg, model, jcode_batch_timeout(cfg))
+    }
+    fn open_with_timeout(cfg: &Config, model: &str, timeout: Duration) -> Result<Self> {
         let socket = ensure_jcode_bridge(cfg)?;
         let stream = UnixStream::connect(&socket)?;
-        stream.set_read_timeout(Some(Duration::from_secs(cfg.sub_timeout)))?;
+        stream.set_read_timeout(Some(timeout))?;
         stream.set_write_timeout(Some(Duration::from_secs(10)))?;
         let reader = BufReader::new(stream.try_clone()?);
         let mut this = Self {
@@ -1222,7 +1326,8 @@ impl JcodeSession {
             provider: String::new(),
             model: String::new(),
             requested_model: model.to_owned(),
-            timeout: Duration::from_secs(cfg.sub_timeout),
+            timeout,
+            archive_on_drop: false,
         };
         let id=this.send(serde_json::json!({"req":"hello","min_version":1,"max_version":1,"client":format!("azdaja/{VERSION}")}))?;
         this.reply(id, "hello_ok")?;
@@ -1255,15 +1360,22 @@ impl JcodeSession {
         this.model = resolved.into();
         let id=this.send(serde_json::json!({"req":"set_reasoning_effort","session_id":this.session,"effort":cfg.jcode_reasoning}))?;
         this.reply(id, "ok")?;
+        this.archive_on_drop = true;
         Ok(this)
     }
-    fn clear(&mut self) -> Result<()> {
-        let sid = self.session.clone();
-        let id = self.send(serde_json::json!({"req":"clear","session_id":sid}))?;
-        self.reply(id, "ok")?;
-        Ok(())
+    fn discard(&mut self) {
+        // A failed turn can leave unread frames on the stream. Do not archive over
+        // that poisoned protocol state; closing it is the only safe way to reuse this worker.
+        self.archive_on_drop = false;
     }
     fn turn(&mut self, prompt: &str) -> Result<ModelReply> {
+        let result = self.turn_inner(prompt);
+        if result.is_err() {
+            self.discard();
+        }
+        result
+    }
+    fn turn_inner(&mut self, prompt: &str) -> Result<ModelReply> {
         let started = Instant::now();
         self.usage = ModelUsage::default();
         let sid = self.session.clone();
@@ -1372,7 +1484,8 @@ impl JcodeSession {
 impl Drop for JcodeSession {
     fn drop(&mut self) {
         let sid = self.session.clone();
-        if !sid.is_empty()
+        if self.archive_on_drop
+            && !sid.is_empty()
             && let Ok(id) = self.send(serde_json::json!({"req":"archive_session","session_id":sid}))
         {
             let _ = self.reply(id, "ok");
@@ -1391,7 +1504,7 @@ impl RootDriver {
     pub fn start(cfg: &Config, model: &str) -> Result<Self> {
         #[cfg(unix)]
         let api = if cfg.sub_llm_cmd == "jcode-api" {
-            Some(JcodeSession::open(cfg, model)?)
+            Some(JcodeSession::open_for_root(cfg, model)?)
         } else {
             None
         };
@@ -1417,6 +1530,28 @@ impl RootDriver {
         self.history.push_str("\n\nUser:\n");
         Ok(r)
     }
+}
+
+fn trace_model_failure(depth: u32) -> Result<()> {
+    if let Some(path) = env::var_os("AZDAJA_MODEL_TRACE") {
+        let row = serde_json::json!({"timestamp_ms":now_ms(),"depth":depth,"error":"provider_call_failed"});
+        let mut bytes = serde_json::to_vec(&row)?;
+        bytes.push(b'\n');
+        let mut options = OpenOptions::new();
+        options.create(true).append(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if file.metadata()?.permissions().mode() & 0o077 != 0 {
+                file.set_permissions(fs::Permissions::from_mode(0o600))?
+            }
+        }
+        file.write_all(&bytes)?;
+    }
+    Ok(())
 }
 
 fn trace_model_reply(reply: &ModelReply, depth: u32) -> Result<()> {
@@ -1646,5 +1781,29 @@ mod unit_tests {
         assert!(a.as_os_str().as_bytes().len() < 100, "{}", a.display());
         assert_ne!(a, b);
         assert!(a.starts_with("/tmp/azdaja-501"));
+    }
+    #[test]
+    fn root_and_batch_timeouts_are_capped_without_changing_config() {
+        let mut cfg = Config {
+            sub_timeout: 300,
+            ..Config::default()
+        };
+        assert_eq!(jcode_batch_timeout(&cfg), Duration::from_secs(60));
+        assert_eq!(
+            Duration::from_secs(cfg.sub_timeout.min(90)),
+            Duration::from_secs(90)
+        );
+        assert_eq!(cfg.sub_timeout, 300);
+        cfg.sub_timeout = 12;
+        assert_eq!(jcode_batch_timeout(&cfg), Duration::from_secs(12));
+    }
+
+    #[test]
+    fn failed_solo_cell_cannot_publish_final() {
+        let cfg = Config::default();
+        let mut session = SoloSession::new(&cfg, None).unwrap();
+        let result = session.exec("FINAL('wrong')\n1/0", &cfg).unwrap();
+        assert!(!result.success && !result.finalized);
+        assert!(session.final_answer(&cfg).is_err());
     }
 }
