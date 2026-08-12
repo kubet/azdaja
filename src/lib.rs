@@ -1222,7 +1222,7 @@ fn ensure_jcode_bridge(cfg: &Config) -> Result<PathBuf> {
 
 #[cfg(unix)]
 fn jcode_root_timeout(cfg: &Config) -> Duration {
-    Duration::from_secs(cfg.sub_timeout.min(90))
+    Duration::from_secs(cfg.sub_timeout.min(30))
 }
 #[cfg(unix)]
 fn jcode_batch_timeout(cfg: &Config, prompt_chars: usize) -> Duration {
@@ -1531,7 +1531,14 @@ impl RootDriver {
     pub fn turn(&mut self, prompt: &str) -> Result<ModelReply> {
         #[cfg(unix)]
         if let Some(api) = &mut self.api {
-            let reply = api.turn(prompt)?;
+            let reply = match api.turn(prompt) {
+                Ok(reply) => reply,
+                Err(error) => {
+                    api.discard();
+                    let _ = trace_model_failure(0);
+                    return Err(error);
+                }
+            };
             trace_model_reply(&reply, 0)?;
             return Ok(reply);
         }
@@ -1805,7 +1812,7 @@ mod unit_tests {
         };
         assert_eq!(jcode_batch_timeout(&cfg, 20_000), Duration::from_secs(55));
         assert_eq!(jcode_batch_timeout(&cfg, 2_000), Duration::from_secs(30));
-        assert_eq!(jcode_root_timeout(&cfg), Duration::from_secs(90));
+        assert_eq!(jcode_root_timeout(&cfg), Duration::from_secs(30));
         assert_eq!(cfg.sub_timeout, 300);
         cfg.sub_timeout = 12;
         assert_eq!(jcode_batch_timeout(&cfg, 20_000), Duration::from_secs(12));

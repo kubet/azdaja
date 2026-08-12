@@ -498,10 +498,26 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
 
     // The root plans once. A broken solve fails closed instead of spending another expensive root
     // turn to repair syntax, protocol failures, or incomplete semantic evidence.
-    let model_reply = {
-        let mut driver = RootDriver::start(cfg, root_model)?;
-        driver.turn(&prompt)?
-    };
+    let mut model_reply = None;
+    let mut root_error = None;
+    for attempt in 0..2 {
+        if attempt == 1 {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+        let turn = (|| {
+            let mut driver = RootDriver::start(cfg, root_model)?;
+            driver.turn(&prompt)
+        })();
+        match turn {
+            Ok(reply) => {
+                model_reply = Some(reply);
+                break;
+            }
+            Err(error) => root_error = Some(error),
+        }
+    }
+    let model_reply = model_reply
+        .ok_or_else(|| root_error.unwrap_or_else(|| anyhow!("root provider turn did not run")))?;
     let trace = env::var_os("AZDAJA_SOLO_TRACE").map(PathBuf::from);
     if let Some(path) = &trace {
         use std::io::Write;
