@@ -937,45 +937,37 @@ fn call_many_items(
                     };
                     #[cfg(unix)]
                     let result = if batch && cfg.sub_llm_cmd == "jcode-api" {
-                        let mut value = None;
-                        let mut last_error = None;
-                        // Independent prompts always get fresh sessions. Reopening once can
-                        // recover a transient failure without risking unread frames from a prior
-                        // turn or the observed long hang after `clear` on subscription sessions.
-                        for _ in 0..2 {
-                            let attempt: Result<ModelReply> = (|| {
-                                let mut api=JcodeSession::open_for_batch(cfg,model,prompts[i].chars().count())?;
-                                let wire = format!(
-                                    "[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",
-                                    depth + 1,
-                                    cfg.max_depth,
-                                    prompts[i]
-                                );
-                                match api.turn(&wire) {
-                                    Ok(reply) => Ok(reply),
-                                    Err(error) => {
-                                        api.discard();
-                                        Err(error)
-                                    }
-                                }
-                            })();
-                            match attempt {
-                                Ok(reply) => {
-                                    if trace_model_reply(&reply, depth + 1).is_err() {
-                                        let _ = trace_model_failure(depth + 1);
-                                    }
-                                    value = Some(reply.text);
-                                    break;
-                                }
+                        // Each logical item owns exactly one physical provider turn. The solve
+                        // cell may retry an explicitly unresolved shard once; a hidden transport
+                        // retry would multiply deadlines and contend with cancellation cleanup.
+                        let attempt: Result<ModelReply> = (|| {
+                            let mut api=JcodeSession::open_for_batch(cfg,model,prompts[i].chars().count())?;
+                            let wire = format!(
+                                "[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",
+                                depth + 1,
+                                cfg.max_depth,
+                                prompts[i]
+                            );
+                            match api.turn(&wire) {
+                                Ok(reply) => Ok(reply),
                                 Err(error) => {
-                                    let _ = trace_model_failure(depth + 1);
-                                    last_error = Some(error);
+                                    api.discard();
+                                    Err(error)
                                 }
                             }
+                        })();
+                        match attempt {
+                            Ok(reply) => {
+                                if trace_model_reply(&reply, depth + 1).is_err() {
+                                    let _ = trace_model_failure(depth + 1);
+                                }
+                                Ok(reply.text)
+                            }
+                            Err(error) => {
+                                let _ = trace_model_failure(depth + 1);
+                                Err(error)
+                            }
                         }
-                        value.ok_or_else(|| {
-                            last_error.unwrap_or_else(|| anyhow!("jcode provider call failed"))
-                        })
                     } else {
                         call_model(&prompts[i], model, cfg, depth + 1)
                     };

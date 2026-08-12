@@ -409,16 +409,16 @@ fn solo_prompt_guides_exact_aggregation_in_one_root_turn() {
         r#"import os,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    begin = '--- BEGIN UNTRUSTED SCHEMA SAMPLE (repr, at most 4096 output characters) ---'
+    begin = '--- BEGIN UNTRUSTED SCHEMA SAMPLE ---'
     end = '--- END UNTRUSTED SCHEMA SAMPLE ---'
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
-    required = ('schema-targeted solve now', 'do not spend a root turn inspecting again',
-                'exact observed schema', 'each source occurrence counts', 'integer multiplicity',
-                'rendered character length', 'candidate-union audit', 'short evidence code',
-                'rotated/reversed order', 'hard logical child-call budget',
-                'os, re, json, math, collections, and datetime', 'csv and other imports',
-                'globals, locals, callable', 'final(answer) is always defined', 'validate ids/schemas',
-                'at most 220 nonblank lines', 'must be at most 64 in this cell', 'you have at most 4 root turns')
+    required = ('parse only the observed schema', 'every source occurrence', 'integer multiplicity',
+                'rendered character length', 'two independent full-coverage views',
+                'every survivor must occur exactly once', 'sparse absence is never evidence',
+                'retry only an unresolved shard once', 'at most one targeted',
+                'two explicit complement certificates', 'json azdaja_error',
+                'os, re, json, math, collections, datetime', 'globals/locals/callable',
+                'preferably under 140 nonblank lines', 'child-call budget: 64')
     sample_ok = 'schema-canary' in sample and len(sample) <= 4096 and 'TAIL_NOT_IN_SAMPLE' not in p
     if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
     else: print('```python\nFINAL("done:" + llm("classify"))\n```')
@@ -468,7 +468,7 @@ else: print('SUB_OK')
 }
 
 #[test]
-fn solo_defaults_to_four_bounded_root_turns() {
+fn solo_fails_closed_after_one_root_turn() {
     let t = temp("solo-turn-limit");
     let calls = t.join("root-calls");
     let mock = t.join("never-final.py");
@@ -500,12 +500,8 @@ else:
         "",
     );
     assert_eq!(output.status.code(), Some(2));
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("solo exceeded 4 root turns"),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 4);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("did not call FINAL"));
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -586,8 +582,9 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
     assert!(skill.contains("Each source occurrence is an aggregation unit"));
     assert!(skill.contains("retaining every source ID or an integer multiplicity"));
     assert!(skill.contains("actual rendered character length"));
-    assert!(skill.contains("sparse two-sided candidate-union audit"));
-    assert!(skill.contains("hard logical child-call budget"));
+    assert!(skill.contains("two independent full-coverage views"));
+    assert!(skill.contains("Omission is unresolved"));
+    assert!(skill.contains("two explicit complement certificates"));
     assert!(skill.contains("`yield`/generators"));
     assert!(skill.contains("`FINAL(answer)` is always defined"));
     assert!(skill.contains("`csv` and other imports are unavailable"));
@@ -969,7 +966,7 @@ fn jcode_api_batch_uses_one_fresh_session_per_item_and_streams_usage() {
 
 #[cfg(unix)]
 #[test]
-fn jcode_batch_retries_with_fresh_sessions_then_marks_failure_and_continues() {
+fn jcode_batch_uses_one_physical_turn_per_item_and_preserves_failures() {
     use std::io::{BufRead, BufReader, Write as _};
     use std::os::unix::net::UnixListener;
     use std::thread;
@@ -980,7 +977,7 @@ fn jcode_batch_retries_with_fresh_sessions_then_marks_failure_and_continues() {
     let server = thread::spawn(move || {
         let mut all_messages = Vec::new();
         let mut archives = Vec::new();
-        for session_number in 1..=4 {
+        for session_number in 1..=3 {
             // JcodeSession::open first probes bridge liveness, then opens the protocol stream.
             let (probe, _) = listener.accept().unwrap();
             drop(probe);
@@ -1021,7 +1018,7 @@ fn jcode_batch_retries_with_fresh_sessions_then_marks_failure_and_continues() {
                         assert_eq!(session_messages, 1, "batch session received a second turn");
                         let content = request["content"].as_str().unwrap().to_owned();
                         all_messages.push(content.clone());
-                        if session_number == 2 || session_number == 3 {
+                        if session_number == 2 {
                             assert!(content.ends_with("bad"));
                             vec![serde_json::json!({
                                 "v": 1, "ev": "error", "session_id": &sid,
@@ -1031,7 +1028,7 @@ fn jcode_batch_retries_with_fresh_sessions_then_marks_failure_and_continues() {
                             let (suffix, answer) = if session_number == 1 {
                                 ("first", "FIRST_OK")
                             } else {
-                                assert_eq!(session_number, 4);
+                                assert_eq!(session_number, 3);
                                 ("third", "THIRD_OK")
                             };
                             assert!(content.ends_with(suffix), "{content}");
@@ -1098,7 +1095,7 @@ fn jcode_batch_retries_with_fresh_sessions_then_marks_failure_and_continues() {
     assert!(out.contains("injected provider failure"), "{out}");
 
     let (messages, archives) = server.join().unwrap();
-    assert_eq!(messages.len(), 4);
-    assert_eq!(archives, ["s1", "s2", "s3", "s4"]);
+    assert_eq!(messages.len(), 3);
+    assert_eq!(archives, ["s1", "s2", "s3"]);
     fs::remove_dir_all(t).unwrap();
 }
