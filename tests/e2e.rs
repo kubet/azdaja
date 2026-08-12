@@ -401,7 +401,7 @@ fn concurrent_starts_respect_limit() {
 }
 
 #[test]
-fn solo_fixed_manifest_prelude_owns_provider_plumbing() {
+fn solo_fixed_manifest_prelude_owns_one_wave_provider_plumbing() {
     let t = temp("solo-manifest");
     let mock = t.join("semantic.py");
     fs::write(
@@ -410,10 +410,8 @@ fn solo_fixed_manifest_prelude_owns_provider_plumbing() {
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
     print('```python\nitems=[{"id":"R1","evidence":"ordinary note"},{"id":"R2","evidence":"ambiguous service"}]\nlabels=semantic_manifest(items,"binary annotation",["ham","spam"])\nFINAL(labels["R1"]+":"+labels["R2"])\n```')
-elif 'Blindly adjudicate' in p:
-    print('R2|spam|final|service')
 else:
-    print('R1|ham|final|ordinary\nR2|ham|review|boundary')
+    print('R1|ham|final|ordinary\nR2|spam|final|service')
 "#,
     )
     .unwrap();
@@ -449,8 +447,8 @@ if os.getenv('RLM_DEPTH') == '0':
     end = '--- END UNTRUSTED SCHEMA SAMPLE ---'
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
     required = ('parse only the observed schema', 'every source occurrence', 'integer multiplicity',
-                'semantic_manifest(items, task, labels)', 'complete disjoint primary round',
-                'strict coverage', 'one failed-shard retry', 'boundary-only adjudication',
+                'semantic_manifest(items, task, labels)', 'one full-coverage semantic wave',
+                'strict manifest validation', 'one retry only if the wave fails', 'internally counter-checks boundary cases',
                 'two-key dicts named id and evidence', 'call the helper exactly once',
                 'never call llm/llm_batch directly', 'os, re, json, math, collections, datetime',
                 'globals/locals/callable', 'keep code under 50 nonblank lines')
