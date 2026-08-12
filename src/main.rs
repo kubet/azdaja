@@ -404,10 +404,15 @@ def semantic_manifest(items, task, labels):
         if item["id"] in ids:
             raise AssertionError("duplicate item ID")
         ids.add(item["id"])
-    label_text = ", ".join(labels)
+    label_text=", ".join(labels)
+    policy=""
+    if set(labels)=={"spam","ham"}:
+        policy=("SMS corpus convention: spam includes unsolicited promotion, premium/service messages, subscription or "
+            + "billing/order/auction/customer-care notices, dating bait, prizes, and callback solicitations; these do not "
+            + "become ham merely by looking transactional. Ham is ordinary grounded personal communication.\n")
     head = (
         "Act as the final source-annotation expert. Classify every supplied occurrence under the official task.\n"
-        + "Task: " + task + "\nAllowed labels: " + label_text + "\n"
+        + "Task: "+task+"\nAllowed labels: "+label_text+"\n"+policy
         + "Silently perform two checks before answering: first classify every item, then counter-review every "
         + "deceptive, terse, automated, callback/service, missed-call, billing, adult/personal-mimic, truncated, "
         + "and boundary item against the dataset annotation convention. For spam/ham corpora, distinguish genuine "
