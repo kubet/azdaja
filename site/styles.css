@@ -1,132 +1,73 @@
 @charset "UTF-8";
 
-:root {
-  --paper: #f0dfaa;
-  --paper-light: #f7edce;
-  --ink: #17140f;
-  --red: #9e251c;
-  --line: rgba(23,20,15,.28);
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --mono: "SFMono-Regular", Consolas, monospace;
-}
-
-* { box-sizing: border-box; }
-html, body { min-height: 100%; }
-html { background: var(--paper); }
+:root { --paper:#f0dfa9; --ink:#17130d; --red:#9c261d; }
+* { box-sizing:border-box; }
+html,body { min-height:100%; }
+html { background:var(--paper); }
 body {
-  margin: 0;
-  color: var(--ink);
-  background:
-    linear-gradient(rgba(255,255,255,.07),rgba(255,255,255,.07)),
-    radial-gradient(circle at 78% 35%, rgba(255,255,255,.38), transparent 33rem),
-    var(--paper);
-  font-family: var(--serif);
-  -webkit-font-smoothing: antialiased;
+  margin:0;
+  color:var(--ink);
+  background:var(--paper);
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  -webkit-font-smoothing:antialiased;
 }
 body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  opacity: .055;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  mix-blend-mode: multiply;
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  opacity:.045;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode:multiply;
 }
-::selection { background: var(--red); color: var(--paper-light); }
-
+::selection { background:var(--red); color:var(--paper); }
 main {
-  width: min(100% - 72px, 1380px);
-  min-height: 100svh;
-  margin: auto;
-  display: grid;
-  grid-template-rows: 80px 1fr 72px;
+  position:relative;
+  width:min(100% - 48px,760px);
+  min-height:100svh;
+  margin:auto;
+  padding:52px 0 48px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
 }
-header, footer {
-  position: relative;
-  z-index: 3;
-  font: 600 .63rem/1 var(--mono);
-  letter-spacing: .2em;
-  text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-header { border-bottom: 1px solid var(--line); }
-header i { width: 4px; height: 4px; border-radius: 50%; background: var(--red); }
-footer { border-top: 1px solid var(--line); color: rgba(23,20,15,.65); }
-
-.hero {
-  position: relative;
-  min-height: 690px;
-  display: grid;
-  grid-template-columns: minmax(0,1.12fr) minmax(330px,.88fr);
-  align-items: center;
-}
-.copy { position: relative; z-index: 2; padding: 70px 0; }
-.eyebrow {
-  margin: 0 0 24px;
-  color: var(--red);
-  font: 700 .68rem/1 var(--mono);
-  letter-spacing: .22em;
+img {
+  width:clamp(82px,10vw,132px);
+  height:auto;
+  max-height:196px;
+  margin:0 0 34px;
+  object-fit:contain;
+  filter:saturate(.85) contrast(1.05);
 }
 h1 {
-  max-width: 870px;
-  margin: 0;
-  font-size: clamp(4.4rem,8.2vw,9rem);
-  font-weight: 400;
-  line-height: .84;
-  letter-spacing: -.068em;
+  margin:0;
+  font-size:clamp(3.5rem,7.6vw,6.6rem);
+  font-weight:400;
+  line-height:.88;
+  letter-spacing:-.065em;
 }
-.summary {
-  max-width: 590px;
-  margin: 34px 0 35px;
-  font-size: clamp(1.04rem,1.45vw,1.3rem);
-  line-height: 1.5;
+.line {
+  width:min(100%,510px);
+  margin:44px 0 0;
+  padding:17px 0;
+  border-top:1px solid rgba(23,19,13,.72);
+  border-bottom:1px solid rgba(23,19,13,.72);
+  font:600 .72rem/1.4 "SFMono-Regular",Consolas,monospace;
+  white-space:nowrap;
 }
-.install {
-  width: min(100%,620px);
-  min-height: 60px;
-  border-top: 1px solid var(--ink);
-  border-bottom: 1px solid var(--ink);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+.line::first-letter { color:var(--red); }
+.note {
+  margin:13px 0 0;
+  color:var(--red);
+  font:700 .59rem/1 "SFMono-Regular",Consolas,monospace;
+  letter-spacing:.22em;
+  text-transform:uppercase;
 }
-.install code { font: .78rem/1.4 var(--mono); white-space: nowrap; }
-.install b { color: var(--red); }
-.install span { color: var(--red); font: 700 .6rem/1 var(--mono); letter-spacing: .15em; }
-.note { margin: 12px 0 0; font: .64rem/1.5 var(--mono); color: rgba(23,20,15,.67); }
-
-.mark {
-  z-index: 1;
-  justify-self: center;
-  width: min(100%,330px);
-  max-height: 690px;
-  object-fit: contain;
-  filter: saturate(.84) contrast(1.06);
-}
-
-@media (max-width: 900px) {
-  main { width: min(100% - 40px,720px); }
-  .hero { min-height: calc(100svh - 152px); grid-template-columns: 1fr; overflow: hidden; }
-  .copy { padding: 74px 0 90px; }
-  h1 { font-size: clamp(4rem,13.6vw,7.1rem); }
-  .mark { position: absolute; z-index: 0; right: -100px; top: 5%; width: 330px; opacity: .18; }
-}
-
-@media (max-width: 520px) {
-  main { width: calc(100% - 30px); grid-template-rows: 64px 1fr 80px; }
-  header, footer { font-size: .57rem; letter-spacing: .13em; }
-  .hero { min-height: auto; }
-  .copy { padding: 66px 0 84px; }
-  .eyebrow { font-size: .62rem; }
-  h1 { font-size: clamp(3.65rem,17.5vw,5rem); line-height: .87; }
-  .summary { max-width: 345px; font-size: 1.05rem; }
-  .install { gap: 8px; padding: 15px 0; }
-  .install code { min-width: 0; max-width: 100%; font-size: .6rem; overflow: hidden; text-overflow: ellipsis; }
-  .install span { flex: 0 0 auto; }
-  .note { max-width: 330px; }
-  .mark { right: -135px; top: 7%; opacity: .17; }
-  footer { gap: 20px; }
+@media(max-width:520px){
+  main { width:calc(100% - 30px); padding:62px 0 38px; }
+  img { width:78px; max-height:118px; margin-bottom:28px; }
+  h1 { font-size:clamp(3.4rem,16.5vw,4.6rem); }
+  .line { margin-top:38px; font-size:.6rem; overflow:hidden; text-overflow:ellipsis; }
 }
