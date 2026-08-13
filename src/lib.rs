@@ -965,17 +965,20 @@ fn call_many_items(
                             }
                         } else {
                         // Transport owns one bounded retry after an entered model turn and up to
-                        // four failed setups. Setup failures provably spend no model tokens; solve
-                        // code owns contract validation and never repeats a locally valid result.
-                        // The session is dropped before the short backoff, so a retry cannot reuse
-                        // a poisoned subscription connection.
+                        // four failed setups. Setup failures provably spend no model tokens and
+                        // never repeat a locally valid result. Turn failures retain a conservative
+                        // backoff; setup-only retries use a short backoff on a new connection and
+                        // a cumulative wall-clock budget.
                         let mut result = None;
                         let mut turn_attempts = 0;
                         let mut setup_attempts = 0;
+                        let mut setup_elapsed = Duration::ZERO;
+                        let mut retry_delay = Duration::ZERO;
                         for physical_attempt in 0..5 {
                             if physical_attempt > 0 {
-                                thread::sleep(Duration::from_secs(2));
+                                thread::sleep(retry_delay);
                             }
+                            let attempt_started = Instant::now();
                             let mut entered_turn = false;
                             let attempt: Result<ModelReply> = (|| {
                                 let mut api=JcodeSession::open_for_batch_serialized(cfg,model,prompts[i].chars().count())?;
@@ -1005,13 +1008,19 @@ fn call_many_items(
                                 Err(error) => {
                                     let _ = if entered_turn {
                                         turn_attempts += 1;
+                                        retry_delay = Duration::from_secs(2);
                                         trace_model_failure(depth + 1)
                                     } else {
                                         setup_attempts += 1;
+                                        setup_elapsed += attempt_started.elapsed();
+                                        retry_delay = Duration::from_millis(50);
                                         trace_model_setup_failure(depth + 1, &error)
                                     };
                                     result = Some(Err(error));
-                                    if turn_attempts >= 2 || setup_attempts >= 4 {
+                                    if turn_attempts >= 2
+                                        || setup_attempts >= 4
+                                        || setup_elapsed >= Duration::from_secs(30)
+                                    {
                                         break
                                     }
                                 }
@@ -1340,18 +1349,21 @@ impl JcodeSession {
                 .ok_or_else(|| anyhow!("jcode API request timed out"))?;
             self.stream.set_read_timeout(Some(remaining))?;
             let f = self.frame()?;
-            if f.get("reply_to").and_then(serde_json::Value::as_u64) == Some(id) {
-                if f.get("ev").and_then(serde_json::Value::as_str) == Some("error") {
-                    bail!(
-                        "jcode API: {}",
-                        f.get("message")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or("error")
-                    )
-                }
-                if f.get("ev").and_then(serde_json::Value::as_str) == Some(kind) {
-                    return Ok(f);
-                }
+            // A flat error is connection-scoped in the bridge protocol. Requests on a
+            // dedicated session connection are serialized, so waiting for a correlated
+            // reply after such an error only converts an immediate failure into a timeout.
+            if f.get("ev").and_then(serde_json::Value::as_str) == Some("error") {
+                bail!(
+                    "jcode API: {}",
+                    f.get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("error")
+                )
+            }
+            if f.get("reply_to").and_then(serde_json::Value::as_u64) == Some(id)
+                && f.get("ev").and_then(serde_json::Value::as_str) == Some(kind)
+            {
+                return Ok(f);
             }
         }
     }
@@ -1376,9 +1388,7 @@ impl JcodeSession {
                 .ok_or_else(|| anyhow!("jcode session attach timed out"))?;
             self.stream.set_read_timeout(Some(remaining))?;
             let f = self.frame()?;
-            if f.get("reply_to").and_then(serde_json::Value::as_u64) == Some(id)
-                && f.get("ev").and_then(serde_json::Value::as_str) == Some("error")
-            {
+            if f.get("ev").and_then(serde_json::Value::as_str) == Some("error") {
                 bail!(
                     "jcode API: {}",
                     f.get("message")
@@ -1459,6 +1469,10 @@ impl JcodeSession {
             .attached_before(id, setup_deadline)
             .context("jcode attach setup")?;
         this.session = session_id;
+        // Pace consecutive bridge control frames. The released bridge can otherwise emit a
+        // connection-scoped JSON parser error or a transient empty route catalog when queried
+        // in the same scheduler tick as attachment.
+        thread::sleep(Duration::from_millis(50));
         // Runtime info is the authoritative post-attach route barrier. An uncorrelated
         // model_info may arrive before or after the correlated attached reply, so do not
         // make its timing part of session setup.
@@ -1470,10 +1484,28 @@ impl JcodeSession {
                 .context("jcode route setup")
         };
         let mut rt = runtime_info(&mut this)?;
+        for delay_ms in [50, 150] {
+            if Self::runtime_is_subscription_route(&rt, model) {
+                break;
+            }
+            let top_matches = rt.get("provider").and_then(serde_json::Value::as_str)
+                == Some("OpenAI")
+                && rt.get("model").and_then(serde_json::Value::as_str) == Some(model);
+            if !top_matches {
+                break;
+            }
+            // A newly attached Jcode session can briefly expose the selected top-level
+            // route before its route catalog is populated. Re-query the correlated runtime
+            // snapshot instead of needlessly churning the selected model.
+            thread::sleep(Duration::from_millis(delay_ms));
+            rt = runtime_info(&mut this)?;
+        }
         if !Self::runtime_is_subscription_route(&rt, model) {
+            thread::sleep(Duration::from_millis(50));
             let id=this.send(serde_json::json!({"req":"set_model","session_id":this.session,"model":format!("openai-oauth:{model}")}))?;
             this.reply_before(id, "ok", setup_deadline)
                 .context("jcode model setup")?;
+            thread::sleep(Duration::from_millis(50));
             rt = runtime_info(&mut this)?;
         }
         if !Self::runtime_is_subscription_route(&rt, model) {
@@ -1489,6 +1521,7 @@ impl JcodeSession {
         }
         this.provider = "OpenAI OAuth".into();
         this.model = model.into();
+        thread::sleep(Duration::from_millis(50));
         let id=this.send(serde_json::json!({"req":"set_reasoning_effort","session_id":this.session,"effort":cfg.jcode_reasoning}))?;
         this.reply_before(id, "ok", setup_deadline)
             .context("jcode reasoning setup")?;

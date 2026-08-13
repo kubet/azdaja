@@ -952,6 +952,7 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
             let mut reader = BufReader::new(stream.try_clone().unwrap());
             let sid = format!("s{session_number}");
             let mut turn_count = 0;
+            let mut runtime_count = 0;
             let mut active_model = if session_number == 1 {
                 "gpt-5.3"
             } else {
@@ -990,18 +991,29 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
                         "session":{"session_id":&sid,"status":"idle"}
                     })],
                     "set_model" => {
+                        assert_eq!(
+                            session_number, 1,
+                            "transient empty routes must be re-queried"
+                        );
                         assert_eq!(f["model"], "openai-oauth:gpt-5.4");
                         active_model = "gpt-5.4";
                         vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
                     }
-                    "get_runtime_info" => vec![serde_json::json!({
-                        "v":1,"reply_to":id,"ev":"runtime_info","session_id":&sid,
-                        "provider":"OpenAI","model":active_model,
-                        "routes":[{
-                            "provider":"OpenAI","model":active_model,
-                            "api_method":"openai-oauth","available":true
-                        }]
-                    })],
+                    "get_runtime_info" => {
+                        runtime_count += 1;
+                        let routes = if session_number == 2 && runtime_count == 1 {
+                            Vec::<serde_json::Value>::new()
+                        } else {
+                            vec![serde_json::json!({
+                                "provider":"OpenAI","model":active_model,
+                                "api_method":"openai-oauth","available":true
+                            })]
+                        };
+                        vec![serde_json::json!({
+                            "v":1,"reply_to":id,"ev":"runtime_info","session_id":&sid,
+                            "provider":"OpenAI","model":active_model,"routes":routes
+                        })]
+                    }
                     "set_reasoning_effort" => {
                         vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
                     }
@@ -1138,7 +1150,7 @@ fn jcode_fresh_batch_retries_setup_without_repeating_model_turn() {
                         "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
                     })],
                     "create_session" if session_number < 3 => vec![serde_json::json!({
-                        "v":1,"reply_to":id,"ev":"error","message":"injected setup failure"
+                        "v":1,"ev":"error","message":"injected setup failure"
                     })],
                     "create_session" => vec![
                         serde_json::json!({
