@@ -6,6 +6,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import types
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -354,6 +355,22 @@ class ControllerTests(unittest.TestCase):
                 ])
             run.assert_not_called()
             popen.assert_not_called()
+
+    def test_generic_official_answer_prefixes_are_strict(self):
+        kind, value, canonical = RUN.parse_gold(
+            "[41714]", "Give your final answer in the form 'User: [X]'"
+        )
+        self.assertEqual((kind, value, canonical), ("User", 41714, "User: 41714"))
+        fixture = types.SimpleNamespace(
+            expected_kind=kind,
+            expected_value=value,
+            expected_canonical=canonical,
+        )
+        self.assertTrue(RUN.strict_score("User: 41714\n", fixture)["correct"])
+        self.assertFalse(RUN.strict_score("Answer: 41714", fixture)["correct"])
+        self.assertIn(
+            "User", RUN.strict_score("Answer: 41714", fixture)["parse_error"]
+        )
 
 
 if __name__=="__main__":unittest.main()

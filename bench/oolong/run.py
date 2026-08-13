@@ -134,7 +134,7 @@ def parse_gold(raw: Any, question: str) -> tuple[str, int | str, str]:
     if not isinstance(value, list) or len(value) != 1:
         raise BenchError(f"row answer must be a one-element list, got {raw!r}")
     item = value[0]
-    requested = re.findall(r'''(?i)form\s+['"](Answer|Label)\s*:''', question)
+    requested = re.findall(r'''(?i)form\s+['"]([A-Za-z][A-Za-z0-9_-]*)\s*:''', question)
     kind = requested[-1].capitalize() if requested else ("Answer" if type(item) is int else "Label")
     if type(item) is int and item >= 0:  # bool must not pass as an int
         return kind, item, f"{kind}: {item}"
@@ -1350,26 +1350,29 @@ def runtime_assertion(
 
 
 def strict_score(text: str, fixture: Fixture) -> dict[str, Any]:
-    matches = ANSWER_LINE.findall(text)
-    # Strict means exactly one nonempty output line and exact field/value, while
-    # tolerating only outer whitespace/newlines from CLIs.
+    answer_line = re.compile(
+        rf"(?im)^\s*({re.escape(fixture.expected_kind)})\s*:\s*([^\r\n]+?)\s*$"
+    )
+    matches = answer_line.findall(text)
     normalized = text.strip()
     correct = normalized == fixture.expected_canonical
     parsed: int | str | None = None
     parse_error: str | None = None
     if len(matches) == 1:
-        key, raw = matches[0]
+        _, raw = matches[0]
         raw = raw.strip()
-        if key != fixture.expected_kind:
-            parse_error = f"expected field {fixture.expected_kind!r}, got {key!r}"
-        elif fixture.expected_kind == "Answer" and re.fullmatch(r"0|[1-9][0-9]*", raw):
+        if type(fixture.expected_value) is int and re.fullmatch(r"0|[1-9][0-9]*", raw):
             parsed = int(raw)
-        elif fixture.expected_kind == "Label" and re.fullmatch(r"[A-Za-z][A-Za-z0-9 _-]*", raw):
+        elif isinstance(fixture.expected_value, str) and re.fullmatch(
+            r"[A-Za-z][A-Za-z0-9 _-]*", raw
+        ):
             parsed = raw
         else:
             parse_error = "answer value has invalid exact format"
     else:
-        parse_error = f"expected exactly one Answer/Label line, found {len(matches)}"
+        parse_error = (
+            f"expected exactly one {fixture.expected_kind} line, found {len(matches)}"
+        )
     if not correct and parse_error is None:
         parse_error = "output was not exactly the canonical gold answer"
     return {
