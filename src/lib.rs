@@ -918,6 +918,13 @@ fn call_many_items(
     if !(1..=32).contains(&workers) {
         bail!("workers must be between 1 and 32")
     }
+    #[cfg(unix)]
+    if batch && !use_shared && cfg.sub_llm_cmd == "jcode-api" {
+        // A fresh/independent batch must not leave the root subscription session occupying
+        // provider capacity or accidentally reuse its conversation. Archive it before any
+        // annotator setup begins.
+        drop(SOLO_SHARED_JCODE.lock().unwrap().take());
+    }
     let results = std::sync::Mutex::new((
         0usize,
         std::iter::repeat_with(|| None)
