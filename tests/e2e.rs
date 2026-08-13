@@ -1652,7 +1652,53 @@ print("invalid prose")
 }
 
 #[test]
-fn solo_repair_fails_closed_after_exactly_two_root_turns() {
+fn solo_second_repair_recovers_a_failed_first_repair_once() {
+    let t = temp("solo-second-repair");
+    let calls = t.join("calls");
+    let mock = t.join("repair-twice.py");
+    fs::write(&mock, r#"import pathlib, sys
+calls = pathlib.Path(sys.argv[1]); count = len(calls.read_text().splitlines()) if calls.exists() else 0
+calls.open("a").write("root\n")
+if count == 0:
+    print("invalid prose")
+elif count == 1:
+    print('```python\n' + '\n'.join('x = 1' for _ in range(51)) + '\n```')
+else:
+    print('```python\nassert ctx == "original"\nFINAL("RECOVERED")\n```')
+"#).unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "original").unwrap();
+    let trace = t.join("solo.trace");
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_SOLO_TRACE", &trace)
+        .args(["solo", "generic question", "-f", input.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "RECOVERED");
+    assert_eq!(fs::read_to_string(calls).unwrap().lines().count(), 3);
+    let retained = fs::read_to_string(trace).unwrap();
+    assert!(retained.contains("repair_index=2"));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_repair_fails_closed_after_exactly_three_root_turns() {
     let t = temp("solo-root-repair-fail-closed");
     let calls = t.join("calls");
     let mock = t.join("bad.py");
@@ -1681,7 +1727,7 @@ print("invalid prose")
         "",
     );
     assert_eq!(output.status.code(), Some(2));
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 3);
     assert!(String::from_utf8_lossy(&output.stderr).contains("repair failed"));
     fs::remove_dir_all(t).unwrap();
 }
@@ -1730,12 +1776,12 @@ else:
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 4);
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 6);
     fs::remove_dir_all(t).unwrap();
 }
 
 #[test]
-fn solo_fails_closed_after_one_repair_turn() {
+fn solo_fails_closed_after_two_repair_turns() {
     let t = temp("solo-turn-limit");
     let calls = t.join("root-calls");
     let mock = t.join("never-final.py");
@@ -1768,7 +1814,7 @@ else:
     );
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stderr).contains("did not call FINAL"));
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 3);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -2898,10 +2944,11 @@ fn solo_jcode_runtime_repair_reuses_one_session_and_archives_once() {
                 "set_reasoning_effort" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
                 "send_message" => {
                     messages.push(request["content"].as_str().unwrap().to_owned());
-                    let text = if messages.len() == 1 {
-                        "```python\nctx = \"poison\"\nassert False\n```"
-                    } else {
-                        "```python\nassert ctx == \"original\"\nFINAL(\"REPAIRED\")\n```"
+                    let text = match messages.len() {
+                        1 => "```python\nctx = \"poison\"\nassert False\n```".to_owned(),
+                        2 => format!("```python\n{}\n```", "x = 1\n".repeat(51)),
+                        _ => "```python\nassert ctx == \"original\"\nFINAL(\"REPAIRED\")\n```"
+                            .to_owned(),
                     };
                     vec![
                         serde_json::json!({"v":1,"ev":"model_info","session_id":"same","provider":"OpenAI","model":"gpt-5.4"}),
@@ -2953,19 +3000,33 @@ fn solo_jcode_runtime_repair_reuses_one_session_and_archives_once() {
     );
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "REPAIRED");
     let (messages, archives) = server.join().unwrap();
-    assert_eq!(messages.len(), 2);
+    assert_eq!(messages.len(), 3);
     assert!(messages[1].contains("typed category Assertion"));
+    assert!(messages[2].contains("typed category LineLimit"));
     assert_eq!(archives, 1);
     let rows: Vec<serde_json::Value> = fs::read_to_string(model_trace)
         .unwrap()
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
-    assert_eq!(rows.len(), 2);
+    assert_eq!(rows.len(), 3);
     assert_eq!(rows[0]["session_id"], "same");
     assert_eq!(rows[1]["session_id"], "same");
     assert_eq!(rows[1]["category"], "repair");
-    assert!(rows[1]["request_id"].as_str().unwrap().ends_with("-repair"));
+    assert_eq!(rows[2]["session_id"], "same");
+    assert_eq!(rows[2]["category"], "repair");
+    assert!(
+        rows[1]["request_id"]
+            .as_str()
+            .unwrap()
+            .ends_with("-repair-1")
+    );
+    assert!(
+        rows[2]["request_id"]
+            .as_str()
+            .unwrap()
+            .ends_with("-repair-2")
+    );
     fs::remove_dir_all(t).unwrap();
 }
 

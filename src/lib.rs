@@ -2540,9 +2540,12 @@ impl RootDriver {
         Ok(r)
     }
 
-    pub fn repair_turn(&mut self, prompt: &str) -> Result<ModelReply> {
+    pub fn repair_turn(&mut self, prompt: &str, repair_index: u32) -> Result<ModelReply> {
         preflight_model_trace_sink()?;
-        let repair_request_id = format!("{}-repair", self.request_id);
+        if !(1..=2).contains(&repair_index) {
+            bail!("root repair index must be 1 or 2")
+        }
+        let repair_request_id = format!("{}-repair-{repair_index}", self.request_id);
         #[cfg(unix)]
         if let Some(api) = &mut self.api {
             let entered_turn = self.entered_turn_budget.try_enter()?;

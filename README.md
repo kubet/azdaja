@@ -87,7 +87,7 @@ Azdaja used 83.2% less root context than native jcode and 61.1% less than Prime 
 
 Root-token evidence covers 90/90 attempts for every arm and measures context entering each arm’s root, not total provider compute. Full provider-token totals are available for both controls (native 5.18M; Prime 4.59M), but Azdaja provider usage covers only its 52 successful executions, so no misleading all-attempt Azdaja provider-total comparison is shown. All 90 Azdaja root transcripts, including failures, passed the exact pre-gold leak gate: no loaded-context substring of 100 or more Unicode characters appeared at the root.
 
-The candidate was built from private commit `48b8a16`; binary SHA-256 is `f53d43ecde4fd800789d0b7469fa6ad81bb2dd46e41a0c643f90dc8e77a2228d`. A LongBench-v2 run with the same bytes was stopped after 12/189 rows before scoring; no benchmark inference is currently active while reliability is being repaired. “Completed exact” excludes execution failures; “end-to-end exact” keeps the fixed 90-item denominator and counts failures as incorrect.
+The candidate was built from private commit `48b8a16`; binary SHA-256 is `f53d43ecde4fd800789d0b7469fa6ad81bb2dd46e41a0c643f90dc8e77a2228d`. A LongBench-v2 run with the same bytes was stopped after 12/189 rows before scoring. A newer reliability-only candidate (`8d70ac9`, binary `1ae2a231`) was also stopped unscored after Azdaja reached 14/17 execution with three repair failures, making its 90/90 gate impossible; no benchmark inference is currently active. “Completed exact” excludes execution failures; “end-to-end exact” keeps the fixed 90-item denominator and counts failures as incorrect.
 
 ## Guarantees
 

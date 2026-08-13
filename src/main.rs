@@ -117,6 +117,33 @@ fn preflight_solo_trace(
     Ok(Some(file))
 }
 
+fn preflight_repair_solo_trace(
+    trace: &mut Option<fs::File>,
+    path: Option<&Path>,
+    request_id: &str,
+    repair_index: u32,
+    trigger: SoloProgramFailureKind,
+    prompt: &str,
+) -> Result<()> {
+    let (Some(file), Some(path)) = (trace.as_mut(), path) else {
+        return Ok(());
+    };
+    ensure_private_trace_file(file, path)?;
+    writeln!(
+        file,
+        "\n=== repair request begin request_id={request_id:?} repair_index={repair_index} trigger={trigger:?} request_chars={} ===",
+        prompt.chars().count()
+    )?;
+    file.write_all(prompt.as_bytes())?;
+    writeln!(
+        file,
+        "\n=== repair request end request_id={request_id:?} repair_index={repair_index} ==="
+    )?;
+    file.sync_data()?;
+    ensure_private_trace_file(file, path)?;
+    Ok(())
+}
+
 fn help() {
     println!(
         "azdaja {VERSION}\n\nUSAGE:\n  azdaja start\n  azdaja load <sid> <path> <var>\n  azdaja exec <sid>             # Python on stdin\n  azdaja final <sid>\n  azdaja list | kill <sid>\n  azdaja solo <question> -f <file> [--model X] [--sub-model Y]\n  azdaja install [--harness jcode|claude|codex|gemini|opencode|all]\n  azdaja doctor [--caps]\n  azdaja uninstall [--harness ...]"
@@ -857,15 +884,54 @@ fn execute_solo_reply(
 }
 
 fn root_repair_prompt(failure: SoloProgramFailureKind) -> String {
+    let constraint = match failure {
+        SoloProgramFailureKind::Protocol => {
+            "Use exactly one python fence with no prose, nested fences, or adjacent replacement programs."
+        }
+        SoloProgramFailureKind::LineLimit => {
+            "Keep the entire replacement below 50 nonblank lines; simplify rather than append another program."
+        }
+        SoloProgramFailureKind::Compile => {
+            "Return a newly compiled complete program, not a patch or continuation."
+        }
+        SoloProgramFailureKind::Assertion
+        | SoloProgramFailureKind::Value
+        | SoloProgramFailureKind::Key
+        | SoloProgramFailureKind::Regex => {
+            "Replace the failed extraction with a simpler bounded approach and validate observed boundaries before FINAL."
+        }
+        SoloProgramFailureKind::MissingFinal => "Call FINAL exactly once on the verified answer.",
+        SoloProgramFailureKind::Runtime | SoloProgramFailureKind::Host => {
+            "Return a different complete fail-closed program."
+        }
+    };
     format!(
         concat!(
             "The previous program failed with typed category {:?}. ",
-            "Return one complete replacement program only, under the original protocol and limits. ",
-            "Re-read complete ctx, use the observed input structure rather than an assumed template, ",
-            "and use a different fail-closed approach."
+            "Return one complete replacement program only under the original protocol. ",
+            "Re-read complete ctx and use only its observed structure. {}"
         ),
-        failure
+        failure, constraint
     )
+}
+
+fn solo_program_failure_is_repairable(
+    failure: &SoloProgramFailure,
+    entered_turns: u32,
+    turn_limit: u32,
+) -> bool {
+    matches!(
+        failure.kind,
+        SoloProgramFailureKind::Protocol
+            | SoloProgramFailureKind::LineLimit
+            | SoloProgramFailureKind::Compile
+            | SoloProgramFailureKind::Assertion
+            | SoloProgramFailureKind::Value
+            | SoloProgramFailureKind::Key
+            | SoloProgramFailureKind::Regex
+            | SoloProgramFailureKind::MissingFinal
+    ) && failure.external_calls == 0
+        && entered_turns < turn_limit
 }
 
 fn solo(args: &[String], cfg: &Config) -> Result<()> {
@@ -938,7 +1004,7 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
     // retryable product failure.
     let mut trace =
         preflight_solo_trace(trace_path.as_deref(), &root_request_id, root_model, &prompt)?;
-    let entered_turn_budget = Arc::new(EnteredTurnBudget::new(2));
+    let entered_turn_budget = Arc::new(EnteredTurnBudget::new(3));
     let mut model_reply = None;
     let mut root_driver = None;
     let mut root_error = None;
@@ -1068,18 +1134,11 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
                     ),
                 );
             }
-            let repairable = matches!(
-                first_failure.kind,
-                SoloProgramFailureKind::Protocol
-                    | SoloProgramFailureKind::LineLimit
-                    | SoloProgramFailureKind::Compile
-                    | SoloProgramFailureKind::Assertion
-                    | SoloProgramFailureKind::Value
-                    | SoloProgramFailureKind::Key
-                    | SoloProgramFailureKind::Regex
-                    | SoloProgramFailureKind::MissingFinal
-            ) && first_failure.external_calls == 0
-                && entered_turn_budget.entered() < 2;
+            let repairable = solo_program_failure_is_repairable(
+                &first_failure,
+                entered_turn_budget.entered(),
+                3,
+            );
             if !repairable || !root_driver.reclaim_from_solo(lease)? {
                 return Err(first_failure.error);
             }
@@ -1088,25 +1147,17 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
             if repair_prompt.len() > 1024 {
                 bail!("solo root repair prompt exceeds byte limit")
             }
-            if let (Some(file), Some(path)) = (trace.as_mut(), trace_path.as_deref()) {
-                ensure_private_trace_file(file, path)?;
-                writeln!(
-                    file,
-                    "\n=== repair request begin request_id={root_request_id:?} trigger={:?} request_chars={} ===",
-                    first_failure.kind,
-                    repair_prompt.chars().count()
-                )?;
-                file.write_all(repair_prompt.as_bytes())?;
-                writeln!(
-                    file,
-                    "\n=== repair request end request_id={root_request_id:?} ==="
-                )?;
-                file.sync_data()?;
-                ensure_private_trace_file(file, path)?;
-            }
+            preflight_repair_solo_trace(
+                &mut trace,
+                trace_path.as_deref(),
+                &root_request_id,
+                1,
+                first_failure.kind,
+                &repair_prompt,
+            )?;
             let repair_session_id = root_driver.session_id().map(str::to_owned);
             let repair_started = Instant::now();
-            let repair_reply = match root_driver.repair_turn(&repair_prompt) {
+            let repair_reply = match root_driver.repair_turn(&repair_prompt, 1) {
                 Ok(reply) => reply,
                 Err(error) => {
                     record_solo_trace(
@@ -1139,7 +1190,7 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
                     repair_reply.text
                 ),
             );
-            let _repair_lease = root_driver.lend_to_solo()?;
+            let repair_lease = root_driver.lend_to_solo()?;
             match execute_solo_reply(&mut session, &repair_reply.text, cfg) {
                 Ok((answer, code, output)) => {
                     record_solo_trace(
@@ -1172,14 +1223,99 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
                         &mut trace,
                         trace_path.as_deref(),
                         format!(
-                            "=== repair outcome=rejected trigger={:?} failure={:?} ===\n",
+                            "=== repair outcome=rejected repair_index=1 trigger={:?} failure={:?} ===\n",
                             first_failure.kind, repair_failure.kind
                         ),
                     );
-                    return Err(repair_failure.error.context(format!(
-                        "solo root repair failed after {:?}",
-                        first_failure.kind
-                    )));
+                    let repairable = solo_program_failure_is_repairable(
+                        &repair_failure,
+                        entered_turn_budget.entered(),
+                        3,
+                    );
+                    if !repairable || !root_driver.reclaim_from_solo(repair_lease)? {
+                        return Err(repair_failure.error.context(format!(
+                            "solo root repair failed after {:?}",
+                            first_failure.kind
+                        )));
+                    }
+                    session.restore_checkpoint(&pristine)?;
+                    let second_prompt = root_repair_prompt(repair_failure.kind);
+                    if second_prompt.len() > 1024 {
+                        bail!("solo root repair prompt exceeds byte limit")
+                    }
+                    preflight_repair_solo_trace(
+                        &mut trace,
+                        trace_path.as_deref(),
+                        &root_request_id,
+                        2,
+                        repair_failure.kind,
+                        &second_prompt,
+                    )?;
+                    let second_session_id = root_driver.session_id().map(str::to_owned);
+                    let second_started = Instant::now();
+                    let second_reply = match root_driver.repair_turn(&second_prompt, 2) {
+                        Ok(reply) => reply,
+                        Err(error) => {
+                            record_solo_trace(
+                                &mut trace,
+                                trace_path.as_deref(),
+                                format!(
+                                    "=== turn 2 category=repair outcome=failed trigger={:?} error_category={:?} ===\n",
+                                    repair_failure.kind,
+                                    model_transport_error_category(&error)
+                                ),
+                            );
+                            return Err(anyhow!(
+                                "solo root second repair turn failed after {:?}: {error:#}",
+                                repair_failure.kind
+                            ));
+                        }
+                    };
+                    record_solo_trace(
+                        &mut trace,
+                        trace_path.as_deref(),
+                        format!(
+                            "\n=== turn 2 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={second_session_id:?} category=repair outcome=succeeded trigger={:?} provider={:?} model={:?} input={} output={} cache_read={} latency_ms={} ===\n{}\n",
+                            repair_failure.kind,
+                            second_reply.provider,
+                            second_reply.model,
+                            second_reply.usage.input,
+                            second_reply.usage.output,
+                            second_reply.usage.cache_read,
+                            second_started.elapsed().as_millis(),
+                            second_reply.text
+                        ),
+                    );
+                    let _second_lease = root_driver.lend_to_solo()?;
+                    match execute_solo_reply(&mut session, &second_reply.text, cfg) {
+                        Ok((answer, code, output)) => {
+                            record_solo_trace(
+                                &mut trace,
+                                trace_path.as_deref(),
+                                format!(
+                                    "=== second repair code ===\n{code}\n=== second repair result ===\n{output}\n=== repair outcome=succeeded repair_index=2 trigger={:?} ===\n",
+                                    repair_failure.kind
+                                ),
+                            );
+                            println!("{answer}");
+                        }
+                        Err(second_failure) => {
+                            record_solo_trace(
+                                &mut trace,
+                                trace_path.as_deref(),
+                                format!(
+                                    "=== repair outcome=rejected repair_index=2 trigger={:?} failure={:?} external_calls={} ===\n",
+                                    repair_failure.kind,
+                                    second_failure.kind,
+                                    second_failure.external_calls
+                                ),
+                            );
+                            return Err(second_failure.error.context(format!(
+                                "solo root second repair failed after {:?}",
+                                repair_failure.kind
+                            )));
+                        }
+                    }
                 }
             }
         }
