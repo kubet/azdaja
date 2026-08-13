@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import fcntl
 import hashlib
 import importlib.util
 import inspect
@@ -1465,6 +1466,309 @@ def smoke_frozen_versions(paths: FrozenPaths, attestation: dict[str, Any]) -> No
 
 
 
+
+def _cleanup_entry_identity(metadata: os.stat_result) -> tuple[int, int, int, int]:
+    return (
+        metadata.st_dev, metadata.st_ino,
+        stat.S_IFMT(metadata.st_mode), metadata.st_uid,
+    )
+
+
+def _cleanup_after_quarantine_hook(
+    parent_fd: int, quarantine_name: str, expected_identity: tuple[int, int, int, int]
+) -> None:
+    """Test hook after atomic quarantine and before any recursive deletion."""
+    del parent_fd, quarantine_name, expected_identity
+
+
+def _held_fd_path(fd: int) -> Path | None:
+    """Darwin F_GETPATH distinguishes removed-at-name from escaped directories."""
+    if sys.platform != "darwin":
+        return None
+    try:
+        raw = fcntl.fcntl(fd, 50, b"\0" * 1024)
+    except (OSError, ValueError) as exc:
+        raise BenchError(
+            f"cannot prove held directory path after removal: {exc}"
+        ) from exc
+    value = raw.split(b"\0", 1)[0]
+    if not value:
+        raise BenchError("held directory path proof is empty")
+    return Path(os.fsdecode(value))
+
+
+def _cleanup_before_final_remove_hook(
+    parent_fd: int,
+    quarantine_name: str,
+    expected_identity: tuple[int, int, int, int],
+    kind: str,
+) -> None:
+    """Test hook after final inode capture and before unlink/rmdir."""
+    del parent_fd, quarantine_name, expected_identity, kind
+
+
+def _cleanup_quarantined_entry(
+    parent_fd: int, name: str, label: str, errors: list[str]
+) -> None:
+    """Quarantine one captured entry, then delete only its verified inode tree."""
+    if not name or "/" in name or name in {".", ".."}:
+        errors.append(f"unsafe cleanup entry name for {label}: {name!r}")
+        return
+    try:
+        before = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except OSError as exc:
+        errors.append(f"cannot capture cleanup entry {label}: {type(exc).__name__}: {exc}")
+        return
+    expected = _cleanup_entry_identity(before)
+    if hasattr(os, "getuid") and before.st_uid != os.getuid():
+        errors.append(f"cleanup entry is not runner-owned: {label}")
+        return
+    quarantine = f".lb2-cleanup-{secrets.token_hex(16)}"
+    try:
+        os.rename(
+            name, quarantine,
+            src_dir_fd=parent_fd, dst_dir_fd=parent_fd,
+        )
+        os.fsync(parent_fd)
+    except OSError as exc:
+        errors.append(f"cannot quarantine cleanup entry {label}: {type(exc).__name__}: {exc}")
+        return
+    try:
+        _cleanup_after_quarantine_hook(parent_fd, quarantine, expected)
+        captured = os.stat(quarantine, dir_fd=parent_fd, follow_symlinks=False)
+    except OSError as exc:
+        errors.append(
+            f"quarantined cleanup entry vanished or changed for {label}: "
+            f"{type(exc).__name__}: {exc}"
+        )
+        return
+    if _cleanup_entry_identity(captured) != expected:
+        errors.append(
+            f"quarantined cleanup entry inode/type/owner swapped for {label}; "
+            f"preserved as {quarantine}"
+        )
+        return
+    try:
+        if stat.S_ISDIR(captured.st_mode):
+            flags = (
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+            )
+            child_fd = os.open(quarantine, flags, dir_fd=parent_fd)
+            try:
+                opened = os.fstat(child_fd)
+                if _cleanup_entry_identity(opened) != expected:
+                    raise BenchError(f"directory inode changed after quarantine: {label}")
+                if os.name == "posix":
+                    os.fchmod(child_fd, 0o700)
+                _cleanup_directory_contents_fd(child_fd, label, errors)
+                if os.listdir(child_fd):
+                    raise BenchError(f"quarantined directory is not empty: {label}")
+                final_open = os.fstat(child_fd)
+                final_name = os.stat(
+                    quarantine, dir_fd=parent_fd, follow_symlinks=False
+                )
+                if (
+                    _cleanup_entry_identity(final_open) != expected
+                    or _cleanup_entry_identity(final_name) != expected
+                ):
+                    raise BenchError(f"directory inode changed before rmdir: {label}")
+                held_path = _held_fd_path(child_fd)
+                _cleanup_before_final_remove_hook(
+                    parent_fd, quarantine, expected, "directory"
+                )
+                post_hook = os.stat(
+                    quarantine, dir_fd=parent_fd, follow_symlinks=False
+                )
+                if _cleanup_entry_identity(post_hook) != expected:
+                    raise BenchError(
+                        f"directory name swapped before rmdir: {label}"
+                    )
+                os.rmdir(quarantine, dir_fd=parent_fd)
+                removed = os.fstat(child_fd)
+                removed_path = _held_fd_path(child_fd)
+                # Darwin retains st_nlink==2 for an unlinked held directory;
+                # F_GETPATH remains the removed pathname, but follows a rename
+                # escape. Linux-like kernels normally report nlink==0.
+                link_proof = (
+                    removed_path == held_path
+                    if held_path is not None else removed.st_nlink == 0
+                )
+                if (
+                    _cleanup_entry_identity(removed) != expected
+                    or not link_proof
+                ):
+                    raise BenchError(
+                        f"directory escaped during rmdir: {label}"
+                    )
+            finally:
+                os.close(child_fd)
+        elif stat.S_ISREG(captured.st_mode):
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            file_fd = os.open(quarantine, flags, dir_fd=parent_fd)
+            try:
+                opened = os.fstat(file_fd)
+                if _cleanup_entry_identity(opened) != expected or opened.st_nlink != 1:
+                    raise BenchError(f"file inode/link changed after quarantine: {label}")
+                # Do not chmod regular files: an injected hard link outside the
+                # run root must never have its permissions mutated.
+                final_name = os.stat(
+                    quarantine, dir_fd=parent_fd, follow_symlinks=False
+                )
+                if _cleanup_entry_identity(final_name) != expected:
+                    raise BenchError(f"file inode changed before unlink: {label}")
+                _cleanup_before_final_remove_hook(
+                    parent_fd, quarantine, expected, "regular"
+                )
+                post_hook = os.stat(
+                    quarantine, dir_fd=parent_fd, follow_symlinks=False
+                )
+                if _cleanup_entry_identity(post_hook) != expected:
+                    raise BenchError(f"file name swapped before unlink: {label}")
+                os.unlink(quarantine, dir_fd=parent_fd)
+                removed = os.fstat(file_fd)
+                if (
+                    _cleanup_entry_identity(removed) != expected
+                    or removed.st_nlink != 0
+                ):
+                    raise BenchError(
+                        f"file escaped or gained a hard link during unlink: {label}"
+                    )
+            finally:
+                os.close(file_fd)
+        elif stat.S_ISLNK(captured.st_mode):
+            symlink_flag = getattr(os, "O_SYMLINK", None)
+            if symlink_flag is not None:
+                link_flags = os.O_RDONLY | symlink_flag
+            elif getattr(os, "O_PATH", None) is not None:
+                link_flags = os.O_PATH | getattr(os, "O_NOFOLLOW", 0)
+            else:
+                raise BenchError(
+                    f"platform cannot hold symlink inode for safe cleanup: {label}"
+                )
+            link_fd = os.open(quarantine, link_flags, dir_fd=parent_fd)
+            try:
+                opened = os.fstat(link_fd)
+                target_before = os.readlink(quarantine, dir_fd=parent_fd)
+                final_name = os.stat(
+                    quarantine, dir_fd=parent_fd, follow_symlinks=False
+                )
+                if (
+                    _cleanup_entry_identity(opened) != expected
+                    or _cleanup_entry_identity(final_name) != expected
+                    or opened.st_nlink != 1
+                ):
+                    raise BenchError(f"symlink changed before unlink: {label}")
+                _cleanup_before_final_remove_hook(
+                    parent_fd, quarantine, expected, "symlink"
+                )
+                post_hook = os.stat(
+                    quarantine, dir_fd=parent_fd, follow_symlinks=False
+                )
+                target_after_hook = os.readlink(quarantine, dir_fd=parent_fd)
+                if (
+                    _cleanup_entry_identity(post_hook) != expected
+                    or target_after_hook != target_before
+                ):
+                    raise BenchError(f"symlink name swapped before unlink: {label}")
+                os.unlink(quarantine, dir_fd=parent_fd)
+                removed = os.fstat(link_fd)
+                if (
+                    _cleanup_entry_identity(removed) != expected
+                    or removed.st_nlink != 0
+                ):
+                    raise BenchError(
+                        f"symlink escaped or changed during unlink: {label}"
+                    )
+            finally:
+                os.close(link_fd)
+        else:
+            raise BenchError(f"special cleanup entry type is forbidden: {label}")
+        os.fsync(parent_fd)
+    except (OSError, BenchError) as exc:
+        errors.append(
+            f"safe cleanup failed for {label}; quarantine preserved when present: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+
+def _cleanup_directory_contents_fd(
+    directory_fd: int, label: str, errors: list[str]
+) -> None:
+    try:
+        names = os.listdir(directory_fd)
+    except OSError as exc:
+        errors.append(f"cannot enumerate cleanup directory {label}: {type(exc).__name__}: {exc}")
+        return
+    if len(names) != len(set(names)):
+        errors.append(f"duplicate names while cleaning {label}")
+        return
+    for name in names:
+        _cleanup_quarantined_entry(
+            directory_fd, name, f"{label}/{name}", errors
+        )
+
+
+def safe_purge_transient_run_state(
+    run_dir: Path, retained_names: set[str], errors: list[str]
+) -> dict[str, Any]:
+    """Delete transient state fd-relatively without following or trusting names."""
+    cleanup_error_start = len(errors)
+    if any(
+        not isinstance(name, str) or not name or "/" in name or name in {".", ".."}
+        for name in retained_names
+    ):
+        errors.append("retained artifact allowlist contains an unsafe name")
+        return {
+            "asserted": False, "credential_homes_deleted": False,
+            "retained_entries": [], "retention_allowlist": sorted(retained_names),
+        }
+    try:
+        absolute, run_fd = _open_owner_directory(run_dir, "run cleanup root")
+    except BenchError as exc:
+        errors.append(str(exc))
+        return {
+            "asserted": False, "credential_homes_deleted": False,
+            "retained_entries": [], "retention_allowlist": sorted(retained_names),
+        }
+    try:
+        before = _fd_identity(run_fd)
+        names = os.listdir(run_fd)
+        if len(names) != len(set(names)):
+            errors.append("run cleanup root contains duplicate entry names")
+        else:
+            for name in names:
+                if name not in retained_names:
+                    _cleanup_quarantined_entry(run_fd, name, name, errors)
+        try:
+            _recheck_directory_binding(absolute, run_fd, "run cleanup root")
+        except BenchError as exc:
+            errors.append(str(exc))
+        if _fd_identity(run_fd) != before:
+            errors.append("held run cleanup root identity changed")
+        survivors = sorted(os.listdir(run_fd))
+        unexpected = sorted(set(survivors) - retained_names)
+        names_absent = "home" not in survivors and "prime-home" not in survivors
+        if unexpected:
+            errors.append(f"unexpected retained run state: {unexpected}")
+        if not names_absent:
+            errors.append("credential-bearing isolated home survived cleanup")
+        cleanup_errors = errors[cleanup_error_start:]
+        # Name absence is not proof of deletion: a quarantined credential tree
+        # may have vanished via same-owner rename. Every cleanup error therefore
+        # invalidates both cleanup and credential-deletion receipts.
+        credential_homes_deleted = names_absent and not cleanup_errors
+        asserted = not unexpected and credential_homes_deleted
+        return {
+            "asserted": asserted,
+            "credential_homes_deleted": credential_homes_deleted,
+            "retained_entries": survivors,
+            "retention_allowlist": sorted(retained_names),
+        }
+    finally:
+        os.close(run_fd)
+
+
 def _validate_adapter_contract(module: Any) -> None:
     required_parameters = {
         "validate_skill": ("skill_arg",),
@@ -1515,6 +1819,7 @@ def _load_frozen_adapter(
         raise BenchError("runner invariant: adapter scoring is forbidden; scoring is owner-deferred")
 
     module.strict_score = forbidden_adapter_scoring
+    module.purge_transient_run_state = safe_purge_transient_run_state
     original_arm_for = module.arm_for
 
     def snapshot_arm_for(name: str, **kwargs: Any):

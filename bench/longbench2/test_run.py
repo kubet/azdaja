@@ -695,6 +695,280 @@ class RunnerTests(unittest.TestCase):
         with self.assertRaises(RUN.BenchError):
             RUN.audit_run_artifacts(row, run_dir, "jcode-azdaja")
 
+    def test_safe_purge_removes_readonly_nested_skill_without_following_symlink(self):
+        run_dir = self.root / "readonly-cleanup-run"
+        run_dir.mkdir(mode=0o700)
+        home = run_dir / "home"
+        skill = home / ".jcode" / "skills" / "azdaja" / "nested"
+        skill.mkdir(mode=0o700, parents=True)
+        readonly = skill / "component.bin"
+        readonly.write_bytes(b"frozen candidate bytes")
+        readonly.chmod(0o400)
+        for directory in (
+            skill, skill.parent, skill.parent.parent,
+            skill.parent.parent.parent, home,
+        ):
+            directory.chmod(0o500)
+        external = self.root / "external-cleanup-target"
+        external.mkdir(mode=0o700)
+        private_bytes(external / "must-survive", b"external")
+        (run_dir / "external-link").symlink_to(external, target_is_directory=True)
+        private_bytes(run_dir / "stdout.ndjson", b"")
+        private_bytes(run_dir / "stderr.log", b"")
+        errors: list[str] = []
+        receipt = RUN.safe_purge_transient_run_state(
+            run_dir, {"stdout.ndjson", "stderr.log"}, errors
+        )
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            set(os.listdir(run_dir)), {"stdout.ndjson", "stderr.log"}
+        )
+        self.assertFalse(home.exists())
+        self.assertFalse((run_dir / "external-link").exists())
+        self.assertEqual((external / "must-survive").read_bytes(), b"external")
+        self.assertTrue(receipt["asserted"])
+        self.assertTrue(receipt["credential_homes_deleted"])
+
+    def test_safe_purge_quarantine_escape_cannot_claim_credentials_deleted(self):
+        run_dir = self.root / "cleanup-escape-run"
+        run_dir.mkdir(mode=0o700)
+        home = run_dir / "home"
+        home.mkdir(mode=0o700)
+        private_bytes(home / "secret", b"owner oauth secret")
+        private_bytes(run_dir / "stdout.ndjson", b"")
+        private_bytes(run_dir / "stderr.log", b"")
+        escaped = self.root / "escaped-home"
+        invoked = False
+
+        def escape(parent_fd, quarantine, expected):
+            nonlocal invoked
+            del expected
+            if invoked:
+                return
+            invoked = True
+            os.rename(quarantine, escaped, src_dir_fd=parent_fd)
+
+        errors: list[str] = []
+        with mock.patch.object(
+            RUN, "_cleanup_after_quarantine_hook", side_effect=escape
+        ):
+            receipt = RUN.safe_purge_transient_run_state(
+                run_dir, {"stdout.ndjson", "stderr.log"}, errors
+            )
+        self.assertTrue(invoked)
+        self.assertEqual((escaped / "secret").read_bytes(), b"owner oauth secret")
+        self.assertFalse((run_dir / "home").exists())
+        self.assertTrue(errors)
+        self.assertFalse(receipt["credential_homes_deleted"])
+        self.assertFalse(receipt["asserted"])
+
+        # The scorer's successful-row evidence contract refuses the false
+        # credential cleanup receipt, so such a job cannot publish success.
+        score_test = importlib.util.spec_from_file_location(
+            "lb2_score_fixture_for_cleanup_escape", HERE / "test_score.py"
+        )
+        module = importlib.util.module_from_spec(score_test)
+        sys.modules[score_test.name] = module
+        assert score_test.loader is not None
+        score_test.loader.exec_module(module)
+        with tempfile.TemporaryDirectory(dir=TMP_PARENT) as directory:
+            fixture_case = module.ScoreTests()
+            generated = fixture_case.make_artifacts(Path(directory))
+            successful = next(
+                row for row in generated["rows"] if row["arm"] == "prime-agent"
+            )
+            successful["credential_cleanup_assertion"] = receipt
+            successful["cleanup_errors"] = list(errors)
+            matching_job = next(
+                item for item in generated["schedule"]["jobs"]
+                if item["run_id"] == successful["run_id"]
+            )
+            with self.assertRaises(SCORE.ScoreError):
+                SCORE.validate_run_rows(
+                    [successful], [matching_job], generated["schedule"],
+                    {item["id"]: item for item in generated["fixtures"]},
+                )
+
+    def test_safe_purge_regular_final_unlink_race_detects_escape(self):
+        run_dir = self.root / "cleanup-final-file-run"
+        run_dir.mkdir(mode=0o700)
+        secret = run_dir / "secret-file"
+        private_bytes(secret, b"regular secret")
+        secret.chmod(0o400)
+        private_bytes(run_dir / "stdout.ndjson", b"")
+        private_bytes(run_dir / "stderr.log", b"")
+        escaped = self.root / "escaped-regular"
+        real_unlink = os.unlink
+        invoked = False
+
+        def raced_unlink(path, *, dir_fd=None):
+            nonlocal invoked
+            if not invoked and str(path).startswith(".lb2-cleanup-"):
+                invoked = True
+                os.rename(path, escaped, src_dir_fd=dir_fd)
+                replacement_fd = os.open(
+                    path, os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600, dir_fd=dir_fd,
+                )
+                os.close(replacement_fd)
+            return real_unlink(path, dir_fd=dir_fd)
+
+        errors: list[str] = []
+        with mock.patch.object(RUN.os, "unlink", side_effect=raced_unlink):
+            receipt = RUN.safe_purge_transient_run_state(
+                run_dir, {"stdout.ndjson", "stderr.log"}, errors
+            )
+        self.assertTrue(invoked)
+        self.assertEqual(escaped.read_bytes(), b"regular secret")
+        self.assertTrue(any("escaped" in error for error in errors))
+        self.assertFalse(receipt["credential_homes_deleted"])
+        self.assertFalse(receipt["asserted"])
+
+    def test_safe_purge_directory_final_rmdir_race_detects_escape(self):
+        run_dir = self.root / "cleanup-final-directory-run"
+        run_dir.mkdir(mode=0o700)
+        (run_dir / "home").mkdir(mode=0o500)
+        private_bytes(run_dir / "stdout.ndjson", b"")
+        private_bytes(run_dir / "stderr.log", b"")
+        escaped = self.root / "escaped-directory"
+        real_rmdir = os.rmdir
+        invoked = False
+
+        def raced_rmdir(path, *, dir_fd=None):
+            nonlocal invoked
+            if not invoked and str(path).startswith(".lb2-cleanup-"):
+                invoked = True
+                os.rename(path, escaped, src_dir_fd=dir_fd)
+                os.mkdir(path, mode=0o700, dir_fd=dir_fd)
+            return real_rmdir(path, dir_fd=dir_fd)
+
+        errors: list[str] = []
+        with mock.patch.object(RUN.os, "rmdir", side_effect=raced_rmdir):
+            receipt = RUN.safe_purge_transient_run_state(
+                run_dir, {"stdout.ndjson", "stderr.log"}, errors
+            )
+        self.assertTrue(invoked)
+        self.assertTrue(escaped.is_dir())
+        self.assertTrue(any("escaped" in error for error in errors))
+        self.assertFalse(receipt["credential_homes_deleted"])
+        self.assertFalse(receipt["asserted"])
+
+    @unittest.skipUnless(
+        sys.platform == "darwin" and hasattr(os, "O_SYMLINK"),
+        "requires Darwin held-symlink descriptor semantics",
+    )
+    def test_safe_purge_symlink_final_unlink_race_detects_escape(self):
+        run_dir = self.root / "cleanup-final-symlink-run"
+        run_dir.mkdir(mode=0o700)
+        target = self.root / "symlink-target"
+        private_bytes(target, b"target")
+        (run_dir / "transient-link").symlink_to(target)
+        private_bytes(run_dir / "stdout.ndjson", b"")
+        private_bytes(run_dir / "stderr.log", b"")
+        escaped = self.root / "escaped-symlink"
+        real_unlink = os.unlink
+        invoked = False
+
+        def raced_unlink(path, *, dir_fd=None):
+            nonlocal invoked
+            if not invoked and str(path).startswith(".lb2-cleanup-"):
+                invoked = True
+                os.rename(path, escaped, src_dir_fd=dir_fd)
+                os.symlink(target, path, dir_fd=dir_fd)
+            return real_unlink(path, dir_fd=dir_fd)
+
+        errors: list[str] = []
+        with mock.patch.object(RUN.os, "unlink", side_effect=raced_unlink):
+            receipt = RUN.safe_purge_transient_run_state(
+                run_dir, {"stdout.ndjson", "stderr.log"}, errors
+            )
+        self.assertTrue(invoked)
+        self.assertTrue(escaped.is_symlink())
+        self.assertEqual(escaped.resolve(), target)
+        self.assertTrue(any("escaped" in error for error in errors))
+        self.assertFalse(receipt["credential_homes_deleted"])
+        self.assertFalse(receipt["asserted"])
+
+    def test_safe_purge_final_unlink_detects_hardlink_injection_without_chmod(self):
+        run_dir = self.root / "cleanup-final-hardlink-run"
+        run_dir.mkdir(mode=0o700)
+        secret = run_dir / "readonly-secret"
+        private_bytes(secret, b"hard-linked secret")
+        secret.chmod(0o400)
+        private_bytes(run_dir / "stdout.ndjson", b"")
+        private_bytes(run_dir / "stderr.log", b"")
+        escaped = self.root / "injected-hardlink"
+        real_unlink = os.unlink
+        invoked = False
+
+        def raced_unlink(path, *, dir_fd=None):
+            nonlocal invoked
+            if not invoked and str(path).startswith(".lb2-cleanup-"):
+                invoked = True
+                os.link(
+                    path, escaped, src_dir_fd=dir_fd,
+                    follow_symlinks=False,
+                )
+            return real_unlink(path, dir_fd=dir_fd)
+
+        errors: list[str] = []
+        with mock.patch.object(RUN.os, "unlink", side_effect=raced_unlink):
+            receipt = RUN.safe_purge_transient_run_state(
+                run_dir, {"stdout.ndjson", "stderr.log"}, errors
+            )
+        self.assertTrue(invoked)
+        self.assertEqual(escaped.read_bytes(), b"hard-linked secret")
+        self.assertEqual(stat.S_IMODE(escaped.stat().st_mode), 0o400)
+        self.assertTrue(any("hard link" in error for error in errors))
+        self.assertFalse(receipt["credential_homes_deleted"])
+        self.assertFalse(receipt["asserted"])
+
+    def test_safe_purge_detects_quarantine_inode_swap_and_preserves_racer(self):
+        run_dir = self.root / "cleanup-racer-run"
+        run_dir.mkdir(mode=0o700)
+        home = run_dir / "home"
+        home.mkdir(mode=0o500)
+        private_bytes(run_dir / "stdout.ndjson", b"")
+        private_bytes(run_dir / "stderr.log", b"")
+        invoked = False
+
+        def swap(parent_fd, quarantine, expected):
+            nonlocal invoked
+            del expected
+            if invoked:
+                return
+            invoked = True
+            os.rename(
+                quarantine, "preserved-original",
+                src_dir_fd=parent_fd, dst_dir_fd=parent_fd,
+            )
+            fd = os.open(
+                quarantine, os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600, dir_fd=parent_fd,
+            )
+            try:
+                os.write(fd, b"racer must survive")
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+
+        errors: list[str] = []
+        with mock.patch.object(
+            RUN, "_cleanup_after_quarantine_hook", side_effect=swap
+        ):
+            receipt = RUN.safe_purge_transient_run_state(
+                run_dir, {"stdout.ndjson", "stderr.log"}, errors
+            )
+        self.assertTrue(invoked)
+        self.assertTrue(any("swapped" in error for error in errors))
+        quarantine = next(
+            child for child in run_dir.iterdir()
+            if child.name.startswith(".lb2-cleanup-")
+        )
+        self.assertEqual(quarantine.read_bytes(), b"racer must survive")
+        self.assertTrue((run_dir / "preserved-original").is_dir())
+        self.assertFalse(receipt["asserted"])
+
     def test_post_turn_audit_failure_preserves_billed_evidence_and_raises(self):
         manifest, _, _ = self.make_public()
         suite = RUN.capture_public_suite(manifest)
