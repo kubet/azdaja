@@ -1,0 +1,6 @@
+- 2026-08-13 | candidate=48b8a16/f53d43ec | run=RULER-v32b/23ddde76 | verified=270/270 terminal rows; immutable candidate identity validated; gold opened only after complete schedule, claims, artifacts, and pre-gold gates
+- 2026-08-13 | candidate=48b8a16/f53d43ec | run=RULER-v32b/23ddde76 | verified=90/90 Azdaja exact root transcripts scanned; zero exact common loaded-context substring >=100 Unicode characters
+- 2026-08-13 | candidate=48b8a16/f53d43ec | run=RULER-v32b/23ddde76 | verified=root-token evidence 90/90 per arm; mean Azdaja=2746.98 native=16318.49 Prime=7064.26
+- 2026-08-13 | candidate=48b8a16/f53d43ec | run=RULER-v32b/23ddde76 | verified=Azdaja 52/90 execution, 38/52 completed exact, 38/90 fixed-denominator exact; controls native=84/90 Prime=85/90
+- 2026-08-13 | candidate=48b8a16/f53d43ec | run=RULER-v32b/23ddde76 | verified=all 38 Azdaja exits retained owner-only stderr/stdout/model-trace/solo-trace artifacts and were fail-closed fixed-denominator failures
+- 2026-08-13 | candidate=48b8a16/f53d43ec | run=RULER-v32b-postscore-triage | verified=exit taxonomy monty_subset_error=38 evaluator_oom=0 snapshot_corruption=0 cell_timeout=0 call_budget_kill=0 host_panic=0
