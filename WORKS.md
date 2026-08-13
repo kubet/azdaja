@@ -4,3 +4,4 @@
 - 2026-08-13 | candidate=48b8a16/f53d43ec | run=RULER-v32b/23ddde76 | verified=Azdaja 52/90 execution, 38/52 completed exact, 38/90 fixed-denominator exact; controls native=84/90 Prime=85/90
 - 2026-08-13 | candidate=48b8a16/f53d43ec | run=RULER-v32b/23ddde76 | verified=all 38 Azdaja exits retained owner-only stderr/stdout/model-trace/solo-trace artifacts and were fail-closed fixed-denominator failures
 - 2026-08-13 | candidate=48b8a16/f53d43ec | run=RULER-v32b-postscore-triage | verified=exit taxonomy monty_subset_error=38 evaluator_oom=0 snapshot_corruption=0 cell_timeout=0 call_budget_kill=0 host_panic=0
+- 2026-08-13 | candidate=SELF | run=local-root-repair-regressions | verified=typed same-session repair covers assertion,ValueError,regex-limit,line-limit,KeyError,prose; exactly two root turns; fresh Monty checkpoint; zero repair after child call; fake-jcode same-session/archive-once; not a subscription benchmark

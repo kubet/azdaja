@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use fs2::FileExt;
 use monty::{Dump, MontyRepl, ReplProgress, Session, SessionRef, dump};
 use monty_types::{
-    CompileOptions, MontyException, MontyObject, NameLookupResult, PrintWriter,
+    CompileOptions, ExcType, MontyException, MontyObject, NameLookupResult, PrintWriter,
     PrintWriterCallback, ResourceLimits, ResourceTracker,
 };
 use regex::Regex;
@@ -392,6 +392,8 @@ pub struct ExecResult {
     pub output: String,
     pub success: bool,
     pub finalized: bool,
+    pub external_calls: usize,
+    pub exception: Option<ExcType>,
 }
 fn as_string(o: &MontyObject, name: &str) -> Result<String> {
     if let MontyObject::String(s) = o {
@@ -604,7 +606,14 @@ fn run_cell(
     code: &str,
     cfg: &Config,
     default_model: &str,
-) -> (MontyRepl, String, bool, Option<Final>) {
+) -> (
+    MontyRepl,
+    String,
+    bool,
+    Option<Final>,
+    usize,
+    Option<ExcType>,
+) {
     repl.tracker_mut()
         .set_max_duration(Duration::from_secs(cfg.cell_timeout));
     let inputs = ["llm", "llm_batch", "llm_batch_fresh", "FINAL", "FINAL_VAR"]
@@ -626,8 +635,16 @@ fn run_cell(
         Ok(p) => p,
         Err(e) => {
             let e = *e;
+            let exception = e.error.exc_type();
             printed.push_str(&e.error.to_string());
-            return (e.repl, printed.finish(), false, final_out);
+            return (
+                e.repl,
+                printed.finish(),
+                false,
+                final_out,
+                call_count,
+                Some(exception),
+            );
         }
     };
     loop {
@@ -644,7 +661,7 @@ fn run_cell(
                     }
                     printed.push('\n')
                 }
-                return (repl, printed.finish(), true, final_out);
+                return (repl, printed.finish(), true, final_out, call_count, None);
             }
             ReplProgress::FunctionCall(call) => {
                 let result = external(
@@ -665,8 +682,16 @@ fn run_cell(
                     Ok(p) => p,
                     Err(e) => {
                         let e = *e;
+                        let exception = e.error.exc_type();
                         printed.push_str(&e.error.to_string());
-                        return (e.repl, printed.finish(), false, final_out);
+                        return (
+                            e.repl,
+                            printed.finish(),
+                            false,
+                            final_out,
+                            call_count,
+                            Some(exception),
+                        );
                     }
                 }
             }
@@ -677,8 +702,16 @@ fn run_cell(
                 Ok(p) => p,
                 Err(e) => {
                     let e = *e;
+                    let exception = e.error.exc_type();
                     printed.push_str(&e.error.to_string());
-                    return (e.repl, printed.finish(), false, final_out);
+                    return (
+                        e.repl,
+                        printed.finish(),
+                        false,
+                        final_out,
+                        call_count,
+                        Some(exception),
+                    );
                 }
             },
             ReplProgress::OsCall(call) => match call.resume(
@@ -688,13 +721,28 @@ fn run_cell(
                 Ok(p) => p,
                 Err(e) => {
                     let e = *e;
+                    let exception = e.error.exc_type();
                     printed.push_str(&e.error.to_string());
-                    return (e.repl, printed.finish(), false, final_out);
+                    return (
+                        e.repl,
+                        printed.finish(),
+                        false,
+                        final_out,
+                        call_count,
+                        Some(exception),
+                    );
                 }
             },
             ReplProgress::ResolveFutures(p) => {
                 printed.push_str("RuntimeError: unresolved async call");
-                return (p.into_repl(), printed.finish(), false, final_out);
+                return (
+                    p.into_repl(),
+                    printed.finish(),
+                    false,
+                    final_out,
+                    call_count,
+                    None,
+                );
             }
         }
     }
@@ -930,12 +978,28 @@ impl SoloSession {
             .as_deref()
             .ok_or_else(|| anyhow!("solo session has no structural sample"))
     }
+    pub fn checkpoint(&self) -> Result<Vec<u8>> {
+        let repl = self
+            .repl
+            .as_ref()
+            .ok_or_else(|| anyhow!("solo session is busy"))?;
+        Ok(dump("azdaja-solo", None, SessionRef::Idle(repl))?)
+    }
+    pub fn restore_checkpoint(&mut self, bytes: &[u8]) -> Result<()> {
+        let restored = Dump::load(bytes)?;
+        self.repl = Some(match restored.state {
+            Session::Idle(repl) => *repl,
+            _ => bail!("solo checkpoint is suspended"),
+        });
+        self.answer = None;
+        Ok(())
+    }
     pub fn exec(&mut self, code: &str, cfg: &Config) -> Result<ExecResult> {
         let repl = self
             .repl
             .take()
             .ok_or_else(|| anyhow!("solo session is busy"))?;
-        let (mut repl, mut output, success, mut final_out) =
+        let (mut repl, mut output, success, mut final_out, external_calls, exception) =
             run_cell(repl, code, cfg, &self.sub_model);
         let mut success = success;
         if success
@@ -969,6 +1033,8 @@ impl SoloSession {
             output: cap(&output, cfg.output_cap),
             success,
             finalized,
+            external_calls,
+            exception,
         })
     }
     pub fn final_answer(&self, cfg: &Config) -> Result<String> {
@@ -985,7 +1051,8 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
     let meta = read_meta(&dir)?;
     let model = meta.sub_model.as_deref().unwrap_or(&cfg.default_model);
     let repl = load_repl(&dir)?;
-    let (mut repl, mut output, success, mut final_out) = run_cell(repl, code, cfg, model);
+    let (mut repl, mut output, success, mut final_out, external_calls, exception) =
+        run_cell(repl, code, cfg, model);
     let mut success = success;
     // Paper-style trajectories sometimes assign `FINAL = answer` instead of calling it.
     if success
@@ -1019,6 +1086,8 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         output: cap(&output, cfg.output_cap),
         success,
         finalized,
+        external_calls,
+        exception,
     })
 }
 pub fn final_answer(sid: &str, cfg: &Config) -> Result<String> {
@@ -1410,6 +1479,7 @@ pub enum ModelTraceEvent {
 pub enum ModelAttemptCategory {
     SessionSetup,
     Turn,
+    Repair,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1897,16 +1967,20 @@ static SOLO_SHARED_JCODE: std::sync::Mutex<Option<JcodeSession>> = std::sync::Mu
 static SOLO_SHARED_JCODE_DRAINS: AtomicU32 = AtomicU32::new(0);
 
 pub struct SoloJcodeLeaseGuard {
-    _private: (),
+    armed: bool,
+    session_id: Option<String>,
 }
 impl Drop for SoloJcodeLeaseGuard {
     fn drop(&mut self) {
         #[cfg(unix)]
-        {
-            let shared = SOLO_SHARED_JCODE
+        if self.armed {
+            let mut slot = SOLO_SHARED_JCODE
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .take();
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let matches = slot
+                .as_ref()
+                .is_some_and(|api| self.session_id.as_deref() == Some(api.session.as_str()));
+            let shared = if matches { slot.take() } else { None };
             #[cfg(test)]
             if shared.is_some() {
                 SOLO_SHARED_JCODE_DRAINS.fetch_add(1, Ordering::AcqRel);
@@ -2466,6 +2540,66 @@ impl RootDriver {
         Ok(r)
     }
 
+    pub fn repair_turn(&mut self, prompt: &str) -> Result<ModelReply> {
+        preflight_model_trace_sink()?;
+        let repair_request_id = format!("{}-repair", self.request_id);
+        #[cfg(unix)]
+        if let Some(api) = &mut self.api {
+            let entered_turn = self.entered_turn_budget.try_enter()?;
+            let started = Instant::now();
+            let reply = match api.turn(prompt) {
+                Ok(reply) => reply,
+                Err(error) => {
+                    api.discard();
+                    record_model_trace_result(trace_model_repair_failure(
+                        &repair_request_id,
+                        entered_turn,
+                        Some(&api.session),
+                        &error,
+                        Some(started.elapsed().as_millis()),
+                    ));
+                    return Err(error);
+                }
+            };
+            trace_model_repair_reply(
+                &reply,
+                &repair_request_id,
+                entered_turn,
+                Some(&api.session),
+                api.usage_observed,
+            );
+            return Ok(reply);
+        }
+        self.history.push_str(prompt);
+        let entered_turn = self.entered_turn_budget.try_enter()?;
+        let started = Instant::now();
+        let text = match call_model_command(&self.history, &self.model, &self.cfg, 0) {
+            Ok(text) => text,
+            Err(error) => {
+                record_model_trace_result(trace_model_repair_failure(
+                    &repair_request_id,
+                    entered_turn,
+                    None,
+                    &error,
+                    Some(started.elapsed().as_millis()),
+                ));
+                return Err(error);
+            }
+        };
+        let reply = ModelReply {
+            text,
+            usage: ModelUsage::default(),
+            provider: String::new(),
+            model: self.model.clone(),
+            latency_ms: started.elapsed().as_millis(),
+        };
+        trace_model_repair_reply(&reply, &repair_request_id, entered_turn, None, false);
+        self.history.push_str("\n\nAssistant:\n");
+        self.history.push_str(&reply.text);
+        self.history.push_str("\n\nUser:\n");
+        Ok(reply)
+    }
+
     pub fn session_id(&self) -> Option<&str> {
         #[cfg(unix)]
         if let Some(api) = &self.api {
@@ -2483,13 +2617,42 @@ impl RootDriver {
                 .ok_or_else(|| anyhow!("root subscription session unavailable"))?;
             api.timeout = Duration::from_secs(self.cfg.sub_timeout.min(90));
             api.idle_timeout = Duration::from_secs(self.cfg.sub_timeout.min(30));
+            let session_id = api.session.clone();
             let mut slot = SOLO_SHARED_JCODE.lock().unwrap();
             if slot.is_some() {
                 bail!("solo subscription session already lent")
             }
             *slot = Some(api);
+            return Ok(SoloJcodeLeaseGuard {
+                armed: true,
+                session_id: Some(session_id),
+            });
         }
-        Ok(SoloJcodeLeaseGuard { _private: () })
+        Ok(SoloJcodeLeaseGuard {
+            armed: true,
+            session_id: None,
+        })
+    }
+    pub fn reclaim_from_solo(&mut self, mut guard: SoloJcodeLeaseGuard) -> Result<bool> {
+        #[cfg(unix)]
+        if self.cfg.sub_llm_cmd == "jcode-api" {
+            let mut slot = SOLO_SHARED_JCODE.lock().unwrap();
+            let matches = slot
+                .as_ref()
+                .is_some_and(|api| guard.session_id.as_deref() == Some(api.session.as_str()));
+            if !matches {
+                guard.armed = false;
+                return Ok(false);
+            }
+            let mut api = slot
+                .take()
+                .ok_or_else(|| anyhow!("solo lease disappeared"))?;
+            api.timeout = jcode_root_timeout(&self.cfg);
+            api.idle_timeout = jcode_root_idle_timeout(&self.cfg);
+            self.api = Some(api);
+        }
+        guard.armed = false;
+        Ok(true)
     }
 }
 
@@ -2570,14 +2733,39 @@ fn model_setup_error_is_transient(error: &anyhow::Error, substage: ModelSetupSub
     model_setup_error_category(error, substage).is_transient()
 }
 
+fn ensure_private_model_trace_file(file: &File, path: &Path) -> Result<()> {
+    let metadata = file.metadata()?;
+    if !metadata.file_type().is_file() {
+        bail!("model trace sink is not a regular file")
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let path_metadata = fs::symlink_metadata(path)?;
+        if path_metadata.file_type().is_symlink()
+            || !path_metadata.file_type().is_file()
+            || path_metadata.dev() != metadata.dev()
+            || path_metadata.ino() != metadata.ino()
+            || metadata.uid() != unsafe { libc::geteuid() }
+            || metadata.nlink() != 1
+            || metadata.permissions().mode() & 0o077 != 0
+        {
+            bail!("model trace sink is not a private bound file")
+        }
+    }
+    Ok(())
+}
+
 fn open_model_trace_sink() -> Result<Option<File>> {
-    let Some(path) = env::var_os("AZDAJA_MODEL_TRACE") else {
+    let Some(path) = env::var_os("AZDAJA_MODEL_TRACE").map(PathBuf::from) else {
         return Ok(None);
     };
     let mut options = OpenOptions::new();
     options.create(true).append(true);
     #[cfg(unix)]
-    options.mode(0o600);
+    options
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     let file = options.open(&path)?;
     #[cfg(unix)]
     {
@@ -2586,6 +2774,7 @@ fn open_model_trace_sink() -> Result<Option<File>> {
             file.set_permissions(fs::Permissions::from_mode(0o600))?;
         }
     }
+    ensure_private_model_trace_file(&file, &path)?;
     Ok(Some(file))
 }
 
@@ -2665,6 +2854,7 @@ fn trace_model_failure_attempt(
             match category {
                 ModelAttemptCategory::SessionSetup => "session_setup",
                 ModelAttemptCategory::Turn => "turn",
+                ModelAttemptCategory::Repair => "repair",
             }
             .into(),
         ),
@@ -2777,6 +2967,64 @@ fn trace_model_reply_attempt(
         failed_attempts_before_success: Some(attempt.saturating_sub(1)),
         response: (depth > 0 && env::var("AZDAJA_TRACE_RESPONSES").as_deref() == Ok("1"))
             .then(|| reply.text.clone()),
+    });
+}
+
+fn trace_model_repair_failure(
+    request_id: &str,
+    entered_turn: u32,
+    session_id: Option<&str>,
+    error: &anyhow::Error,
+    latency_ms: Option<u128>,
+) -> Result<()> {
+    trace_model_failure_attempt(
+        ModelAttemptContext {
+            depth: 0,
+            request_id,
+            attempt: 1,
+            entered_turn: Some(entered_turn),
+            session_id,
+            latency_ms,
+        },
+        ModelAttemptCategory::Repair,
+        None,
+        model_transport_error_category(error),
+    )
+}
+
+fn trace_model_repair_reply(
+    reply: &ModelReply,
+    request_id: &str,
+    entered_turn: u32,
+    session_id: Option<&str>,
+    usage_observed: bool,
+) {
+    let known_provider = !reply.provider.trim().is_empty();
+    let known_usage = known_provider && usage_observed;
+    record_model_trace(&ModelTrace {
+        schema_version: MODEL_TRACE_SCHEMA_VERSION,
+        event: ModelTraceEvent::ModelAttempt,
+        timestamp_ms: now_ms(),
+        depth: 0,
+        request_id: request_id.to_owned(),
+        attempt: 1,
+        entered_turn: Some(entered_turn),
+        session_id: session_id.map(str::to_owned),
+        category: ModelAttemptCategory::Repair,
+        outcome: ModelAttemptOutcome::Succeeded,
+        error: None,
+        error_category: None,
+        stage: Some("repair".into()),
+        setup_substage: None,
+        provider: known_provider.then(|| reply.provider.clone()),
+        model: known_provider.then(|| reply.model.clone()),
+        input_tokens: known_usage.then_some(reply.usage.input),
+        output_tokens: known_usage.then_some(reply.usage.output),
+        cache_read_tokens: known_usage.then_some(reply.usage.cache_read),
+        latency_ms: Some(reply.latency_ms),
+        degraded_transport: Some(false),
+        failed_attempts_before_success: Some(0),
+        response: None,
     });
 }
 
@@ -3296,7 +3544,10 @@ mod unit_tests {
             cancel_before_archive: false,
         };
         *SOLO_SHARED_JCODE.lock().unwrap() = Some(api);
-        drop(SoloJcodeLeaseGuard { _private: () });
+        drop(SoloJcodeLeaseGuard {
+            armed: true,
+            session_id: Some(String::new()),
+        });
         assert!(SOLO_SHARED_JCODE.lock().unwrap().is_none());
         assert_eq!(SOLO_SHARED_JCODE_DRAINS.load(Ordering::Acquire), before + 1);
     }

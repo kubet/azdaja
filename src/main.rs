@@ -6,7 +6,7 @@ use azdaja::{
     model_transport_error_category, model_transport_error_is_transient, start,
 };
 use monty::MontyRun;
-use monty_types::CompileOptions;
+use monty_types::{CompileOptions, ExcType};
 use serde::{Deserialize, Serialize};
 use std::{
     env, fs,
@@ -34,6 +34,14 @@ fn ensure_private_trace_file(file: &fs::File, path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let path_metadata = fs::symlink_metadata(path)?;
+        if path_metadata.file_type().is_symlink()
+            || !path_metadata.file_type().is_file()
+            || path_metadata.dev() != metadata.dev()
+            || path_metadata.ino() != metadata.ino()
+        {
+            bail!("private trace path no longer names its open file")
+        }
         if metadata.uid() != unsafe { libc::geteuid() } {
             bail!("private trace sink is not owned by the current user")
         }
@@ -67,6 +75,23 @@ fn private_append(path: &Path) -> Result<fs::File> {
     };
     ensure_private_trace_file(&file, path)?;
     Ok(file)
+}
+
+fn record_solo_trace(trace: &mut Option<fs::File>, path: Option<&Path>, entry: String) {
+    let Some(file) = trace.as_mut() else {
+        return;
+    };
+    let result = (|| -> Result<()> {
+        let path = path.ok_or_else(|| anyhow!("solo trace path unavailable"))?;
+        ensure_private_trace_file(file, path)?;
+        file.write_all(entry.as_bytes())?;
+        file.sync_data()?;
+        ensure_private_trace_file(file, path)?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        eprintln!("azdaja: solo trace write failed: {error:#}");
+    }
 }
 
 fn preflight_solo_trace(
@@ -719,6 +744,130 @@ fn validate_solo_python(code: &str) -> Result<()> {
     .map_err(|error| anyhow!("solo root Python compile error: {error}"))
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SoloProgramFailureKind {
+    Protocol,
+    LineLimit,
+    Compile,
+    Assertion,
+    Value,
+    Key,
+    Regex,
+    MissingFinal,
+    Runtime,
+    Host,
+}
+
+struct SoloProgramFailure {
+    kind: SoloProgramFailureKind,
+    error: anyhow::Error,
+    code: Option<String>,
+    output: Option<String>,
+    external_calls: usize,
+}
+
+fn classify_program_failure(
+    text: &str,
+    fallback: SoloProgramFailureKind,
+) -> SoloProgramFailureKind {
+    let terminal = text
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or(text);
+    if terminal.contains("nonblank line limit") {
+        SoloProgramFailureKind::LineLimit
+    } else {
+        fallback
+    }
+}
+
+fn classify_monty_exception(exception: Option<ExcType>) -> SoloProgramFailureKind {
+    match exception {
+        Some(ExcType::AssertionError) => SoloProgramFailureKind::Assertion,
+        Some(ExcType::ValueError) => SoloProgramFailureKind::Value,
+        Some(ExcType::KeyError) => SoloProgramFailureKind::Key,
+        Some(ExcType::RePatternError) => SoloProgramFailureKind::Regex,
+        _ => SoloProgramFailureKind::Runtime,
+    }
+}
+
+fn execute_solo_reply(
+    session: &mut SoloSession,
+    reply: &str,
+    cfg: &Config,
+) -> std::result::Result<(String, String, String), SoloProgramFailure> {
+    let code = extract_solo_python(reply).map_err(|error| SoloProgramFailure {
+        kind: classify_program_failure(&error.to_string(), SoloProgramFailureKind::Protocol),
+        error,
+        code: None,
+        output: None,
+        external_calls: 0,
+    })?;
+    validate_solo_python(&code).map_err(|error| SoloProgramFailure {
+        kind: classify_program_failure(&error.to_string(), SoloProgramFailureKind::Compile),
+        error,
+        code: Some(code.clone()),
+        output: None,
+        external_calls: 0,
+    })?;
+    let result = session
+        .exec(&code, cfg)
+        .map_err(|error| SoloProgramFailure {
+            kind: SoloProgramFailureKind::Host,
+            error,
+            code: Some(code.clone()),
+            output: None,
+            external_calls: 0,
+        })?;
+    if !result.success {
+        let kind = classify_monty_exception(result.exception);
+        let error = if kind == SoloProgramFailureKind::Regex {
+            anyhow!("solo solve invalid regular expression: {}", result.output)
+        } else {
+            anyhow!("solo solve cell runtime error: {}", result.output)
+        };
+        return Err(SoloProgramFailure {
+            kind,
+            error,
+            code: Some(code),
+            output: Some(result.output),
+            external_calls: result.external_calls,
+        });
+    }
+    if !result.finalized {
+        return Err(SoloProgramFailure {
+            kind: SoloProgramFailureKind::MissingFinal,
+            error: anyhow!("solo solve cell did not call FINAL"),
+            code: Some(code),
+            output: Some(result.output),
+            external_calls: result.external_calls,
+        });
+    }
+    let answer = session
+        .final_answer(cfg)
+        .map_err(|error| SoloProgramFailure {
+            kind: SoloProgramFailureKind::Host,
+            error,
+            code: Some(code.clone()),
+            output: Some(result.output.clone()),
+            external_calls: result.external_calls,
+        })?;
+    Ok((answer, code, result.output))
+}
+
+fn root_repair_prompt(failure: SoloProgramFailureKind) -> String {
+    format!(
+        concat!(
+            "The previous program failed with typed category {:?}. ",
+            "Return one complete replacement program only, under the original protocol and limits. ",
+            "Re-read complete ctx, use the observed input structure rather than an assumed template, ",
+            "and use a different fail-closed approach."
+        ),
+        failure
+    )
+}
+
 fn solo(args: &[String], cfg: &Config) -> Result<()> {
     if args.len() < 4 {
         bail!("usage: solo <question> -f <file> [--model X] [--sub-model Y]")
@@ -742,7 +891,7 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
         i += 2
     }
     let file = PathBuf::from(file.ok_or_else(|| anyhow!("solo requires -f"))?);
-    let mut session = SoloSession::new(cfg, sub)?;
+    let mut session = SoloSession::new(cfg, sub.clone())?;
     let metadata = session.load(&file, "ctx", cfg)?;
 
     // Fixed, provider-free structural evidence. The complete context remains only in Monty.
@@ -789,24 +938,6 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
     // retryable product failure.
     let mut trace =
         preflight_solo_trace(trace_path.as_deref(), &root_request_id, root_model, &prompt)?;
-    let mut record_trace = |entry: String| {
-        let Some(file) = trace.as_mut() else {
-            return;
-        };
-        let result = (|| -> Result<()> {
-            let path = trace_path
-                .as_deref()
-                .ok_or_else(|| anyhow!("solo trace path unavailable"))?;
-            ensure_private_trace_file(file, path)?;
-            file.write_all(entry.as_bytes())?;
-            file.sync_data()?;
-            ensure_private_trace_file(file, path)?;
-            Ok(())
-        })();
-        if let Err(error) = result {
-            eprintln!("azdaja: solo trace write failed: {error:#}");
-        }
-    };
     let entered_turn_budget = Arc::new(EnteredTurnBudget::new(2));
     let mut model_reply = None;
     let mut root_driver = None;
@@ -850,12 +981,16 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
                         failed_root_attempts += 1;
                         retry_delay = Duration::from_secs(2);
                         let transient = model_transport_error_is_transient(&error);
-                        record_trace(format!(
-                            "\n=== turn 0 request_id={root_request_id:?} attempt={physical_attempt} entered_turn={} session_id={session_id:?} category=turn outcome=failed transient={transient} error_category={:?} latency_ms={} ===\n{error:#}\n",
-                            entered_turn_budget.entered(),
-                            model_transport_error_category(&error),
-                            turn_started.elapsed().as_millis(),
-                        ));
+                        record_solo_trace(
+                            &mut trace,
+                            trace_path.as_deref(),
+                            format!(
+                                "\n=== turn 0 request_id={root_request_id:?} attempt={physical_attempt} entered_turn={} session_id={session_id:?} category=turn outcome=failed transient={transient} error_category={:?} latency_ms={} ===\n{error:#}\n",
+                                entered_turn_budget.entered(),
+                                model_transport_error_category(&error),
+                                turn_started.elapsed().as_millis(),
+                            ),
+                        );
                         root_error = Some(error);
                         if !transient {
                             break;
@@ -867,11 +1002,15 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
                 failed_root_attempts += 1;
                 retry_delay = Duration::from_millis(50);
                 let transient = model_transport_error_is_transient(&error);
-                record_trace(format!(
-                    "\n=== turn 0 request_id={root_request_id:?} attempt={physical_attempt} entered_turn=null session_id=null category=session_setup outcome=failed transient={transient} error_category={:?} setup_elapsed_ms={} ===\n{error:#}\n",
-                    model_transport_error_category(&error),
-                    attempt_started.elapsed().as_millis(),
-                ));
+                record_solo_trace(
+                    &mut trace,
+                    trace_path.as_deref(),
+                    format!(
+                        "\n=== turn 0 request_id={root_request_id:?} attempt={physical_attempt} entered_turn=null session_id=null category=session_setup outcome=failed transient={transient} error_category={:?} setup_elapsed_ms={} ===\n{error:#}\n",
+                        model_transport_error_category(&error),
+                        attempt_started.elapsed().as_millis(),
+                    ),
+                );
                 root_error = Some(error);
                 if !transient || setup_elapsed >= Duration::from_secs(30) {
                     break;
@@ -887,41 +1026,193 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
         .as_mut()
         .ok_or_else(|| anyhow!("root driver unavailable"))?;
     let root_session_id = root_driver.session_id().map(str::to_owned);
-    record_trace(format!(
-        "\n=== turn 0 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={root_session_id:?} category=turn outcome=succeeded degraded_transport={} failed_attempts_before_success={failed_root_attempts} provider={:?} model={:?} input={} output={} cache_read={} latency_ms={} ===\n{}\n",
-        failed_root_attempts > 0,
-        model_reply.provider,
-        model_reply.model,
-        model_reply.usage.input,
-        model_reply.usage.output,
-        model_reply.usage.cache_read,
-        model_reply.latency_ms,
-        model_reply.text
-    ));
-    let _solo_jcode_guard = root_driver.lend_to_solo()?;
-    let code = extract_solo_python(&model_reply.text)?;
-    validate_solo_python(&code)?;
-    let result = session.exec(&code, cfg)?;
-    record_trace(format!(
-        "=== code ===\n{code}\n=== result ===\n{}\n",
-        result.output
-    ));
-    if !result.success {
-        if result.output.contains("re.PatternError:") {
-            bail!("solo solve invalid regular expression: {}", result.output)
+    record_solo_trace(
+        &mut trace,
+        trace_path.as_deref(),
+        format!(
+            "\n=== turn 0 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={root_session_id:?} category=turn outcome=succeeded degraded_transport={} failed_attempts_before_success={failed_root_attempts} provider={:?} model={:?} input={} output={} cache_read={} latency_ms={} ===\n{}\n",
+            failed_root_attempts > 0,
+            model_reply.provider,
+            model_reply.model,
+            model_reply.usage.input,
+            model_reply.usage.output,
+            model_reply.usage.cache_read,
+            model_reply.latency_ms,
+            model_reply.text
+        ),
+    );
+    let pristine = session.checkpoint()?;
+    let lease = root_driver.lend_to_solo()?;
+    match execute_solo_reply(&mut session, &model_reply.text, cfg) {
+        Ok((answer, code, output)) => {
+            record_solo_trace(
+                &mut trace,
+                trace_path.as_deref(),
+                format!("=== code ===\n{code}\n=== result ===\n{output}\n"),
+            );
+            println!("{answer}");
         }
-        bail!("solo solve cell runtime error: {}", result.output)
+        Err(first_failure) => {
+            if let Some(code) = first_failure.code.as_deref() {
+                record_solo_trace(
+                    &mut trace,
+                    trace_path.as_deref(),
+                    format!(
+                        "=== code ===\n{code}\n=== result outcome=failed kind={:?} external_calls={} output_chars={} ===\n",
+                        first_failure.kind,
+                        first_failure.external_calls,
+                        first_failure
+                            .output
+                            .as_deref()
+                            .map_or(0, |value| value.chars().count())
+                    ),
+                );
+            }
+            let repairable = matches!(
+                first_failure.kind,
+                SoloProgramFailureKind::Protocol
+                    | SoloProgramFailureKind::LineLimit
+                    | SoloProgramFailureKind::Compile
+                    | SoloProgramFailureKind::Assertion
+                    | SoloProgramFailureKind::Value
+                    | SoloProgramFailureKind::Key
+                    | SoloProgramFailureKind::Regex
+                    | SoloProgramFailureKind::MissingFinal
+            ) && first_failure.external_calls == 0
+                && entered_turn_budget.entered() < 2;
+            if !repairable || !root_driver.reclaim_from_solo(lease)? {
+                return Err(first_failure.error);
+            }
+            session.restore_checkpoint(&pristine)?;
+            let repair_prompt = root_repair_prompt(first_failure.kind);
+            if repair_prompt.len() > 1024 {
+                bail!("solo root repair prompt exceeds byte limit")
+            }
+            if let (Some(file), Some(path)) = (trace.as_mut(), trace_path.as_deref()) {
+                ensure_private_trace_file(file, path)?;
+                writeln!(
+                    file,
+                    "\n=== repair request begin request_id={root_request_id:?} trigger={:?} request_chars={} ===",
+                    first_failure.kind,
+                    repair_prompt.chars().count()
+                )?;
+                file.write_all(repair_prompt.as_bytes())?;
+                writeln!(
+                    file,
+                    "\n=== repair request end request_id={root_request_id:?} ==="
+                )?;
+                file.sync_data()?;
+                ensure_private_trace_file(file, path)?;
+            }
+            let repair_session_id = root_driver.session_id().map(str::to_owned);
+            let repair_started = Instant::now();
+            let repair_reply = match root_driver.repair_turn(&repair_prompt) {
+                Ok(reply) => reply,
+                Err(error) => {
+                    record_solo_trace(
+                        &mut trace,
+                        trace_path.as_deref(),
+                        format!(
+                            "=== turn 1 category=repair outcome=failed trigger={:?} error_category={:?} ===\n",
+                            first_failure.kind,
+                            model_transport_error_category(&error)
+                        ),
+                    );
+                    return Err(anyhow!(
+                        "solo root repair turn failed after {:?}: {error:#}",
+                        first_failure.kind
+                    ));
+                }
+            };
+            record_solo_trace(
+                &mut trace,
+                trace_path.as_deref(),
+                format!(
+                    "\n=== turn 1 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={repair_session_id:?} category=repair outcome=succeeded trigger={:?} provider={:?} model={:?} input={} output={} cache_read={} latency_ms={} ===\n{}\n",
+                    first_failure.kind,
+                    repair_reply.provider,
+                    repair_reply.model,
+                    repair_reply.usage.input,
+                    repair_reply.usage.output,
+                    repair_reply.usage.cache_read,
+                    repair_started.elapsed().as_millis(),
+                    repair_reply.text
+                ),
+            );
+            let _repair_lease = root_driver.lend_to_solo()?;
+            match execute_solo_reply(&mut session, &repair_reply.text, cfg) {
+                Ok((answer, code, output)) => {
+                    record_solo_trace(
+                        &mut trace,
+                        trace_path.as_deref(),
+                        format!(
+                            "=== repair code ===\n{code}\n=== repair result ===\n{output}\n=== repair outcome=succeeded trigger={:?} ===\n",
+                            first_failure.kind
+                        ),
+                    );
+                    println!("{answer}");
+                }
+                Err(repair_failure) => {
+                    if let Some(code) = repair_failure.code.as_deref() {
+                        record_solo_trace(
+                            &mut trace,
+                            trace_path.as_deref(),
+                            format!(
+                                "=== repair code ===\n{code}\n=== repair result outcome=failed kind={:?} external_calls={} output_chars={} ===\n",
+                                repair_failure.kind,
+                                repair_failure.external_calls,
+                                repair_failure
+                                    .output
+                                    .as_deref()
+                                    .map_or(0, |value| value.chars().count())
+                            ),
+                        );
+                    }
+                    record_solo_trace(
+                        &mut trace,
+                        trace_path.as_deref(),
+                        format!(
+                            "=== repair outcome=rejected trigger={:?} failure={:?} ===\n",
+                            first_failure.kind, repair_failure.kind
+                        ),
+                    );
+                    return Err(repair_failure.error.context(format!(
+                        "solo root repair failed after {:?}",
+                        first_failure.kind
+                    )));
+                }
+            }
+        }
     }
-    if !result.finalized {
-        bail!("solo solve cell did not call FINAL")
-    }
-    println!("{}", session.final_answer(cfg)?);
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn root_repair_categories_are_typed_and_prompt_is_fixed_and_bounded() {
+        assert_eq!(
+            classify_program_failure("nonblank line limit", SoloProgramFailureKind::Protocol),
+            SoloProgramFailureKind::LineLimit
+        );
+        let kinds = [
+            (
+                Some(ExcType::AssertionError),
+                SoloProgramFailureKind::Assertion,
+            ),
+            (Some(ExcType::ValueError), SoloProgramFailureKind::Value),
+            (Some(ExcType::KeyError), SoloProgramFailureKind::Key),
+            (Some(ExcType::RePatternError), SoloProgramFailureKind::Regex),
+        ];
+        for (exception, expected) in kinds {
+            assert_eq!(classify_monty_exception(exception), expected);
+            let prompt = root_repair_prompt(expected);
+            assert!(prompt.len() <= 1024);
+            assert!(!prompt.contains("secret"));
+        }
+    }
 
     #[test]
     fn solo_trace_preflight_failure_prevents_provider_entry() {

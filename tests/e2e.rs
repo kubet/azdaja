@@ -1360,7 +1360,334 @@ else:
 }
 
 #[test]
-fn solo_reports_typed_compile_and_regex_diagnostics_without_retry() {
+fn solo_repairs_each_observed_root_failure_class_once_and_uses_fresh_monty() {
+    let t = temp("solo-root-repair-classes");
+    let mock = t.join("repair.py");
+    fs::write(
+        &mock,
+        r#"import pathlib, sys
+calls = pathlib.Path(sys.argv[1])
+kind = sys.argv[2]
+count = len(calls.read_text().splitlines()) if calls.exists() else 0
+calls.open("a").write("root\n")
+if count:
+    print('```python\nassert ctx == "generic synthetic context"\nFINAL("repaired")\n```')
+elif kind == "assertion":
+    print('```python\nctx = "poison"\nassert False\n```')
+elif kind == "value":
+    print('```python\nraise ValueError("sentinel-secret")\n```')
+elif kind == "regex":
+    print('```python\nre.compile("[z-a]")\nFINAL("bad")\n```')
+elif kind == "line":
+    print('```python\n' + '\n'.join('x = 1' for _ in range(51)) + '\n```')
+elif kind == "key":
+    print('```python\nx = {}\nx["missing"]\n```')
+else:
+    print('invalid prose')
+"#,
+    )
+    .unwrap();
+    let input = t.join("input.txt");
+    fs::write(&input, "generic synthetic context").unwrap();
+    for kind in ["assertion", "value", "regex", "line", "key", "prose"] {
+        let calls = t.join(format!("{kind}.calls"));
+        let trace = t.join(format!("{kind}.trace"));
+        let cfg = config(
+            &t,
+            &format!("python3 {} {} {kind}", mock.display(), calls.display()),
+            4096,
+            1,
+            3,
+            4,
+        );
+        let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+            .env_remove("RLM_DEPTH")
+            .env("AZDAJA_HOME", t.join(format!("{kind}-state")))
+            .env("AZDAJA_CONFIG", &cfg)
+            .env("AZDAJA_SOLO_TRACE", &trace)
+            .args([
+                "solo",
+                "answer the generic question",
+                "-f",
+                input.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{kind}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "repaired");
+        assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
+        let retained = fs::read_to_string(&trace).unwrap();
+        assert!(
+            retained.contains("category=repair outcome=succeeded"),
+            "{kind}: {retained}"
+        );
+        let repair_request = retained
+            .split("=== repair request begin")
+            .nth(1)
+            .unwrap()
+            .split("=== repair request end")
+            .next()
+            .unwrap();
+        assert!(
+            !repair_request.contains("sentinel-secret"),
+            "repair prompt leaked raw diagnostic"
+        );
+    }
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_does_not_repair_unknown_runtime_failures() {
+    let t = temp("solo-no-unknown-repair");
+    let calls = t.join("calls");
+    let mock = t.join("unknown.py");
+    fs::write(
+        &mock,
+        r#"import pathlib, sys
+pathlib.Path(sys.argv[1]).open("a").write("root\n")
+print('```python\nprint("AssertionError: spoof")\nraise RuntimeError("unknown")\n```')
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "generic").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "generic question", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_does_not_repair_after_a_child_call_consumes_evidence() {
+    let t = temp("solo-no-repair-after-child");
+    let calls = t.join("calls");
+    let mock = t.join("child.py");
+    fs::write(
+        &mock,
+        r#"import os, pathlib, sys
+pathlib.Path(sys.argv[1]).open("a").write(os.environ.get("RLM_DEPTH", "?") + "\n")
+if os.environ.get("RLM_DEPTH") == "0":
+    print('```python\nllm("child")\nassert False\n```')
+else:
+    print("child result")
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "generic context").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "generic question", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        fs::read_to_string(&calls)
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        ["0", "1"]
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_repair_model_trace_preflight_failure_prevents_second_turn() {
+    let t = temp("repair-model-trace-preflight");
+    let calls = t.join("calls");
+    let trace = t.join("model.jsonl");
+    let mock = t.join("break-model-trace.py");
+    fs::write(
+        &mock,
+        r#"import pathlib, sys
+calls = pathlib.Path(sys.argv[1]); trace = pathlib.Path(sys.argv[2])
+calls.open("a").write("root\n")
+trace.unlink(); trace.mkdir()
+print("invalid prose")
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!(
+            "python3 {} {} {}",
+            mock.display(),
+            calls.display(),
+            trace.display()
+        ),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "generic").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_MODEL_TRACE", &trace)
+        .args(["solo", "generic question", "-f", input.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn solo_repair_trace_rename_replacement_prevents_second_turn() {
+    let t = temp("repair-trace-binding");
+    let calls = t.join("calls");
+    let trace = t.join("solo.trace");
+    let hidden = t.join("solo.hidden");
+    let mock = t.join("replace-trace.py");
+    fs::write(&mock, r#"import os, pathlib, sys
+calls = pathlib.Path(sys.argv[1]); trace = pathlib.Path(sys.argv[2]); hidden = pathlib.Path(sys.argv[3])
+calls.open("a").write("root\n")
+trace.rename(hidden)
+trace.write_text("")
+os.chmod(trace, 0o600)
+print("invalid prose")
+"#).unwrap();
+    let cfg = config(
+        &t,
+        &format!(
+            "python3 {} {} {} {}",
+            mock.display(),
+            calls.display(),
+            trace.display(),
+            hidden.display()
+        ),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "generic").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_SOLO_TRACE", &trace)
+        .args(["solo", "generic question", "-f", input.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
+    assert_eq!(fs::metadata(&trace).unwrap().len(), 0);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_repair_trace_preflight_failure_prevents_second_turn() {
+    let t = temp("solo-repair-trace-preflight");
+    let calls = t.join("calls");
+    let trace = t.join("solo.trace");
+    let mock = t.join("break-trace.py");
+    fs::write(
+        &mock,
+        r#"import pathlib, shutil, sys
+calls = pathlib.Path(sys.argv[1]); trace = pathlib.Path(sys.argv[2])
+calls.open("a").write("root\n")
+trace.unlink(); trace.mkdir()
+print("invalid prose")
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!(
+            "python3 {} {} {}",
+            mock.display(),
+            calls.display(),
+            trace.display()
+        ),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "generic").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_SOLO_TRACE", &trace)
+        .args(["solo", "generic question", "-f", input.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_repair_fails_closed_after_exactly_two_root_turns() {
+    let t = temp("solo-root-repair-fail-closed");
+    let calls = t.join("calls");
+    let mock = t.join("bad.py");
+    fs::write(
+        &mock,
+        r#"import pathlib, sys
+pathlib.Path(sys.argv[1]).open("a").write("root\n")
+print("invalid prose")
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "generic synthetic context").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "generic question", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("repair failed"));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_reports_typed_compile_and_regex_diagnostics_after_one_repair() {
     let t = temp("solo-typed-diagnostics");
     let calls = t.join("calls");
     let mock = t.join("invalid.py");
@@ -1403,12 +1730,12 @@ else:
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 4);
     fs::remove_dir_all(t).unwrap();
 }
 
 #[test]
-fn solo_fails_closed_after_one_root_turn() {
+fn solo_fails_closed_after_one_repair_turn() {
     let t = temp("solo-turn-limit");
     let calls = t.join("root-calls");
     let mock = t.join("never-final.py");
@@ -1441,7 +1768,7 @@ else:
     );
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stderr).contains("did not call FINAL"));
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -2531,6 +2858,114 @@ fn solo_root_stops_after_four_setup_attempts_without_entering_turn() {
     );
     assert!(rows.iter().all(|row| row["category"] == "session_setup"));
     assert!(rows.iter().all(|row| row.get("entered_turn").is_none()));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn solo_jcode_runtime_repair_reuses_one_session_and_archives_once() {
+    use std::io::{BufRead, BufReader, Write as _};
+    use std::os::unix::net::UnixListener;
+    use std::thread;
+
+    let t = temp("jrs");
+    let socket = t.join("a");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = thread::spawn(move || {
+        let (probe, _) = listener.accept().unwrap();
+        drop(probe);
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut messages = Vec::new();
+        let mut archives = 0;
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap() == 0 {
+                break;
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let id = request["id"].as_u64().unwrap();
+            let frames = match request["req"].as_str().unwrap() {
+                "hello" => vec![
+                    serde_json::json!({"v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"}),
+                ],
+                "create_session" => vec![
+                    serde_json::json!({"v":1,"reply_to":id,"ev":"attached","session":{"session_id":"same","status":"idle"}}),
+                ],
+                "get_runtime_info" => vec![
+                    serde_json::json!({"v":1,"reply_to":id,"ev":"runtime_info","session_id":"same","provider":"OpenAI","model":"gpt-5.4","routes":[{"provider":"OpenAI","model":"gpt-5.4","api_method":"openai-oauth","available":true}]}),
+                ],
+                "set_reasoning_effort" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
+                "send_message" => {
+                    messages.push(request["content"].as_str().unwrap().to_owned());
+                    let text = if messages.len() == 1 {
+                        "```python\nctx = \"poison\"\nassert False\n```"
+                    } else {
+                        "```python\nassert ctx == \"original\"\nFINAL(\"REPAIRED\")\n```"
+                    };
+                    vec![
+                        serde_json::json!({"v":1,"ev":"model_info","session_id":"same","provider":"OpenAI","model":"gpt-5.4"}),
+                        serde_json::json!({"v":1,"ev":"text_delta","session_id":"same","text":text}),
+                        serde_json::json!({"v":1,"ev":"token_usage","session_id":"same","input":4,"output":1,"cache_read_input":0}),
+                        serde_json::json!({"v":1,"ev":"turn_done","session_id":"same"}),
+                    ]
+                }
+                "archive_session" => {
+                    archives += 1;
+                    vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                }
+                other => panic!("unexpected root request {other}"),
+            };
+            for frame in frames {
+                serde_json::to_writer(&mut stream, &frame).unwrap();
+                stream.write_all(b"\n").unwrap();
+                stream.flush().unwrap();
+            }
+        }
+        (messages, archives)
+    });
+    let cfg = config(&t, "jcode-api", 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "original").unwrap();
+    let model_trace = t.join("model.jsonl");
+    let solo_trace = t.join("solo.log");
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args([
+            "solo",
+            "generic question",
+            "-f",
+            input.to_str().unwrap(),
+            "--model",
+            "gpt-5.4",
+        ])
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_API_SOCKET", &socket)
+        .env("AZDAJA_MODEL_TRACE", &model_trace)
+        .env("AZDAJA_SOLO_TRACE", &solo_trace)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "REPAIRED");
+    let (messages, archives) = server.join().unwrap();
+    assert_eq!(messages.len(), 2);
+    assert!(messages[1].contains("typed category Assertion"));
+    assert_eq!(archives, 1);
+    let rows: Vec<serde_json::Value> = fs::read_to_string(model_trace)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["session_id"], "same");
+    assert_eq!(rows[1]["session_id"], "same");
+    assert_eq!(rows[1]["category"], "repair");
+    assert!(rows[1]["request_id"].as_str().unwrap().ends_with("-repair"));
     fs::remove_dir_all(t).unwrap();
 }
 
