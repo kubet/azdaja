@@ -79,22 +79,24 @@ These are private, frozen diagnostics—not official leaderboard results or a su
 
 ### Latest finalized cohorts
 
-| Suite / cohort | Arm | Execution success | Completed accuracy | Fixed-denominator exact |
-|---|---|---:|---:|---:|
-| OOLONG diagnostic v29, 26 fixtures | Azdaja | 25/26 (96.15%) | 24/25 (96.00%) | 24/26 (92.31%) |
-| OOLONG diagnostic v29, 26 fixtures | Native jcode | 25/26 (96.15%) | 22/25 (88.00%) | 22/26 (84.62%) |
-| OOLONG diagnostic v29, 26 fixtures | Prime Agent | 25/26 (96.15%) | 20/25 (80.00%) | 20/26 (76.92%) |
-| Derived RULER v3, 90 fixtures | Azdaja | 60/90 (66.67%) | 28/60 (46.67%) | 28/90 (31.11%) |
-| Derived RULER v3, 90 fixtures | Native jcode | 90/90 (100%) | 80/90 (88.89%) | 80/90 (88.89%) |
-| Derived RULER v3, 90 fixtures | Prime Agent | 90/90 (100%) | 80/90 (88.89%) | 80/90 (88.89%) |
+| Suite / cohort | Arm | Execution success | Completed accuracy | Fixed-denominator exact | Mean root tokens |
+|---|---|---:|---:|---:|---:|
+| Derived RULER v32b, 90 fixtures | Azdaja | 52/90 (57.78%) | 38/52 (73.08%) | 38/90 (42.22%) | 2,746.98 |
+| Derived RULER v32b, 90 fixtures | Native jcode | 90/90 (100%) | 84/90 (93.33%) | 84/90 (93.33%) | 16,318.49 |
+| Derived RULER v32b, 90 fixtures | Prime Agent | 90/90 (100%) | 85/90 (94.44%) | 85/90 (94.44%) | 7,064.26 |
+| OOLONG diagnostic v29, 26 fixtures | Azdaja | 25/26 (96.15%) | 24/25 (96.00%) | 24/26 (92.31%) | — |
+| OOLONG diagnostic v29, 26 fixtures | Native jcode | 25/26 (96.15%) | 22/25 (88.00%) | 22/26 (84.62%) | — |
+| OOLONG diagnostic v29, 26 fixtures | Prime Agent | 25/26 (96.15%) | 20/25 (80.00%) | 20/26 (76.92%) | — |
 
-The two cohorts used different immutable Azdaja candidates and are reported separately. Derived RULER is a project diagnostic, not an official RULER leaderboard. The 30 Azdaja execution failures in RULER v3 comprised 20 transport-affected rows and 10 adapter/parser-protocol rows. LongBench-v2 attempts v1–v5 were preserved as failed, non-resumable cohorts and were never scored; no LongBench number is reported.
+RULER v32b passed its frozen candidate regression floor: Azdaja improved from the historical v3 fixed-denominator result of 28/90 to 38/90, despite execution success falling from 60/90 to 52/90. All 90 Azdaja root transcripts—including failed attempts—passed the exact pre-gold scan with no common loaded-context substring of 100 or more Unicode characters. Its 38 execution failures were all normalized as `other_execution` from raw `process_exit`; controls had none. Root-token evidence covered 90/90 rows for every arm. Azdaja’s recorded mean root context was 83.2% lower than native jcode and 61.1% lower than Prime Agent, but its end-to-end accuracy was also much lower; this is an accuracy/economy trade-off, not a win over the controls.
+
+Derived RULER is a project diagnostic, not an official RULER leaderboard. An earlier complete v32a cohort was preserved unscored after an OrbStack-driven disk-full incident caused one treatment row to lack mandatory transcript authority; v32b is a complete fresh cohort, not a selected retry. LongBench-v2 attempts v1–v5 were likewise preserved as failed, non-resumable, unscored cohorts.
 
 ### Active same-candidate campaign
 
-Candidate v32 was built from private commit `48b8a16` with binary SHA-256 `f53d43ecde4fd800789d0b7469fa6ad81bb2dd46e41a0c643f90dc8e77a2228d`. It is running a locally frozen, version-stamped serial campaign over derived RULER (270 jobs), LongBench-v2 (189 jobs), and OOLONG (78 jobs). No interim accuracy is inspected or published. Each suite is scored only after exact schedule closure and artifact validation, and the next suite starts only if the prior gate passes.
+Candidate v32 was built from private commit `48b8a16` with binary SHA-256 `f53d43ecde4fd800789d0b7469fa6ad81bb2dd46e41a0c643f90dc8e77a2228d`. RULER v32b passed; fresh LongBench-v2 (189 jobs) is next, followed only on a pass by OOLONG (78 jobs), using exactly the same candidate. Each suite is scored only after exact schedule closure and artifact validation.
 
-Every finalized report must include execution success, completed accuracy, fixed-denominator end-to-end accuracy, normalized failure taxonomy, and root-token economy. For Azdaja, any exact substring of at least 100 Unicode characters shared by the loaded long context and the retained root transcript is a hard failure. Missing root-transcript evidence also blocks scoring.
+Every finalized report includes execution success, completed accuracy, fixed-denominator end-to-end accuracy, normalized failure taxonomy, root-token economy, and missingness. For Azdaja, any exact substring of at least 100 Unicode characters shared by the loaded long context and retained root transcript is a hard failure. Missing root-transcript evidence also blocks scoring.
 
 ## Guarantees
 
