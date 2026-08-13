@@ -1138,29 +1138,20 @@ if os.getenv('RLM_DEPTH') == '0':
     begin = '--- BEGIN UNTRUSTED OFFSET-LABELLED STRUCTURAL SAMPLE ---'
     end = '--- END UNTRUSTED OFFSET-LABELLED STRUCTURAL SAMPLE ---'
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
-    required = ('parse only the observed schema', 'every source occurrence', 'integer multiplicity',
-                'source_count = len(rows)', 'never overwrite rows',
-                'semantic_manifest(items, task, labels)', 'two blind independent full manifests',
-                'strictly validates both', 'blindly adjudicates every disagreement',
-                'two-key dicts named id and evidence', 'nonempty unique string',
-                'hard per-unique-item serialized/evidence prompt envelope of 45000 characters',
-                'official question, task framing, and allowed labels/choices',
-                'leave conservative room below that envelope',
-                'item-specific task/question/choice information',
-                'removing only duplicate bytes caused by their overlap',
-                'preserve genuinely repeated source spans',
-                'unbounded set of overlapping/sliding-window snippets',
-                'never silently truncate evidence', 'preserve ids, occurrences, and weights',
-                'call the helper exactly once iff semantic judgments are required',
-                'allowed answer labels in the question define an ontology',
-                'never regex/search the evidence for allowed label words',
-                'never call llm, llm_batch, or llm_batch_fresh directly',
+    required = ('inspect and parse complete ctx', 'preserve source occurrences',
+                'semantic_manifest(items, task, labels) exactly once',
+                'nonempty list of exactly two-key dicts named id and evidence',
+                'nonempty unique string', 'complete faithful nonempty item evidence',
+                'never silently truncated', 'source occurrences and weights preserved',
+                'task concisely frames', 'at least two distinct actual labels',
+                'leave conservative room below the 45000-character envelope',
+                'complete id-to-label mapping', 'two blind validated manifests',
+                'blind disagreement adjudication', 'every source item has exactly one result',
+                'reduce with preserved multiplicity',
+                'never infer semantic labels by searching evidence for label words',
+                'do not call llm, llm_batch, or llm_batch_fresh directly',
                 'os, re, json, math, collections, datetime',
-                'globals/locals/callable', 'never call mapping.get',
-                'keep code under 50 nonblank lines', 'ordinary csv, logs, source code',
-                'if the input itself contains multiple task',
-                'if the input itself ends with a supplied answer prefix',
-                'do not invent question/answer conventions', 'one logical query')
+                'globals/locals/callable', 'dict.get', 'below 50 nonblank lines')
     sample_ok = ('schema-canary' in sample and 'TAIL_NOT_IN_SAMPLE' in sample
                  and '[HEAD chars 0..' in sample and '[TAIL chars ' in sample
                  and len(sample.encode('utf-8')) <= 4096)
@@ -1220,10 +1211,9 @@ fn solo_handles_synthetic_final_section_and_prefix_formats_without_gold() {
         r#"import os,sys
 p=sys.stdin.read()
 assert os.getenv('RLM_DEPTH') == '0'
-required = ('ordinary csv, logs, source code',
-            'if the input itself contains multiple task',
-            'if the input itself ends with a supplied answer prefix',
-            'do not invent question/answer conventions', 'one logical query', '[chars 0..')
+required = ('inspect and parse complete ctx',
+            'demonstrations or multiple sections',
+            'select the requested section', 'preserve source occurrences', '[chars 0..')
 assert all(value in p.lower() for value in required), p
 if 'CASE_FWE' in p:
     code = '''qpos=ctx.rfind("\\nQuestion:")
@@ -1691,6 +1681,91 @@ print("invalid prose")
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
     assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_rejects_long_whitespace_final_before_output_capping() {
+    let t = temp("solo-long-blank-final");
+    let calls = t.join("calls");
+    let mock = t.join("long-blank-final.py");
+    fs::write(
+        &mock,
+        r#"import pathlib, sys
+pathlib.Path(sys.argv[1]).open("a").write("root\n")
+print('```python\nFINAL(" " * 1000)\n```')
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        256,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "original").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "return a nonempty answer",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 3);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_second_repair_rejects_empty_final_and_recovers() {
+    let t = temp("solo-empty-final-repair");
+    let calls = t.join("calls");
+    let mock = t.join("empty-final.py");
+    fs::write(
+        &mock,
+        r#"import pathlib, sys
+calls = pathlib.Path(sys.argv[1]); count = len(calls.read_text().splitlines()) if calls.exists() else 0
+calls.open("a").write("root\n")
+if count == 0:
+    print('```python\nassert False\n```')
+elif count == 1:
+    print('```python\nFINAL("")\n```')
+else:
+    print('```python\nassert ctx == "original"\nFINAL("RECOVERED")\n```')
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "original").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "generic question", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "RECOVERED");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 3);
     fs::remove_dir_all(t).unwrap();
 }
 

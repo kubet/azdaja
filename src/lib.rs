@@ -408,6 +408,7 @@ pub struct ExecResult {
     pub finalized: bool,
     pub external_calls: usize,
     pub failure_kind: ExecFailureKind,
+    pub failure_line: Option<String>,
 }
 fn exec_failure_kind(exception: Option<ExcType>) -> ExecFailureKind {
     match exception {
@@ -641,6 +642,7 @@ fn run_cell(
     Option<Final>,
     usize,
     Option<ExcType>,
+    Option<String>,
 ) {
     repl.tracker_mut()
         .set_max_duration(Duration::from_secs(cfg.cell_timeout));
@@ -664,6 +666,12 @@ fn run_cell(
         Err(e) => {
             let e = *e;
             let exception = e.error.exc_type();
+            let failure_line = e
+                .error
+                .traceback()
+                .last()
+                .and_then(|frame| frame.preview_line.as_deref())
+                .map(str::to_owned);
             printed.push_str(&e.error.to_string());
             return (
                 e.repl,
@@ -672,6 +680,7 @@ fn run_cell(
                 final_out,
                 call_count,
                 Some(exception),
+                failure_line,
             );
         }
     };
@@ -689,7 +698,15 @@ fn run_cell(
                     }
                     printed.push('\n')
                 }
-                return (repl, printed.finish(), true, final_out, call_count, None);
+                return (
+                    repl,
+                    printed.finish(),
+                    true,
+                    final_out,
+                    call_count,
+                    None,
+                    None,
+                );
             }
             ReplProgress::FunctionCall(call) => {
                 let result = external(
@@ -711,6 +728,12 @@ fn run_cell(
                     Err(e) => {
                         let e = *e;
                         let exception = e.error.exc_type();
+                        let failure_line = e
+                            .error
+                            .traceback()
+                            .last()
+                            .and_then(|frame| frame.preview_line.as_deref())
+                            .map(str::to_owned);
                         printed.push_str(&e.error.to_string());
                         return (
                             e.repl,
@@ -719,6 +742,7 @@ fn run_cell(
                             final_out,
                             call_count,
                             Some(exception),
+                            failure_line,
                         );
                     }
                 }
@@ -731,6 +755,12 @@ fn run_cell(
                 Err(e) => {
                     let e = *e;
                     let exception = e.error.exc_type();
+                    let failure_line = e
+                        .error
+                        .traceback()
+                        .last()
+                        .and_then(|frame| frame.preview_line.as_deref())
+                        .map(str::to_owned);
                     printed.push_str(&e.error.to_string());
                     return (
                         e.repl,
@@ -739,6 +769,7 @@ fn run_cell(
                         final_out,
                         call_count,
                         Some(exception),
+                        failure_line,
                     );
                 }
             },
@@ -750,6 +781,12 @@ fn run_cell(
                 Err(e) => {
                     let e = *e;
                     let exception = e.error.exc_type();
+                    let failure_line = e
+                        .error
+                        .traceback()
+                        .last()
+                        .and_then(|frame| frame.preview_line.as_deref())
+                        .map(str::to_owned);
                     printed.push_str(&e.error.to_string());
                     return (
                         e.repl,
@@ -758,6 +795,7 @@ fn run_cell(
                         final_out,
                         call_count,
                         Some(exception),
+                        failure_line,
                     );
                 }
             },
@@ -769,6 +807,7 @@ fn run_cell(
                     false,
                     final_out,
                     call_count,
+                    None,
                     None,
                 );
             }
@@ -1027,7 +1066,7 @@ impl SoloSession {
             .repl
             .take()
             .ok_or_else(|| anyhow!("solo session is busy"))?;
-        let (mut repl, mut output, success, mut final_out, external_calls, exception) =
+        let (mut repl, mut output, success, mut final_out, external_calls, exception, failure_line) =
             run_cell(repl, code, cfg, &self.sub_model);
         let mut success = success;
         if success
@@ -1063,8 +1102,16 @@ impl SoloSession {
             finalized,
             external_calls,
             failure_kind: exec_failure_kind(exception),
+            failure_line,
         })
     }
+    pub fn final_answer_is_blank(&self) -> Result<bool> {
+        self.answer
+            .as_deref()
+            .map(|answer| answer.trim().is_empty())
+            .ok_or_else(|| anyhow!("session has no final answer"))
+    }
+
     pub fn final_answer(&self, cfg: &Config) -> Result<String> {
         self.answer
             .as_deref()
@@ -1079,7 +1126,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
     let meta = read_meta(&dir)?;
     let model = meta.sub_model.as_deref().unwrap_or(&cfg.default_model);
     let repl = load_repl(&dir)?;
-    let (mut repl, mut output, success, mut final_out, external_calls, exception) =
+    let (mut repl, mut output, success, mut final_out, external_calls, exception, failure_line) =
         run_cell(repl, code, cfg, model);
     let mut success = success;
     // Paper-style trajectories sometimes assign `FINAL = answer` instead of calling it.
@@ -1116,6 +1163,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         finalized,
         external_calls,
         failure_kind: exec_failure_kind(exception),
+        failure_line,
     })
 }
 pub fn final_answer(sid: &str, cfg: &Config) -> Result<String> {
