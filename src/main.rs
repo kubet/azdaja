@@ -473,16 +473,18 @@ def semantic_manifest(items, task, labels):
         + "Never omit, insert, or reorder a decision. Each item may represent exact duplicate occurrences; the "
         + "caller will preserve multiplicity.\n"
     )
-    prompts, expected = _az_pack(unique_items, head, 100000)
+    prompts, expected = _az_pack(unique_items, head, 40000)
     if not prompts or len(prompts) > 64:
         raise AssertionError("semantic wave exceeds call envelope")
-    raw = llm_batch(prompts, None, min(2, len(prompts)))
+    raw = llm_batch(prompts, None, 1)
     if len(raw) != len(prompts):
         raise AssertionError("semantic response count")
     manifests = [None] * len(prompts)
     bad = []
     i = 0
     while i < len(prompts):
+        if _az_error(raw[i]):
+            raise AssertionError("semantic provider failure")
         try:
             manifests[i] = _az_parse_codes(raw[i], expected[i], codes)
         except:
@@ -492,7 +494,7 @@ def semantic_manifest(items, task, labels):
         retry_prompts = []
         for i in bad:
             retry_prompts.append(prompts[i])
-        retry_raw = llm_batch(retry_prompts, None, min(2, len(retry_prompts)))
+        retry_raw = llm_batch(retry_prompts, None, 1)
         if len(retry_raw) != len(retry_prompts):
             raise AssertionError("semantic retry count")
         j = 0
