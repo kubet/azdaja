@@ -49,7 +49,8 @@ CONTAINMENT_DISCLOSURE = (
     "No enforceable filesystem/network/DNS/cache sandbox is supplied. The runner passes "
     "no gold path and stages only one captured public payload, but native tools retain "
     "ambient host reachability; the public payload is joinable to upstream answers, so "
-    "gold blindness and containment are not asserted."
+    "gold blindness and containment are not asserted. Credential-home deletion is not "
+    "OS containment and cannot prove malicious code did not copy credential bytes first."
 )
 AMBIENT_CLOSURE_DISCLOSURE = (
     "The Prime npm package, Node executable, and complete Prime kernel venv are frozen "
@@ -1474,6 +1475,163 @@ def _cleanup_entry_identity(metadata: os.stat_result) -> tuple[int, int, int, in
     )
 
 
+@dataclass
+class CredentialHomeBinding:
+    """Held identity for the one credential-bearing home created by an arm."""
+
+    run_dir_key: str
+    fd: int
+    device: int
+    inode: int
+    entry_type: int
+    owner: int
+    name: str
+    removal_path: Path | None = None
+    deletion_verified: bool = False
+
+    @property
+    def identity(self) -> tuple[int, int, int, int]:
+        return self.device, self.inode, self.entry_type, self.owner
+
+
+def _credential_run_key(run_dir: Path) -> str:
+    """Preserve the adapter's exact lexical run-dir argument as the binding key."""
+    return os.fspath(run_dir)
+
+
+def _credential_home_name(arm_name: str) -> str:
+    if arm_name == "prime-agent":
+        return "prime-home"
+    if arm_name in {"jcode-native", "jcode-azdaja"}:
+        return "home"
+    raise BenchError(f"cannot bind credential home for unknown arm: {arm_name!r}")
+
+
+def _open_credential_home_binding(
+    run_dir: Path, name: str
+) -> CredentialHomeBinding:
+    """Immediately hold the exact, newly created owner-only home directory."""
+    if name not in {"home", "prime-home"}:
+        raise BenchError(f"unsafe credential home name: {name!r}")
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if nofollow is None:
+        raise BenchError("O_NOFOLLOW is required for credential-home binding")
+    _, run_fd = _open_owner_directory(run_dir, "credential-home run root")
+    home_fd: int | None = None
+    try:
+        flags = (
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | nofollow
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        try:
+            home_fd = os.open(name, flags, dir_fd=run_fd)
+            os.set_inheritable(home_fd, False)
+            opened = os.fstat(home_fd)
+            named = os.stat(name, dir_fd=run_fd, follow_symlinks=False)
+            final_open = os.fstat(home_fd)
+        except OSError as exc:
+            raise BenchError(
+                f"cannot bind exact credential home {name!r}: {exc}"
+            ) from exc
+        expected = _cleanup_entry_identity(opened)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or expected != _cleanup_entry_identity(named)
+            or expected != _cleanup_entry_identity(final_open)
+        ):
+            raise BenchError(
+                f"credential home {name!r} is not one stable no-follow directory"
+            )
+        if os.name == "posix":
+            if _mode(opened) & 0o077:
+                try:
+                    os.fchmod(home_fd, 0o700)
+                    opened = os.fstat(home_fd)
+                except OSError as exc:
+                    raise BenchError(
+                        f"cannot make credential home {name!r} owner-only: {exc}"
+                    ) from exc
+                if _mode(opened) != 0o700:
+                    raise BenchError(
+                        f"credential home {name!r} must be owner-only"
+                    )
+                named = os.stat(name, dir_fd=run_fd, follow_symlinks=False)
+                if _cleanup_entry_identity(opened) != _cleanup_entry_identity(named):
+                    raise BenchError(
+                        f"credential home {name!r} changed while made owner-only"
+                    )
+            if hasattr(os, "getuid") and opened.st_uid != os.getuid():
+                raise BenchError(
+                    f"credential home {name!r} is not owned by the runner user"
+                )
+        binding = CredentialHomeBinding(
+            run_dir_key=_credential_run_key(run_dir),
+            fd=home_fd,
+            device=opened.st_dev,
+            inode=opened.st_ino,
+            entry_type=stat.S_IFMT(opened.st_mode),
+            owner=opened.st_uid,
+            name=name,
+        )
+        home_fd = None
+        return binding
+    finally:
+        if home_fd is not None:
+            os.close(home_fd)
+        os.close(run_fd)
+
+
+def _reverify_credential_home_binding(
+    binding: CredentialHomeBinding, run_dir: Path, errors: list[str]
+) -> bool:
+    """Before inventory, prove both the held fd and intended name still agree."""
+    if binding.run_dir_key != _credential_run_key(run_dir):
+        errors.append("credential-home binding has the wrong exact run directory")
+        return False
+    try:
+        held = os.fstat(binding.fd)
+    except OSError as exc:
+        errors.append(
+            f"held credential-home descriptor is unavailable: {type(exc).__name__}: {exc}"
+        )
+        return False
+    if _cleanup_entry_identity(held) != binding.identity:
+        errors.append("held credential-home descriptor identity changed")
+        return False
+    if not stat.S_ISDIR(held.st_mode):
+        errors.append("held credential-home descriptor type is not a directory")
+        return False
+    if os.name == "posix":
+        if _mode(held) & 0o077:
+            errors.append("held credential-home descriptor is no longer owner-only")
+            return False
+        if hasattr(os, "getuid") and held.st_uid != os.getuid():
+            errors.append("held credential-home descriptor owner changed")
+            return False
+    try:
+        _, run_fd = _open_owner_directory(run_dir, "bound credential-home run root")
+    except BenchError as exc:
+        errors.append(str(exc))
+        return False
+    try:
+        try:
+            named = os.stat(binding.name, dir_fd=run_fd, follow_symlinks=False)
+        except OSError as exc:
+            errors.append(
+                f"bound credential home {binding.name!r} is missing or moved before cleanup: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            return False
+        if _cleanup_entry_identity(named) != binding.identity:
+            errors.append(
+                f"bound credential home {binding.name!r} was moved or swapped before cleanup"
+            )
+            return False
+        return True
+    finally:
+        os.close(run_fd)
+
+
 def _cleanup_after_quarantine_hook(
     parent_fd: int, quarantine_name: str, expected_identity: tuple[int, int, int, int]
 ) -> None:
@@ -1497,6 +1655,60 @@ def _held_fd_path(fd: int) -> Path | None:
     return Path(os.fsdecode(value))
 
 
+def _verify_deleted_credential_home_binding(
+    binding: CredentialHomeBinding, run_dir: Path, errors: list[str]
+) -> bool:
+    """After cleanup, prove that the originally held directory itself was removed."""
+    if not binding.deletion_verified:
+        errors.append("exact bound credential-home deletion was not verified")
+        return False
+    try:
+        held = os.fstat(binding.fd)
+    except OSError as exc:
+        errors.append(
+            f"held credential-home descriptor vanished during cleanup: "
+            f"{type(exc).__name__}: {exc}"
+        )
+        return False
+    if _cleanup_entry_identity(held) != binding.identity:
+        errors.append("deleted credential-home descriptor identity changed")
+        return False
+    try:
+        held_path = _held_fd_path(binding.fd)
+    except BenchError as exc:
+        errors.append(str(exc))
+        return False
+    removal_proof = (
+        held_path == binding.removal_path
+        if held_path is not None else held.st_nlink == 0
+    )
+    if not removal_proof:
+        errors.append("bound credential home escaped rather than being deleted")
+        return False
+    try:
+        _, run_fd = _open_owner_directory(run_dir, "post-cleanup credential-home run root")
+    except BenchError as exc:
+        errors.append(str(exc))
+        return False
+    try:
+        try:
+            os.stat(binding.name, dir_fd=run_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            return True
+        except OSError as exc:
+            errors.append(
+                f"cannot prove intended credential-home name absent after cleanup: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            return False
+        errors.append(
+            f"intended credential-home name {binding.name!r} survived or was recreated"
+        )
+        return False
+    finally:
+        os.close(run_fd)
+
+
 def _cleanup_before_final_remove_hook(
     parent_fd: int,
     quarantine_name: str,
@@ -1508,21 +1720,44 @@ def _cleanup_before_final_remove_hook(
 
 
 def _cleanup_quarantined_entry(
-    parent_fd: int, name: str, label: str, errors: list[str]
-) -> None:
+    parent_fd: int,
+    name: str,
+    label: str,
+    errors: list[str],
+    *,
+    credential_binding: CredentialHomeBinding | None = None,
+) -> bool:
     """Quarantine one captured entry, then delete only its verified inode tree."""
     if not name or "/" in name or name in {".", ".."}:
         errors.append(f"unsafe cleanup entry name for {label}: {name!r}")
-        return
+        return False
     try:
         before = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
     except OSError as exc:
         errors.append(f"cannot capture cleanup entry {label}: {type(exc).__name__}: {exc}")
-        return
+        return False
     expected = _cleanup_entry_identity(before)
     if hasattr(os, "getuid") and before.st_uid != os.getuid():
         errors.append(f"cleanup entry is not runner-owned: {label}")
-        return
+        return False
+    if credential_binding is not None:
+        try:
+            held_credential = os.fstat(credential_binding.fd)
+        except OSError as exc:
+            errors.append(
+                f"cannot recheck held credential home {label}: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            return False
+        if (
+            name != credential_binding.name
+            or expected != credential_binding.identity
+            or _cleanup_entry_identity(held_credential) != credential_binding.identity
+        ):
+            errors.append(
+                f"bound credential home inode/type/owner swapped before quarantine: {label}"
+            )
+            return False
     quarantine = f".lb2-cleanup-{secrets.token_hex(16)}"
     try:
         os.rename(
@@ -1532,7 +1767,7 @@ def _cleanup_quarantined_entry(
         os.fsync(parent_fd)
     except OSError as exc:
         errors.append(f"cannot quarantine cleanup entry {label}: {type(exc).__name__}: {exc}")
-        return
+        return False
     try:
         _cleanup_after_quarantine_hook(parent_fd, quarantine, expected)
         captured = os.stat(quarantine, dir_fd=parent_fd, follow_symlinks=False)
@@ -1541,13 +1776,28 @@ def _cleanup_quarantined_entry(
             f"quarantined cleanup entry vanished or changed for {label}: "
             f"{type(exc).__name__}: {exc}"
         )
-        return
+        return False
     if _cleanup_entry_identity(captured) != expected:
         errors.append(
             f"quarantined cleanup entry inode/type/owner swapped for {label}; "
             f"preserved as {quarantine}"
         )
-        return
+        return False
+    if credential_binding is not None:
+        try:
+            held_after_quarantine = os.fstat(credential_binding.fd)
+        except OSError as exc:
+            errors.append(
+                f"held credential home vanished after quarantine for {label}: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            return False
+        if _cleanup_entry_identity(held_after_quarantine) != expected:
+            errors.append(
+                f"held credential home identity changed after quarantine: {label}"
+            )
+            return False
+    bound_removal_path: Path | None = None
     try:
         if stat.S_ISDIR(captured.st_mode):
             flags = (
@@ -1574,6 +1824,13 @@ def _cleanup_quarantined_entry(
                 ):
                     raise BenchError(f"directory inode changed before rmdir: {label}")
                 held_path = _held_fd_path(child_fd)
+                if credential_binding is not None:
+                    bound_final = os.fstat(credential_binding.fd)
+                    if _cleanup_entry_identity(bound_final) != expected:
+                        raise BenchError(
+                            f"held credential home changed before rmdir: {label}"
+                        )
+                    bound_removal_path = _held_fd_path(credential_binding.fd)
                 _cleanup_before_final_remove_hook(
                     parent_fd, quarantine, expected, "directory"
                 )
@@ -1601,6 +1858,21 @@ def _cleanup_quarantined_entry(
                     raise BenchError(
                         f"directory escaped during rmdir: {label}"
                     )
+                if credential_binding is not None:
+                    bound_removed = os.fstat(credential_binding.fd)
+                    bound_removed_path = _held_fd_path(credential_binding.fd)
+                    bound_link_proof = (
+                        bound_removed_path == bound_removal_path
+                        if bound_removed_path is not None
+                        else bound_removed.st_nlink == 0
+                    )
+                    if (
+                        _cleanup_entry_identity(bound_removed) != expected
+                        or not bound_link_proof
+                    ):
+                        raise BenchError(
+                            f"bound credential home escaped during rmdir: {label}"
+                        )
             finally:
                 os.close(child_fd)
         elif stat.S_ISREG(captured.st_mode):
@@ -1685,11 +1957,16 @@ def _cleanup_quarantined_entry(
         else:
             raise BenchError(f"special cleanup entry type is forbidden: {label}")
         os.fsync(parent_fd)
+        if credential_binding is not None:
+            credential_binding.removal_path = bound_removal_path
+            credential_binding.deletion_verified = True
+        return True
     except (OSError, BenchError) as exc:
         errors.append(
             f"safe cleanup failed for {label}; quarantine preserved when present: "
             f"{type(exc).__name__}: {exc}"
         )
+        return False
 
 
 def _cleanup_directory_contents_fd(
@@ -1710,7 +1987,11 @@ def _cleanup_directory_contents_fd(
 
 
 def safe_purge_transient_run_state(
-    run_dir: Path, retained_names: set[str], errors: list[str]
+    run_dir: Path,
+    retained_names: set[str],
+    errors: list[str],
+    *,
+    credential_binding: CredentialHomeBinding | None = None,
 ) -> dict[str, Any]:
     """Delete transient state fd-relatively without following or trusting names."""
     cleanup_error_start = len(errors)
@@ -1734,12 +2015,34 @@ def safe_purge_transient_run_state(
     try:
         before = _fd_identity(run_fd)
         names = os.listdir(run_fd)
+        credential_inventory_seen = False
         if len(names) != len(set(names)):
             errors.append("run cleanup root contains duplicate entry names")
         else:
+            if (
+                credential_binding is not None
+                and credential_binding.name in retained_names
+            ):
+                errors.append("bound credential home is in the retention allowlist")
             for name in names:
                 if name not in retained_names:
-                    _cleanup_quarantined_entry(run_fd, name, name, errors)
+                    entry_binding = (
+                        credential_binding
+                        if credential_binding is not None
+                        and name == credential_binding.name
+                        else None
+                    )
+                    if entry_binding is not None:
+                        credential_inventory_seen = True
+                    _cleanup_quarantined_entry(
+                        run_fd,
+                        name,
+                        name,
+                        errors,
+                        credential_binding=entry_binding,
+                    )
+        if credential_binding is not None and not credential_inventory_seen:
+            errors.append("bound credential home was absent from cleanup inventory")
         try:
             _recheck_directory_binding(absolute, run_fd, "run cleanup root")
         except BenchError as exc:
@@ -1755,9 +2058,14 @@ def safe_purge_transient_run_state(
             errors.append("credential-bearing isolated home survived cleanup")
         cleanup_errors = errors[cleanup_error_start:]
         # Name absence is not proof of deletion: a quarantined credential tree
-        # may have vanished via same-owner rename. Every cleanup error therefore
-        # invalidates both cleanup and credential-deletion receipts.
-        credential_homes_deleted = names_absent and not cleanup_errors
+        # may have vanished via same-owner rename. Every cleanup error and every
+        # failure to delete the exact arm-time binding invalidates both receipts.
+        binding_deleted = (
+            credential_binding is None or credential_binding.deletion_verified
+        )
+        credential_homes_deleted = (
+            names_absent and binding_deleted and not cleanup_errors
+        )
         asserted = not unexpected and credential_homes_deleted
         return {
             "asserted": asserted,
@@ -1819,25 +2127,165 @@ def _load_frozen_adapter(
         raise BenchError("runner invariant: adapter scoring is forbidden; scoring is owner-deferred")
 
     module.strict_score = forbidden_adapter_scoring
-    module.purge_transient_run_state = safe_purge_transient_run_state
+    original_cleanup_run = module.cleanup_run
     original_arm_for = module.arm_for
+    credential_bindings: dict[str, CredentialHomeBinding] = {}
+    # Exposed only for lifecycle auditing/tests; adapter.run_one resolves the
+    # lifecycle monkeypatches from this same module global on every serial arm.
+    module._lb2_credential_home_bindings = credential_bindings
+
+    def guarded_cleanup_run(
+        arm_name: str, args: argparse.Namespace, env: dict[str, str], run_dir: Path
+    ) -> list[str]:
+        """Turn ordinary adapter cleanup failures into row-visible diagnostics."""
+        try:
+            result = original_cleanup_run(arm_name, args, env, run_dir)
+        except Exception as exc:
+            try:
+                detail = str(exc)
+            except Exception as detail_exc:
+                detail = f"<unprintable; str raised {type(detail_exc).__name__}>"
+            return [
+                f"adapter cleanup_run failed: {type(exc).__name__}: {detail}"
+            ]
+        if type(result) is not list or any(type(error) is not str for error in result):
+            return ["adapter cleanup_run returned invalid cleanup-error list"]
+        return result
+
+    def close_binding(binding: CredentialHomeBinding) -> OSError | None:
+        fd = binding.fd
+        binding.fd = -1
+        if fd < 0:
+            return None
+        try:
+            os.close(fd)
+        except OSError as exc:
+            return exc
+        return None
+
+    def bound_purge_transient_run_state(
+        run_dir: Path, retained_names: set[str], errors: list[str]
+    ) -> dict[str, Any]:
+        key = _credential_run_key(run_dir)
+        binding = credential_bindings.get(key)
+        binding_valid = False
+        receipt: dict[str, Any] | None = None
+        lifecycle_valid = True
+        lifecycle_error_start = len(errors)
+        try:
+            if binding is None:
+                errors.append(
+                    "missing exact arm-time credential-home binding for run cleanup"
+                )
+                lifecycle_valid = False
+                if credential_bindings:
+                    errors.append(
+                        "credential-home binding exists under a different exact run directory"
+                    )
+            else:
+                binding_valid = _reverify_credential_home_binding(
+                    binding, run_dir, errors
+                )
+                lifecycle_valid = binding_valid
+            # Cleanup still inventories and safely removes ordinary transient
+            # state even when the arm-time identity proof has already failed.
+            receipt = safe_purge_transient_run_state(
+                run_dir,
+                retained_names,
+                errors,
+                credential_binding=binding if binding_valid else None,
+            )
+            # Preexisting lifecycle errors (including missing/moved/swapped
+            # binding) are authoritative even though safe cleanup deliberately
+            # measures only errors appended during its own pass.
+            if errors[lifecycle_error_start:]:
+                receipt["asserted"] = False
+                receipt["credential_homes_deleted"] = False
+            deleted_valid = False
+            if binding is not None:
+                deleted_valid = _verify_deleted_credential_home_binding(
+                    binding, run_dir, errors
+                )
+            lifecycle_valid = lifecycle_valid and deleted_valid
+            if not lifecycle_valid:
+                receipt["asserted"] = False
+                receipt["credential_homes_deleted"] = False
+            return receipt
+        finally:
+            close_error = False
+            if binding is not None and credential_bindings.get(key) is binding:
+                del credential_bindings[key]
+            elif binding is not None:
+                errors.append("credential-home binding registry changed during cleanup")
+                close_error = True
+            # Sequential execution permits no other live binding. Closing any
+            # mismatched residual here makes an exact-key failure fail closed
+            # without leaking the descriptor into a later arm.
+            to_close = [binding] if binding is not None else []
+            if credential_bindings:
+                errors.append(
+                    "unexpected live credential-home binding for a different run directory"
+                )
+                close_error = True
+                to_close.extend(credential_bindings.values())
+                credential_bindings.clear()
+            closed_ids: set[int] = set()
+            for item in to_close:
+                if item is None or id(item) in closed_ids:
+                    continue
+                closed_ids.add(id(item))
+                exc = close_binding(item)
+                if exc is not None:
+                    errors.append(
+                        f"cannot close held credential-home descriptor: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                    close_error = True
+            if close_error and receipt is not None:
+                receipt["asserted"] = False
+                receipt["credential_homes_deleted"] = False
 
     def snapshot_arm_for(name: str, **kwargs: Any):
+        if credential_bindings:
+            raise BenchError(
+                "cannot start an arm with a prior live credential-home binding"
+            )
         arm, env, traces = original_arm_for(name, **kwargs)
-        prefix = [str(paths.node.parent)]
-        if name == "jcode-azdaja":
-            skill = Path(kwargs["skill"])
-            arm.command[0] = str(skill / "azdaja")
-            env["AZDAJA_CONFIG"] = str(skill / "config.toml")
-            # The candidate's sub_llm_cmd names `jcode`; resolution is forced to
-            # the scheduled frozen Jcode and never an inherited PATH candidate.
-            prefix.insert(0, str(paths.jcode.parent))
-        if name == "prime-agent":
-            env["PRIME_AGENT_KERNEL_VENV"] = str(kernel_environment)
-        env["PATH"] = os.pathsep.join([*prefix, env.get("PATH", os.defpath)])
-        module.assert_env_allowlisted(env)
-        return arm, env, traces
+        run_dir = Path(kwargs["run_dir"])
+        key = _credential_run_key(run_dir)
+        binding = _open_credential_home_binding(
+            run_dir, _credential_home_name(name)
+        )
+        if credential_bindings:
+            close_binding(binding)
+            raise BenchError(
+                "credential-home binding appeared during serial arm creation"
+            )
+        credential_bindings[key] = binding
+        try:
+            prefix = [str(paths.node.parent)]
+            if name == "jcode-azdaja":
+                skill = Path(kwargs["skill"])
+                arm.command[0] = str(skill / "azdaja")
+                env["AZDAJA_CONFIG"] = str(skill / "config.toml")
+                # The candidate's sub_llm_cmd names `jcode`; resolution is forced to
+                # the scheduled frozen Jcode and never an inherited PATH candidate.
+                prefix.insert(0, str(paths.jcode.parent))
+            if name == "prime-agent":
+                env["PRIME_AGENT_KERNEL_VENV"] = str(kernel_environment)
+            env["PATH"] = os.pathsep.join([*prefix, env.get("PATH", os.defpath)])
+            module.assert_env_allowlisted(env)
+            return arm, env, traces
+        except Exception:
+            if credential_bindings.get(key) is binding:
+                del credential_bindings[key]
+            close_binding(binding)
+            raise
 
+    # run_one resolves these module globals at cleanup time. Guard cleanup_run
+    # first so its ordinary failures cannot skip trace capture or the bound purge.
+    module.cleanup_run = guarded_cleanup_run
+    module.purge_transient_run_state = bound_purge_transient_run_state
     module.arm_for = snapshot_arm_for
     _ADAPTER = module
     return module

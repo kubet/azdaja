@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import copy
+import errno
 import hashlib
 import importlib.util
+import inspect
 import json
 import os
 import random
@@ -661,6 +663,51 @@ class RunnerTests(unittest.TestCase):
             "sensitivity": "redacted retained trace",
         }
 
+    def load_binding_adapter(self, original_arm_for, *, original_cleanup_run=None):
+        source_adapter = RUN._load_python(
+            "lb2_binding_source_" + os.urandom(4).hex(), RUN.OOLONG_SOURCE
+        )
+        source = RUN.OOLONG_SOURCE.read_bytes()
+        frozen_root = self.root / ("binding-frozen-" + os.urandom(4).hex())
+        frozen_root.mkdir(mode=0o700)
+        frozen_adapter = frozen_root / "oolong-run.py"
+        frozen_adapter.write_bytes(source)
+        frozen_adapter.chmod(0o700)
+        paths = mock.Mock(
+            adapter=frozen_adapter,
+            node=self.root / "bin" / "node",
+            jcode=self.root / "bin" / "jcode",
+        )
+        source_adapter.arm_for = original_arm_for
+        if original_cleanup_run is not None:
+            source_adapter.cleanup_run = original_cleanup_run
+        source_adapter.arm_for.__signature__ = inspect.signature(
+            RUN._load_python(
+                "lb2_binding_signature_" + os.urandom(4).hex(),
+                RUN.OOLONG_SOURCE,
+            ).arm_for
+        )
+        # Patch the loader result so the production wrapper is exercised around
+        # a deterministic arm implementation without subprocesses.
+        prior = RUN._ADAPTER
+        try:
+            with mock.patch.object(RUN, "_load_python", return_value=source_adapter):
+                adapter = RUN._load_frozen_adapter(
+                    paths, kernel_environment=self.root / "kernel"
+                )
+        finally:
+            RUN._ADAPTER = prior
+        return adapter
+
+    @staticmethod
+    def binding_arm_kwargs(run_dir: Path):
+        return {
+            "prompt": "prompt", "args": argparse.Namespace(),
+            "root": run_dir / "task", "fixture": object(),
+            "run_dir": run_dir, "auth_jcode": {}, "auth_prime": {},
+            "source_home": run_dir / "source", "skill": run_dir / "skill",
+        }
+
     def test_mandatory_artifacts_and_exact_run_directory_inventory(self):
         run_dir = self.root / "run-artifacts"
         run_dir.mkdir(mode=0o700)
@@ -694,6 +741,201 @@ class RunnerTests(unittest.TestCase):
         trace.symlink_to(run_dir / "stderr.log")
         with self.assertRaises(RUN.BenchError):
             RUN.audit_run_artifacts(row, run_dir, "jcode-azdaja")
+
+    def test_bound_purge_rejects_arm_time_rename_escape_and_closes_fd(self):
+        run_dir = self.root / "bound-rename-run"
+        run_dir.mkdir(mode=0o700)
+        escaped = self.root / "escaped-bound-home"
+
+        def original_arm_for(name, **kwargs):
+            self.assertEqual(name, "jcode-native")
+            home = Path(kwargs["run_dir"]) / "home"
+            home.mkdir(mode=0o700)
+            private_bytes(home / "oauth-secret", b"escaped credential bytes")
+            return mock.Mock(command=["jcode"]), {}, {}
+
+        adapter = self.load_binding_adapter(original_arm_for)
+        adapter.arm_for(
+            "jcode-native", **self.binding_arm_kwargs(run_dir)
+        )
+        binding = next(iter(adapter._lb2_credential_home_bindings.values()))
+        held_fd = binding.fd
+        self.assertFalse(os.get_inheritable(held_fd))
+        os.rename(run_dir / "home", escaped)
+        errors: list[str] = []
+        receipt = adapter.purge_transient_run_state(run_dir, set(), errors)
+        self.assertEqual(
+            (escaped / "oauth-secret").read_bytes(), b"escaped credential bytes"
+        )
+        self.assertFalse(binding.deletion_verified)
+        self.assertTrue(any("missing or moved" in error for error in errors))
+        self.assertFalse(receipt["credential_homes_deleted"])
+        self.assertFalse(receipt["asserted"])
+        self.assertEqual(adapter._lb2_credential_home_bindings, {})
+        with self.assertRaises(OSError):
+            os.fstat(held_fd)
+
+    def test_bound_purge_normal_cleanup_is_true_and_sequential_binding_is_exact(self):
+        def original_arm_for(name, **kwargs):
+            home_name = "prime-home" if name == "prime-agent" else "home"
+            home = Path(kwargs["run_dir"]) / home_name
+            home.mkdir(mode=0o755)
+            private_bytes(home / "oauth-secret", name.encode())
+            return mock.Mock(command=[name]), {}, {}
+
+        adapter = self.load_binding_adapter(original_arm_for)
+        self.assertIs(adapter.run_one.__globals__["arm_for"], adapter.arm_for)
+        self.assertIs(
+            adapter.run_one.__globals__["purge_transient_run_state"],
+            adapter.purge_transient_run_state,
+        )
+        prior_fd: int | None = None
+        for index, arm_name in enumerate(("jcode-native", "prime-agent")):
+            run_dir = self.root / f"bound-normal-{index}"
+            run_dir.mkdir(mode=0o700)
+            adapter.arm_for(arm_name, **self.binding_arm_kwargs(run_dir))
+            self.assertEqual(
+                list(adapter._lb2_credential_home_bindings), [os.fspath(run_dir)]
+            )
+            binding = adapter._lb2_credential_home_bindings[os.fspath(run_dir)]
+            self.assertEqual(
+                binding.name, "prime-home" if arm_name == "prime-agent" else "home"
+            )
+            prior_fd = binding.fd
+            errors: list[str] = []
+            receipt = adapter.purge_transient_run_state(run_dir, set(), errors)
+            self.assertEqual(errors, [])
+            self.assertTrue(receipt["credential_homes_deleted"])
+            self.assertTrue(receipt["asserted"])
+            self.assertEqual(adapter._lb2_credential_home_bindings, {})
+            with self.assertRaises(OSError):
+                os.fstat(prior_fd)
+
+    def test_cleanup_run_exception_cannot_skip_bound_purge_or_report_success(self):
+        state: dict[str, object] = {"executed": False}
+        adapter_ref: dict[str, object] = {}
+
+        def original_arm_for(name, **kwargs):
+            self.assertEqual(name, "jcode-native")
+            home = Path(kwargs["run_dir"]) / "home"
+            home.mkdir(mode=0o700)
+            private_bytes(home / "oauth-secret", b"credential bytes")
+            arm = mock.Mock()
+            arm.command = ["jcode", "--ndjson", "prompt"]
+            arm.auth_assertion = {"asserted": True}
+            arm.activation_mode = "test"
+            arm.skill_instructions_sha256 = None
+            arm.staged_skill = None
+            return arm, {}, {}
+
+        def original_cleanup_run(arm_name, args, env, run_dir):
+            del arm_name, args, env
+            self.assertTrue(state["executed"])
+            adapter = adapter_ref["adapter"]
+            binding = next(iter(adapter._lb2_credential_home_bindings.values()))
+            state["held_fd"] = binding.fd
+            self.assertTrue((run_dir / "home").is_dir())
+            raise RuntimeError("injected cleanup failure")
+
+        adapter = self.load_binding_adapter(
+            original_arm_for, original_cleanup_run=original_cleanup_run
+        )
+        adapter_ref["adapter"] = adapter
+        self.assertIs(
+            adapter.run_one.__globals__["cleanup_run"], adapter.cleanup_run
+        )
+
+        context_path = self.root / "cleanup-exception-context.json"
+        private_bytes(context_path, b'{"question":"Question?"}\n')
+        context_sha = hashlib.sha256(context_path.read_bytes()).hexdigest()
+        fixture = adapter.Fixture(
+            row_path=context_path,
+            context_path=context_path,
+            metadata={"question": "Question?"},
+            expected_kind="Answer",
+            expected_value="A",
+            expected_canonical="Answer: A",
+            row_sha256=context_sha,
+            context_sha256=context_sha,
+            context_bytes=context_path.stat().st_size,
+            context_chars=len(context_path.read_text()),
+            context_lines=1,
+        )
+        stdout = "\n".join(
+            (
+                json.dumps({"type": "tokens", "input": 1, "output": 1}),
+                json.dumps(
+                    {
+                        "type": "done",
+                        "provider": "OpenAI",
+                        "model": RUN.MODEL,
+                        "response": "The correct answer is (A)",
+                    }
+                ),
+            )
+        ) + "\n"
+
+        def successful_execute(*_args):
+            state["executed"] = True
+            return 0, stdout, "", False, 0.01
+
+        work_root = self.root / "cleanup-exception-work"
+        args = argparse.Namespace(
+            timeout=10, seed=RUN.DEFAULT_SEED, jcode="jcode",
+            executable_identities={},
+        )
+        with mock.patch.object(adapter, "execute", side_effect=successful_execute):
+            row = adapter.run_one(
+                arm_name="jcode-native",
+                repetition=0,
+                ordinal=0,
+                fixture=fixture,
+                prompt=None,
+                args=args,
+                root=self.root,
+                source_home=self.root / "source-home",
+                skill=self.root / "skill",
+                auth_jcode={},
+                auth_prime={},
+                work_root=work_root,
+                defer_scoring=True,
+            )
+
+        diagnostic = "adapter cleanup_run failed: RuntimeError: injected cleanup failure"
+        run_dir = work_root / "r000-000-jcode-native"
+        self.assertEqual(row["cleanup_errors"], [diagnostic])
+        self.assertFalse(row["execution_success"])
+        self.assertIsNone(row["success"])
+        self.assertEqual(row["failure"]["kind"], "cleanup")
+        self.assertEqual(row["failure"]["message"], diagnostic)
+        self.assertTrue(row["credential_cleanup_assertion"]["asserted"])
+        self.assertTrue(
+            row["credential_cleanup_assertion"]["credential_homes_deleted"]
+        )
+        self.assertFalse((run_dir / "home").exists())
+        self.assertEqual(adapter._lb2_credential_home_bindings, {})
+        with self.assertRaises(OSError) as closed:
+            os.fstat(state["held_fd"])
+        self.assertEqual(closed.exception.errno, errno.EBADF)
+
+    def test_bound_purge_missing_binding_is_false_without_fd_leak(self):
+        def original_arm_for(name, **kwargs):
+            del name, kwargs
+            raise AssertionError("arm creation is not used")
+
+        adapter = self.load_binding_adapter(original_arm_for)
+        run_dir = self.root / "missing-binding-run"
+        run_dir.mkdir(mode=0o700)
+        home = run_dir / "home"
+        home.mkdir(mode=0o700)
+        private_bytes(home / "oauth-secret", b"credential bytes")
+        errors: list[str] = []
+        receipt = adapter.purge_transient_run_state(run_dir, set(), errors)
+        self.assertTrue(any("missing exact arm-time" in error for error in errors))
+        self.assertFalse(receipt["credential_homes_deleted"])
+        self.assertFalse(receipt["asserted"])
+        self.assertFalse(home.exists())
+        self.assertEqual(adapter._lb2_credential_home_bindings, {})
 
     def test_safe_purge_removes_readonly_nested_skill_without_following_symlink(self):
         run_dir = self.root / "readonly-cleanup-run"
@@ -1083,6 +1325,8 @@ class RunnerTests(unittest.TestCase):
             )
         self.assertIn("not asserted", RUN.CONTAINMENT_DISCLOSURE)
         self.assertIn("joinable", RUN.CONTAINMENT_DISCLOSURE)
+        self.assertIn("not OS containment", RUN.CONTAINMENT_DISCLOSURE)
+        self.assertIn("copy credential bytes first", RUN.CONTAINMENT_DISCLOSURE)
 
     def test_actual_full_prime_snapshot_runs_frozen_version_when_available(self):
         required = {name: shutil.which(name) for name in ("prime-agent", "jcode", "node")}
