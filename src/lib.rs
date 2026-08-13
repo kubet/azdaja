@@ -30,6 +30,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const MONTY_VERSION: &str = "0.0.21";
 pub const SKILL: &str = include_str!("../assets/SKILL.md");
 pub const DEFAULT_CONFIG: &str = include_str!("../assets/config.toml");
+pub const SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS: usize = 45_000;
 const PRELUDE: &str = "import os, re, json, math, collections, datetime";
 
 #[derive(Clone, Deserialize, Serialize)]
