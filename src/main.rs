@@ -779,9 +779,11 @@ enum SoloProgramFailureKind {
     Assertion,
     Value,
     Key,
+    Index,
     Regex,
     MissingFinal,
     EmptyFinal,
+    Program,
     Runtime,
     Host,
 }
@@ -816,7 +818,9 @@ fn classify_monty_failure(failure: ExecFailureKind) -> SoloProgramFailureKind {
         ExecFailureKind::Assertion => SoloProgramFailureKind::Assertion,
         ExecFailureKind::Value => SoloProgramFailureKind::Value,
         ExecFailureKind::Key => SoloProgramFailureKind::Key,
+        ExecFailureKind::Index => SoloProgramFailureKind::Index,
         ExecFailureKind::Regex => SoloProgramFailureKind::Regex,
+        ExecFailureKind::Program => SoloProgramFailureKind::Program,
         ExecFailureKind::Timeout
         | ExecFailureKind::Memory
         | ExecFailureKind::Recursion
@@ -980,7 +984,9 @@ fn root_repair_prompt(failure: &SoloProgramFailure) -> String {
         SoloProgramFailureKind::Assertion
         | SoloProgramFailureKind::Value
         | SoloProgramFailureKind::Key
-        | SoloProgramFailureKind::Regex => {
+        | SoloProgramFailureKind::Index
+        | SoloProgramFailureKind::Regex
+        | SoloProgramFailureKind::Program => {
             "Replace the failed extraction with a simpler bounded approach and validate observed boundaries before FINAL. Parse the exact text that is present: do not guess alternate phrasings or raise a new exception merely because an assumed template does not match."
         }
         SoloProgramFailureKind::MissingFinal => "Call FINAL exactly once on the verified answer.",
@@ -1017,7 +1023,9 @@ fn solo_program_failure_is_repairable(
             | SoloProgramFailureKind::Assertion
             | SoloProgramFailureKind::Value
             | SoloProgramFailureKind::Key
+            | SoloProgramFailureKind::Index
             | SoloProgramFailureKind::Regex
+            | SoloProgramFailureKind::Program
             | SoloProgramFailureKind::MissingFinal
             | SoloProgramFailureKind::EmptyFinal
     ) && failure.external_calls == 0
@@ -1429,6 +1437,7 @@ mod tests {
             ),
             (ExecFailureKind::Value, SoloProgramFailureKind::Value),
             (ExecFailureKind::Key, SoloProgramFailureKind::Key),
+            (ExecFailureKind::Index, SoloProgramFailureKind::Index),
             (ExecFailureKind::Regex, SoloProgramFailureKind::Regex),
         ];
         for (exception, expected) in kinds {
@@ -1498,6 +1507,24 @@ mod tests {
             assert!(!prompt.contains(&"secret".repeat(20)));
             assert!(!prompt.contains("raw exception secret"));
         }
+
+        let ordinary_program_failure = SoloProgramFailure {
+            kind: classify_monty_failure(ExecFailureKind::Program),
+            error: anyhow!("typed program failure"),
+            code: Some("x = 1 + None".to_owned()),
+            output: None,
+            failure_line: Some("x = 1 + None".to_owned()),
+            external_calls: 0,
+        };
+        assert_eq!(
+            ordinary_program_failure.kind,
+            SoloProgramFailureKind::Program
+        );
+        assert!(solo_program_failure_is_repairable(
+            &ordinary_program_failure,
+            1,
+            3
+        ));
 
         for infrastructure in [
             ExecFailureKind::Timeout,

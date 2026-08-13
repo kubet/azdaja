@@ -1372,6 +1372,8 @@ elif kind == "line":
     print('```python\n' + '\n'.join('x = 1' for _ in range(51)) + '\n```')
 elif kind == "key":
     print('```python\nx = {}\nx["missing"]\n```')
+elif kind == "index":
+    print('```python\nx = []\nx[0]\n```')
 else:
     print('invalid prose')
 "#,
@@ -1379,7 +1381,15 @@ else:
     .unwrap();
     let input = t.join("input.txt");
     fs::write(&input, "generic synthetic context").unwrap();
-    for kind in ["assertion", "value", "regex", "line", "key", "prose"] {
+    for kind in [
+        "assertion",
+        "value",
+        "regex",
+        "line",
+        "key",
+        "index",
+        "prose",
+    ] {
         let calls = t.join(format!("{kind}.calls"));
         let trace = t.join(format!("{kind}.trace"));
         let cfg = config(
@@ -1681,6 +1691,49 @@ print("invalid prose")
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
     assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_repairs_deferred_final_var_lookup_failure() {
+    let t = temp("solo-final-var-repair");
+    let calls = t.join("calls");
+    let mock = t.join("final-var.py");
+    fs::write(
+        &mock,
+        r#"import pathlib, sys
+calls = pathlib.Path(sys.argv[1]); count = len(calls.read_text().splitlines()) if calls.exists() else 0
+calls.open("a").write("root\n")
+if count == 0:
+    print('```python\nFINAL_VAR("missing")\n```')
+else:
+    print('```python\nFINAL("RECOVERED")\n```')
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "original").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "generic question", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "RECOVERED");
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
     fs::remove_dir_all(t).unwrap();
 }
 

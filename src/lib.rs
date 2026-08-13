@@ -395,10 +395,12 @@ pub enum ExecFailureKind {
     Assertion,
     Value,
     Key,
+    Index,
     Regex,
     Timeout,
     Memory,
     Recursion,
+    Program,
     Other,
 }
 
@@ -416,12 +418,41 @@ fn exec_failure_kind(exception: Option<ExcType>) -> ExecFailureKind {
         Some(ExcType::AssertionError) => ExecFailureKind::Assertion,
         Some(ExcType::ValueError) => ExecFailureKind::Value,
         Some(ExcType::KeyError) => ExecFailureKind::Key,
+        Some(ExcType::IndexError) => ExecFailureKind::Index,
         Some(ExcType::RePatternError) => ExecFailureKind::Regex,
         Some(ExcType::TimeoutError) => ExecFailureKind::Timeout,
         Some(ExcType::MemoryError) => ExecFailureKind::Memory,
         Some(ExcType::RecursionError) => ExecFailureKind::Recursion,
+        Some(
+            ExcType::ArithmeticError
+            | ExcType::OverflowError
+            | ExcType::ZeroDivisionError
+            | ExcType::LookupError
+            | ExcType::NotImplementedError
+            | ExcType::AttributeError
+            | ExcType::FrozenInstanceError
+            | ExcType::NameError
+            | ExcType::UnboundLocalError
+            | ExcType::UnicodeDecodeError
+            | ExcType::UnicodeEncodeError
+            | ExcType::JsonDecodeError
+            | ExcType::ImportError
+            | ExcType::ModuleNotFoundError
+            | ExcType::StopIteration
+            | ExcType::SyntaxError
+            | ExcType::TypeError,
+        ) => ExecFailureKind::Program,
         Some(_) => ExecFailureKind::Other,
     }
+}
+
+fn monty_exception_info(error: &MontyException) -> (ExcType, Option<String>) {
+    let failure_line = error
+        .traceback()
+        .last()
+        .and_then(|frame| frame.preview_line.as_deref())
+        .map(str::to_owned);
+    (error.exc_type(), failure_line)
 }
 
 fn as_string(o: &MontyObject, name: &str) -> Result<String> {
@@ -665,13 +696,7 @@ fn run_cell(
         Ok(p) => p,
         Err(e) => {
             let e = *e;
-            let exception = e.error.exc_type();
-            let failure_line = e
-                .error
-                .traceback()
-                .last()
-                .and_then(|frame| frame.preview_line.as_deref())
-                .map(str::to_owned);
+            let (exception, failure_line) = monty_exception_info(&e.error);
             printed.push_str(&e.error.to_string());
             return (
                 e.repl,
@@ -1066,8 +1091,15 @@ impl SoloSession {
             .repl
             .take()
             .ok_or_else(|| anyhow!("solo session is busy"))?;
-        let (mut repl, mut output, success, mut final_out, external_calls, exception, failure_line) =
-            run_cell(repl, code, cfg, &self.sub_model);
+        let (
+            mut repl,
+            mut output,
+            success,
+            mut final_out,
+            external_calls,
+            mut exception,
+            mut failure_line,
+        ) = run_cell(repl, code, cfg, &self.sub_model);
         let mut success = success;
         if success
             && final_out.is_none()
@@ -1084,6 +1116,9 @@ impl SoloSession {
                 Final::Var(name) => match repl.feed_run(&name, vec![], PrintWriter::Disabled) {
                     Ok(v) => Some(v),
                     Err(e) => {
+                        let (kind, line) = monty_exception_info(&e);
+                        exception = Some(kind);
+                        failure_line = line;
                         output.push_str(&format!("\n{e}"));
                         success = false;
                         None
@@ -1126,8 +1161,15 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
     let meta = read_meta(&dir)?;
     let model = meta.sub_model.as_deref().unwrap_or(&cfg.default_model);
     let repl = load_repl(&dir)?;
-    let (mut repl, mut output, success, mut final_out, external_calls, exception, failure_line) =
-        run_cell(repl, code, cfg, model);
+    let (
+        mut repl,
+        mut output,
+        success,
+        mut final_out,
+        external_calls,
+        mut exception,
+        mut failure_line,
+    ) = run_cell(repl, code, cfg, model);
     let mut success = success;
     // Paper-style trajectories sometimes assign `FINAL = answer` instead of calling it.
     if success
@@ -1145,6 +1187,9 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
             Final::Var(name) => match repl.feed_run(&name, vec![], PrintWriter::Disabled) {
                 Ok(v) => Some(v),
                 Err(e) => {
+                    let (kind, line) = monty_exception_info(&e);
+                    exception = Some(kind);
+                    failure_line = line;
                     output.push_str(&format!("\n{e}"));
                     success = false;
                     None
@@ -3388,6 +3433,41 @@ assert datetime.date(2026, 1, 2).isoformat() == "2026-01-02"
 #[cfg(all(test, unix))]
 mod unit_tests {
     use super::*;
+
+    #[test]
+    fn monty_failure_kinds_separate_program_bugs_from_resource_and_host_classes() {
+        for ordinary in [
+            ExcType::IndexError,
+            ExcType::TypeError,
+            ExcType::AttributeError,
+            ExcType::NameError,
+            ExcType::ZeroDivisionError,
+            ExcType::JsonDecodeError,
+            ExcType::SyntaxError,
+        ] {
+            assert!(matches!(
+                exec_failure_kind(Some(ordinary)),
+                ExecFailureKind::Index | ExecFailureKind::Program
+            ));
+        }
+        for infrastructure in [
+            ExcType::TimeoutError,
+            ExcType::MemoryError,
+            ExcType::RecursionError,
+            ExcType::RuntimeError,
+            ExcType::OSError,
+            ExcType::PermissionError,
+            ExcType::SystemExit,
+        ] {
+            assert!(matches!(
+                exec_failure_kind(Some(infrastructure)),
+                ExecFailureKind::Timeout
+                    | ExecFailureKind::Memory
+                    | ExecFailureKind::Recursion
+                    | ExecFailureKind::Other
+            ));
+        }
+    }
 
     #[test]
     fn private_bridge_socket_is_short_and_state_specific() {
