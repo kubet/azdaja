@@ -31,6 +31,7 @@ pub const MONTY_VERSION: &str = "0.0.21";
 pub const SKILL: &str = include_str!("../assets/SKILL.md");
 pub const DEFAULT_CONFIG: &str = include_str!("../assets/config.toml");
 pub const SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS: usize = 45_000;
+
 const PRELUDE: &str = "import os, re, json, math, collections, datetime";
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -388,13 +389,40 @@ enum Final {
     Value(MontyObject),
     Var(String),
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecFailureKind {
+    None,
+    Assertion,
+    Value,
+    Key,
+    Regex,
+    Timeout,
+    Memory,
+    Recursion,
+    Other,
+}
+
 pub struct ExecResult {
     pub output: String,
     pub success: bool,
     pub finalized: bool,
     pub external_calls: usize,
-    pub exception: Option<ExcType>,
+    pub failure_kind: ExecFailureKind,
 }
+fn exec_failure_kind(exception: Option<ExcType>) -> ExecFailureKind {
+    match exception {
+        None => ExecFailureKind::None,
+        Some(ExcType::AssertionError) => ExecFailureKind::Assertion,
+        Some(ExcType::ValueError) => ExecFailureKind::Value,
+        Some(ExcType::KeyError) => ExecFailureKind::Key,
+        Some(ExcType::RePatternError) => ExecFailureKind::Regex,
+        Some(ExcType::TimeoutError) => ExecFailureKind::Timeout,
+        Some(ExcType::MemoryError) => ExecFailureKind::Memory,
+        Some(ExcType::RecursionError) => ExecFailureKind::Recursion,
+        Some(_) => ExecFailureKind::Other,
+    }
+}
+
 fn as_string(o: &MontyObject, name: &str) -> Result<String> {
     if let MontyObject::String(s) = o {
         Ok(s.clone())
@@ -1034,7 +1062,7 @@ impl SoloSession {
             success,
             finalized,
             external_calls,
-            exception,
+            failure_kind: exec_failure_kind(exception),
         })
     }
     pub fn final_answer(&self, cfg: &Config) -> Result<String> {
@@ -1087,7 +1115,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         success,
         finalized,
         external_calls,
-        exception,
+        failure_kind: exec_failure_kind(exception),
     })
 }
 pub fn final_answer(sid: &str, cfg: &Config) -> Result<String> {

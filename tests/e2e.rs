@@ -1441,6 +1441,49 @@ else:
 }
 
 #[test]
+fn solo_does_not_repair_monty_timeouts() {
+    let t = temp("solo-no-timeout-repair");
+    let calls = t.join("calls");
+    let mock = t.join("timeout.py");
+    fs::write(
+        &mock,
+        r#"import pathlib, sys
+pathlib.Path(sys.argv[1]).open("a").write("root\n")
+print('```python\nwhile True:\n    pass\n```')
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let cfg_text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("cell_timeout = 2", "cell_timeout = 1");
+    fs::write(&cfg, cfg_text).unwrap();
+    let input = t.join("input.txt");
+    fs::write(&input, "generic").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "generic question", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("TimeoutError"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
 fn solo_does_not_repair_unknown_runtime_failures() {
     let t = temp("solo-no-unknown-repair");
     let calls = t.join("calls");

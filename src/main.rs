@@ -1,12 +1,12 @@
 use anyhow::{Context, Result, anyhow, bail};
 use azdaja::{
-    Config, DEFAULT_CONFIG, EnteredTurnBudget, MONTY_VERSION, RootDriver,
+    Config, DEFAULT_CONFIG, EnteredTurnBudget, ExecFailureKind, MONTY_VERSION, RootDriver,
     SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS, SKILL, SoloSession, VERSION, call_model,
     capability_check, exec, final_answer, kill, list, load, model_trace_request_id,
     model_transport_error_category, model_transport_error_is_transient, start,
 };
 use monty::MontyRun;
-use monty_types::{CompileOptions, ExcType};
+use monty_types::CompileOptions;
 use serde::{Deserialize, Serialize};
 use std::{
     env, fs,
@@ -809,13 +809,17 @@ fn classify_program_failure(
     }
 }
 
-fn classify_monty_exception(exception: Option<ExcType>) -> SoloProgramFailureKind {
-    match exception {
-        Some(ExcType::AssertionError) => SoloProgramFailureKind::Assertion,
-        Some(ExcType::ValueError) => SoloProgramFailureKind::Value,
-        Some(ExcType::KeyError) => SoloProgramFailureKind::Key,
-        Some(ExcType::RePatternError) => SoloProgramFailureKind::Regex,
-        _ => SoloProgramFailureKind::Runtime,
+fn classify_monty_failure(failure: ExecFailureKind) -> SoloProgramFailureKind {
+    match failure {
+        ExecFailureKind::Assertion => SoloProgramFailureKind::Assertion,
+        ExecFailureKind::Value => SoloProgramFailureKind::Value,
+        ExecFailureKind::Key => SoloProgramFailureKind::Key,
+        ExecFailureKind::Regex => SoloProgramFailureKind::Regex,
+        ExecFailureKind::Timeout
+        | ExecFailureKind::Memory
+        | ExecFailureKind::Recursion
+        | ExecFailureKind::None
+        | ExecFailureKind::Other => SoloProgramFailureKind::Runtime,
     }
 }
 
@@ -848,7 +852,7 @@ fn execute_solo_reply(
             external_calls: 0,
         })?;
     if !result.success {
-        let kind = classify_monty_exception(result.exception);
+        let kind = classify_monty_failure(result.failure_kind);
         let error = if kind == SoloProgramFailureKind::Regex {
             anyhow!("solo solve invalid regular expression: {}", result.output)
         } else {
@@ -898,7 +902,7 @@ fn root_repair_prompt(failure: SoloProgramFailureKind) -> String {
         | SoloProgramFailureKind::Value
         | SoloProgramFailureKind::Key
         | SoloProgramFailureKind::Regex => {
-            "Replace the failed extraction with a simpler bounded approach and validate observed boundaries before FINAL."
+            "Replace the failed extraction with a simpler bounded approach and validate observed boundaries before FINAL. Parse the exact text that is present: do not guess alternate phrasings or raise a new exception merely because an assumed template does not match."
         }
         SoloProgramFailureKind::MissingFinal => "Call FINAL exactly once on the verified answer.",
         SoloProgramFailureKind::Runtime | SoloProgramFailureKind::Host => {
@@ -1335,18 +1339,34 @@ mod tests {
         );
         let kinds = [
             (
-                Some(ExcType::AssertionError),
+                ExecFailureKind::Assertion,
                 SoloProgramFailureKind::Assertion,
             ),
-            (Some(ExcType::ValueError), SoloProgramFailureKind::Value),
-            (Some(ExcType::KeyError), SoloProgramFailureKind::Key),
-            (Some(ExcType::RePatternError), SoloProgramFailureKind::Regex),
+            (ExecFailureKind::Value, SoloProgramFailureKind::Value),
+            (ExecFailureKind::Key, SoloProgramFailureKind::Key),
+            (ExecFailureKind::Regex, SoloProgramFailureKind::Regex),
         ];
         for (exception, expected) in kinds {
-            assert_eq!(classify_monty_exception(exception), expected);
+            assert_eq!(classify_monty_failure(exception), expected);
             let prompt = root_repair_prompt(expected);
             assert!(prompt.len() <= 1024);
             assert!(!prompt.contains("secret"));
+        }
+        for infrastructure in [
+            ExecFailureKind::Timeout,
+            ExecFailureKind::Memory,
+            ExecFailureKind::Recursion,
+        ] {
+            let kind = classify_monty_failure(infrastructure);
+            assert_eq!(kind, SoloProgramFailureKind::Runtime);
+            let failure = SoloProgramFailure {
+                kind,
+                error: anyhow!("typed resource failure"),
+                code: None,
+                output: None,
+                external_calls: 0,
+            };
+            assert!(!solo_program_failure_is_repairable(&failure, 1, 3));
         }
     }
 
