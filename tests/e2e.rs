@@ -1135,8 +1135,8 @@ fn solo_prompt_guides_exact_aggregation_in_one_root_turn() {
         r#"import os,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    begin = '--- BEGIN UNTRUSTED SCHEMA SAMPLE ---'
-    end = '--- END UNTRUSTED SCHEMA SAMPLE ---'
+    begin = '--- BEGIN UNTRUSTED OFFSET-LABELLED STRUCTURAL SAMPLE ---'
+    end = '--- END UNTRUSTED OFFSET-LABELLED STRUCTURAL SAMPLE ---'
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
     required = ('parse only the observed schema', 'every source occurrence', 'integer multiplicity',
                 'source_count = len(rows)', 'never overwrite rows',
@@ -1149,8 +1149,13 @@ if os.getenv('RLM_DEPTH') == '0':
                 'never call llm, llm_batch, or llm_batch_fresh directly',
                 'os, re, json, math, collections, datetime',
                 'globals/locals/callable', 'never call mapping.get',
-                'keep code under 50 nonblank lines')
-    sample_ok = 'schema-canary' in sample and len(sample) <= 4096 and 'TAIL_NOT_IN_SAMPLE' not in p
+                'keep code under 50 nonblank lines', 'ordinary csv, logs, source code',
+                'if the input itself contains multiple task',
+                'if the input itself ends with a supplied answer prefix',
+                'do not invent question/answer conventions', 'one logical query')
+    sample_ok = ('schema-canary' in sample and 'TAIL_NOT_IN_SAMPLE' in sample
+                 and '[HEAD chars 0..' in sample and '[TAIL chars ' in sample
+                 and len(sample.encode('utf-8')) <= 4096)
     if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
     else: print('```python\nFINAL("done:" + llm("classify"))\n```')
 else: print('SUB_OK')
@@ -1195,6 +1200,202 @@ else: print('SUB_OK')
         })
         .count();
     assert_eq!(sessions, 0, "solo should retain Monty only in-process");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_handles_synthetic_final_section_and_prefix_formats_without_gold() {
+    let t = temp("solo-final-structure");
+    let mock = t.join("root.py");
+    fs::write(
+        &mock,
+        r#"import os,sys
+p=sys.stdin.read()
+assert os.getenv('RLM_DEPTH') == '0'
+required = ('ordinary csv, logs, source code',
+            'if the input itself contains multiple task',
+            'if the input itself ends with a supplied answer prefix',
+            'do not invent question/answer conventions', 'one logical query', '[chars 0..')
+assert all(value in p.lower() for value in required), p
+if 'CASE_FWE' in p:
+    code = '''qpos=ctx.rfind("\\nQuestion:")
+assert qpos>=0
+body=ctx[:qpos]
+start=body.rfind("Data:")
+assert start>=0
+tokens=body[start+len("Data:"):].split()
+counts={}
+for token in tokens:
+    if token!="...":
+        counts[token]=counts[token]+1 if token in counts else 1
+words=[]
+for token in counts:
+    words.append(token)
+words.sort(key=lambda token: counts[token],reverse=True)
+FINAL(", ".join(words[:3]))'''
+    print('```python\n' + code + '\n```')
+elif 'CASE_VT' in p:
+    first = '''qpos=ctx.rfind("\\nQuestion:")
+assert qpos>=0
+start=ctx.rfind("Assignments:",0,qpos)
+assert start>=0
+question=ctx[qpos:]
+match=re.search(r"value ([0-9]+)",question)
+assert match is not None
+target=match.group(1)
+mapping={}
+order=[]
+for line in ctx[start:qpos].splitlines():
+    if line.startswith("VAR "):
+        parts=line.split()
+        mapping[parts[1]]=parts[3]
+        order.append(parts[1])'''
+    second = '''names=[]
+for name in order:
+    current=name
+    seen=[]
+    while not mapping[current].isdigit():
+        assert current not in seen
+        seen.append(current)
+        current=mapping[current]
+    if mapping[current]==target:
+        names.append(name)
+FINAL(" ".join(names))'''
+    print('```python\n' + first + '\n' + second + '\n```')
+elif 'CASE_KEY' in p:
+    code = '''qpos=ctx.rfind("\\nQuestion:")
+assert qpos>=0
+question=ctx[qpos:]
+question_only=question.split(" Answer:",1)[0]
+mentions=re.findall(r"key-[a-z]+",question_only)
+unique=[]
+for key in mentions:
+    if key not in unique:
+        unique.append(key)
+assert len(unique)==1
+records={}
+for line in ctx[:qpos].splitlines():
+    if " = " in line:
+        parts=line.split(" = ",1)
+        records[parts[0]]=parts[1]
+assert unique[0] in records
+FINAL(records[unique[0]])'''
+    print('```python\n' + code + '\n```')
+elif 'CASE_CSV' in p:
+    code = '''rows=ctx.splitlines()
+total=0
+for line in rows[2:]:
+    parts=line.split(",")
+    total+=int(parts[1])
+FINAL(str(total))'''
+    print('```python\n' + code + '\n```')
+elif 'CASE_LOG' in p:
+    code = '''count=0
+for line in ctx.splitlines():
+    if line.startswith("ERROR "):
+        count+=1
+FINAL(str(count))'''
+    print('```python\n' + code + '\n```')
+elif 'CASE_CODE' in p:
+    code = '''count=0
+for line in ctx.splitlines():
+    if "TODO" in line:
+        count+=1
+FINAL(str(count))'''
+    print('```python\n' + code + '\n```')
+else:
+    raise AssertionError('missing synthetic case marker')
+"#,
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 1024, 1, 3, 4);
+    let cases = [
+        (
+            "CASE_FWE Read and count coded tokens. Data: red red red blue blue green ...\nQuestion: Return the three tokens in order. Answer:",
+            "red, blue, green",
+        ),
+        (
+            "CASE_VT demo\nAssignments:\nVAR OLD = 111\nQuestion: Find variables assigned value 111. Answer: OLD\nCASE_VT actual\nAssignments:\nVAR END = 777\nVAR MID = END\nVAR TOP = MID\nQuestion: Find variables assigned value 777. Answer:",
+            "END MID TOP",
+        ),
+        (
+            "CASE_KEY pairs\nkey-z = value-old\nkey-x = value-final\nQuestion: What is stored for key-x? Answer: continuation for key-x is",
+            "value-final",
+        ),
+        ("CASE_CSV\nname,value\na,2\nb,3", "5"),
+        ("CASE_LOG\nINFO boot\nERROR one\nWARN mid\nERROR two", "2"),
+        ("CASE_CODE\nfn main() {} // TODO first\n// TODO second", "2"),
+    ];
+    for (index, (input_text, expected)) in cases.iter().enumerate() {
+        let input = t.join(format!("case-{index}.txt"));
+        fs::write(&input, input_text).unwrap();
+        let output = run(
+            &t,
+            &cfg,
+            &[
+                "solo",
+                "synthetic format regression",
+                "-f",
+                input.to_str().unwrap(),
+            ],
+            "",
+        );
+        assert!(
+            output.status.success(),
+            "case={index} stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), *expected);
+    }
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_reports_typed_compile_and_regex_diagnostics_without_retry() {
+    let t = temp("solo-typed-diagnostics");
+    let calls = t.join("calls");
+    let mock = t.join("invalid.py");
+    fs::write(
+        &mock,
+        r#"import sys
+with open(sys.argv[1], 'a') as f: f.write('root\n')
+p=sys.stdin.read()
+if 'compile-case' in p:
+    print('```python\nx = (\n```')
+else:
+    print('```python\nre.compile("[z-a]")\nFINAL("unreachable")\n```')
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        2048,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "synthetic no-gold data").unwrap();
+    for (question, expected) in [
+        ("compile-case", "solo root Python compile error"),
+        ("regex-case", "solo solve invalid regular expression"),
+    ] {
+        let output = run(
+            &t,
+            &cfg,
+            &["solo", question, "-f", input.to_str().unwrap()],
+            "",
+        );
+        assert_eq!(output.status.code(), Some(2));
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(expected),
+            "stderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -1396,6 +1597,47 @@ fn cumulative_llm_budget_stops_repeated_calls_in_one_cell() {
     fs::remove_dir_all(t).unwrap();
 }
 
+#[test]
+fn command_transport_trace_keeps_unknown_route_and_usage_null() {
+    let t = temp("unknown-trace");
+    let cfg = config(&t, "cat", 2048, 1, 3, 4);
+    let id = sid(&t, &cfg);
+    let trace = t.join("model.jsonl");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+    command
+        .args(["exec", &id])
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_MODEL_TRACE", &trace)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"print(llm('synthetic'))\n")
+        .unwrap();
+    ok(child.wait_with_output().unwrap());
+    let rows: Vec<serde_json::Value> = fs::read_to_string(trace)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    let row = &rows[0];
+    assert_eq!(row["outcome"], "succeeded");
+    assert_eq!(row["entered_turn"], 1);
+    assert!(row.get("provider").is_none());
+    assert!(row.get("model").is_none());
+    assert!(row.get("input_tokens").is_none());
+    assert!(row.get("output_tokens").is_none());
+    assert!(row.get("cache_read_tokens").is_none());
+    fs::remove_dir_all(t).unwrap();
+}
+
 #[cfg(unix)]
 #[test]
 fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
@@ -1490,7 +1732,7 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
                             assert!(content.ends_with("second"));
                             "SECOND_OK"
                         };
-                        vec![
+                        let mut frames = vec![
                             serde_json::json!({
                                 "v":1,"ev":"message_accepted","session_id":&sid
                             }),
@@ -1501,12 +1743,17 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
                             serde_json::json!({
                                 "v":1,"ev":"text_delta","session_id":&sid,"text":text
                             }),
-                            serde_json::json!({
+                        ];
+                        if session_number == 1 {
+                            frames.push(serde_json::json!({
                                 "v":1,"ev":"token_usage","session_id":&sid,
                                 "input":11,"output":2,"cache_read_input":3
-                            }),
-                            serde_json::json!({"v":1,"ev":"turn_done","session_id":&sid}),
-                        ]
+                            }));
+                        }
+                        frames.push(serde_json::json!({
+                            "v":1,"ev":"turn_done","session_id":&sid
+                        }));
+                        frames
                     }
                     "archive_session" => {
                         vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
@@ -1570,18 +1817,43 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
     assert_eq!(usages.len(), 2);
-    let usage = &usages[0];
-    assert_eq!(usage["provider"], "OpenAI");
-    assert_eq!(usage["model"], "gpt-5.4");
-    assert_eq!(usage["input_tokens"], 11);
-    assert_eq!(usage["output_tokens"], 2);
-    assert_eq!(usage["cache_read_tokens"], 3);
-    assert!(usage["latency_ms"].as_u64().is_some());
+    let request_ids: std::collections::HashSet<_> = usages
+        .iter()
+        .map(|row| row["request_id"].as_str().unwrap())
+        .collect();
+    assert_eq!(request_ids.len(), 2, "one logical request per batch item");
+    let session_ids: std::collections::HashSet<_> = usages
+        .iter()
+        .map(|row| row["session_id"].as_str().unwrap())
+        .collect();
+    assert_eq!(session_ids, std::collections::HashSet::from(["s1", "s2"]));
+    for usage in &usages {
+        assert_eq!(usage["schema_version"], 2);
+        assert_eq!(usage["event"], "model_attempt");
+        assert_eq!(usage["attempt"], 1);
+        assert_eq!(usage["category"], "turn");
+        assert_eq!(usage["outcome"], "succeeded");
+        assert_eq!(usage["degraded_transport"], false);
+        assert_eq!(usage["failed_attempts_before_success"], 0);
+        assert_eq!(usage["provider"], "OpenAI");
+        assert_eq!(usage["model"], "gpt-5.4");
+        if usage["session_id"] == "s1" {
+            assert_eq!(usage["input_tokens"], 11);
+            assert_eq!(usage["output_tokens"], 2);
+            assert_eq!(usage["cache_read_tokens"], 3);
+        } else {
+            assert_eq!(usage["session_id"], "s2");
+            assert!(usage.get("input_tokens").is_none());
+            assert!(usage.get("output_tokens").is_none());
+            assert!(usage.get("cache_read_tokens").is_none());
+        }
+        assert!(usage["latency_ms"].as_u64().is_some());
+        assert!(usage.get("error").is_none());
+    }
     assert_eq!(server.join().unwrap(), [1, 1]);
     fs::remove_dir_all(t).unwrap();
 }
 
-#[cfg(unix)]
 #[test]
 #[cfg(unix)]
 fn jcode_fresh_batch_retries_setup_without_repeating_model_turn() {
@@ -1613,7 +1885,7 @@ fn jcode_fresh_batch_retries_setup_without_repeating_model_turn() {
                         "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
                     })],
                     "create_session" if session_number < 3 => vec![serde_json::json!({
-                        "v":1,"ev":"error","message":"injected setup failure"
+                        "v":1,"ev":"error","code":"service_unavailable","message":"injected setup failure"
                     })],
                     "create_session" => vec![
                         serde_json::json!({
@@ -1698,20 +1970,52 @@ fn jcode_fresh_batch_retries_setup_without_repeating_model_turn() {
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
     assert_eq!(rows.len(), 3, "{rows:?}");
+    assert!(rows.iter().all(|row| row["schema_version"] == 2));
+    assert!(rows.iter().all(|row| row["event"] == "model_attempt"));
+    assert!(
+        rows.windows(2)
+            .all(|pair| pair[0]["request_id"] == pair[1]["request_id"])
+    );
     assert_eq!(
         rows.iter()
-            .filter(|row| row["stage"] == "session_setup")
-            .count(),
-        2
+            .map(|row| row["attempt"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        [1, 2, 3]
+    );
+    let failures = &rows[..2];
+    assert!(
+        failures
+            .iter()
+            .all(|row| row["category"] == "session_setup")
+    );
+    assert!(failures.iter().all(|row| row["outcome"] == "failed"));
+    assert!(failures.iter().all(|row| row["stage"] == "session_setup"));
+    assert!(failures.iter().all(|row| row["setup_substage"] == "attach"));
+    assert!(
+        failures
+            .iter()
+            .all(|row| row["error"] == "provider_call_failed")
     );
     assert!(
-        rows[..2]
+        failures
             .iter()
-            .all(|row| row["setup_substage"] == "attach")
+            .all(|row| row["error_category"] == "provider")
     );
+    assert!(failures.iter().all(|row| row["session_id"].is_null()));
+    assert!(failures.iter().all(|row| row.get("input_tokens").is_none()));
+
+    let success = &rows[2];
+    assert_eq!(success["category"], "turn");
+    assert_eq!(success["outcome"], "succeeded");
+    assert_eq!(success["session_id"], "s3");
+    assert_eq!(success["degraded_transport"], true);
+    assert_eq!(success["failed_attempts_before_success"], 2);
+    assert_eq!(success["input_tokens"], 7);
+    assert_eq!(success["output_tokens"], 1);
     assert_eq!(
-        rows.iter().filter(|row| row.get("model").is_some()).count(),
-        1
+        rows.iter().filter(|row| row["category"] == "turn").count(),
+        1,
+        "setup retries must not consume entered-turn budget"
     );
 }
 
@@ -1763,7 +2067,7 @@ fn jcode_fresh_batch_stops_after_four_failed_setups() {
                             "api_method":"openai-oauth","available":true}]
                     })],
                     "set_reasoning_effort" => vec![serde_json::json!({
-                        "v":1,"reply_to":id,"ev":"error","message":"injected setup failure"
+                        "v":1,"reply_to":id,"ev":"error","code":"service_unavailable","message":"injected setup failure"
                     })],
                     "send_message" => {
                         messages.push(request["content"].as_str().unwrap().to_owned());
@@ -1835,20 +2139,511 @@ fn jcode_fresh_batch_stops_after_four_failed_setups() {
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
     assert_eq!(rows.len(), 4, "{rows:?}");
+    assert!(
+        rows.windows(2)
+            .all(|pair| pair[0]["request_id"] == pair[1]["request_id"])
+    );
     assert_eq!(
         rows.iter()
-            .filter(|row| row["stage"] == "session_setup")
-            .count(),
-        4
+            .map(|row| row["attempt"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        [1, 2, 3, 4]
     );
+    assert!(rows.iter().all(|row| row["category"] == "session_setup"));
+    assert!(rows.iter().all(|row| row["outcome"] == "failed"));
+    assert!(rows.iter().all(|row| row["stage"] == "session_setup"));
     assert!(rows.iter().all(|row| row["setup_substage"] == "reasoning"));
     assert_eq!(
-        rows.iter().filter(|row| row.get("model").is_some()).count(),
-        0
+        rows.iter()
+            .map(|row| row["session_id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["s1", "s2", "s3", "s4"]
     );
+    assert!(rows.iter().all(|row| row.get("input_tokens").is_none()));
 }
 
 #[test]
+#[cfg(unix)]
+fn solo_root_does_not_retry_typed_permanent_invalid_request() {
+    use std::io::{BufRead, BufReader, Write as _};
+    use std::os::unix::net::UnixListener;
+    use std::thread;
+
+    let t = temp("pir");
+    let socket = t.join("a");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = thread::spawn(move || {
+        let (probe, _) = listener.accept().unwrap();
+        drop(probe);
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut entered_turns = 0;
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap() == 0 {
+                break;
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let id = request["id"].as_u64().unwrap();
+            let frames = match request["req"].as_str().unwrap() {
+                "hello" => vec![serde_json::json!({
+                    "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
+                })],
+                "create_session" => vec![serde_json::json!({
+                    "v":1,"reply_to":id,"ev":"attached",
+                    "session":{"session_id":"s1","status":"idle"}
+                })],
+                "get_runtime_info" => vec![serde_json::json!({
+                    "v":1,"reply_to":id,"ev":"runtime_info","session_id":"s1",
+                    "provider":"OpenAI","model":"gpt-5.4",
+                    "routes":[{"provider":"OpenAI","model":"gpt-5.4",
+                        "api_method":"openai-oauth","available":true}]
+                })],
+                "set_reasoning_effort" => vec![serde_json::json!({
+                    "v":1,"reply_to":id,"ev":"ok"
+                })],
+                "send_message" => {
+                    entered_turns += 1;
+                    vec![serde_json::json!({
+                        "v":1,"ev":"error","session_id":"s1",
+                        "code":"invalid_request","message":"permanent invalid request"
+                    })]
+                }
+                "cancel" | "archive_session" => vec![serde_json::json!({
+                    "v":1,"reply_to":id,"ev":"ok"
+                })],
+                other => panic!("unexpected request {other}"),
+            };
+            for frame in frames {
+                serde_json::to_writer(&mut stream, &frame).unwrap();
+                stream.write_all(b"\n").unwrap();
+                stream.flush().unwrap();
+            }
+        }
+        entered_turns
+    });
+
+    let cfg = config(&t, "jcode-api", 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "synthetic row").unwrap();
+    let trace = t.join("model.jsonl");
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args([
+            "solo",
+            "return scripted result",
+            "-f",
+            input.to_str().unwrap(),
+            "--model",
+            "gpt-5.4",
+        ])
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_API_SOCKET", &socket)
+        .env("AZDAJA_MODEL_TRACE", &trace)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert_eq!(server.join().unwrap(), 1, "permanent error must not retry");
+    let rows: Vec<serde_json::Value> = fs::read_to_string(trace)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0]["category"], "turn");
+    assert_eq!(rows[0]["entered_turn"], 1);
+    assert_eq!(rows[0]["error_category"], "provider");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn solo_root_retries_explicit_typed_transient_errors_with_separate_budgets() {
+    use std::io::{BufRead, BufReader, Write as _};
+    use std::os::unix::net::UnixListener;
+    use std::thread;
+
+    let t = temp("rtr");
+    let socket = t.join("a");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = thread::spawn(move || {
+        let mut entered_turns = Vec::new();
+        for session_number in 1..=3 {
+            // Each open probes bridge liveness before creating its protocol connection.
+            let (probe, _) = listener.accept().unwrap();
+            drop(probe);
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let sid = format!("s{session_number}");
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 {
+                    break;
+                }
+                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let id = request["id"].as_u64().unwrap();
+                let req = request["req"].as_str().unwrap();
+                let frames = match req {
+                    "hello" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
+                    })],
+                    "create_session" if session_number == 1 => vec![serde_json::json!({
+                        "v":1,"ev":"error","code":"service_unavailable","message":"injected transient setup provider failure"
+                    })],
+                    "create_session" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"attached",
+                        "session":{"session_id":&sid,"status":"idle"}
+                    })],
+                    "get_runtime_info" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"runtime_info","session_id":&sid,
+                        "provider":"OpenAI","model":"gpt-5.4",
+                        "routes":[{"provider":"OpenAI","model":"gpt-5.4",
+                            "api_method":"openai-oauth","available":true}]
+                    })],
+                    "set_reasoning_effort" => {
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    "send_message" => {
+                        entered_turns.push(sid.clone());
+                        if session_number == 2 {
+                            vec![serde_json::json!({
+                                "v":1,"ev":"error","session_id":&sid,"code":"service_unavailable",
+                                "message":"injected transient provider failure"
+                            })]
+                        } else {
+                            vec![
+                                serde_json::json!({
+                                    "v":1,"ev":"model_info","session_id":&sid,
+                                    "provider":"OpenAI","model":"gpt-5.4"
+                                }),
+                                serde_json::json!({
+                                    "v":1,"ev":"text_delta","session_id":&sid,
+                                    "text":"```python\nFINAL(\"ROUTE_OK\")\n```"
+                                }),
+                                serde_json::json!({
+                                    "v":1,"ev":"token_usage","session_id":&sid,
+                                    "input":13,"output":2,"cache_read_input":5
+                                }),
+                                serde_json::json!({"v":1,"ev":"turn_done","session_id":&sid}),
+                            ]
+                        }
+                    }
+                    "cancel" | "archive_session" => {
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    other => panic!("unexpected root request {other}"),
+                };
+                for frame in frames {
+                    serde_json::to_writer(&mut stream, &frame).unwrap();
+                    stream.write_all(b"\n").unwrap();
+                    stream.flush().unwrap();
+                }
+            }
+        }
+        entered_turns
+    });
+
+    let cfg = config(&t, "jcode-api", 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "synthetic row").unwrap();
+    let model_trace = t.join("model.jsonl");
+    let solo_trace = t.join("solo.log");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+    command
+        .args([
+            "solo",
+            "return the scripted result",
+            "-f",
+            input.to_str().unwrap(),
+            "--model",
+            "gpt-5.4",
+        ])
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_API_SOCKET", &socket)
+        .env("AZDAJA_MODEL_TRACE", &model_trace)
+        .env("AZDAJA_SOLO_TRACE", &solo_trace)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let output = command.output().unwrap();
+    let out = ok(output);
+    assert_eq!(out.trim(), "ROUTE_OK");
+    assert_eq!(server.join().unwrap(), ["s2", "s3"]);
+
+    let rows: Vec<serde_json::Value> = fs::read_to_string(&model_trace)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    assert!(
+        rows.windows(2)
+            .all(|pair| pair[0]["request_id"] == pair[1]["request_id"])
+    );
+    assert_eq!(
+        rows.iter()
+            .map(|row| row["attempt"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        [1, 2, 3]
+    );
+
+    let setup_failure = &rows[0];
+    assert_eq!(setup_failure["category"], "session_setup");
+    assert_eq!(setup_failure["outcome"], "failed");
+    assert_eq!(setup_failure["setup_substage"], "attach");
+    assert_eq!(setup_failure["error_category"], "provider");
+    assert!(setup_failure["session_id"].is_null());
+    assert!(setup_failure.get("entered_turn").is_none());
+
+    let turn_failure = &rows[1];
+    assert_eq!(turn_failure["category"], "turn");
+    assert_eq!(turn_failure["outcome"], "failed");
+    assert_eq!(turn_failure["session_id"], "s2");
+    assert_eq!(turn_failure["entered_turn"], 1);
+    assert_eq!(turn_failure["error_category"], "provider");
+    assert!(turn_failure.get("input_tokens").is_none());
+
+    let success = &rows[2];
+    assert_eq!(success["category"], "turn");
+    assert_eq!(success["outcome"], "succeeded");
+    assert_eq!(success["session_id"], "s3");
+    assert_eq!(success["entered_turn"], 2);
+    assert_eq!(success["provider"], "OpenAI");
+    assert_eq!(success["model"], "gpt-5.4");
+    assert_eq!(success["degraded_transport"], true);
+    assert_eq!(success["failed_attempts_before_success"], 2);
+
+    let successful_usage = rows
+        .iter()
+        .filter(|row| row["outcome"] == "succeeded")
+        .fold((0, 0, 0), |sum, row| {
+            (
+                sum.0 + row["input_tokens"].as_u64().unwrap(),
+                sum.1 + row["output_tokens"].as_u64().unwrap(),
+                sum.2 + row["cache_read_tokens"].as_u64().unwrap(),
+            )
+        });
+    assert_eq!(successful_usage, (13, 2, 5));
+    assert_eq!(
+        rows.iter().filter(|row| row["outcome"] == "failed").count(),
+        2
+    );
+    assert_eq!(
+        rows.iter().filter(|row| row["category"] == "turn").count(),
+        2,
+        "setup failure must not spend either physical entered turn"
+    );
+
+    let solo = fs::read_to_string(solo_trace).unwrap();
+    assert!(solo.contains("attempt=3"), "{solo}");
+    assert!(solo.contains("session_id=Some(\"s3\")"), "{solo}");
+    assert!(solo.contains("degraded_transport=true"), "{solo}");
+    assert!(solo.contains("failed_attempts_before_success=2"), "{solo}");
+    assert!(
+        solo.contains("provider=\"OpenAI\" model=\"gpt-5.4\""),
+        "{solo}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn solo_root_stops_after_four_setup_attempts_without_entering_turn() {
+    use std::io::{BufRead, BufReader, Write as _};
+    use std::os::unix::net::UnixListener;
+    use std::thread;
+
+    let t = temp("rsa");
+    let socket = t.join("a");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = thread::spawn(move || {
+        for _ in 0..4 {
+            let (probe, _) = listener.accept().unwrap();
+            drop(probe);
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 {
+                    break;
+                }
+                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let id = request["id"].as_u64().unwrap();
+                let frame = match request["req"].as_str().unwrap() {
+                    "hello" => serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
+                    }),
+                    "create_session" => serde_json::json!({
+                        "v":1,"ev":"error","code":"service_unavailable","message":"transient provider setup failure"
+                    }),
+                    other => panic!("setup failure must not reach {other}"),
+                };
+                serde_json::to_writer(&mut stream, &frame).unwrap();
+                stream.write_all(b"\n").unwrap();
+                stream.flush().unwrap();
+            }
+        }
+    });
+
+    let cfg = config(&t, "jcode-api", 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "synthetic row").unwrap();
+    let trace = t.join("model.jsonl");
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args([
+            "solo",
+            "return scripted result",
+            "-f",
+            input.to_str().unwrap(),
+            "--model",
+            "gpt-5.4",
+        ])
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_API_SOCKET", &socket)
+        .env("AZDAJA_MODEL_TRACE", &trace)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    server.join().unwrap();
+    let rows: Vec<serde_json::Value> = fs::read_to_string(trace)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(rows.len(), 4, "{rows:?}");
+    assert_eq!(
+        rows.iter()
+            .map(|row| row["attempt"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        [1, 2, 3, 4]
+    );
+    assert!(rows.iter().all(|row| row["category"] == "session_setup"));
+    assert!(rows.iter().all(|row| row.get("entered_turn").is_none()));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn valid_root_response_is_not_retried_when_trace_append_fails() {
+    use std::io::{BufRead, BufReader, Write as _};
+    use std::os::unix::net::UnixListener;
+    use std::thread;
+
+    let t = temp("tio");
+    let socket = t.join("a");
+    let model_trace = t.join("model.jsonl");
+    let server_trace = model_trace.clone();
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = thread::spawn(move || {
+        let (probe, _) = listener.accept().unwrap();
+        drop(probe);
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut entered_turns = 0;
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap() == 0 {
+                break;
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let id = request["id"].as_u64().unwrap();
+            let frames = match request["req"].as_str().unwrap() {
+                "hello" => vec![serde_json::json!({
+                    "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
+                })],
+                "create_session" => vec![serde_json::json!({
+                    "v":1,"reply_to":id,"ev":"attached",
+                    "session":{"session_id":"s1","status":"idle"}
+                })],
+                "get_runtime_info" => vec![serde_json::json!({
+                    "v":1,"reply_to":id,"ev":"runtime_info","session_id":"s1",
+                    "provider":"OpenAI","model":"gpt-5.4",
+                    "routes":[{"provider":"OpenAI","model":"gpt-5.4",
+                        "api_method":"openai-oauth","available":true}]
+                })],
+                "set_reasoning_effort" => {
+                    vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                }
+                "send_message" => {
+                    entered_turns += 1;
+                    // Preflight already succeeded. Break only the later append to prove a
+                    // diagnostic failure cannot turn this valid response into another call.
+                    fs::remove_file(&server_trace).unwrap();
+                    fs::create_dir(&server_trace).unwrap();
+                    vec![
+                        serde_json::json!({
+                            "v":1,"ev":"model_info","session_id":"s1",
+                            "provider":"OpenAI","model":"gpt-5.4"
+                        }),
+                        serde_json::json!({
+                            "v":1,"ev":"text_delta","session_id":"s1",
+                            "text":"```python\nFINAL(\"TRACE_OK\")\n```"
+                        }),
+                        serde_json::json!({
+                            "v":1,"ev":"token_usage","session_id":"s1",
+                            "input":4,"output":1,"cache_read_input":0
+                        }),
+                        serde_json::json!({"v":1,"ev":"turn_done","session_id":"s1"}),
+                    ]
+                }
+                "archive_session" => {
+                    vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                }
+                other => panic!("unexpected root request {other}"),
+            };
+            for frame in frames {
+                serde_json::to_writer(&mut stream, &frame).unwrap();
+                stream.write_all(b"\n").unwrap();
+                stream.flush().unwrap();
+            }
+        }
+        entered_turns
+    });
+
+    let cfg = config(&t, "jcode-api", 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "synthetic row").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args([
+            "solo",
+            "return scripted result",
+            "-f",
+            input.to_str().unwrap(),
+            "--model",
+            "gpt-5.4",
+        ])
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_API_SOCKET", &socket)
+        .env("AZDAJA_MODEL_TRACE", &model_trace)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "TRACE_OK");
+    assert_eq!(
+        server.join().unwrap(),
+        1,
+        "valid response must not be retried"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("model trace write failed"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
 fn jcode_batch_retries_provider_once_then_preserves_failure() {
     use std::io::{BufRead, BufReader, Write as _};
     use std::os::unix::net::UnixListener;
@@ -1915,7 +2710,7 @@ fn jcode_batch_retries_provider_once_then_preserves_failure() {
                             assert!(content.ends_with("bad"));
                             vec![serde_json::json!({
                                 "v": 1, "ev": "error", "session_id": &sid,
-                                "message": "injected provider failure"
+                                "code": "service_unavailable", "message": "injected provider failure"
                             })]
                         } else {
                             let (suffix, answer) = if session_number == 1 {
