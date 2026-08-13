@@ -1526,6 +1526,298 @@ def root_token_economy(arm: str, evidence: dict[str, bytes]) -> dict[str, Any]:
     return _control_root_token_economy(arm, evidence["stdout"])
 
 
+SCORE_SOLO_RUNTIME_KEYS = {
+    "schema_version", "event", "request_id", "outcome",
+    "exec_invocation_count", "exec_wall_ns", "snapshot_save_count",
+    "snapshot_save_wall_ns", "snapshot_load_count", "snapshot_load_wall_ns",
+    "sub_call_count", "sub_call_wall_ns",
+}
+SCORE_MODEL_TRACE_KEYS = {
+    "schema_version", "event", "timestamp_ms", "depth", "request_id",
+    "attempt", "entered_turn", "session_id", "category", "outcome",
+    "error", "error_category", "stage", "setup_substage", "provider", "model",
+    "input_tokens", "output_tokens", "cache_read_tokens", "latency_ms",
+    "degraded_transport", "failed_attempts_before_success", "response",
+}
+SCORE_MODEL_TRACE_REQUIRED = {
+    "schema_version", "event", "timestamp_ms", "depth", "request_id",
+    "attempt", "session_id", "category", "outcome",
+}
+PERFORMANCE_AUTHORITY = (
+    "AZDAJA_MODEL_TRACE v2 provider attempts plus the unique absolute-EOF "
+    "AZDAJA_SOLO_TRACE solo_runtime v1 record"
+)
+
+
+def _independent_performance_ledger(
+    model_data: bytes, solo_data: bytes, index: int
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    label = f"inference row {index} performance ledger"
+    try:
+        model_text = model_data.decode("utf-8")
+        solo_text = solo_data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ScoreError(f"{label} trace is not UTF-8") from exc
+    solo_lines = solo_text.splitlines()
+    if len(solo_lines) < 3:
+        raise ScoreError(f"{label} has no absolute-EOF runtime footer")
+    try:
+        runtime = json.loads(solo_lines[-2])
+    except json.JSONDecodeError as exc:
+        raise ScoreError(f"{label} runtime footer is malformed") from exc
+    request_id = runtime.get("request_id") if isinstance(runtime, dict) else None
+    if (
+        not isinstance(runtime, dict)
+        or set(runtime) != SCORE_SOLO_RUNTIME_KEYS
+        or runtime.get("schema_version") != 1
+        or runtime.get("event") != "solo_runtime"
+        or runtime.get("outcome") != "succeeded"
+        or not isinstance(request_id, str)
+        or re.fullmatch(r"[0-9]+-[0-9]+-[0-9]+", request_id) is None
+    ):
+        raise ScoreError(f"{label} runtime footer shape is invalid")
+    if (
+        solo_lines[-3] != f'=== solo runtime trace begin request_id="{request_id}" ==='
+        or solo_lines[-1] != f'=== solo runtime trace end request_id="{request_id}" ==='
+    ):
+        raise ScoreError(f"{label} runtime footer envelope is not exact")
+    runtime_rows = []
+    for line in solo_lines:
+        if not line.startswith("{"):
+            continue
+        try:
+            candidate = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(candidate, dict) and candidate.get("event") == "solo_runtime":
+            runtime_rows.append(candidate)
+    if runtime_rows != [runtime]:
+        raise ScoreError(f"{label} runtime footer is spoof-ambiguous")
+    counter_keys = SCORE_SOLO_RUNTIME_KEYS - {
+        "schema_version", "event", "request_id", "outcome"
+    }
+    if any(not _nonnegative_int(runtime.get(key)) for key in counter_keys):
+        raise ScoreError(f"{label} runtime counters are invalid")
+    if runtime["sub_call_wall_ns"] > runtime["exec_wall_ns"]:
+        raise ScoreError(f"{label} child wall exceeds exec wall")
+
+    raw_lines = [line for line in model_text.splitlines() if line.strip()]
+    if not raw_lines:
+        raise ScoreError(f"{label} model trace is empty")
+    model_rows: list[dict[str, Any]] = []
+    for line in raw_lines:
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ScoreError(f"{label} failed to parse model trace") from exc
+        if (
+            not isinstance(row, dict)
+            or not SCORE_MODEL_TRACE_REQUIRED.issubset(row)
+            or not set(row).issubset(SCORE_MODEL_TRACE_KEYS)
+            or row.get("schema_version") != 2
+            or row.get("event") != "model_attempt"
+            or not _nonnegative_int(row.get("timestamp_ms"))
+            or not _nonnegative_int(row.get("depth"))
+            or type(row.get("attempt")) is not int
+            or row["attempt"] < 1
+            or not isinstance(row.get("request_id"), str)
+            or not row["request_id"]
+            or row.get("category") not in {"session_setup", "turn", "repair"}
+            or row.get("outcome") not in {"failed", "succeeded"}
+        ):
+            raise ScoreError(f"{label} model trace row is invalid")
+        if row["category"] in {"turn", "repair"} and (
+            type(row.get("entered_turn")) is not int
+            or row["entered_turn"] < 1
+            or not _nonnegative_int(row.get("latency_ms"))
+        ):
+            raise ScoreError(f"{label} entered turn lacks ordinal or latency")
+        model_rows.append(row)
+
+    root_rows = [
+        row for row in model_rows
+        if row["depth"] == 0 and row["category"] in {"turn", "repair"}
+    ]
+    initial_rows = [row for row in root_rows if row["category"] == "turn"]
+    if not initial_rows or any(row["request_id"] != request_id for row in initial_rows):
+        raise ScoreError(f"{label} root correlation is invalid")
+    ordinals = [row["entered_turn"] for row in root_rows]
+    if sorted(ordinals) != list(range(1, len(root_rows) + 1)):
+        raise ScoreError(f"{label} root ordinals are not unique and contiguous")
+    repair_rows = [row for row in root_rows if row["category"] == "repair"]
+    repair_suffixes = [
+        row["request_id"].removeprefix(request_id + "-repair-")
+        for row in repair_rows
+    ]
+    if repair_suffixes != [str(value) for value in range(1, len(repair_rows) + 1)]:
+        raise ScoreError(f"{label} repair sequence is invalid")
+    sub_request_ids = {row["request_id"] for row in model_rows if row["depth"] > 0}
+    sub_turn_rows = [
+        row for row in model_rows
+        if row["depth"] > 0 and row["category"] in {"turn", "repair"}
+    ]
+    if len(sub_request_ids) != runtime["sub_call_count"]:
+        raise ScoreError(f"{label} logical child count disagrees with trace")
+    if (
+        runtime["snapshot_save_count"] != 1
+        or runtime["snapshot_load_count"] != len(repair_rows)
+        or not 1 <= runtime["exec_invocation_count"] <= 1 + len(repair_rows)
+    ):
+        raise ScoreError(f"{label} successful count identities are invalid")
+    repair_usage_complete = all(
+        row["outcome"] == "succeeded"
+        and all(_nonnegative_int(row.get(key)) for key in (
+            "input_tokens", "output_tokens", "cache_read_tokens"
+        ))
+        for row in repair_rows
+    )
+    repair_cost = {
+        "inference_ms": sum(row["latency_ms"] for row in repair_rows),
+        "input_tokens": sum(row["input_tokens"] for row in repair_rows)
+        if repair_usage_complete else None,
+        "output_tokens": sum(row["output_tokens"] for row in repair_rows)
+        if repair_usage_complete else None,
+        "cache_read_tokens": sum(row["cache_read_tokens"] for row in repair_rows)
+        if repair_usage_complete else None,
+        "token_accounting_complete": repair_usage_complete,
+    }
+    ledger = {
+        "schema_version": 1,
+        "complete": True,
+        "root_turn_count": len(root_rows),
+        "root_inference_ms": sum(row["latency_ms"] for row in root_rows),
+        "exec_invocation_count": runtime["exec_invocation_count"],
+        "exec_wall_ms": runtime["exec_wall_ns"] / 1_000_000.0,
+        "snapshot_save_count": runtime["snapshot_save_count"],
+        "snapshot_save_ms": runtime["snapshot_save_wall_ns"] / 1_000_000.0,
+        "snapshot_load_count": runtime["snapshot_load_count"],
+        "snapshot_load_ms": runtime["snapshot_load_wall_ns"] / 1_000_000.0,
+        "sub_call_count": runtime["sub_call_count"],
+        "sub_call_turn_count": len(sub_turn_rows),
+        "sub_call_wall_ms": runtime["sub_call_wall_ns"] / 1_000_000.0,
+        "repair_count": len(repair_rows),
+        "repair_cost": repair_cost,
+    }
+    assertion = {
+        "applicable": True,
+        "asserted": True,
+        "authority": PERFORMANCE_AUTHORITY,
+        "raw_runtime": runtime,
+        "reasons": [],
+    }
+    return ledger, assertion
+
+
+def _validate_recorded_performance_shape(
+    ledger: Any, assertion: Any, index: int
+) -> None:
+    assertion_keys = {"applicable", "asserted", "authority", "raw_runtime", "reasons"}
+    if (
+        not isinstance(assertion, dict)
+        or set(assertion) != assertion_keys
+        or type(assertion.get("applicable")) is not bool
+        or type(assertion.get("asserted")) is not bool
+        or not isinstance(assertion.get("authority"), str)
+        or not isinstance(assertion.get("reasons"), list)
+        or any(not isinstance(reason, str) for reason in assertion["reasons"])
+    ):
+        raise ScoreError(f"inference row {index} performance assertion shape is invalid")
+    if ledger is None:
+        if assertion["asserted"]:
+            raise ScoreError(f"inference row {index} asserted performance ledger is missing")
+        return
+    keys = {
+        "schema_version", "complete", "root_turn_count", "root_inference_ms",
+        "exec_invocation_count", "exec_wall_ms", "snapshot_save_count",
+        "snapshot_save_ms", "snapshot_load_count", "snapshot_load_ms",
+        "sub_call_count", "sub_call_turn_count", "sub_call_wall_ms",
+        "repair_count", "repair_cost",
+    }
+    integer_keys = {
+        "root_turn_count", "root_inference_ms", "exec_invocation_count",
+        "snapshot_save_count", "snapshot_load_count", "sub_call_count",
+        "sub_call_turn_count", "repair_count",
+    }
+    if (
+        not isinstance(ledger, dict)
+        or set(ledger) != keys
+        or ledger.get("schema_version") != 1
+        or type(ledger.get("complete")) is not bool
+        or any(not _nonnegative_int(ledger.get(key)) for key in integer_keys)
+        or any(not _nonnegative_number(ledger.get(key)) for key in (
+            "exec_wall_ms", "snapshot_save_ms", "snapshot_load_ms", "sub_call_wall_ms"
+        ))
+    ):
+        raise ScoreError(f"inference row {index} performance ledger shape is invalid")
+    cost = ledger["repair_cost"]
+    cost_keys = {
+        "inference_ms", "input_tokens", "output_tokens", "cache_read_tokens",
+        "token_accounting_complete",
+    }
+    if (
+        not isinstance(cost, dict)
+        or set(cost) != cost_keys
+        or not _nonnegative_int(cost.get("inference_ms"))
+        or type(cost.get("token_accounting_complete")) is not bool
+    ):
+        raise ScoreError(f"inference row {index} performance repair cost is invalid")
+    tokens = [cost.get(key) for key in (
+        "input_tokens", "output_tokens", "cache_read_tokens"
+    )]
+    if cost["token_accounting_complete"]:
+        if any(not _nonnegative_int(value) for value in tokens):
+            raise ScoreError(f"inference row {index} repair token cost is invalid")
+    elif any(value is not None for value in tokens):
+        raise ScoreError(f"inference row {index} incomplete repair tokens are not null")
+    if ledger["complete"] != assertion["asserted"]:
+        raise ScoreError(f"inference row {index} ledger completeness disagrees with assertion")
+
+
+def _audit_performance_evidence(
+    row: dict[str, Any], retained: dict[str, bytes], index: int
+) -> dict[str, Any] | None:
+    evidence = row["arm_evidence"]
+    if (
+        "performance_ledger" not in evidence
+        or "performance_ledger_assertion" not in evidence
+    ):
+        raise ScoreError(f"inference row {index} performance ledger evidence is missing")
+    ledger = evidence["performance_ledger"]
+    assertion = evidence["performance_ledger_assertion"]
+    if row["arm"] != "jcode-azdaja":
+        expected = {
+            "applicable": False,
+            "asserted": True,
+            "authority": "not applicable to control arm",
+            "raw_runtime": None,
+            "reasons": [],
+        }
+        if ledger is not None or assertion != expected:
+            raise ScoreError(f"inference row {index} control performance evidence is invalid")
+        return None
+    _validate_recorded_performance_shape(ledger, assertion, index)
+    if assertion["applicable"] is not True:
+        raise ScoreError(f"inference row {index} Azdaja performance assertion is invalid")
+    if row["execution_success"] and not assertion["asserted"]:
+        raise ScoreError(f"inference row {index} successful Azdaja ledger is incomplete")
+    if not assertion["asserted"]:
+        return None
+    try:
+        expected_ledger, expected_assertion = _independent_performance_ledger(
+            retained["azdaja_model_trace"], retained["azdaja_solo_trace"], index
+        )
+    except KeyError as exc:
+        raise ScoreError(
+            f"inference row {index} asserted Azdaja performance traces are missing"
+        ) from exc
+    _require_equal(ledger, expected_ledger, f"inference row {index} performance ledger")
+    _require_equal(
+        assertion, expected_assertion,
+        f"inference row {index} performance ledger assertion",
+    )
+    return expected_ledger
+
+
 def _validate_artifact_record(
     record: Any, label: str
 ) -> tuple[Path, bytes, tuple[int, int]]:
@@ -1669,6 +1961,7 @@ def _validate_arm_artifacts(
             "missing_reason": "not applicable to control arm",
         }
     economy = root_token_economy(row["arm"], retained)
+    performance_ledger = _audit_performance_evidence(row, retained, index)
 
     if row["execution_success"]:
         # Hash-check above binds these exact bytes; route and usage are then replayed
@@ -1689,6 +1982,7 @@ def _validate_arm_artifacts(
     return run_directory, {
         "root_context_leak": leak_audit,
         "root_token_economy": economy,
+        "performance_ledger": performance_ledger,
     }
 
 
@@ -2783,6 +3077,7 @@ def build_score_rows(
                 "fallback_used": False, "source_chars": None,
                 "missing_reason": "independent audit unavailable",
             },
+            "performance_ledger": None,
         })
         references = outputs_by_id[fixture_id]
         prediction = row["response"]
@@ -2802,6 +3097,7 @@ def build_score_rows(
                 "operational_failure": normalize_operational_failure(row, audit),
                 "root_context_leak": audit["root_context_leak"],
                 "root_token_economy": audit["root_token_economy"],
+                "performance_ledger": audit["performance_ledger"],
                 "response_sha256": sha256_bytes(prediction.encode("utf-8")),
                 "official_ruler_coverage": coverage,
                 "official_ruler_coverage_percent": round(coverage * 100.0, 2),

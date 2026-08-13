@@ -283,6 +283,147 @@ class RulerRunnerTests(unittest.TestCase):
                 RUN.append_private_jsonl(link, {"x": 1})
             self.assertEqual(victim.read_text(), "must survive")
 
+    def test_control_performance_assertion_is_exact_not_emergency_candidate_shape(self):
+        evidence = {
+            "applicable": False,
+            "asserted": True,
+            "authority": "not applicable to control arm",
+            "raw_runtime": None,
+            "reasons": [],
+        }
+        RUN.validate_performance_ledger(
+            None, evidence, candidate=False, successful=False
+        )
+        evidence["reasons"] = ["controller exception occurred before ledger collection"]
+        with self.assertRaisesRegex(RUN.BenchError, "control arm"):
+            RUN.validate_performance_ledger(
+                None, evidence, candidate=False, successful=False
+            )
+
+    def test_performance_ledger_combines_model_authority_and_runtime_footer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            request_id = "123-456-7"
+            base = {
+                "schema_version": 2,
+                "event": "model_attempt",
+                "timestamp_ms": 10,
+                "attempt": 1,
+                "session_id": "session",
+                "outcome": "succeeded",
+                "provider": "OpenAI",
+                "model": RUN.MODEL,
+                "input_tokens": 10,
+                "output_tokens": 2,
+                "cache_read_tokens": 3,
+                "degraded_transport": False,
+                "failed_attempts_before_success": 0,
+            }
+            rows = [
+                {**base, "depth": 0, "request_id": request_id, "category": "turn",
+                 "entered_turn": 1, "latency_ms": 101},
+                {**base, "depth": 1, "request_id": "sub-a", "category": "turn",
+                 "entered_turn": 1, "latency_ms": 40},
+                {**base, "depth": 1, "request_id": "sub-b", "category": "turn",
+                 "entered_turn": 1, "latency_ms": 50},
+                {**base, "depth": 0, "request_id": request_id + "-repair-1",
+                 "category": "repair", "stage": "repair", "entered_turn": 2,
+                 "latency_ms": 23},
+            ]
+            model_trace = root / "model.jsonl"
+            write_private(
+                model_trace,
+                b"".join(RUN.canonical_json_file_bytes(row) for row in rows),
+            )
+            runtime = {
+                "schema_version": 1,
+                "event": "solo_runtime",
+                "request_id": request_id,
+                "outcome": "succeeded",
+                "exec_invocation_count": 1,
+                "exec_wall_ns": 9_000_000,
+                "snapshot_save_count": 1,
+                "snapshot_save_wall_ns": 120_000,
+                "snapshot_load_count": 1,
+                "snapshot_load_wall_ns": 80_000,
+                "sub_call_count": 2,
+                "sub_call_wall_ns": 8_000_000,
+            }
+            footer = (
+                f'ignored transcript\n=== solo runtime trace begin request_id="{request_id}" ===\n'
+                + json.dumps(runtime, separators=(",", ":"))
+                + f'\n=== solo runtime trace end request_id="{request_id}" ===\n'
+            )
+            solo_trace = root / "solo.log"
+            write_private(solo_trace, footer.encode())
+
+            ledger, evidence = RUN.parse_performance_ledger(model_trace, solo_trace)
+            self.assertTrue(evidence["asserted"])
+            self.assertEqual(ledger["root_turn_count"], 2)
+            self.assertEqual(ledger["root_inference_ms"], 124)
+            self.assertEqual(ledger["exec_invocation_count"], 1)
+            self.assertEqual(ledger["snapshot_save_ms"], 0.12)
+            self.assertEqual(ledger["snapshot_load_ms"], 0.08)
+            self.assertEqual(ledger["sub_call_count"], 2)
+            self.assertEqual(ledger["sub_call_turn_count"], 2)
+            self.assertEqual(ledger["sub_call_wall_ms"], 8.0)
+            self.assertEqual(ledger["repair_count"], 1)
+            self.assertEqual(ledger["repair_cost"], {
+                "inference_ms": 23,
+                "input_tokens": 10,
+                "output_tokens": 2,
+                "cache_read_tokens": 3,
+                "token_accounting_complete": True,
+            })
+
+            rows[-1]["request_id"] = request_id + "-repair-2"
+            write_private(
+                model_trace,
+                b"".join(RUN.canonical_json_file_bytes(row) for row in rows),
+            )
+            invalid, invalid_evidence = RUN.parse_performance_ledger(
+                model_trace, solo_trace
+            )
+            self.assertIsNone(invalid)
+            self.assertTrue(any(
+                "contiguous" in reason for reason in invalid_evidence["reasons"]
+            ))
+
+    def test_performance_ledger_fails_closed_on_spoof_or_count_drift(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            request_id = "1-2-3"
+            model = {
+                "schema_version": 2, "event": "model_attempt", "timestamp_ms": 1,
+                "depth": 0, "request_id": request_id, "attempt": 1,
+                "entered_turn": 1, "session_id": None, "category": "turn",
+                "outcome": "succeeded", "provider": "OpenAI", "model": RUN.MODEL,
+                "input_tokens": 1, "output_tokens": 1, "cache_read_tokens": 0,
+                "latency_ms": 1, "degraded_transport": False,
+                "failed_attempts_before_success": 0,
+            }
+            model_trace = root / "model.jsonl"
+            write_private(model_trace, RUN.canonical_json_file_bytes(model))
+            runtime = {
+                "schema_version": 1, "event": "solo_runtime", "request_id": request_id,
+                "outcome": "succeeded", "exec_invocation_count": 1,
+                "exec_wall_ns": 1, "snapshot_save_count": 1,
+                "snapshot_save_wall_ns": 1, "snapshot_load_count": 0,
+                "snapshot_load_wall_ns": 0, "sub_call_count": 1,
+                "sub_call_wall_ns": 0,
+            }
+            row = json.dumps(runtime, separators=(",", ":"))
+            footer = (
+                row + f'\n=== solo runtime trace begin request_id="{request_id}" ===\n'
+                + row + f'\n=== solo runtime trace end request_id="{request_id}" ===\n'
+            )
+            solo_trace = root / "solo.log"
+            write_private(solo_trace, footer.encode())
+            ledger, evidence = RUN.parse_performance_ledger(model_trace, solo_trace)
+            self.assertIsNone(ledger)
+            self.assertFalse(evidence["asserted"])
+            self.assertTrue(any("duplicated" in reason for reason in evidence["reasons"]))
+
     def test_trace_capture_rejects_symlink_and_hardlink(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -740,6 +881,36 @@ class RulerRunnerTests(unittest.TestCase):
                     "fresh_session": True, "cleanup_complete": True,
                 },
                 "failure": None,
+                "arm_evidence": {
+                    "performance_ledger": (
+                        {
+                            "schema_version": 1, "complete": True,
+                            "root_turn_count": 1, "root_inference_ms": 100,
+                            "exec_invocation_count": 1, "exec_wall_ms": 2.0,
+                            "snapshot_save_count": 1, "snapshot_save_ms": 0.1,
+                            "snapshot_load_count": 0, "snapshot_load_ms": 0.0,
+                            "sub_call_count": 0, "sub_call_turn_count": 0,
+                            "sub_call_wall_ms": 0.0, "repair_count": 0,
+                            "repair_cost": {
+                                "inference_ms": 0, "input_tokens": 0,
+                                "output_tokens": 0, "cache_read_tokens": 0,
+                                "token_accounting_complete": True,
+                            },
+                        }
+                        if job["arm"] == "jcode-azdaja" else None
+                    ),
+                    "performance_ledger_assertion": {
+                        "applicable": job["arm"] == "jcode-azdaja",
+                        "asserted": True,
+                        "authority": (
+                            "synthetic test evidence"
+                            if job["arm"] == "jcode-azdaja"
+                            else "not applicable to control arm"
+                        ),
+                        "raw_runtime": None,
+                        "reasons": [],
+                    },
+                },
             }
             RUN.atomic_create_private_json(claims / f"{job['run_id']}.json", {
                 "schedule_id": schedule["schedule_id"], "run_id": job["run_id"],

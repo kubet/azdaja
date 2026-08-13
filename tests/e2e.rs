@@ -2999,6 +2999,28 @@ fn solo_root_retries_explicit_typed_transient_errors_with_separate_budgets() {
         solo.contains("provider=\"OpenAI\" model=\"gpt-5.4\""),
         "{solo}"
     );
+    let traced_request_id = success["request_id"].as_str().unwrap();
+    let solo_lines: Vec<&str> = solo.lines().collect();
+    assert_eq!(
+        solo_lines[solo_lines.len() - 3],
+        format!("=== solo runtime trace begin request_id={traced_request_id:?} ===")
+    );
+    assert_eq!(
+        solo_lines[solo_lines.len() - 1],
+        format!("=== solo runtime trace end request_id={traced_request_id:?} ===")
+    );
+    let runtime: serde_json::Value =
+        serde_json::from_str(solo_lines[solo_lines.len() - 2]).unwrap();
+    assert_eq!(runtime["schema_version"], 1);
+    assert_eq!(runtime["event"], "solo_runtime");
+    assert_eq!(runtime["request_id"], traced_request_id);
+    assert_eq!(runtime["outcome"], "succeeded");
+    assert_eq!(runtime["exec_invocation_count"], 1);
+    assert_eq!(runtime["snapshot_save_count"], 1);
+    assert_eq!(runtime["snapshot_load_count"], 0);
+    assert_eq!(runtime["sub_call_count"], 0);
+    assert!(runtime["exec_wall_ns"].as_u64().is_some());
+    assert!(runtime["snapshot_save_wall_ns"].as_u64().is_some());
     fs::remove_dir_all(t).unwrap();
 }
 

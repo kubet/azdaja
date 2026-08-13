@@ -797,6 +797,93 @@ struct SoloProgramFailure {
     external_calls: usize,
 }
 
+/// Monotonic, process-local timings not represented by provider attempt rows.
+/// Model time remains authoritative in `AZDAJA_MODEL_TRACE`; this record only
+/// covers generated-cell execution, in-memory checkpoints, and logical child batches.
+#[derive(Debug, Default)]
+struct SoloRuntimeMetrics {
+    exec_invocation_count: u32,
+    exec_wall_ns: u128,
+    snapshot_save_count: u32,
+    snapshot_save_wall_ns: u128,
+    snapshot_load_count: u32,
+    snapshot_load_wall_ns: u128,
+    sub_call_count: u64,
+    sub_call_wall_ns: u128,
+}
+
+#[derive(Serialize)]
+struct SoloRuntimeTrace<'a> {
+    schema_version: u8,
+    event: &'static str,
+    request_id: &'a str,
+    outcome: &'static str,
+    exec_invocation_count: u32,
+    exec_wall_ns: u128,
+    snapshot_save_count: u32,
+    snapshot_save_wall_ns: u128,
+    snapshot_load_count: u32,
+    snapshot_load_wall_ns: u128,
+    sub_call_count: u64,
+    sub_call_wall_ns: u128,
+}
+
+fn solo_runtime_trace(
+    request_id: &str,
+    outcome: &'static str,
+    metrics: &SoloRuntimeMetrics,
+) -> Result<String> {
+    let row = SoloRuntimeTrace {
+        schema_version: 1,
+        event: "solo_runtime",
+        request_id,
+        outcome,
+        exec_invocation_count: metrics.exec_invocation_count,
+        exec_wall_ns: metrics.exec_wall_ns,
+        snapshot_save_count: metrics.snapshot_save_count,
+        snapshot_save_wall_ns: metrics.snapshot_save_wall_ns,
+        snapshot_load_count: metrics.snapshot_load_count,
+        snapshot_load_wall_ns: metrics.snapshot_load_wall_ns,
+        sub_call_count: metrics.sub_call_count,
+        sub_call_wall_ns: metrics.sub_call_wall_ns,
+    };
+    Ok(format!(
+        "\n=== solo runtime trace begin request_id={request_id:?} ===\n{}\n=== solo runtime trace end request_id={request_id:?} ===\n",
+        serde_json::to_string(&row)?,
+    ))
+}
+
+struct SoloRuntimeRecorder {
+    trace: Option<fs::File>,
+    trace_path: Option<PathBuf>,
+    request_id: String,
+    metrics: SoloRuntimeMetrics,
+    succeeded: bool,
+}
+
+impl SoloRuntimeRecorder {
+    fn record(&mut self, entry: String) {
+        record_solo_trace(&mut self.trace, self.trace_path.as_deref(), entry);
+    }
+}
+
+impl Drop for SoloRuntimeRecorder {
+    fn drop(&mut self) {
+        match solo_runtime_trace(
+            &self.request_id,
+            if self.succeeded {
+                "succeeded"
+            } else {
+                "failed"
+            },
+            &self.metrics,
+        ) {
+            Ok(entry) => self.record(entry),
+            Err(error) => eprintln!("azdaja: solo runtime trace serialization failed: {error:#}"),
+        }
+    }
+}
+
 fn classify_program_failure(
     text: &str,
     fallback: SoloProgramFailureKind,
@@ -833,6 +920,7 @@ fn execute_solo_reply(
     session: &mut SoloSession,
     reply: &str,
     cfg: &Config,
+    runtime: &mut SoloRuntimeMetrics,
 ) -> std::result::Result<(String, String, String), SoloProgramFailure> {
     let code = extract_solo_python(reply).map_err(|error| SoloProgramFailure {
         kind: classify_program_failure(&error.to_string(), SoloProgramFailureKind::Protocol),
@@ -850,16 +938,26 @@ fn execute_solo_reply(
         failure_line: None,
         external_calls: 0,
     })?;
-    let result = session
-        .exec(&code, cfg)
-        .map_err(|error| SoloProgramFailure {
-            kind: SoloProgramFailureKind::Host,
-            error,
-            code: Some(code.clone()),
-            output: None,
-            failure_line: None,
-            external_calls: 0,
-        })?;
+    runtime.exec_invocation_count = runtime.exec_invocation_count.saturating_add(1);
+    let exec_started = Instant::now();
+    let result = session.exec(&code, cfg);
+    runtime.exec_wall_ns = runtime
+        .exec_wall_ns
+        .saturating_add(exec_started.elapsed().as_nanos());
+    let result = result.map_err(|error| SoloProgramFailure {
+        kind: SoloProgramFailureKind::Host,
+        error,
+        code: Some(code.clone()),
+        output: None,
+        failure_line: None,
+        external_calls: 0,
+    })?;
+    runtime.sub_call_count = runtime
+        .sub_call_count
+        .saturating_add(u64::try_from(result.external_calls).unwrap_or(u64::MAX));
+    runtime.sub_call_wall_ns = runtime
+        .sub_call_wall_ns
+        .saturating_add(result.sub_call_wall_ns);
     if !result.success {
         let kind = classify_monty_failure(result.failure_kind);
         let error = if kind == SoloProgramFailureKind::Regex {
@@ -1101,6 +1199,18 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
     // retryable product failure.
     let mut trace =
         preflight_solo_trace(trace_path.as_deref(), &root_request_id, root_model, &prompt)?;
+    let footer_trace = trace
+        .as_ref()
+        .map(fs::File::try_clone)
+        .transpose()
+        .context("clone solo runtime trace sink")?;
+    let mut runtime = SoloRuntimeRecorder {
+        trace: footer_trace,
+        trace_path: trace_path.clone(),
+        request_id: root_request_id.clone(),
+        metrics: SoloRuntimeMetrics::default(),
+        succeeded: false,
+    };
     let entered_turn_budget = Arc::new(EnteredTurnBudget::new(3));
     let mut model_reply = None;
     let mut root_driver = None;
@@ -1204,9 +1314,16 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
             model_reply.text
         ),
     );
-    let pristine = session.checkpoint()?;
+    runtime.metrics.snapshot_save_count = runtime.metrics.snapshot_save_count.saturating_add(1);
+    let snapshot_started = Instant::now();
+    let pristine = session.checkpoint();
+    runtime.metrics.snapshot_save_wall_ns = runtime
+        .metrics
+        .snapshot_save_wall_ns
+        .saturating_add(snapshot_started.elapsed().as_nanos());
+    let pristine = pristine?;
     let lease = root_driver.lend_to_solo()?;
-    match execute_solo_reply(&mut session, &model_reply.text, cfg) {
+    match execute_solo_reply(&mut session, &model_reply.text, cfg, &mut runtime.metrics) {
         Ok((answer, code, output)) => {
             record_solo_trace(
                 &mut trace,
@@ -1239,7 +1356,15 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
             if !repairable || !root_driver.reclaim_from_solo(lease)? {
                 return Err(first_failure.error);
             }
-            session.restore_checkpoint(&pristine)?;
+            runtime.metrics.snapshot_load_count =
+                runtime.metrics.snapshot_load_count.saturating_add(1);
+            let snapshot_started = Instant::now();
+            let restored = session.restore_checkpoint(&pristine);
+            runtime.metrics.snapshot_load_wall_ns = runtime
+                .metrics
+                .snapshot_load_wall_ns
+                .saturating_add(snapshot_started.elapsed().as_nanos());
+            restored?;
             let repair_prompt = root_repair_prompt(&first_failure);
             if repair_prompt.len() > 1024 {
                 bail!("solo root repair prompt exceeds byte limit")
@@ -1288,7 +1413,7 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
                 ),
             );
             let repair_lease = root_driver.lend_to_solo()?;
-            match execute_solo_reply(&mut session, &repair_reply.text, cfg) {
+            match execute_solo_reply(&mut session, &repair_reply.text, cfg, &mut runtime.metrics) {
                 Ok((answer, code, output)) => {
                     record_solo_trace(
                         &mut trace,
@@ -1335,7 +1460,15 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
                             first_failure.kind
                         )));
                     }
-                    session.restore_checkpoint(&pristine)?;
+                    runtime.metrics.snapshot_load_count =
+                        runtime.metrics.snapshot_load_count.saturating_add(1);
+                    let snapshot_started = Instant::now();
+                    let restored = session.restore_checkpoint(&pristine);
+                    runtime.metrics.snapshot_load_wall_ns = runtime
+                        .metrics
+                        .snapshot_load_wall_ns
+                        .saturating_add(snapshot_started.elapsed().as_nanos());
+                    restored?;
                     let second_prompt = root_repair_prompt(&repair_failure);
                     if second_prompt.len() > 1024 {
                         bail!("solo root repair prompt exceeds byte limit")
@@ -1384,7 +1517,12 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
                         ),
                     );
                     let _second_lease = root_driver.lend_to_solo()?;
-                    match execute_solo_reply(&mut session, &second_reply.text, cfg) {
+                    match execute_solo_reply(
+                        &mut session,
+                        &second_reply.text,
+                        cfg,
+                        &mut runtime.metrics,
+                    ) {
                         Ok((answer, code, output)) => {
                             record_solo_trace(
                                 &mut trace,
@@ -1417,6 +1555,7 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
             }
         }
     }
+    runtime.succeeded = true;
     Ok(())
 }
 
@@ -1660,6 +1799,46 @@ mod tests {
             );
         }
         fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn solo_runtime_recorder_writes_failed_footer_at_absolute_eof() {
+        let directory = env::temp_dir().join(format!(
+            "azdaja-solo-runtime-footer-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let path = directory.join("trace.log");
+        let request_id = "1-2-3";
+        let trace = preflight_solo_trace(Some(&path), request_id, "model", "root request").unwrap();
+        let footer_trace = trace.as_ref().map(fs::File::try_clone).transpose().unwrap();
+        let recorder = SoloRuntimeRecorder {
+            trace: footer_trace,
+            trace_path: Some(path.clone()),
+            request_id: request_id.into(),
+            metrics: SoloRuntimeMetrics::default(),
+            succeeded: false,
+        };
+        drop(recorder);
+        drop(trace);
+        let recorded = fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = recorded.lines().collect();
+        assert_eq!(
+            lines[lines.len() - 3],
+            "=== solo runtime trace begin request_id=\"1-2-3\" ==="
+        );
+        assert_eq!(
+            lines[lines.len() - 1],
+            "=== solo runtime trace end request_id=\"1-2-3\" ==="
+        );
+        let row: serde_json::Value = serde_json::from_str(lines[lines.len() - 2]).unwrap();
+        assert_eq!(row["event"], "solo_runtime");
+        assert_eq!(row["outcome"], "failed");
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

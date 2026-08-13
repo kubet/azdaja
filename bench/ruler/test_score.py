@@ -656,20 +656,43 @@ class ScoreTests(unittest.TestCase):
                     json.dumps({"type": "done", "provider": "OpenAI", "model": SCORE.MODEL}),
                 ))
             else:
+                request_id = f"1-{job['ordinal']}-1"
                 stdout_evidence = json.dumps({
-                    "depth": 0, "input_tokens": 100, "output_tokens": 5,
-                    "cache_read_tokens": 20, "cache_write_tokens": 0,
+                    "schema_version": 2, "event": "model_attempt",
+                    "depth": 0, "request_id": request_id, "attempt": 1,
+                    "entered_turn": 1, "session_id": None, "category": "turn",
+                    "outcome": "succeeded", "input_tokens": 100,
+                    "output_tokens": 5, "cache_read_tokens": 20,
                     "timestamp_ms": 1, "latency_ms": 1,
-                    "provider": "openai_subscription", "model": SCORE.MODEL,
+                    "provider": "OpenAI", "model": SCORE.MODEL,
+                    "degraded_transport": False,
+                    "failed_attempts_before_success": 0,
                 })
             private_text(stdout_path, stdout_evidence)
             private_text(stderr_path, "test stderr")
             model_trace_path = artifact_dir / "azdaja-model-usage.jsonl"
             solo_trace_path = artifact_dir / "azdaja-solo-trace.log"
+            runtime_row = None
             if job["arm"] == "jcode-azdaja":
-                # Candidate v32 opens/writes the exact solo trace before provider
-                # execution, so even a provider failure retains scan authority.
-                private_text(solo_trace_path, json.dumps({"event": "solo_started"}))
+                # The exact product footer is absolute EOF and request-bound.
+                runtime_row = {
+                    "schema_version": 1, "event": "solo_runtime",
+                    "request_id": request_id,
+                    "outcome": "succeeded" if execution_success else "failed",
+                    "exec_invocation_count": 1 if execution_success else 0,
+                    "exec_wall_ns": 1_000_000 if execution_success else 0,
+                    "snapshot_save_count": 1 if execution_success else 0,
+                    "snapshot_save_wall_ns": 100_000 if execution_success else 0,
+                    "snapshot_load_count": 0, "snapshot_load_wall_ns": 0,
+                    "sub_call_count": 0, "sub_call_wall_ns": 0,
+                }
+                solo_evidence = (
+                    f'{{"event":"solo_started"}}\n'
+                    f'=== solo runtime trace begin request_id="{request_id}" ===\n'
+                    + json.dumps(runtime_row, separators=(",", ":"))
+                    + f'\n=== solo runtime trace end request_id="{request_id}" ===\n'
+                )
+                private_text(solo_trace_path, solo_evidence)
                 if execution_success:
                     private_text(model_trace_path, stdout_evidence)
 
@@ -686,6 +709,41 @@ class ScoreTests(unittest.TestCase):
                 response = ", ".join(expected) + " -- explanation"
             else:
                 response = ", ".join(expected[:-1]) or "missing"
+            if job["arm"] == "jcode-azdaja" and execution_success:
+                performance_ledger = {
+                    "schema_version": 1, "complete": True,
+                    "root_turn_count": 1, "root_inference_ms": 1,
+                    "exec_invocation_count": 1, "exec_wall_ms": 1.0,
+                    "snapshot_save_count": 1, "snapshot_save_ms": 0.1,
+                    "snapshot_load_count": 0, "snapshot_load_ms": 0.0,
+                    "sub_call_count": 0, "sub_call_turn_count": 0,
+                    "sub_call_wall_ms": 0.0, "repair_count": 0,
+                    "repair_cost": {
+                        "inference_ms": 0, "input_tokens": 0,
+                        "output_tokens": 0, "cache_read_tokens": 0,
+                        "token_accounting_complete": True,
+                    },
+                }
+                performance_assertion = {
+                    "applicable": True, "asserted": True,
+                    "authority": SCORE.PERFORMANCE_AUTHORITY,
+                    "raw_runtime": runtime_row, "reasons": [],
+                }
+            elif job["arm"] == "jcode-azdaja":
+                performance_ledger = None
+                performance_assertion = {
+                    "applicable": True, "asserted": False,
+                    "authority": SCORE.PERFORMANCE_AUTHORITY,
+                    "raw_runtime": None,
+                    "reasons": ["required model or solo trace path is unavailable"],
+                }
+            else:
+                performance_ledger = None
+                performance_assertion = {
+                    "applicable": False, "asserted": True,
+                    "authority": "not applicable to control arm",
+                    "raw_runtime": None, "reasons": [],
+                }
             row = {
                 "schema_version": 1,
 
@@ -734,6 +792,8 @@ class ScoreTests(unittest.TestCase):
                 "arm_evidence": {
                     "staged_filename": job["staged_filename"],
                     "wrapper_sha256": SCORE.WRAPPER_TEMPLATE_SHA256,
+                    "performance_ledger": performance_ledger,
+                    "performance_ledger_assertion": performance_assertion,
                     "trajectory_artifacts": {
                         "stdout": artifact_record(stdout_path),
                         "stderr": artifact_record(stderr_path),
@@ -868,6 +928,36 @@ class ScoreTests(unittest.TestCase):
             with mock.patch.object(SCORE, "load_gold", side_effect=AssertionError("gold read")):
                 with self.assertRaisesRegex(SCORE.ScoreError, "falsely claims success.*root_context_leak"):
                     SCORE.build_report(manifest, gold, runs, bootstrap_resamples=1)
+
+    def test_performance_ledger_is_independently_recomputed_and_tamper_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            baseline = self.make_artifacts(Path(directory))
+            row = next(
+                item for item in baseline[6]
+                if item["arm"] == "jcode-azdaja" and item["execution_success"]
+            )
+            artifacts = row["arm_evidence"]["trajectory_artifacts"]
+            retained = {
+                name: Path(record["path"]).read_bytes()
+                for name, record in artifacts.items()
+            }
+            audited = SCORE._audit_performance_evidence(row, retained, 1)
+            self.assertEqual(audited, row["arm_evidence"]["performance_ledger"])
+
+            tampered = copy.deepcopy(row)
+            tampered["arm_evidence"]["performance_ledger"]["root_turn_count"] += 1
+            with self.assertRaisesRegex(SCORE.ScoreError, "performance ledger"):
+                SCORE._audit_performance_evidence(tampered, retained, 1)
+
+            missing = copy.deepcopy(row)
+            missing["arm_evidence"].pop("performance_ledger")
+            with self.assertRaisesRegex(SCORE.ScoreError, "performance ledger"):
+                SCORE._audit_performance_evidence(missing, retained, 1)
+
+            trace_tampered = dict(retained)
+            trace_tampered["azdaja_solo_trace"] += b"unexpected trailing row\n"
+            with self.assertRaisesRegex(SCORE.ScoreError, "runtime footer"):
+                SCORE._audit_performance_evidence(row, trace_tampered, 1)
 
     def test_failed_treatment_missing_solo_trace_blocks_gold(self):
         with tempfile.TemporaryDirectory() as directory:

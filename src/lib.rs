@@ -409,6 +409,8 @@ pub struct ExecResult {
     pub success: bool,
     pub finalized: bool,
     pub external_calls: usize,
+    /// Gross monotonic wall spent inside logical model-call batches during this cell.
+    pub sub_call_wall_ns: u128,
     pub failure_kind: ExecFailureKind,
     pub failure_line: Option<String>,
 }
@@ -529,6 +531,7 @@ fn external(
     default_model: &str,
     final_out: &mut Option<Final>,
     call_count: &mut usize,
+    sub_call_wall: &mut Duration,
 ) -> Result<MontyObject> {
     match name {
         "FINAL" => {
@@ -570,7 +573,10 @@ fn external(
                     cfg.max_calls_per_cell
                 )
             }
-            let values = call_many_items(&prompts, model, workers, cfg, batch, use_shared)?;
+            let sub_call_started = Instant::now();
+            let values = call_many_items(&prompts, model, workers, cfg, batch, use_shared);
+            *sub_call_wall += sub_call_started.elapsed();
+            let values = values?;
             if batch {
                 Ok(MontyObject::List(
                     values
@@ -672,6 +678,7 @@ fn run_cell(
     bool,
     Option<Final>,
     usize,
+    Duration,
     Option<ExcType>,
     Option<String>,
 ) {
@@ -692,6 +699,7 @@ fn run_cell(
     let mut printed = BoundedOutput::new(cfg.output_cap);
     let mut final_out = None;
     let mut call_count = 0usize;
+    let mut sub_call_wall = Duration::ZERO;
     let mut progress = match repl.feed_start(code, inputs, PrintWriter::Callback(&mut printed)) {
         Ok(p) => p,
         Err(e) => {
@@ -704,6 +712,7 @@ fn run_cell(
                 false,
                 final_out,
                 call_count,
+                sub_call_wall,
                 Some(exception),
                 failure_line,
             );
@@ -729,6 +738,7 @@ fn run_cell(
                     true,
                     final_out,
                     call_count,
+                    sub_call_wall,
                     None,
                     None,
                 );
@@ -742,6 +752,7 @@ fn run_cell(
                     default_model,
                     &mut final_out,
                     &mut call_count,
+                    &mut sub_call_wall,
                 )
                 .map_err(MontyException::runtime_error);
                 let resumed = match result {
@@ -766,6 +777,7 @@ fn run_cell(
                             false,
                             final_out,
                             call_count,
+                            sub_call_wall,
                             Some(exception),
                             failure_line,
                         );
@@ -793,6 +805,7 @@ fn run_cell(
                         false,
                         final_out,
                         call_count,
+                        sub_call_wall,
                         Some(exception),
                         failure_line,
                     );
@@ -819,6 +832,7 @@ fn run_cell(
                         false,
                         final_out,
                         call_count,
+                        sub_call_wall,
                         Some(exception),
                         failure_line,
                     );
@@ -832,6 +846,7 @@ fn run_cell(
                     false,
                     final_out,
                     call_count,
+                    sub_call_wall,
                     None,
                     None,
                 );
@@ -1097,6 +1112,7 @@ impl SoloSession {
             success,
             mut final_out,
             external_calls,
+            sub_call_wall,
             mut exception,
             mut failure_line,
         ) = run_cell(repl, code, cfg, &self.sub_model);
@@ -1136,6 +1152,7 @@ impl SoloSession {
             success,
             finalized,
             external_calls,
+            sub_call_wall_ns: sub_call_wall.as_nanos(),
             failure_kind: exec_failure_kind(exception),
             failure_line,
         })
@@ -1167,6 +1184,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         success,
         mut final_out,
         external_calls,
+        sub_call_wall,
         mut exception,
         mut failure_line,
     ) = run_cell(repl, code, cfg, model);
@@ -1207,6 +1225,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         success,
         finalized,
         external_calls,
+        sub_call_wall_ns: sub_call_wall.as_nanos(),
         failure_kind: exec_failure_kind(exception),
         failure_line,
     })

@@ -1450,6 +1450,93 @@ def _expected_envelope(schedule: dict[str, Any], job: dict[str, Any]) -> dict[st
     }
 
 
+def _valid_nonnegative_number(value: Any) -> bool:
+    return (
+        type(value) in (int, float)
+        and math.isfinite(float(value))
+        and value >= 0
+    )
+
+
+def validate_performance_ledger(
+    ledger: Any, evidence: Any, *, candidate: bool, successful: bool
+) -> None:
+    evidence_keys = {"applicable", "asserted", "authority", "raw_runtime", "reasons"}
+    if (
+        not isinstance(evidence, dict)
+        or set(evidence) != evidence_keys
+        or type(evidence.get("applicable")) is not bool
+        or type(evidence.get("asserted")) is not bool
+        or not isinstance(evidence.get("authority"), str)
+        or not isinstance(evidence.get("reasons"), list)
+        or any(not isinstance(reason, str) for reason in evidence["reasons"])
+    ):
+        raise BenchError("performance ledger assertion shape is invalid")
+    if not candidate:
+        expected = {
+            "applicable": False,
+            "asserted": True,
+            "authority": "not applicable to control arm",
+            "raw_runtime": None,
+            "reasons": [],
+        }
+        if ledger is not None or evidence != expected:
+            raise BenchError("control arm claimed invalid Azdaja performance evidence")
+        return
+    if evidence["applicable"] is not True:
+        raise BenchError("Azdaja performance ledger is not marked applicable")
+    if ledger is None:
+        if evidence["asserted"] or successful:
+            raise BenchError("successful Azdaja row lacks a performance ledger")
+        return
+    keys = {
+        "schema_version", "complete", "root_turn_count", "root_inference_ms",
+        "exec_invocation_count", "exec_wall_ms", "snapshot_save_count",
+        "snapshot_save_ms", "snapshot_load_count", "snapshot_load_ms",
+        "sub_call_count", "sub_call_turn_count", "sub_call_wall_ms",
+        "repair_count", "repair_cost",
+    }
+    count_keys = {
+        "root_turn_count", "root_inference_ms", "exec_invocation_count",
+        "snapshot_save_count", "snapshot_load_count", "sub_call_count",
+        "sub_call_turn_count", "repair_count",
+    }
+    if (
+        not isinstance(ledger, dict)
+        or set(ledger) != keys
+        or ledger.get("schema_version") != 1
+        or type(ledger.get("complete")) is not bool
+        or any(_uint(ledger.get(key)) is None for key in count_keys)
+        or any(not _valid_nonnegative_number(ledger.get(key)) for key in (
+            "exec_wall_ms", "snapshot_save_ms", "snapshot_load_ms",
+            "sub_call_wall_ms",
+        ))
+    ):
+        raise BenchError("performance ledger shape or timing value is invalid")
+    cost = ledger["repair_cost"]
+    cost_keys = {
+        "inference_ms", "input_tokens", "output_tokens", "cache_read_tokens",
+        "token_accounting_complete",
+    }
+    if (
+        not isinstance(cost, dict)
+        or set(cost) != cost_keys
+        or _uint(cost.get("inference_ms")) is None
+        or type(cost.get("token_accounting_complete")) is not bool
+    ):
+        raise BenchError("performance repair cost is invalid")
+    token_values = [cost.get(key) for key in (
+        "input_tokens", "output_tokens", "cache_read_tokens"
+    )]
+    if cost["token_accounting_complete"]:
+        if any(_uint(value) is None for value in token_values):
+            raise BenchError("complete repair token cost is invalid")
+    elif any(value is not None for value in token_values):
+        raise BenchError("incomplete repair token cost must fail closed to null")
+    if ledger["complete"] != evidence["asserted"] or (successful and not ledger["complete"]):
+        raise BenchError("performance ledger completeness disagrees with execution")
+
+
 def validate_result_prefix(
     output: Path, schedule: dict[str, Any], claims: Path | None = None
 ) -> tuple[list[dict[str, Any]], tuple[int, int, int] | None]:
@@ -1504,6 +1591,20 @@ def validate_result_prefix(
             type(lifecycle[key]) is not bool for key in lifecycle_keys
         ):
             raise BenchError(f"inference row {line_number} lifecycle assertion is invalid")
+        arm_evidence = row.get("arm_evidence")
+        if not isinstance(arm_evidence, dict):
+            raise BenchError(f"inference row {line_number} arm evidence is invalid")
+        try:
+            validate_performance_ledger(
+                arm_evidence.get("performance_ledger"),
+                arm_evidence.get("performance_ledger_assertion"),
+                candidate=row["arm"] == "jcode-azdaja",
+                successful=row["execution_success"],
+            )
+        except BenchError as exc:
+            raise BenchError(
+                f"inference row {line_number} has invalid performance evidence: {exc}"
+            ) from exc
         usage = row.get("usage")
         usage_keys = {
             "input_tokens", "output_tokens", "cache_read_tokens",
@@ -1651,6 +1752,234 @@ def finalize_payload(
     )
     result["errors"] = errors
     return result
+
+
+SOLO_RUNTIME_KEYS = {
+    "schema_version", "event", "request_id", "outcome",
+    "exec_invocation_count", "exec_wall_ns",
+    "snapshot_save_count", "snapshot_save_wall_ns",
+    "snapshot_load_count", "snapshot_load_wall_ns",
+    "sub_call_count", "sub_call_wall_ns",
+}
+MODEL_TRACE_KEYS = {
+    "schema_version", "event", "timestamp_ms", "depth", "request_id",
+    "attempt", "entered_turn", "session_id", "category", "outcome",
+    "error", "error_category", "stage", "setup_substage", "provider", "model",
+    "input_tokens", "output_tokens", "cache_read_tokens", "latency_ms",
+    "degraded_transport", "failed_attempts_before_success", "response",
+}
+MODEL_TRACE_REQUIRED = {
+    "schema_version", "event", "timestamp_ms", "depth", "request_id",
+    "attempt", "session_id", "category", "outcome",
+}
+
+
+def _uint(value: Any, *, positive: bool = False) -> int | None:
+    if type(value) is not int or value < (1 if positive else 0):
+        return None
+    return value
+
+
+def parse_performance_ledger(
+    model_trace_path: Path | None, solo_trace_path: Path | None
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """Build one strict per-item ledger from the two existing product traces.
+
+    Provider-attempt rows remain authority for model time and tokens. The exact
+    final solo-runtime record contributes only monotonic internal spans which the
+    provider trace cannot observe. Any ambiguity returns no normalized ledger.
+    """
+    evidence: dict[str, Any] = {
+        "asserted": False,
+        "authority": (
+            "AZDAJA_MODEL_TRACE v2 provider attempts plus the unique absolute-EOF "
+            "AZDAJA_SOLO_TRACE solo_runtime v1 record"
+        ),
+        "raw_runtime": None,
+        "reasons": [],
+    }
+    if model_trace_path is None or solo_trace_path is None:
+        evidence["reasons"].append("required model or solo trace path is unavailable")
+        return None, evidence
+    try:
+        model_text = read_owner_file_once(
+            model_trace_path, "performance model trace", exact_mode=0o600
+        ).decode("utf-8")
+        solo_text = read_owner_file_once(
+            solo_trace_path, "performance solo trace", exact_mode=0o600
+        ).decode("utf-8")
+    except (BenchError, UnicodeError, OSError) as exc:
+        evidence["reasons"].append(f"secure trace read failed: {type(exc).__name__}: {exc}")
+        return None, evidence
+
+    solo_lines = solo_text.splitlines()
+    if len(solo_lines) < 3:
+        evidence["reasons"].append("solo runtime footer is missing")
+        return None, evidence
+    try:
+        runtime = json.loads(solo_lines[-2])
+    except json.JSONDecodeError:
+        runtime = None
+    if not isinstance(runtime, dict):
+        evidence["reasons"].append("absolute-EOF solo runtime row is not JSON object")
+        return None, evidence
+    evidence["raw_runtime"] = runtime
+    request_id = runtime.get("request_id")
+    if (
+        set(runtime) != SOLO_RUNTIME_KEYS
+        or runtime.get("schema_version") != 1
+        or runtime.get("event") != "solo_runtime"
+        or runtime.get("outcome") not in {"succeeded", "failed"}
+        or not isinstance(request_id, str)
+        or re.fullmatch(r"[0-9]+-[0-9]+-[0-9]+", request_id) is None
+    ):
+        evidence["reasons"].append("solo runtime row shape or correlation key is invalid")
+        return None, evidence
+    expected_begin = f'=== solo runtime trace begin request_id="{request_id}" ==='
+    expected_end = f'=== solo runtime trace end request_id="{request_id}" ==='
+    if solo_lines[-3] != expected_begin or solo_lines[-1] != expected_end:
+        evidence["reasons"].append("solo runtime row is not in its exact absolute-EOF envelope")
+        return None, evidence
+    runtime_rows = []
+    for line in solo_lines:
+        if not line.startswith("{"):
+            continue
+        try:
+            candidate = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(candidate, dict) and candidate.get("event") == "solo_runtime":
+            runtime_rows.append(candidate)
+    if runtime_rows != [runtime]:
+        evidence["reasons"].append("solo runtime row is missing, duplicated, or spoof-ambiguous")
+        return None, evidence
+    counter_keys = {
+        "exec_invocation_count", "exec_wall_ns", "snapshot_save_count",
+        "snapshot_save_wall_ns", "snapshot_load_count", "snapshot_load_wall_ns",
+        "sub_call_count", "sub_call_wall_ns",
+    }
+    if any(_uint(runtime.get(key)) is None for key in counter_keys):
+        evidence["reasons"].append("solo runtime counters are not nonnegative integers")
+        return None, evidence
+    if runtime["sub_call_wall_ns"] > runtime["exec_wall_ns"]:
+        evidence["reasons"].append("child-call wall exceeds its containing exec wall")
+        return None, evidence
+
+    raw_model_lines = [line for line in model_text.splitlines() if line.strip()]
+    if not raw_model_lines:
+        evidence["reasons"].append("model trace has no rows")
+        return None, evidence
+    model_rows: list[dict[str, Any]] = []
+    for line in raw_model_lines:
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            evidence["reasons"].append("model trace contains malformed JSON")
+            return None, evidence
+        if (
+            not isinstance(row, dict)
+            or not MODEL_TRACE_REQUIRED.issubset(row)
+            or not set(row).issubset(MODEL_TRACE_KEYS)
+            or row.get("schema_version") != 2
+            or row.get("event") != "model_attempt"
+            or _uint(row.get("timestamp_ms")) is None
+            or _uint(row.get("depth")) is None
+            or _uint(row.get("attempt"), positive=True) is None
+            or not isinstance(row.get("request_id"), str)
+            or not row["request_id"]
+            or row.get("category") not in {"session_setup", "turn", "repair"}
+            or row.get("outcome") not in {"failed", "succeeded"}
+        ):
+            evidence["reasons"].append("model trace contains a structurally invalid row")
+            return None, evidence
+        if row["category"] in {"turn", "repair"} and (
+            _uint(row.get("entered_turn"), positive=True) is None
+            or _uint(row.get("latency_ms")) is None
+        ):
+            evidence["reasons"].append("entered model turn lacks ordinal or latency")
+            return None, evidence
+        model_rows.append(row)
+
+    root_rows = [
+        row for row in model_rows
+        if row["depth"] == 0 and row["category"] in {"turn", "repair"}
+    ]
+    initial_root_rows = [row for row in root_rows if row["category"] == "turn"]
+    if not initial_root_rows or any(row["request_id"] != request_id for row in initial_root_rows):
+        evidence["reasons"].append("runtime request_id is not bound to every initial root turn")
+        return None, evidence
+    entered_ordinals = [row["entered_turn"] for row in root_rows]
+    if sorted(entered_ordinals) != list(range(1, len(root_rows) + 1)):
+        evidence["reasons"].append("root entered-turn ordinals are duplicated or noncontiguous")
+        return None, evidence
+
+    repair_rows = [row for row in root_rows if row["category"] == "repair"]
+    repair_suffixes = [
+        row["request_id"].removeprefix(request_id + "-repair-")
+        for row in repair_rows
+    ]
+    if repair_suffixes != [str(index) for index in range(1, len(repair_rows) + 1)]:
+        evidence["reasons"].append("repair rows are not a unique contiguous root sequence")
+        return None, evidence
+    sub_request_ids = {row["request_id"] for row in model_rows if row["depth"] > 0}
+    sub_turn_rows = [
+        row for row in model_rows
+        if row["depth"] > 0 and row["category"] in {"turn", "repair"}
+    ]
+    if len(sub_request_ids) != runtime["sub_call_count"]:
+        evidence["reasons"].append("logical child-call count disagrees with model trace")
+        return None, evidence
+
+    repair_usage_complete = all(
+        row["outcome"] == "succeeded"
+        and all(_uint(row.get(key)) is not None for key in (
+            "input_tokens", "output_tokens", "cache_read_tokens"
+        ))
+        for row in repair_rows
+    )
+    repair_cost = {
+        "inference_ms": sum(row["latency_ms"] for row in repair_rows),
+        "input_tokens": (
+            sum(row["input_tokens"] for row in repair_rows)
+            if repair_usage_complete else None
+        ),
+        "output_tokens": (
+            sum(row["output_tokens"] for row in repair_rows)
+            if repair_usage_complete else None
+        ),
+        "cache_read_tokens": (
+            sum(row["cache_read_tokens"] for row in repair_rows)
+            if repair_usage_complete else None
+        ),
+        "token_accounting_complete": repair_usage_complete,
+    }
+    complete = runtime["outcome"] == "succeeded"
+    if complete and (
+        runtime["snapshot_save_count"] != 1
+        or runtime["snapshot_load_count"] != len(repair_rows)
+        or not 1 <= runtime["exec_invocation_count"] <= 1 + len(repair_rows)
+    ):
+        evidence["reasons"].append("successful runtime count identities are inconsistent")
+        return None, evidence
+    ledger = {
+        "schema_version": 1,
+        "complete": complete,
+        "root_turn_count": len(root_rows),
+        "root_inference_ms": sum(row["latency_ms"] for row in root_rows),
+        "exec_invocation_count": runtime["exec_invocation_count"],
+        "exec_wall_ms": runtime["exec_wall_ns"] / 1_000_000.0,
+        "snapshot_save_count": runtime["snapshot_save_count"],
+        "snapshot_save_ms": runtime["snapshot_save_wall_ns"] / 1_000_000.0,
+        "snapshot_load_count": runtime["snapshot_load_count"],
+        "snapshot_load_ms": runtime["snapshot_load_wall_ns"] / 1_000_000.0,
+        "sub_call_count": runtime["sub_call_count"],
+        "sub_call_turn_count": len(sub_turn_rows),
+        "sub_call_wall_ms": runtime["sub_call_wall_ns"] / 1_000_000.0,
+        "repair_count": len(repair_rows),
+        "repair_cost": repair_cost,
+    }
+    evidence["asserted"] = complete
+    return ledger, evidence
 
 
 def _normalized_usage(arm: str, stdout: str, stderr: str, trace: dict[str, Any] | None) -> tuple[dict[str, Any] | None, dict[str, Any]]:
@@ -1958,6 +2287,22 @@ def execute_product_arm(
         OOLONG.parse_azdaja_route_evidence(model_trace_path)
         if "azdaja_model_trace" in trace_captured else None
     )
+    if job["arm"] == "jcode-azdaja":
+        performance_ledger, performance_evidence = parse_performance_ledger(
+            model_trace_path if "azdaja_model_trace" in trace_captured else None,
+            trace_paths.get("azdaja_solo_trace")
+            if "azdaja_solo_trace" in trace_captured else None,
+        )
+        performance_evidence["applicable"] = True
+    else:
+        performance_ledger = None
+        performance_evidence = {
+            "applicable": False,
+            "asserted": True,
+            "authority": "not applicable to control arm",
+            "raw_runtime": None,
+            "reasons": [],
+        }
     route, route_evidence = _normalized_route(job["arm"], stdout, auth, route_trace)
     normalized_usage, usage_evidence = _normalized_usage(
         job["arm"], stdout, stderr, trace_usage
@@ -2037,6 +2382,7 @@ def execute_product_arm(
         and normalized_usage is not None
         and lifecycle["asserted"]
         and trace_assertion["asserted"]
+        and performance_evidence.get("asserted") is True
         and (job["arm"] != "jcode-azdaja" or (
             root_leak_audit.get("scanned") is True
             and root_leak_audit.get("detected") is False
@@ -2068,6 +2414,8 @@ def execute_product_arm(
             kind, message = "lifecycle_assertion", "fresh isolated lifecycle or cleanup was not verified"
         elif not trace_assertion["asserted"]:
             kind, message = "trace_capture", "required product traces were not captured"
+        elif performance_evidence.get("asserted") is not True:
+            kind, message = "performance_trace", "per-item timing ledger was missing, partial, or inconsistent"
         elif job["arm"] == "jcode-azdaja" and root_leak_audit.get("scanned") is not True:
             kind, message = "trace_capture", "exact root-context leak scan was unavailable"
         elif not payload_asserted:
@@ -2104,6 +2452,8 @@ def execute_product_arm(
             "payload_integrity": payload_evidence,
             "candidate_staging": staged_skill,
             "trace_capture": trace_assertion,
+            "performance_ledger": performance_ledger,
+            "performance_ledger_assertion": performance_evidence,
             "root_context_leak": root_leak_audit,
             "tool_access_policy": tool_policy,
             "credential_cleanup": retention,
@@ -2365,6 +2715,21 @@ def run_suite(args: argparse.Namespace, suite: PublicSuite) -> int:
                 "arm_evidence": {
                     "controller_exception": message,
                     "trajectory_artifacts": emergency_artifacts,
+                    "performance_ledger": None,
+                    "performance_ledger_assertion": {
+                        "applicable": job["arm"] == "jcode-azdaja",
+                        "asserted": job["arm"] != "jcode-azdaja",
+                        "authority": (
+                            "controller exception occurred before ledger collection"
+                            if job["arm"] == "jcode-azdaja"
+                            else "not applicable to control arm"
+                        ),
+                        "raw_runtime": None,
+                        "reasons": (
+                            ["controller exception occurred before ledger collection"]
+                            if job["arm"] == "jcode-azdaja" else []
+                        ),
+                    },
                     "telemetry_authority": {
                         "route_and_usage": "mandatory empty stdout artifact after controller failure",
                         "process": "controller assertion",
