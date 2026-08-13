@@ -118,7 +118,10 @@ def _private_regular_file(path: Path, label: str) -> None:
 
 
 def load_suite_manifest(path_arg: str) -> Suite:
-    path = Path(path_arg).expanduser().resolve(strict=True)
+    unresolved = Path(path_arg).expanduser()
+    if unresolved.is_symlink():
+        raise BenchError(f"suite manifest must not be a symlink: {unresolved}")
+    path = unresolved.resolve(strict=True)
     _private_regular_file(path, "suite manifest")
     metadata = load_json_object(path, "suite manifest")
     if metadata.get("schema_version") != 1:
@@ -161,7 +164,10 @@ def load_suite_manifest(path_arg: str) -> Suite:
             raw = entry.get(key)
             if not isinstance(raw, str) or not raw or Path(raw).is_absolute():
                 raise BenchError(f"suite fixture {key} must be a relative path")
-            candidate = (parent / raw).resolve(strict=True)
+            unresolved_candidate = parent / raw
+            if unresolved_candidate.is_symlink():
+                raise BenchError(f"suite fixture {key} must not be a symlink")
+            candidate = unresolved_candidate.resolve(strict=True)
             if candidate.parent != parent:
                 raise BenchError(f"suite fixture {key} must stay in the manifest directory")
             _private_regular_file(candidate, f"suite fixture {key}")
@@ -2253,7 +2259,9 @@ def build_suite_schedule(
     return identity
 
 
-def validate_result_prefix(path: Path, schedule: dict[str, Any]) -> list[dict[str, Any]]:
+def validate_result_prefix(
+    path: Path, schedule: dict[str, Any], claims: Path | None = None
+) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     _private_regular_file(path, "suite output")
@@ -2269,30 +2277,73 @@ def validate_result_prefix(path: Path, schedule: dict[str, Any]) -> list[dict[st
         if not isinstance(row, dict) or len(rows) >= len(schedule["jobs"]):
             raise BenchError("suite output is not a valid schedule prefix")
         job = schedule["jobs"][len(rows)]
-        for key in ("run_id", "fixture_id", "schedule_id"):
-            expected = schedule["schedule_id"] if key == "schedule_id" else job[key]
+        expected_envelope = {
+            "record_type": "inference",
+            "schedule_id": schedule["schedule_id"],
+            "run_id": job["run_id"],
+            "fixture_id": job["fixture_id"],
+            "row_sha256": job["row_sha256"],
+            "context_sha256": job["context_sha256"],
+            "execution_ordinal": job["ordinal"],
+            "arm": job["arm"],
+            "repetition": job["repetition"],
+            "model": schedule["configuration"]["model"],
+            "reasoning": schedule["configuration"]["reasoning"],
+            "candidate_sha256": (
+                None
+                if schedule["configuration"]["candidate"] is None
+                else schedule["configuration"]["candidate"]["sha256"]
+            ),
+            "controller_sha256": schedule["configuration"]["controller"]["sha256"],
+            "success": None,
+            "score": None,
+            "scoring_status": "deferred",
+        }
+        for key, expected in expected_envelope.items():
             if row.get(key) != expected:
-                raise BenchError(f"suite output prefix mismatch for {key} at line {line_number}")
+                raise BenchError(
+                    f"suite output prefix mismatch for {key} at line {line_number}"
+                )
+        if type(row.get("execution_success")) is not bool:
+            raise BenchError(f"invalid terminal execution status at line {line_number}")
         if row["run_id"] in seen:
             raise BenchError(f"duplicate suite run_id at line {line_number}")
+        if claims is not None:
+            claim_path = claims / (row["run_id"] + ".json")
+            _private_regular_file(claim_path, "suite run claim")
+            claim = load_json_object(claim_path, "suite run claim")
+            completion_path = claims / (row["run_id"] + ".done.json")
+            _private_regular_file(completion_path, "suite run completion")
+            completion = load_json_object(completion_path, "suite run completion")
+            if completion != {
+                "schedule_id": schedule["schedule_id"],
+                "run_id": job["run_id"],
+                "row_sha256": hashlib.sha256(canonical_json_bytes(row)).hexdigest(),
+            }:
+                raise BenchError(f"suite run completion mismatch at line {line_number}")
+            for key, expected in (
+                ("schedule_id", schedule["schedule_id"]),
+                ("run_id", job["run_id"]),
+                ("ordinal", job["ordinal"]),
+            ):
+                if claim.get(key) != expected:
+                    raise BenchError(
+                        f"suite run claim mismatch for {key} at line {line_number}"
+                    )
         seen.add(row["run_id"])
         rows.append(row)
     return rows
 
 
 def score_completed_suite(
-    output: Path, scores_path: Path, schedule: dict[str, Any], suite: Suite
+    output: Path,
+    scores_path: Path,
+    schedule: dict[str, Any],
+    suite: Suite,
+    claims: Path,
 ) -> None:
-    rows = validate_result_prefix(output, schedule)
+    rows = validate_result_prefix(output, schedule, claims)
     if len(rows) != len(schedule["jobs"]):
-        return
-    if scores_path.exists():
-        existing = load_json_object(scores_path, "suite scores")
-        if (
-            existing.get("schedule_id") != schedule["schedule_id"]
-            or existing.get("inference_jsonl_sha256") != sha256_path(output)
-        ):
-            raise BenchError("existing suite scores do not match completed inference")
         return
     by_id = {item.fixture_id: item.fixture for item in suite.fixtures}
     scores = []
@@ -2319,6 +2370,12 @@ def score_completed_suite(
         "inference_jsonl_sha256": sha256_path(output),
         "scores": scores,
     }
+    if scores_path.exists():
+        _private_regular_file(scores_path, "suite scores")
+        existing = load_json_object(scores_path, "suite scores")
+        if existing != artifact:
+            raise BenchError("existing suite scores do not exactly match completed inference")
+        return
     atomic_create_private_json(scores_path, artifact)
 
 
@@ -2456,10 +2513,18 @@ def run_suite(args: argparse.Namespace, suite: Suite) -> int:
             raise BenchError("resume configuration or identities differ from frozen schedule")
     else:
         atomic_create_private_json(schedule_path, schedule)
-    completed = validate_result_prefix(output, schedule)
+    claims_root = Path(str(output) + ".claims")
+    claims_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    claims = claims_root / schedule["schedule_id"]
+    claims.mkdir(mode=0o700, exist_ok=True)
+    if os.name == "posix":
+        os.chmod(claims_root, 0o700)
+        os.chmod(claims, 0o700)
+    completed = validate_result_prefix(output, schedule, claims)
     if len(completed) == len(schedule["jobs"]):
-        score_completed_suite(output, scores_path, schedule, suite)
-        return 0
+        score_completed_suite(output, scores_path, schedule, suite, claims)
+        scores = load_json_object(scores_path, "suite scores").get("scores", [])
+        return 1 if any(not item.get("success") for item in scores) else 0
     auth_jcode = preflight_jcode(source_home, args.jcode) if any(
         arm.startswith("jcode") for arm in args.arms
     ) else {}
@@ -2477,8 +2542,6 @@ def run_suite(args: argparse.Namespace, suite: Suite) -> int:
     if os.name == "posix":
         os.chmod(work_base, 0o700)
     schedule_root = work_base / ("schedule-" + schedule["schedule_id"])
-    claims = schedule_root / "claims"
-    claims.mkdir(mode=0o700, parents=True, exist_ok=True)
     work_root = schedule_root / "runs"
     work_root.mkdir(mode=0o700, parents=True, exist_ok=True)
     by_id = {item.fixture_id: item.fixture for item in suite.fixtures}
@@ -2536,17 +2599,30 @@ def run_suite(args: argparse.Namespace, suite: Suite) -> int:
                     "message": f"{type(exc).__name__}: {exc}",
                 },
             }
+        if isinstance(row.get("fixture"), dict):
+            row["fixture"].pop("row", None)
+            row["fixture"].pop("context", None)
         row.update(
             {
                 "record_type": "inference",
                 "schedule_id": schedule["schedule_id"],
                 "run_id": job["run_id"],
                 "fixture_id": job["fixture_id"],
+                "row_sha256": job["row_sha256"],
+                "context_sha256": job["context_sha256"],
                 "candidate_sha256": None if candidate is None else candidate["sha256"],
                 "controller_sha256": schedule["configuration"]["controller"]["sha256"],
             }
         )
         write_jsonl(output, row)
+        atomic_create_private_json(
+            claims / (job["run_id"] + ".done.json"),
+            {
+                "schedule_id": schedule["schedule_id"],
+                "run_id": job["run_id"],
+                "row_sha256": hashlib.sha256(canonical_json_bytes(row)).hexdigest(),
+            },
+        )
         print(
             json.dumps(
                 {
@@ -2561,7 +2637,7 @@ def run_suite(args: argparse.Namespace, suite: Suite) -> int:
             ),
             flush=True,
         )
-    score_completed_suite(output, scores_path, schedule, suite)
+    score_completed_suite(output, scores_path, schedule, suite, claims)
     scores = load_json_object(scores_path, "suite scores").get("scores", [])
     return 1 if any(not item.get("success") for item in scores) else 0
 

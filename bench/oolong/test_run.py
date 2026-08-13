@@ -456,24 +456,89 @@ class ControllerTests(unittest.TestCase):
             self.assertNotEqual(first["schedule_id"], changed["schedule_id"])
 
     def test_suite_output_prefix_rejects_duplicates_and_scores_only_when_complete(self):
+        jobs = [
+            {
+                "run_id": "r1",
+                "fixture_id": "f",
+                "row_sha256": "1" * 64,
+                "context_sha256": "2" * 64,
+                "ordinal": 1,
+                "arm": "a",
+                "repetition": 1,
+            },
+            {
+                "run_id": "r2",
+                "fixture_id": "f",
+                "row_sha256": "1" * 64,
+                "context_sha256": "2" * 64,
+                "ordinal": 2,
+                "arm": "b",
+                "repetition": 1,
+            },
+        ]
         schedule = {
             "schedule_id": "s",
-            "jobs": [
-                {"run_id": "r1", "fixture_id": "f", "ordinal": 1, "arm": "a", "repetition": 1},
-                {"run_id": "r2", "fixture_id": "f", "ordinal": 2, "arm": "b", "repetition": 1},
-            ],
+            "configuration": {
+                "model": "m",
+                "reasoning": "medium",
+                "candidate": None,
+                "controller": {"sha256": "c" * 64},
+            },
+            "jobs": jobs,
         }
+        def terminal(job):
+            return {
+                "record_type": "inference",
+                "schedule_id": "s",
+                "run_id": job["run_id"],
+                "fixture_id": "f",
+                "row_sha256": "1" * 64,
+                "context_sha256": "2" * 64,
+                "execution_ordinal": job["ordinal"],
+                "arm": job["arm"],
+                "repetition": 1,
+                "model": "m",
+                "reasoning": "medium",
+                "candidate_sha256": None,
+                "controller_sha256": "c" * 64,
+                "success": None,
+                "score": None,
+                "scoring_status": "deferred",
+                "execution_success": True,
+                "response": "Answer: 0",
+            }
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "out.jsonl"
-            RUN.write_jsonl(
-                output,
-                {"schedule_id": "s", "run_id": "r1", "fixture_id": "f", "response": "Answer: 0"},
-            )
+            first = terminal(jobs[0])
+            RUN.write_jsonl(output, first)
             self.assertEqual(len(RUN.validate_result_prefix(output, schedule)), 1)
-            RUN.write_jsonl(
-                output,
-                {"schedule_id": "s", "run_id": "r1", "fixture_id": "f", "response": "Answer: 0"},
+            claims = Path(directory) / "claims"
+            claims.mkdir(mode=0o700)
+            RUN.atomic_create_private_json(
+                claims / "r1.json",
+                {"schedule_id": "s", "run_id": "r1", "ordinal": 1, "pid": 1},
             )
+            RUN.atomic_create_private_json(
+                claims / "r1.done.json",
+                {
+                    "schedule_id": "s",
+                    "run_id": "r1",
+                    "row_sha256": RUN.hashlib.sha256(
+                        RUN.canonical_json_bytes(first)
+                    ).hexdigest(),
+                },
+            )
+            self.assertEqual(
+                len(RUN.validate_result_prefix(output, schedule, claims)), 1
+            )
+            first["response"] = "tampered"
+            output.write_text(json.dumps(first) + "\n", encoding="utf-8")
+            output.chmod(0o600)
+            with self.assertRaises(RUN.BenchError):
+                RUN.validate_result_prefix(output, schedule, claims)
+            output.unlink()
+            RUN.write_jsonl(output, terminal(jobs[0]))
+            RUN.write_jsonl(output, terminal(jobs[0]))
             with self.assertRaises(RUN.BenchError):
                 RUN.validate_result_prefix(output, schedule)
 
