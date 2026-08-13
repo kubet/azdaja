@@ -3,14 +3,14 @@ use azdaja::{
     Config, DEFAULT_CONFIG, EnteredTurnBudget, MONTY_VERSION, RootDriver,
     SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS, SKILL, SoloSession, VERSION, call_model,
     capability_check, exec, final_answer, kill, list, load, model_trace_request_id,
-    model_transport_error_is_transient, start,
+    model_transport_error_category, model_transport_error_is_transient, start,
 };
 use monty::MontyRun;
 use monty_types::CompileOptions;
 use serde::{Deserialize, Serialize};
 use std::{
     env, fs,
-    io::{self, Read},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
     process::ExitCode,
     sync::Arc,
@@ -23,20 +23,73 @@ use std::os::unix::fs::OpenOptionsExt;
 const CANARY_PROMPT: &str = "Reverse the six-letter ASCII string AJADZA. Reply with the reversed string only, no punctuation.";
 const CANARY_ANSWER: &str = "AZDAJA";
 
-fn private_append(path: &Path) -> Result<fs::File> {
-    let mut o = fs::OpenOptions::new();
-    o.create(true).append(true);
-    #[cfg(unix)]
-    o.mode(0o600);
-    let f = o.open(path)?;
+fn ensure_private_trace_file(file: &fs::File, path: &Path) -> Result<()> {
+    let metadata = file.metadata()?;
+    if !metadata.file_type().is_file() {
+        bail!(
+            "private trace sink is not a regular file: {}",
+            path.display()
+        )
+    }
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        if f.metadata()?.permissions().mode() & 0o077 != 0 {
-            f.set_permissions(fs::Permissions::from_mode(0o600))?
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        if metadata.uid() != unsafe { libc::geteuid() } {
+            bail!("private trace sink is not owned by the current user")
+        }
+        if metadata.nlink() != 1 {
+            bail!("private trace sink must have exactly one hard link")
+        }
+        if metadata.permissions().mode() & 0o077 != 0 {
+            bail!("existing private trace sink is accessible by group or other users")
         }
     }
-    Ok(f)
+    Ok(())
+}
+
+fn private_append(path: &Path) -> Result<fs::File> {
+    let mut create = fs::OpenOptions::new();
+    create.append(true).create_new(true);
+    #[cfg(unix)]
+    create
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    let file = match create.open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let mut existing = fs::OpenOptions::new();
+            existing.append(true);
+            #[cfg(unix)]
+            existing.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+            existing.open(path)?
+        }
+        Err(error) => return Err(error.into()),
+    };
+    ensure_private_trace_file(&file, path)?;
+    Ok(file)
+}
+
+fn preflight_solo_trace(
+    path: Option<&Path>,
+    request_id: &str,
+    model: &str,
+    prompt: &str,
+) -> Result<Option<fs::File>> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let mut file = private_append(path)?;
+    ensure_private_trace_file(&file, path)?;
+    writeln!(
+        file,
+        "\n=== root request begin request_id={request_id:?} model={model:?} request_chars={} ===",
+        prompt.chars().count()
+    )?;
+    file.write_all(prompt.as_bytes())?;
+    writeln!(file, "\n=== root request end request_id={request_id:?} ===")?;
+    file.sync_data()?;
+    ensure_private_trace_file(&file, path)?;
+    Ok(Some(file))
 }
 
 fn help() {
@@ -730,6 +783,30 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
     // The root plans once. A broken solve fails closed instead of spending another expensive root
     // turn to repair syntax, protocol failures, or incomplete semantic evidence.
     let root_request_id = model_trace_request_id();
+    let trace_path = env::var_os("AZDAJA_SOLO_TRACE").map(PathBuf::from);
+    // Create, permission, populate, and sync the transcript before a provider turn can be
+    // entered. Later diagnostic write failures are reported but cannot turn paid success into a
+    // retryable product failure.
+    let mut trace =
+        preflight_solo_trace(trace_path.as_deref(), &root_request_id, root_model, &prompt)?;
+    let mut record_trace = |entry: String| {
+        let Some(file) = trace.as_mut() else {
+            return;
+        };
+        let result = (|| -> Result<()> {
+            let path = trace_path
+                .as_deref()
+                .ok_or_else(|| anyhow!("solo trace path unavailable"))?;
+            ensure_private_trace_file(file, path)?;
+            file.write_all(entry.as_bytes())?;
+            file.sync_data()?;
+            ensure_private_trace_file(file, path)?;
+            Ok(())
+        })();
+        if let Err(error) = result {
+            eprintln!("azdaja: solo trace write failed: {error:#}");
+        }
+    };
     let entered_turn_budget = Arc::new(EnteredTurnBudget::new(2));
     let mut model_reply = None;
     let mut root_driver = None;
@@ -759,27 +836,42 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
         );
         setup_elapsed += attempt_started.elapsed();
         match driver {
-            Ok(mut driver) => match driver.turn(&prompt) {
-                Ok(reply) => {
-                    root_driver = Some(driver);
-                    model_reply = Some(reply);
-                    successful_root_attempt = Some(physical_attempt);
-                    break;
-                }
-                Err(error) => {
-                    failed_root_attempts += 1;
-                    retry_delay = Duration::from_secs(2);
-                    let transient = model_transport_error_is_transient(&error);
-                    root_error = Some(error);
-                    if !transient {
+            Ok(mut driver) => {
+                let session_id = driver.session_id().map(str::to_owned);
+                let turn_started = Instant::now();
+                match driver.turn(&prompt) {
+                    Ok(reply) => {
+                        root_driver = Some(driver);
+                        model_reply = Some(reply);
+                        successful_root_attempt = Some(physical_attempt);
                         break;
                     }
+                    Err(error) => {
+                        failed_root_attempts += 1;
+                        retry_delay = Duration::from_secs(2);
+                        let transient = model_transport_error_is_transient(&error);
+                        record_trace(format!(
+                            "\n=== turn 0 request_id={root_request_id:?} attempt={physical_attempt} entered_turn={} session_id={session_id:?} category=turn outcome=failed transient={transient} error_category={:?} latency_ms={} ===\n{error:#}\n",
+                            entered_turn_budget.entered(),
+                            model_transport_error_category(&error),
+                            turn_started.elapsed().as_millis(),
+                        ));
+                        root_error = Some(error);
+                        if !transient {
+                            break;
+                        }
+                    }
                 }
-            },
+            }
             Err(error) => {
                 failed_root_attempts += 1;
                 retry_delay = Duration::from_millis(50);
                 let transient = model_transport_error_is_transient(&error);
+                record_trace(format!(
+                    "\n=== turn 0 request_id={root_request_id:?} attempt={physical_attempt} entered_turn=null session_id=null category=session_setup outcome=failed transient={transient} error_category={:?} setup_elapsed_ms={} ===\n{error:#}\n",
+                    model_transport_error_category(&error),
+                    attempt_started.elapsed().as_millis(),
+                ));
                 root_error = Some(error);
                 if !transient || setup_elapsed >= Duration::from_secs(30) {
                     break;
@@ -795,36 +887,25 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
         .as_mut()
         .ok_or_else(|| anyhow!("root driver unavailable"))?;
     let root_session_id = root_driver.session_id().map(str::to_owned);
-    root_driver.lend_to_solo()?;
-    let trace = env::var_os("AZDAJA_SOLO_TRACE").map(PathBuf::from);
-    if let Some(path) = &trace {
-        use std::io::Write;
-        let mut f = private_append(path)?;
-        writeln!(
-            f,
-            "\n=== turn 0 request_id={:?} attempt={} session_id={:?} category=turn outcome=succeeded degraded_transport={} failed_attempts_before_success={} provider={:?} model={:?} input={} output={} cache_read={} latency_ms={} ===\n{}",
-            root_request_id,
-            successful_root_attempt,
-            root_session_id,
-            failed_root_attempts > 0,
-            failed_root_attempts,
-            model_reply.provider,
-            model_reply.model,
-            model_reply.usage.input,
-            model_reply.usage.output,
-            model_reply.usage.cache_read,
-            model_reply.latency_ms,
-            model_reply.text
-        )?;
-    }
+    record_trace(format!(
+        "\n=== turn 0 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={root_session_id:?} category=turn outcome=succeeded degraded_transport={} failed_attempts_before_success={failed_root_attempts} provider={:?} model={:?} input={} output={} cache_read={} latency_ms={} ===\n{}\n",
+        failed_root_attempts > 0,
+        model_reply.provider,
+        model_reply.model,
+        model_reply.usage.input,
+        model_reply.usage.output,
+        model_reply.usage.cache_read,
+        model_reply.latency_ms,
+        model_reply.text
+    ));
+    let _solo_jcode_guard = root_driver.lend_to_solo()?;
     let code = extract_solo_python(&model_reply.text)?;
     validate_solo_python(&code)?;
     let result = session.exec(&code, cfg)?;
-    if let Some(path) = &trace {
-        use std::io::Write;
-        let mut f = private_append(path)?;
-        writeln!(f, "=== code ===\n{code}\n=== result ===\n{}", result.output)?;
-    }
+    record_trace(format!(
+        "=== code ===\n{code}\n=== result ===\n{}\n",
+        result.output
+    ));
     if !result.success {
         if result.output.contains("re.PatternError:") {
             bail!("solo solve invalid regular expression: {}", result.output)
@@ -841,6 +922,123 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn solo_trace_preflight_failure_prevents_provider_entry() {
+        let directory = env::temp_dir().join(format!(
+            "azdaja-solo-trace-failure-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let provider_entered = std::cell::Cell::new(false);
+        let result = preflight_solo_trace(
+            Some(&directory),
+            "request-id",
+            "model",
+            "exact root request",
+        )
+        .map(|_| {
+            provider_entered.set(true);
+        });
+        assert!(result.is_err());
+        assert!(!provider_entered.get());
+        fs::remove_dir(&directory).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn solo_trace_rejects_insecure_existing_mode_without_repair_or_write() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = env::temp_dir().join(format!(
+            "azdaja-solo-trace-mode-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let path = directory.join("trace.log");
+        fs::write(&path, b"sentinel").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        let error = preflight_solo_trace(Some(&path), "request-id", "model", "root request")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("accessible by group or other users"),
+            "{error}"
+        );
+        assert_eq!(fs::read(&path).unwrap(), b"sentinel");
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o644
+        );
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn solo_trace_rejects_hardlink_without_mutating_alias() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = env::temp_dir().join(format!(
+            "azdaja-solo-trace-hardlink-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let path = directory.join("trace.log");
+        let alias = directory.join("alias.log");
+        fs::write(&path, b"sentinel").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        fs::hard_link(&path, &alias).unwrap();
+        let error = preflight_solo_trace(Some(&path), "request-id", "model", "root request")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("exactly one hard link"), "{error}");
+        assert_eq!(fs::read(&path).unwrap(), b"sentinel");
+        assert_eq!(fs::read(&alias).unwrap(), b"sentinel");
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn solo_trace_preflight_records_exact_counted_private_root_request() {
+        let directory = env::temp_dir().join(format!(
+            "azdaja-solo-trace-success-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let path = directory.join("trace.log");
+        let prompt = "prefix 🦀 exact loaded-context substring suffix";
+        let file = preflight_solo_trace(Some(&path), "request-id", "model", prompt)
+            .unwrap()
+            .unwrap();
+        drop(file);
+        let recorded = fs::read_to_string(&path).unwrap();
+        assert!(recorded.contains(&format!("request_chars={}", prompt.chars().count())));
+        assert!(recorded.contains(prompt));
+        assert!(recorded.contains("=== root request begin"));
+        assert!(recorded.contains("=== root request end"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        fs::remove_dir_all(&directory).unwrap();
+    }
 
     #[test]
     fn solo_python_extraction_accepts_exactly_one_python_fence() {
