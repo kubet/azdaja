@@ -34,6 +34,12 @@ EXPECTED_FIXTURES = 63
 ARMS = ("jcode-native", "jcode-azdaja", "prime-agent")
 MODEL = "gpt-5.6-luna"
 REASONING = "medium"
+AMBIENT_CLOSURE_DISCLOSURE = (
+    "The Prime npm package, Node executable, and complete Prime kernel venv are frozen "
+    "owner-only snapshots with schedule-bound recursive inventories. Node/Python dynamic "
+    "libraries, the OS runtime, OAuth homes, and network service remain ambient and are "
+    "not snapshotted."
+)
 RUN_ID_DOMAIN = b"lb2-hard-long-63-run-v1\0"
 DEFAULT_BOOTSTRAP_SEED = 20260813
 DEFAULT_BOOTSTRAP_RESAMPLES = 100000
@@ -109,7 +115,7 @@ INFERENCE_ROW_KEYS = frozenset({
     "trace_capture_assertion", "task_context_integrity",
     "tool_access_policy_assertion", "credential_cleanup_assertion",
     "cleanup_errors", "root_usage", "azdaja_model_usage",
-    "efficiency_evidence", "usage", "failure",
+    "efficiency_evidence", "usage", "trajectory_artifacts", "failure",
 })
 
 
@@ -671,6 +677,63 @@ def _validate_candidate_identity(value: Any) -> None:
     )
 
 
+
+def _validate_runtime_closure(value: Any) -> None:
+    if not isinstance(value, dict) or set(value) != {
+        "adapter", "validator", "prime_package", "node", "kernel_python",
+        "kernel_launcher", "kernel_environment", "runtime_python",
+        "ambient_closure_disclosure",
+    }:
+        raise ScoreError("schedule runtime closure has an unexpected shape")
+    for name in ("adapter", "validator"):
+        _validate_component_identity(value[name], f"schedule runtime {name}", path=True)
+    for name in ("node", "kernel_python"):
+        _validate_component_identity(
+            value[name], f"schedule runtime {name}", version=True, path=True
+        )
+    launcher = value["kernel_launcher"]
+    if not isinstance(launcher, dict) or set(launcher) != {"path", "target", "resolved_path"} or not all(isinstance(launcher[key], str) for key in launcher) or not Path(launcher["path"]).is_absolute() or not Path(launcher["resolved_path"]).is_absolute() or os.path.isabs(launcher["target"]):
+        raise ScoreError("schedule kernel launcher identity is invalid")
+    prime = value["prime_package"]
+    if not isinstance(prime, dict) or set(prime) != {
+        "snapshot_root", "inventory_sha256", "entry_count", "cli_relative"
+    }:
+        raise ScoreError("schedule Prime package runtime identity shape is invalid")
+    if (
+        not isinstance(prime["snapshot_root"], str)
+        or not Path(prime["snapshot_root"]).is_absolute()
+        or not _is_sha256(prime["inventory_sha256"])
+        or not _positive_int(prime["entry_count"])
+        or not isinstance(prime["cli_relative"], str)
+        or not prime["cli_relative"]
+        or Path(prime["cli_relative"]).is_absolute()
+        or ".." in Path(prime["cli_relative"]).parts
+    ):
+        raise ScoreError("schedule Prime package runtime identity is invalid")
+    kernel = value["kernel_environment"]
+    if not isinstance(kernel, dict) or set(kernel) != {
+        "root", "inventory_sha256", "entry_count"
+    }:
+        raise ScoreError("schedule kernel environment runtime identity shape is invalid")
+    if (
+        not isinstance(kernel["root"], str)
+        or not Path(kernel["root"]).is_absolute()
+        or not _is_sha256(kernel["inventory_sha256"])
+        or not _positive_int(kernel["entry_count"])
+    ):
+        raise ScoreError("schedule kernel environment runtime identity is invalid")
+    runtime_python = value["runtime_python"]
+    if not isinstance(runtime_python, dict) or set(runtime_python) != {
+        "snapshot_root", "inventory_sha256", "entry_count"
+    } or not isinstance(runtime_python["snapshot_root"], str) or not Path(runtime_python["snapshot_root"]).is_absolute() or not _is_sha256(runtime_python["inventory_sha256"]) or not _positive_int(runtime_python["entry_count"]):
+        raise ScoreError("schedule runtime Python identity is invalid")
+    _require_equal(
+        value["ambient_closure_disclosure"],
+        AMBIENT_CLOSURE_DISCLOSURE,
+        "schedule ambient runtime closure disclosure",
+    )
+
+
 def validate_schedule(
     schedule: dict[str, Any],
     manifest_path: Path,
@@ -737,7 +800,7 @@ def validate_schedule(
 
     required_config = {
         "model", "reasoning", "arms", "repetitions", "seed", "timeout_seconds",
-        "candidate", "controller", "executables",
+        "candidate", "controller", "executables", "runtime_closure",
     }
     if set(configuration) != required_config:
         raise ScoreError("schedule configuration has an unexpected object shape")
@@ -762,6 +825,7 @@ def validate_schedule(
         _validate_component_identity(
             executable, f"schedule executable {name}", version=True, path=True
         )
+    _validate_runtime_closure(configuration["runtime_closure"])
 
     jobs = schedule["jobs"]
     expected_jobs = EXPECTED_FIXTURES * len(ARMS)
@@ -1168,6 +1232,142 @@ def _validate_success_evidence(row: dict[str, Any], job: dict[str, Any], schedul
     _require_equal(row.get("cleanup_errors"), [], f"inference row {index} cleanup errors")
 
 
+
+def _validate_trajectory_artifacts(
+    value: Any, arm: str, index: int, *, execution_success: bool
+) -> None:
+    base = {"stdout", "stderr"}
+    treatment = {"azdaja_model_trace", "azdaja_solo_trace"}
+    allowed = base | (treatment if arm == "jcode-azdaja" else set())
+    if not isinstance(value, dict) or not base.issubset(value) or not set(value).issubset(allowed):
+        raise ScoreError(f"inference row {index} trajectory artifact set is invalid")
+    if execution_success and set(value) != allowed:
+        raise ScoreError(f"inference row {index} successful trajectory artifacts are incomplete")
+    expected_basenames = {
+        "stdout": "stdout.ndjson",
+        "stderr": "stderr.log",
+        "azdaja_model_trace": "azdaja-model-usage.jsonl",
+        "azdaja_solo_trace": "azdaja-solo-trace.log",
+    }
+    paths: set[str] = set()
+    for name, receipt in value.items():
+        if not isinstance(receipt, dict) or set(receipt) != {
+            "path", "sha256", "bytes", "mode", "contains_private_raw_trajectory",
+            "credential_redacted", "sensitivity",
+        }:
+            raise ScoreError(f"inference row {index} trajectory receipt {name} shape is invalid")
+        raw_path = receipt["path"]
+        if (
+            not isinstance(raw_path, str)
+            or not Path(raw_path).is_absolute()
+            or Path(raw_path).name != expected_basenames[name]
+            or raw_path in paths
+            or not _is_sha256(receipt["sha256"])
+            or type(receipt["bytes"]) is not int
+            or receipt["bytes"] < 0
+            or receipt["mode"] != "0600"
+            or receipt["contains_private_raw_trajectory"] is not False
+            or receipt["credential_redacted"] is not True
+            or not isinstance(receipt["sensitivity"], str)
+            or not receipt["sensitivity"].strip()
+        ):
+            raise ScoreError(f"inference row {index} trajectory receipt {name} is invalid")
+        paths.add(raw_path)
+
+
+
+def _trajectory_response(arm: str, stdout: bytes, index: int) -> str:
+    try:
+        text = stdout.decode("utf-8")
+    except UnicodeError as exc:
+        raise ScoreError(f"inference row {index} stdout trajectory is not UTF-8") from exc
+    objects: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        try:
+            value = json.loads(line, object_pairs_hook=_object_no_duplicates, parse_constant=_reject_constant)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(value, dict):
+            objects.append(value)
+    if arm == "prime-agent":
+        final: str | None = None
+        for obj in objects:
+            message = obj.get("message")
+            if obj.get("type") != "message_end" or not isinstance(message, dict) or message.get("role") != "assistant":
+                continue
+            content = message.get("content")
+            if isinstance(content, list):
+                final = "".join(
+                    part.get("text", "") for part in content
+                    if isinstance(part, dict) and part.get("type") == "text"
+                )
+        return final if final is not None else ""
+    assembled = ""
+    completed: str | None = None
+    for obj in objects:
+        typ = obj.get("type") or obj.get("ev")
+        if typ in {"text_delta", "assistant_text_delta"} and isinstance(obj.get("text"), str):
+            assembled += obj["text"]
+        for key in ("response", "output_text", "text", "content"):
+            value = obj.get(key)
+            if typ in {"result", "message_end", "assistant", "final", "done"} and isinstance(value, str):
+                completed = value
+    return completed if completed is not None else (assembled if assembled else text)
+
+
+def validate_artifact_rows(
+    artifacts_root: Path,
+    rows: Sequence[dict[str, Any]],
+    jobs: Sequence[dict[str, Any]],
+) -> None:
+    absolute_root, root_fd = _open_directory_fd(artifacts_root, "trajectory artifacts root")
+    try:
+        names, fingerprint = _captured_directory_names(root_fd, "trajectory artifacts root")
+        expected_dirs = {
+            f"r001-{job['ordinal']:03d}-{job['arm']}" for job in jobs
+        }
+        if set(names) != expected_dirs:
+            raise ScoreError("trajectory artifacts root is not the exact scheduled run-directory set")
+        directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        basename = {
+            "stdout": "stdout.ndjson", "stderr": "stderr.log",
+            "azdaja_model_trace": "azdaja-model-usage.jsonl",
+            "azdaja_solo_trace": "azdaja-solo-trace.log",
+        }
+        for index, (row, job) in enumerate(zip(rows, jobs), 1):
+            run_name = f"r001-{job['ordinal']:03d}-{job['arm']}"
+            fd = os.open(run_name, directory_flags, dir_fd=root_fd)
+            try:
+                metadata = os.fstat(fd)
+                if stat.S_IMODE(metadata.st_mode) != 0o700 or (hasattr(os, "getuid") and metadata.st_uid != os.getuid()):
+                    raise ScoreError(f"trajectory run directory {index} is not owner-only")
+                run_names, _ = _captured_directory_names(fd, f"trajectory run directory {index}")
+                receipts = row["trajectory_artifacts"]
+                expected_names = {basename[key] for key in receipts}
+                if set(run_names) != expected_names:
+                    raise ScoreError(f"trajectory run directory {index} inventory differs from row")
+                retained = row.get("credential_cleanup_assertion")
+                if not isinstance(retained, dict) or retained.get("retained_entries") != sorted(expected_names) or retained.get("retention_allowlist") != sorted(expected_names):
+                    raise ScoreError(f"inference row {index} cleanup/artifact inventories disagree")
+                stdout: bytes | None = None
+                for key, receipt in receipts.items():
+                    data, _ = _read_private_regular_at(fd, basename[key], f"trajectory {index} {key}")
+                    expected_path = absolute_root / run_name / basename[key]
+                    if receipt["path"] != str(expected_path) or receipt["sha256"] != sha256_bytes(data) or receipt["bytes"] != len(data):
+                        raise ScoreError(f"trajectory artifact {index} {key} bytes/path differ from receipt")
+                    if key == "stdout":
+                        stdout = data
+                assert stdout is not None
+                if _trajectory_response(job["arm"], stdout, index) != row["response"]:
+                    raise ScoreError(f"inference row {index} response differs from retained stdout")
+            finally:
+                os.close(fd)
+        if _directory_fingerprint(os.fstat(root_fd)) != fingerprint:
+            raise ScoreError("trajectory artifacts root changed during validation")
+    finally:
+        os.close(root_fd)
+
+
 def validate_run_rows(
     rows: list[dict[str, Any]],
     jobs: list[dict[str, Any]],
@@ -1236,6 +1436,10 @@ def validate_run_rows(
             raise ScoreError(f"inference row {index} timed_out is invalid")
         if row.get("exit_code") is not None and type(row.get("exit_code")) is not int:
             raise ScoreError(f"inference row {index} exit_code is invalid")
+        _validate_trajectory_artifacts(
+            row.get("trajectory_artifacts"), job["arm"], index,
+            execution_success=row["execution_success"],
+        )
         route_ok = _validate_route(row.get("runtime_route_assertion"), job["arm"], index)
         lifecycle_ok = _validate_lifecycle(row.get("product_lifecycle_assertion"), row, job["arm"], index)
         usage_ok, _ = _validate_usage(row, job["arm"], index)
@@ -1346,6 +1550,7 @@ def validate_frozen_runs(
     runs_path: Path,
     schedule_path: Path | None = None,
     claims_root: Path | None = None,
+    artifacts_root: Path | None = None,
     *,
     captured_schedule: bytes | None = None,
     captured_runs: bytes | None = None,
@@ -1354,6 +1559,7 @@ def validate_frozen_runs(
     """Validate terminal completion.  This function cannot receive or read gold."""
     schedule_path = schedule_path or Path(str(runs_path) + ".schedule.json")
     claims_root = claims_root or Path(str(runs_path) + ".claims")
+    artifacts_root = artifacts_root or Path(str(runs_path) + ".artifacts")
     if captured_schedule is None:
         schedule, _, _ = load_json_object_captured(schedule_path, "frozen schedule")
     else:
@@ -1370,6 +1576,7 @@ def validate_frozen_runs(
     validate_claims(
         claims_root, rows, jobs, schedule, held_root_fd=held_claims_root_fd
     )
+    validate_artifact_rows(artifacts_root, rows, jobs)
     return schedule, jobs, rows, arms
 
 
@@ -1889,6 +2096,7 @@ def build_report(
     *,
     schedule_path: Path | None = None,
     claims_root: Path | None = None,
+    artifacts_root: Path | None = None,
     bootstrap_seed: int = DEFAULT_BOOTSTRAP_SEED,
     bootstrap_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
 ) -> dict[str, Any]:
@@ -1907,6 +2115,10 @@ def build_report(
     )
     effective_claims = _absolute_lexical(
         Path(claims_root) if claims_root is not None else expected_claims
+    )
+    effective_artifacts = _absolute_lexical(
+        Path(artifacts_root) if artifacts_root is not None
+        else Path(str(runs_path) + ".artifacts")
     )
     if effective_schedule != expected_schedule:
         raise ScoreError(
@@ -1945,6 +2157,7 @@ def build_report(
             runs_path,
             effective_schedule,
             effective_claims,
+            effective_artifacts,
             captured_schedule=captured_schedule,
             captured_runs=captured_runs,
             held_claims_root_fd=claims_root_fd,
@@ -2171,6 +2384,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--runs", required=True, type=Path)
     parser.add_argument("--schedule", type=Path, help="default: <runs>.schedule.json")
     parser.add_argument("--claims", type=Path, help="default: <runs>.claims")
+    parser.add_argument(
+        "--artifacts-root", required=True, type=Path,
+        help="owner-only retained run-artifact directory",
+    )
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--bootstrap-seed", type=int, default=DEFAULT_BOOTSTRAP_SEED)
     parser.add_argument("--bootstrap-resamples", type=int, default=DEFAULT_BOOTSTRAP_RESAMPLES)
@@ -2193,6 +2410,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.claims if args.claims is not None
                 else Path(str(_absolute_lexical(args.runs)) + ".claims")
             ),
+            _absolute_lexical(args.artifacts_root),
         )
         if any(_is_nested_or_equal(output.parent, root) for root in input_roots):
             raise ScoreError("private report output root must be outside every sealed/run root")
@@ -2202,6 +2420,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.runs,
             schedule_path=args.schedule,
             claims_root=args.claims,
+            artifacts_root=args.artifacts_root,
             bootstrap_seed=args.bootstrap_seed,
             bootstrap_resamples=args.bootstrap_resamples,
         )

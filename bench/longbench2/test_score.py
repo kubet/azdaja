@@ -193,6 +193,39 @@ class ScoreTests(unittest.TestCase):
                         "version_command": ["/bin/prime-agent", "--version"],
                     },
                 },
+                "runtime_closure": {
+                    "adapter": {"path": "/sealed/oolong-run.py", "sha256": "6" * 64, "bytes": 16},
+                    "validator": {"path": "/sealed/score.py", "sha256": "7" * 64, "bytes": 17},
+                    "prime_package": {
+                        "snapshot_root": "/sealed/prime-package",
+                        "inventory_sha256": "8" * 64,
+                        "entry_count": 100,
+                        "cli_relative": "dist/bundle/cli.js",
+                    },
+                    "node": {
+                        "path": "/sealed/node", "sha256": "9" * 64, "bytes": 18,
+                        "version": "node test", "version_command": ["/sealed/node", "--version"],
+                    },
+                    "kernel_python": {
+                        "path": "/sealed/kernel-python", "sha256": "a" * 64, "bytes": 19,
+                        "version": "python test",
+                        "version_command": ["/sealed/kernel-python", "--version"],
+                    },
+                    "kernel_launcher": {
+                        "path": "/sealed/kernel-venv/bin/python",
+                        "target": "../../runtime-python/bin/python3.11",
+                        "resolved_path": "/sealed/runtime-python/bin/python3.11",
+                    },
+                    "kernel_environment": {
+                        "root": "/sealed/kernel-venv", "inventory_sha256": "f" * 64,
+                        "entry_count": 200,
+                    },
+                    "runtime_python": {
+                        "snapshot_root": "/sealed/runtime-python",
+                        "inventory_sha256": "0" * 64, "entry_count": 300,
+                    },
+                    "ambient_closure_disclosure": SCORE.AMBIENT_CLOSURE_DISCLOSURE,
+                },
             },
             "jobs": [],
         }
@@ -232,6 +265,8 @@ class ScoreTests(unittest.TestCase):
             )
         schedule["schedule_id"] = schedule_id
         runs_path = runs_root / "runs.jsonl"
+        artifacts_root = Path(str(runs_path) + ".artifacts")
+        artifacts_root.mkdir(mode=0o700)
         schedule_path = Path(str(runs_path) + ".schedule.json")
         private_json(schedule_path, schedule)
 
@@ -342,6 +377,35 @@ class ScoreTests(unittest.TestCase):
                 ("jcode", "azdaja") if job["arm"] == "jcode-azdaja"
                 else (("jcode",) if job["arm"] == "jcode-native" else ("prime-agent",))
             )
+            run_dir = artifacts_root / f"r001-{job['ordinal']:03d}-{job['arm']}"
+            run_dir.mkdir(mode=0o700)
+            if job["arm"] == "prime-agent":
+                stdout = json.dumps({
+                    "type": "message_end", "message": {
+                        "role": "assistant", "content": [{"type": "text", "text": response}]
+                    }
+                }, separators=(",", ":")) + "\n"
+            else:
+                stdout = json.dumps(
+                    {"type": "result", "response": response}, separators=(",", ":")
+                ) + "\n"
+            artifact_files = {"stdout": ("stdout.ndjson", stdout.encode()), "stderr": ("stderr.log", b"")}
+            if job["arm"] == "jcode-azdaja":
+                artifact_files.update({
+                    "azdaja_model_trace": ("azdaja-model-usage.jsonl", b"{}\n"),
+                    "azdaja_solo_trace": ("azdaja-solo-trace.log", b"trace\n"),
+                })
+            trajectory_artifacts = {}
+            for artifact_name, (basename, data) in artifact_files.items():
+                private_text(run_dir / basename, data)
+                trajectory_artifacts[artifact_name] = {
+                    "path": str(run_dir / basename), "sha256": SCORE.sha256_bytes(data),
+                    "bytes": len(data), "mode": "0600",
+                    "contains_private_raw_trajectory": False,
+                    "credential_redacted": True,
+                    "sensitivity": "synthetic redacted trajectory",
+                }
+            retained_basenames = sorted(value[0] for value in artifact_files.values())
             row = {
                 "schema_version": SCORE.SCHEMA_VERSION,
                 "benchmark": SCORE.SUITE_ID,
@@ -392,7 +456,8 @@ class ScoreTests(unittest.TestCase):
                 },
                 "credential_cleanup_assertion": {
                     "asserted": True, "credential_homes_deleted": True,
-                    "retained_entries": [], "retention_allowlist": [],
+                    "retained_entries": retained_basenames,
+                    "retention_allowlist": retained_basenames,
                 },
                 "cleanup_errors": [],
                 "root_usage": dict(usage),
@@ -420,6 +485,7 @@ class ScoreTests(unittest.TestCase):
                     }
                 ),
                 "usage": usage,
+                "trajectory_artifacts": trajectory_artifacts,
                 "failure": (
                     None if execution_success
                     else {"kind": "timeout", "message": "timed out", "stderr": ""}
@@ -450,6 +516,7 @@ class ScoreTests(unittest.TestCase):
             "gold_path": gold_path,
             "runs_path": runs_path,
             "schedule_path": schedule_path,
+            "artifacts_root": artifacts_root,
             "claims_root": claims_root,
             "claims": claims,
             "manifest": manifest,
@@ -949,6 +1016,7 @@ class ScoreTests(unittest.TestCase):
                     "--manifest", str(public / "manifest.json"),
                     "--gold", str(gold / "gold.json"),
                     "--runs", str(runs / "runs.jsonl"),
+                    "--artifacts-root", str(root / "artifacts"),
                     "--output", str(public / "report.json"),
                     "--bootstrap-resamples", "1",
                 ])
@@ -1109,6 +1177,40 @@ class ScoreTests(unittest.TestCase):
                         bootstrap_resamples=1,
                     )
                 gold.assert_not_called()
+
+
+    def test_scorer_rehashes_artifacts_and_response_before_gold(self):
+        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+            artifacts = self.make_artifacts(Path(directory))
+            first_job = artifacts["schedule"]["jobs"][0]
+            run_dir = artifacts["artifacts_root"] / f"r001-{first_job['ordinal']:03d}-{first_job['arm']}"
+            stderr = run_dir / "stderr.log"
+            stderr.write_bytes(b"evil")
+            stderr.chmod(0o600)
+            with mock.patch.object(SCORE, "load_gold", side_effect=AssertionError("gold touched")) as opened:
+                with self.assertRaises(SCORE.ScoreError):
+                    SCORE.build_report(
+                        artifacts["manifest_path"], artifacts["gold_path"],
+                        artifacts["runs_path"], artifacts_root=artifacts["artifacts_root"],
+                        bootstrap_resamples=1,
+                    )
+                opened.assert_not_called()
+
+            # Restore artifact, then tamper the row response and its completion
+            # hash: retained stdout remains the independent response authority.
+            stderr.write_bytes(b"")
+            stderr.chmod(0o600)
+            artifacts["rows"][0]["response"] = "The correct answer is (D)"
+            self.rewrite_rows_and_receipts(artifacts)
+            with mock.patch.object(SCORE, "load_gold", side_effect=AssertionError("gold touched")) as opened:
+                with self.assertRaisesRegex(SCORE.ScoreError, "response differs"):
+                    SCORE.build_report(
+                        artifacts["manifest_path"], artifacts["gold_path"],
+                        artifacts["runs_path"], artifacts_root=artifacts["artifacts_root"],
+                        bootstrap_resamples=1,
+                    )
+                opened.assert_not_called()
+
 
 
 if __name__ == "__main__":
