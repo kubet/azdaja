@@ -411,7 +411,7 @@ p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
     print('```python\nitems=[{"id":"R1","evidence":"ordinary note"},{"id":"R2","evidence":"ambiguous service"}]\nlabels=semantic_manifest(items,"binary annotation",["ham","spam"])\nFINAL(labels["R1"]+":"+labels["R2"])\n```')
 else:
-    print('R00000000|ham\nR00000001|spam')
+    print('LABELS|AB')
 "#,
     )
     .unwrap();
@@ -789,7 +789,7 @@ fn solo_jcode_reuses_root_session_for_one_semantic_wave() {
                         "```python\nitems=[{\"id\":\"R1\",\"evidence\":\"ordinary note\"}]\nlabels=semantic_manifest(items,\"binary annotation\",[\"ham\",\"spam\"])\nFINAL(labels[\"R1\"])\n```"
                     } else {
                         assert_eq!(turns, 2, "unexpected third model turn");
-                        "R00000000|ham"
+                        "LABELS|A"
                     };
                     vec![
                         serde_json::json!({"v":1,"ev":"model_info","session_id":"root","provider":"OpenAI","model":"mock"}),
