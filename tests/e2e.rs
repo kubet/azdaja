@@ -1035,7 +1035,7 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
         .take()
         .unwrap()
         .write_all(
-            b"print(llm_batch_fresh(['direct secret prompt','second'],model='gpt-5.4',workers=1))\n",
+            b"print(llm_batch_fresh(['direct secret prompt','second'],model='gpt-5.4',workers=2))\n",
         )
         .unwrap();
     let out = child.wait_with_output().unwrap();

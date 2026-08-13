@@ -952,7 +952,7 @@ fn call_many_items(
                                     api.discard();drop(api);let _=trace_model_failure(depth+1);
                                     thread::sleep(Duration::from_secs(2));
                                     let mut retry_entered_turn=false;
-                                    let retry=(||{let mut fresh=JcodeSession::open_for_batch(cfg,model,prompts[i].chars().count())?;retry_entered_turn=true;match fresh.turn(&wire){Ok(reply)=>Ok(reply),Err(error)=>{fresh.discard();Err(error)}}})();
+                                    let retry=(||{let mut fresh=JcodeSession::open_for_batch_serialized(cfg,model,prompts[i].chars().count())?;retry_entered_turn=true;match fresh.turn(&wire){Ok(reply)=>Ok(reply),Err(error)=>{fresh.discard();Err(error)}}})();
                                     match retry { Ok(reply)=>{if trace_model_reply(&reply,depth+1).is_err(){let _=trace_model_failure(depth+1);} Ok(reply.text)}, Err(retry_error)=>{let _=if retry_entered_turn { trace_model_failure(depth+1) } else { trace_model_setup_failure(depth+1) };Err(anyhow!("shared turn failed: {error:#}; retry failed: {retry_error:#}"))} }
                                 }
                             }
@@ -968,7 +968,7 @@ fn call_many_items(
                             }
                             let mut entered_turn = false;
                             let attempt: Result<ModelReply> = (|| {
-                                let mut api=JcodeSession::open_for_batch(cfg,model,prompts[i].chars().count())?;
+                                let mut api=JcodeSession::open_for_batch_serialized(cfg,model,prompts[i].chars().count())?;
                                 let wire = format!(
                                     "[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",
                                     depth + 1,
@@ -1273,6 +1273,8 @@ struct JcodeSession {
 #[cfg(unix)]
 static SOLO_SHARED_JCODE: std::sync::Mutex<Option<JcodeSession>> = std::sync::Mutex::new(None);
 #[cfg(unix)]
+static JCODE_SETUP_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+#[cfg(unix)]
 impl JcodeSession {
     fn send(&mut self, value: serde_json::Value) -> Result<u64> {
         let id = self.next_id;
@@ -1365,6 +1367,13 @@ impl JcodeSession {
     fn open_for_batch(cfg: &Config, model: &str, prompt_chars: usize) -> Result<Self> {
         Self::open_with_timeout(cfg, model, jcode_batch_timeout(cfg, prompt_chars))
     }
+    fn open_for_batch_serialized(cfg: &Config, model: &str, prompt_chars: usize) -> Result<Self> {
+        // The private bridge can serve concurrent turns, but its subscription control plane
+        // intermittently stalls when multiple sessions are created at once. Serialize only
+        // setup; release the lock before inference so independent turns still overlap.
+        let _guard = JCODE_SETUP_LOCK.lock().unwrap();
+        Self::open_for_batch(cfg, model, prompt_chars)
+    }
     fn open_with_timeout(cfg: &Config, model: &str, timeout: Duration) -> Result<Self> {
         let socket = ensure_jcode_bridge(cfg)?;
         let stream = UnixStream::connect(&socket)?;
@@ -1383,7 +1392,7 @@ impl JcodeSession {
             timeout,
             cancel_before_archive: true,
         };
-        let setup_deadline = Instant::now() + Duration::from_secs(8);
+        let setup_deadline = Instant::now() + Duration::from_secs(12);
         let id=this.send(serde_json::json!({"req":"hello","min_version":1,"max_version":1,"client":format!("azdaja/{VERSION}")}))?;
         this.reply_before(id, "hello_ok", setup_deadline)?;
         let id = this
