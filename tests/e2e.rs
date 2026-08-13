@@ -681,6 +681,8 @@ if os.getenv('RLM_DEPTH') == '0':
                 'strictly validates both', 'blindly adjudicates every disagreement',
                 'two-key dicts named id and evidence', 'nonempty unique string',
                 'call the helper exactly once iff semantic judgments are required',
+                'allowed answer labels in the question define an ontology',
+                'never regex/search the evidence for allowed label words',
                 'never call llm, llm_batch, or llm_batch_fresh directly',
                 'os, re, json, math, collections, datetime',
                 'globals/locals/callable', 'never call mapping.get',
