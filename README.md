@@ -75,7 +75,7 @@ start  load  exec  final  list  kill  solo  doctor  install  uninstall
 
 ## Current benchmark
 
-Private diagnostic on official OOLONG row 645, identical hidden context/question, GPT-5.4, reasoning `medium`, fresh serial sessions, subscription OAuth, and strict exact scoring:
+Private cross-run diagnostic on official OOLONG row 645, with the same hidden context/question and strict exact scoring. These arms were captured at different development times and are not a paired, contemporaneous cohort; their seeds, timeout conditions, and candidate state were not fully matched:
 
 | Arm | Output | Correct | Wall time | Provider tokens |
 |---|---:|:---:|---:|---:|
@@ -83,7 +83,7 @@ Private diagnostic on official OOLONG row 645, identical hidden context/question
 | Native jcode | `Answer: 133` | no | 64.6s | 190,356 |
 | Azdaja one-wave v26 | `Answer: 132` | **yes** | **45.1s** | **16,097** |
 
-On this diagnostic, Azdaja is 2.44× faster than Prime and uses 81.5% fewer provider tokens while matching the strict answer. This is one clean run, not a general superiority claim; repeated blind tasks remain required before release.
+Within these historical runs, Azdaja's wall time was 2.44× lower than Prime's and its reported provider-token count was 81.5% lower while matching the strict answer. Those ratios are descriptive only, not controlled estimates or a general superiority claim. Row 645 is now development-contaminated; repeated frozen blind suites remain required before release.
 
 The relevant improvement is architectural: the earlier 277.5s multi-pass path was replaced by one compact root plan and one full-coverage semantic wave on the same subscription session. The clean v26 trajectory spent 12.8s in root planning and 22.1s in semantic classification, with no provider error row.
 
