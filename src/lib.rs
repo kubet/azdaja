@@ -1240,7 +1240,7 @@ fn jcode_root_timeout(cfg: &Config) -> Duration {
 }
 #[cfg(unix)]
 fn jcode_batch_timeout(cfg: &Config, prompt_chars: usize) -> Duration {
-    let cap = if prompt_chars >= 8_000 { 35 } else { 30 };
+    let cap = if prompt_chars >= 8_000 { 50 } else { 30 };
     Duration::from_secs(cfg.sub_timeout.min(cap))
 }
 
@@ -1584,7 +1584,7 @@ impl RootDriver {
                 .api
                 .take()
                 .ok_or_else(|| anyhow!("root subscription session unavailable"))?;
-            api.timeout = Duration::from_secs(self.cfg.sub_timeout.min(35));
+            api.timeout = Duration::from_secs(self.cfg.sub_timeout.min(50));
             let mut slot = SOLO_SHARED_JCODE.lock().unwrap();
             if slot.is_some() {
                 bail!("solo subscription session already lent")
@@ -1854,7 +1854,7 @@ mod unit_tests {
             sub_timeout: 300,
             ..Config::default()
         };
-        assert_eq!(jcode_batch_timeout(&cfg, 20_000), Duration::from_secs(35));
+        assert_eq!(jcode_batch_timeout(&cfg, 20_000), Duration::from_secs(50));
         assert_eq!(jcode_batch_timeout(&cfg, 2_000), Duration::from_secs(30));
         assert_eq!(jcode_root_timeout(&cfg), Duration::from_secs(30));
         assert_eq!(cfg.sub_timeout, 300);

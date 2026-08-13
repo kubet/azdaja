@@ -411,7 +411,7 @@ p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
     print('```python\nitems=[{"id":"R1","evidence":"ordinary note"},{"id":"R2","evidence":"ambiguous service"}]\nlabels=semantic_manifest(items,"binary annotation",["ham","spam"])\nFINAL(labels["R1"]+":"+labels["R2"])\n```')
 else:
-    print('R1|ham\nR2|spam')
+    print('R00000000|ham\nR00000001|spam')
 "#,
     )
     .unwrap();
@@ -435,6 +435,47 @@ else:
 }
 
 #[test]
+fn solo_manifest_normalizes_integer_ids_and_singleton_labels_without_child_call() {
+    let t = temp("solo-manifest-ids");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        r#"import os,sys
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[{"id":7,"evidence":"one"},{"id":8,"evidence":"one"}]\nlabels=semantic_manifest(items,"deterministic inclusion",["include","include"])\nFINAL(str(labels[7])+":"+str(labels[8]))\n```')
+else:
+    print('UNEXPECTED_CHILD_CALL')
+"#,
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "deterministic inclusion",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "include:include"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
 fn solo_prompt_guides_exact_aggregation_in_one_root_turn() {
     let t = temp("solo");
     let mock = t.join("solo.py");
@@ -447,9 +488,10 @@ if os.getenv('RLM_DEPTH') == '0':
     end = '--- END UNTRUSTED SCHEMA SAMPLE ---'
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
     required = ('parse only the observed schema', 'every source occurrence', 'integer multiplicity',
-                'semantic_manifest(items, task, labels)', 'one full-coverage semantic wave',
-                'strict manifest validation', 'one retry only if the wave fails', 'internally counter-checks boundary cases',
-                'two-key dicts named id and evidence', 'call the helper exactly once',
+                'semantic_manifest(items, task, labels)', 'sharded full-coverage wave',
+                'strict manifest validation', 'one contract retry',
+                'two-key dicts named id and evidence', 'nonempty unique string',
+                'call the helper exactly once iff semantic judgments are required',
                 'never call llm/llm_batch directly', 'os, re, json, math, collections, datetime',
                 'globals/locals/callable', 'keep code under 50 nonblank lines')
     sample_ok = 'schema-canary' in sample and len(sample) <= 4096 and 'TAIL_NOT_IN_SAMPLE' not in p
@@ -747,7 +789,7 @@ fn solo_jcode_reuses_root_session_for_one_semantic_wave() {
                         "```python\nitems=[{\"id\":\"R1\",\"evidence\":\"ordinary note\"}]\nlabels=semantic_manifest(items,\"binary annotation\",[\"ham\",\"spam\"])\nFINAL(labels[\"R1\"])\n```"
                     } else {
                         assert_eq!(turns, 2, "unexpected third model turn");
-                        "R1|ham"
+                        "R00000000|ham"
                     };
                     vec![
                         serde_json::json!({"v":1,"ev":"model_info","session_id":"root","provider":"OpenAI","model":"mock"}),
