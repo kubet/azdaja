@@ -77,6 +77,262 @@ fn sid(home: &Path, cfg: &Path) -> String {
     ok(run(home, cfg, &["start"], "")).trim().into()
 }
 
+// Local scripted transport only: these synthetic classes are unrelated to benchmark gold, and
+// every semantic response is produced by the temporary Python oracle without inference/network I/O.
+fn write_semantic_metamorphic_oracle(dir: &Path) -> (PathBuf, PathBuf) {
+    let logs = dir.join("semantic-logs");
+    fs::create_dir(&logs).unwrap();
+    let script = dir.join("semantic-oracle.py");
+    fs::write(
+        &script,
+        r#"import json, os, pathlib, re, sys
+
+logs = pathlib.Path(sys.argv[1])
+prompt = sys.stdin.read()
+cases = (
+    "id-original", "id-renamed", "records-forward", "records-reversed",
+    "labels-forward", "labels-reversed", "evidence-plain", "evidence-noisy",
+    "duplicates-one", "duplicates-three",
+)
+case = [name for name in cases if ("metamorphic/" + name) in prompt]
+assert len(case) == 1, case
+case = case[0]
+
+root_code = {
+    "id-original": '''items=[{"id":"caller-left","evidence":"semantic-alpha review-me"},{"id":"caller-right","evidence":"semantic-beta stable"}]
+labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+FINAL(labels["caller-left"]+":"+labels["caller-right"])''',
+    "id-renamed": '''items=[{"id":"renamed-red","evidence":"semantic-alpha review-me"},{"id":"renamed-blue","evidence":"semantic-beta stable"}]
+labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+FINAL(labels["renamed-red"]+":"+labels["renamed-blue"])''',
+    "records-forward": '''items=[{"id":"forward-alpha-0","evidence":"semantic-alpha review-me"},{"id":"forward-alpha-1","evidence":"semantic-alpha review-me"},{"id":"forward-beta-0","evidence":"semantic-beta stable"}]
+labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+counts={"class-a":0,"class-b":0}
+for item in items:
+    counts[labels[item["id"]]]+=1
+FINAL(str(counts["class-a"])+":"+str(counts["class-b"]))''',
+    "records-reversed": '''items=[{"id":"forward-beta-0","evidence":"semantic-beta stable"},{"id":"forward-alpha-1","evidence":"semantic-alpha review-me"},{"id":"forward-alpha-0","evidence":"semantic-alpha review-me"}]
+labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+counts={"class-a":0,"class-b":0}
+for item in items:
+    counts[labels[item["id"]]]+=1
+FINAL(str(counts["class-a"])+":"+str(counts["class-b"]))''',
+    "labels-forward": '''items=[{"id":"label-alpha","evidence":"semantic-alpha review-me"},{"id":"label-beta","evidence":"semantic-beta stable"}]
+labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+FINAL(labels["label-alpha"]+":"+labels["label-beta"])''',
+    "labels-reversed": '''items=[{"id":"label-alpha","evidence":"semantic-alpha review-me"},{"id":"label-beta","evidence":"semantic-beta stable"}]
+labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-b","class-a"])
+FINAL(labels["label-alpha"]+":"+labels["label-beta"])''',
+    "evidence-plain": '''items=[{"id":"plain-alpha","evidence":"semantic-alpha review-me"},{"id":"plain-beta","evidence":"semantic-beta stable"}]
+labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+FINAL(labels["plain-alpha"]+":"+labels["plain-beta"])''',
+    "evidence-noisy": '''items=[{"id":"noisy-alpha","evidence":"meta=semantic-beta semantic-alpha   review-me\\nmeta=trace-77"},{"id":"noisy-beta","evidence":"meta=noop\\nsemantic-beta\\tstable meta=semantic-alpha"}]
+labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+FINAL(labels["noisy-alpha"]+":"+labels["noisy-beta"])''',
+    "duplicates-one": '''items=[{"id":"occ-alpha-0","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-1","evidence":"semantic-alpha review-me"},{"id":"occ-beta-0","evidence":"semantic-beta stable"}]
+labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+counts={"class-a":0,"class-b":0}
+expanded=[]
+for item in items:
+    value=labels[item["id"]]
+    counts[value]+=1
+    expanded.append(item["id"]+"="+value)
+FINAL(str(len(labels))+":"+str(counts["class-a"])+":"+str(counts["class-b"])+"|"+",".join(expanded))''',
+    "duplicates-three": '''items=[{"id":"occ-alpha-0","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-1","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-2","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-3","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-4","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-5","evidence":"semantic-alpha review-me"},{"id":"occ-beta-0","evidence":"semantic-beta stable"},{"id":"occ-beta-1","evidence":"semantic-beta stable"},{"id":"occ-beta-2","evidence":"semantic-beta stable"}]
+labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+counts={"class-a":0,"class-b":0}
+expanded=[]
+for item in items:
+    value=labels[item["id"]]
+    counts[value]+=1
+    expanded.append(item["id"]+"="+value)
+FINAL(str(len(labels))+":"+str(counts["class-a"])+":"+str(counts["class-b"])+"|"+",".join(expanded))''',
+}
+
+if os.getenv("RLM_DEPTH") == "0":
+    print("```python\n" + root_code[case] + "\n```")
+    raise SystemExit(0)
+
+if "annotator A" in prompt:
+    role = "a"
+elif "annotator B" in prompt:
+    role = "b"
+elif "final blind source-annotation adjudicator" in prompt:
+    role = "j"
+else:
+    raise AssertionError("unexpected semantic prompt")
+allowed_match = re.search(r"^Allowed labels: (.+)$", prompt, re.MULTILINE)
+assert allowed_match is not None
+allowed = allowed_match.group(1).split(", ")
+assert set(allowed) == {"class-a", "class-b"}
+rows = []
+for line in prompt.splitlines():
+    if re.match(r"^R[0-9]{8} \|\| ", line):
+        rid, evidence = line.split(" || ", 1)
+        rows.append([rid, evidence])
+assert rows
+
+def canonical_label(evidence):
+    without_metadata = re.sub(r"\bmeta=[^ ]+", "", evidence)
+    semantic = " ".join(without_metadata.split())
+    has_alpha = "semantic-alpha" in semantic
+    has_beta = "semantic-beta" in semantic
+    assert has_alpha != has_beta, semantic
+    return "class-a" if has_alpha else "class-b"
+
+manifest = []
+for rid, evidence in rows:
+    label = canonical_label(evidence)
+    if role == "b" and label == "class-a":
+        label = "class-b"  # Script one blind disagreement; the judge must see only its wire ID.
+    manifest.append([rid, label])
+record = {"allowed": allowed, "manifest": manifest, "prompt": prompt, "rows": rows}
+path = logs / (case + "-" + role + ".json")
+assert not path.exists(), "unexpected retry or duplicate semantic call"
+path.write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
+print("\n".join(rid + "|" + label for rid, label in manifest))
+"#,
+    )
+    .unwrap();
+    (script, logs)
+}
+
+fn semantic_metamorphic_config(dir: &Path, script: &Path, logs: &Path) -> PathBuf {
+    let cfg = config(
+        dir,
+        &format!("python3 {} {}", script.display(), logs.display()),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("max_calls_per_cell = 64", "max_calls_per_cell = 5");
+    fs::write(&cfg, text).unwrap();
+    cfg
+}
+
+fn run_semantic_metamorphic_case(dir: &Path, cfg: &Path, case: &str) -> String {
+    let input = dir.join(format!("{case}.txt"));
+    fs::write(&input, "synthetic schema; no benchmark rows or gold").unwrap();
+    let question = format!("metamorphic/{case}");
+    let output = run(
+        dir,
+        cfg,
+        &["solo", &question, "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "case={case} stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap().trim().to_string()
+}
+
+fn semantic_log(logs: &Path, case: &str, role: &str) -> serde_json::Value {
+    serde_json::from_slice(&fs::read(logs.join(format!("{case}-{role}.json"))).unwrap()).unwrap()
+}
+
+fn string_pairs(value: &serde_json::Value, key: &str) -> Vec<Vec<String>> {
+    serde_json::from_value(value[key].clone()).unwrap()
+}
+
+fn string_list(value: &serde_json::Value, key: &str) -> Vec<String> {
+    serde_json::from_value(value[key].clone()).unwrap()
+}
+
+fn assert_exact_semantic_trace(
+    logs: &Path,
+    case: &str,
+    rows: &[(&str, &str)],
+    caller_labels: &[&str],
+    forbidden_caller_ids: &[&str],
+) {
+    let mut call_roles = fs::read_dir(logs)
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name.starts_with(&format!("{case}-")))
+        .collect::<Vec<_>>();
+    call_roles.sort();
+    assert_eq!(
+        call_roles,
+        [
+            format!("{case}-a.json"),
+            format!("{case}-b.json"),
+            format!("{case}-j.json")
+        ],
+        "exact child-call budget is two blind manifests plus one adjudication"
+    );
+
+    let a = semantic_log(logs, case, "a");
+    let b = semantic_log(logs, case, "b");
+    let j = semantic_log(logs, case, "j");
+    let expected_a = rows
+        .iter()
+        .map(|(rid, evidence)| vec![(*rid).to_string(), (*evidence).to_string()])
+        .collect::<Vec<_>>();
+    let scripted_class_is_a = |evidence: &str| {
+        evidence
+            .split_whitespace()
+            .filter(|word| !word.starts_with("meta="))
+            .any(|word| word == "semantic-alpha")
+    };
+    let expected_a_manifest = rows
+        .iter()
+        .map(|(rid, evidence)| {
+            vec![
+                (*rid).to_string(),
+                if scripted_class_is_a(evidence) {
+                    "class-a".to_string()
+                } else {
+                    "class-b".to_string()
+                },
+            ]
+        })
+        .collect::<Vec<_>>();
+    let mut expected_b = expected_a.clone();
+    expected_b.reverse();
+    let expected_b_manifest = expected_b
+        .iter()
+        .map(|row| vec![row[0].clone(), "class-b".to_string()])
+        .collect::<Vec<_>>();
+    let expected_j = expected_a
+        .iter()
+        .filter(|row| scripted_class_is_a(&row[1]))
+        .cloned()
+        .collect::<Vec<_>>();
+    let expected_j_manifest = expected_j
+        .iter()
+        .map(|row| vec![row[0].clone(), "class-a".to_string()])
+        .collect::<Vec<_>>();
+
+    assert_eq!(string_pairs(&a, "rows"), expected_a);
+    assert_eq!(string_pairs(&a, "manifest"), expected_a_manifest);
+    assert_eq!(string_list(&a, "allowed"), caller_labels);
+    assert_eq!(string_pairs(&b, "rows"), expected_b);
+    assert_eq!(string_pairs(&b, "manifest"), expected_b_manifest);
+    assert_eq!(
+        string_list(&b, "allowed"),
+        caller_labels.iter().rev().copied().collect::<Vec<_>>()
+    );
+    assert_eq!(string_pairs(&j, "rows"), expected_j);
+    assert_eq!(string_pairs(&j, "manifest"), expected_j_manifest);
+    assert_eq!(string_list(&j, "allowed"), caller_labels);
+    for call in [&a, &b, &j] {
+        let prompt = call["prompt"].as_str().unwrap();
+        for caller_id in forbidden_caller_ids {
+            assert!(
+                !prompt.contains(caller_id),
+                "caller ID leaked into provider manifest: {caller_id}"
+            );
+        }
+    }
+}
+
 #[test]
 fn lifecycle_is_persistent_and_load_is_metadata_only() {
     let t = temp("life");
@@ -480,6 +736,213 @@ else:
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham:spam");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_is_invariant_to_caller_item_id_renaming() {
+    let t = temp("semantic-id-metamorphism");
+    let (script, logs) = write_semantic_metamorphic_oracle(&t);
+    let cfg = semantic_metamorphic_config(&t, &script, &logs);
+    let original = run_semantic_metamorphic_case(&t, &cfg, "id-original");
+    let renamed = run_semantic_metamorphic_case(&t, &cfg, "id-renamed");
+    assert_eq!(original, "class-a:class-b");
+    assert_eq!(renamed, original);
+    let rows = [
+        ("R00000000", "semantic-alpha review-me"),
+        ("R00000001", "semantic-beta stable"),
+    ];
+    assert_exact_semantic_trace(
+        &logs,
+        "id-original",
+        &rows,
+        &["class-a", "class-b"],
+        &["caller-left", "caller-right"],
+    );
+    assert_exact_semantic_trace(
+        &logs,
+        "id-renamed",
+        &rows,
+        &["class-a", "class-b"],
+        &["renamed-red", "renamed-blue"],
+    );
+    assert_eq!(
+        string_pairs(&semantic_log(&logs, "id-original", "a"), "manifest"),
+        string_pairs(&semantic_log(&logs, "id-renamed", "a"), "manifest")
+    );
+    assert_eq!(
+        string_pairs(&semantic_log(&logs, "id-original", "j"), "rows"),
+        vec![vec![
+            "R00000000".to_string(),
+            "semantic-alpha review-me".to_string()
+        ]]
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_reversal_preserves_order_invariant_reduction() {
+    let t = temp("semantic-order-metamorphism");
+    let (script, logs) = write_semantic_metamorphic_oracle(&t);
+    let cfg = semantic_metamorphic_config(&t, &script, &logs);
+    let forward = run_semantic_metamorphic_case(&t, &cfg, "records-forward");
+    let reversed = run_semantic_metamorphic_case(&t, &cfg, "records-reversed");
+    assert_eq!(forward, "2:1");
+    assert_eq!(reversed, forward);
+    assert_exact_semantic_trace(
+        &logs,
+        "records-forward",
+        &[
+            ("R00000000", "semantic-alpha review-me"),
+            ("R00000001", "semantic-beta stable"),
+        ],
+        &["class-a", "class-b"],
+        &["forward-alpha-0", "forward-alpha-1", "forward-beta-0"],
+    );
+    assert_exact_semantic_trace(
+        &logs,
+        "records-reversed",
+        &[
+            ("R00000000", "semantic-beta stable"),
+            ("R00000001", "semantic-alpha review-me"),
+        ],
+        &["class-a", "class-b"],
+        &["forward-alpha-0", "forward-alpha-1", "forward-beta-0"],
+    );
+    assert_eq!(
+        string_pairs(&semantic_log(&logs, "records-forward", "j"), "manifest"),
+        vec![vec!["R00000000".to_string(), "class-a".to_string()]]
+    );
+    assert_eq!(
+        string_pairs(&semantic_log(&logs, "records-reversed", "j"), "manifest"),
+        vec![vec!["R00000001".to_string(), "class-a".to_string()]]
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_is_invariant_to_caller_allowed_label_order() {
+    let t = temp("semantic-label-metamorphism");
+    let (script, logs) = write_semantic_metamorphic_oracle(&t);
+    let cfg = semantic_metamorphic_config(&t, &script, &logs);
+    let forward = run_semantic_metamorphic_case(&t, &cfg, "labels-forward");
+    let reversed = run_semantic_metamorphic_case(&t, &cfg, "labels-reversed");
+    assert_eq!(forward, "class-a:class-b");
+    assert_eq!(reversed, forward);
+    let rows = [
+        ("R00000000", "semantic-alpha review-me"),
+        ("R00000001", "semantic-beta stable"),
+    ];
+    assert_exact_semantic_trace(
+        &logs,
+        "labels-forward",
+        &rows,
+        &["class-a", "class-b"],
+        &["label-alpha", "label-beta"],
+    );
+    assert_exact_semantic_trace(
+        &logs,
+        "labels-reversed",
+        &rows,
+        &["class-b", "class-a"],
+        &["label-alpha", "label-beta"],
+    );
+    assert_eq!(
+        string_pairs(&semantic_log(&logs, "labels-forward", "j"), "manifest"),
+        string_pairs(&semantic_log(&logs, "labels-reversed", "j"), "manifest")
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_scripted_oracle_ignores_harmless_metadata_and_whitespace() {
+    let t = temp("semantic-evidence-metamorphism");
+    let (script, logs) = write_semantic_metamorphic_oracle(&t);
+    let cfg = semantic_metamorphic_config(&t, &script, &logs);
+    let plain = run_semantic_metamorphic_case(&t, &cfg, "evidence-plain");
+    let noisy = run_semantic_metamorphic_case(&t, &cfg, "evidence-noisy");
+    assert_eq!(plain, "class-a:class-b");
+    assert_eq!(noisy, plain);
+    assert_exact_semantic_trace(
+        &logs,
+        "evidence-plain",
+        &[
+            ("R00000000", "semantic-alpha review-me"),
+            ("R00000001", "semantic-beta stable"),
+        ],
+        &["class-a", "class-b"],
+        &["plain-alpha", "plain-beta"],
+    );
+    assert_exact_semantic_trace(
+        &logs,
+        "evidence-noisy",
+        &[
+            (
+                "R00000000",
+                "meta=semantic-beta semantic-alpha   review-me meta=trace-77",
+            ),
+            (
+                "R00000001",
+                "meta=noop semantic-beta\tstable meta=semantic-alpha",
+            ),
+        ],
+        &["class-a", "class-b"],
+        &["noisy-alpha", "noisy-beta"],
+    );
+    assert_eq!(
+        string_pairs(&semantic_log(&logs, "evidence-plain", "j"), "manifest"),
+        string_pairs(&semantic_log(&logs, "evidence-noisy", "j"), "manifest")
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_scales_duplicate_multiplicity_and_expands_every_occurrence() {
+    let t = temp("semantic-duplicate-metamorphism");
+    let (script, logs) = write_semantic_metamorphic_oracle(&t);
+    let cfg = semantic_metamorphic_config(&t, &script, &logs);
+    let one = run_semantic_metamorphic_case(&t, &cfg, "duplicates-one");
+    let three = run_semantic_metamorphic_case(&t, &cfg, "duplicates-three");
+    assert_eq!(
+        one,
+        "3:2:1|occ-alpha-0=class-a,occ-alpha-1=class-a,occ-beta-0=class-b"
+    );
+    assert_eq!(
+        three,
+        "9:6:3|occ-alpha-0=class-a,occ-alpha-1=class-a,occ-alpha-2=class-a,occ-alpha-3=class-a,occ-alpha-4=class-a,occ-alpha-5=class-a,occ-beta-0=class-b,occ-beta-1=class-b,occ-beta-2=class-b"
+    );
+    let unique_rows = [
+        ("R00000000", "semantic-alpha review-me"),
+        ("R00000001", "semantic-beta stable"),
+    ];
+    assert_exact_semantic_trace(
+        &logs,
+        "duplicates-one",
+        &unique_rows,
+        &["class-a", "class-b"],
+        &["occ-alpha-0", "occ-alpha-1", "occ-beta-0"],
+    );
+    assert_exact_semantic_trace(
+        &logs,
+        "duplicates-three",
+        &unique_rows,
+        &["class-a", "class-b"],
+        &[
+            "occ-alpha-0",
+            "occ-alpha-1",
+            "occ-alpha-2",
+            "occ-alpha-3",
+            "occ-alpha-4",
+            "occ-alpha-5",
+            "occ-beta-0",
+            "occ-beta-1",
+            "occ-beta-2",
+        ],
+    );
+    assert_eq!(
+        string_pairs(&semantic_log(&logs, "duplicates-one", "a"), "manifest"),
+        string_pairs(&semantic_log(&logs, "duplicates-three", "a"), "manifest")
+    );
     fs::remove_dir_all(t).unwrap();
 }
 
