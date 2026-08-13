@@ -96,6 +96,99 @@ class Fixture:
 
 
 @dataclass(frozen=True)
+class SuiteFixture:
+    fixture_id: str
+    fixture: Fixture
+    manifest_entry: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class Suite:
+    path: Path
+    sha256: str
+    metadata: dict[str, Any]
+    fixtures: tuple[SuiteFixture, ...]
+
+
+def _private_regular_file(path: Path, label: str) -> None:
+    if path.is_symlink() or not path.is_file():
+        raise BenchError(f"{label} must be a regular non-symlink file: {path}")
+    if os.name == "posix" and path.stat().st_mode & 0o077:
+        raise BenchError(f"{label} must be owner-only: {path}")
+
+
+def load_suite_manifest(path_arg: str) -> Suite:
+    path = Path(path_arg).expanduser().resolve(strict=True)
+    _private_regular_file(path, "suite manifest")
+    metadata = load_json_object(path, "suite manifest")
+    if metadata.get("schema_version") != 1:
+        raise BenchError("suite manifest schema_version must be 1")
+    if metadata.get("source") != "oolongbench/oolong-synth":
+        raise BenchError("suite manifest source must be oolongbench/oolong-synth")
+    split = metadata.get("split")
+    if not isinstance(split, str) or not split:
+        raise BenchError("suite manifest split must be nonempty")
+    commit = metadata.get("upstream_commit")
+    if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise BenchError("suite manifest upstream_commit must be lowercase Git SHA-1")
+    entries = metadata.get("fixtures")
+    if not isinstance(entries, list) or not entries:
+        raise BenchError("suite manifest fixtures must be a nonempty list")
+    parent = path.parent
+    seen_ids: set[str] = set()
+    seen_rows: set[str] = set()
+    fixtures: list[SuiteFixture] = []
+    redundant = (
+        "dataset",
+        "context_len",
+        "context_window_id",
+        "task_group",
+        "task",
+    )
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise BenchError("suite fixture entry must be an object")
+        fixture_id = entry.get("fixture_id")
+        if not isinstance(fixture_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9._-]{0,191}", fixture_id
+        ):
+            raise BenchError("suite fixture_id is unsafe")
+        if fixture_id in seen_ids:
+            raise BenchError(f"duplicate suite fixture_id: {fixture_id}")
+        seen_ids.add(fixture_id)
+        paths: dict[str, Path] = {}
+        for key in ("row", "context"):
+            raw = entry.get(key)
+            if not isinstance(raw, str) or not raw or Path(raw).is_absolute():
+                raise BenchError(f"suite fixture {key} must be a relative path")
+            candidate = (parent / raw).resolve(strict=True)
+            if candidate.parent != parent:
+                raise BenchError(f"suite fixture {key} must stay in the manifest directory")
+            _private_regular_file(candidate, f"suite fixture {key}")
+            paths[key] = candidate
+        fixture = load_fixture(str(paths["row"]), str(paths["context"]))
+        for key, actual in (
+            ("row_sha256", fixture.row_sha256),
+            ("context_sha256", fixture.context_sha256),
+        ):
+            expected = entry.get(key)
+            if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
+                raise BenchError(f"suite fixture {key} must be lowercase SHA-256")
+            if expected != actual:
+                raise BenchError(f"suite fixture {key} mismatch for {fixture_id}")
+        if fixture.row_sha256 in seen_rows:
+            raise BenchError(f"duplicate suite row identity: {fixture_id}")
+        seen_rows.add(fixture.row_sha256)
+        for key in redundant:
+            if entry.get(key) != fixture.metadata.get(key):
+                raise BenchError(f"suite fixture metadata mismatch for {fixture_id}: {key}")
+        if fixture.metadata.get("split") != split:
+            raise BenchError(f"suite fixture split mismatch for {fixture_id}")
+        fixtures.append(SuiteFixture(fixture_id, fixture, dict(entry)))
+    return Suite(path, sha256_path(path), metadata, tuple(fixtures))
+
+
+@dataclass(frozen=True)
 class Arm:
     name: str
     command: list[str]
@@ -1733,6 +1826,7 @@ def run_one(
     auth_jcode: dict[str, Any],
     auth_prime: dict[str, Any],
     work_root: Path,
+    defer_scoring: bool = False,
 ) -> dict[str, Any]:
     del root, prompt  # Inference prompts/cwd are always rebuilt from the staged copy.
     run_dir = work_root / f"r{repetition:03d}-{ordinal:03d}-{arm_name}"
@@ -1826,20 +1920,25 @@ def run_one(
         else None
     )
     route = runtime_assertion(arm_name, stdout, azdaja_route_evidence)
+    execution_parse_error = (
+        execution_error
+        if execution_error is not None
+        else ("turn timed out" if timed_out else f"process exited {exit_code}")
+    )
     score = (
-        strict_score(response, fixture)
-        if execution_error is None and exit_code == 0 and not timed_out
-        else {
-            "correct": False,
-            "strict_exact": True,
-            "expected": fixture.expected_canonical,
-            "parsed_value": None,
-            "parse_error": (
-                execution_error
-                if execution_error is not None
-                else ("turn timed out" if timed_out else f"process exited {exit_code}")
-            ),
-        }
+        None
+        if defer_scoring
+        else (
+            strict_score(response, fixture)
+            if execution_error is None and exit_code == 0 and not timed_out
+            else {
+                "correct": False,
+                "strict_exact": True,
+                "expected": fixture.expected_canonical,
+                "parsed_value": None,
+                "parse_error": execution_parse_error,
+            }
+        )
     )
     if arm_name == "jcode-azdaja":
         root_usage = usage_fields_from_azdaja(
@@ -1900,10 +1999,10 @@ def run_one(
     if execution_error is not None:
         failure = {"kind": "execution", "message": execution_error, "stderr": bounded(stderr)}
     elif timed_out:
-        failure = {"kind": "timeout", "message": score["parse_error"], "stderr": bounded(stderr)}
+        failure = {"kind": "timeout", "message": execution_parse_error, "stderr": bounded(stderr)}
     elif exit_code != 0:
-        failure = {"kind": "process_exit", "message": score["parse_error"], "stderr": bounded(stderr)}
-    elif not score["correct"]:
+        failure = {"kind": "process_exit", "message": execution_parse_error, "stderr": bounded(stderr)}
+    elif not defer_scoring and score is not None and not score["correct"]:
         failure = {"kind": "strict_score", "message": score["parse_error"], "stderr": bounded(stderr)}
     elif not route["asserted"]:
         failure = {
@@ -1973,7 +2072,9 @@ def run_one(
         "timeout_seconds": args.timeout,
         "timed_out": timed_out,
         "exit_code": exit_code,
-        "success": failure is None,
+        "success": None if defer_scoring else failure is None,
+        "execution_success": failure is None,
+        "scoring_status": "deferred" if defer_scoring else "complete",
         "provider": JCODE_PROVIDER if arm_name.startswith("jcode") else PRIME_PROVIDER,
         "reported_provider": "OpenAI OAuth" if arm_name.startswith("jcode") else PRIME_PROVIDER,
         "model": MODEL,
@@ -2037,14 +2138,199 @@ def run_one(
     }
 
 
+def canonical_json_bytes(value: Any) -> bytes:
+    return json.dumps(
+        value, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+
+
+def atomic_create_private_json(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = canonical_json_bytes(value) + b"\n"
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        if os.name == "posix":
+            os.fchmod(fd, 0o600)
+        os.write(fd, data)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def candidate_identity(skill: Path) -> dict[str, Any]:
+    components = skill_component_hashes(skill)["files"]
+    bound = {
+        name: {
+            "sha256": entry["source_sha256"],
+            "bytes": entry["source_bytes"],
+        }
+        for name, entry in sorted(components.items())
+    }
+    return {
+        "sha256": hashlib.sha256(canonical_json_bytes(bound)).hexdigest(),
+        "components": bound,
+    }
+
+
+def controller_identity() -> dict[str, Any]:
+    path = Path(__file__).resolve(strict=True)
+    return {"path": str(path), "sha256": sha256_path(path), "bytes": path.stat().st_size}
+
+
+def build_suite_schedule(
+    suite: Suite,
+    args: argparse.Namespace,
+    candidate: dict[str, Any] | None,
+    controller: dict[str, Any],
+    executables: dict[str, Any],
+) -> dict[str, Any]:
+    jobs: list[dict[str, Any]] = []
+    rng = random.Random(args.seed)
+    ordinal = 0
+    for repetition in range(1, args.repetitions + 1):
+        fixture_order = list(suite.fixtures)
+        rng.shuffle(fixture_order)
+        for selected in fixture_order:
+            arms = list(args.arms)
+            rng.shuffle(arms)
+            for arm in arms:
+                ordinal += 1
+                jobs.append(
+                    {
+                        "ordinal": ordinal,
+                        "fixture_id": selected.fixture_id,
+                        "row_sha256": selected.fixture.row_sha256,
+                        "context_sha256": selected.fixture.context_sha256,
+                        "repetition": repetition,
+                        "arm": arm,
+                    }
+                )
+    identity = {
+        "schema_version": 1,
+        "record_type": "oolong_frozen_schedule",
+        "suite": {
+            "manifest_sha256": suite.sha256,
+            "source": suite.metadata["source"],
+            "split": suite.metadata["split"],
+            "upstream_commit": suite.metadata["upstream_commit"],
+            "fixtures": [
+                {
+                    "fixture_id": item.fixture_id,
+                    "row_sha256": item.fixture.row_sha256,
+                    "context_sha256": item.fixture.context_sha256,
+                }
+                for item in suite.fixtures
+            ],
+        },
+        "configuration": {
+            "model": args.model,
+            "reasoning": args.reasoning,
+            "arms": list(args.arms),
+            "repetitions": args.repetitions,
+            "seed": args.seed,
+            "timeout_seconds": args.timeout,
+            "candidate": candidate,
+            "controller": controller,
+            "executables": executables,
+        },
+        "jobs": jobs,
+    }
+    schedule_id = hashlib.sha256(canonical_json_bytes(identity)).hexdigest()
+    for job in jobs:
+        job["run_id"] = hashlib.sha256(
+            b"oolong-run-v1\0" + schedule_id.encode() + canonical_json_bytes(job)
+        ).hexdigest()
+    identity["schedule_id"] = schedule_id
+    return identity
+
+
+def validate_result_prefix(path: Path, schedule: dict[str, Any]) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    _private_regular_file(path, "suite output")
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            raise BenchError(f"blank suite output row at line {line_number}")
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise BenchError(f"malformed suite output row {line_number}: {exc}") from exc
+        if not isinstance(row, dict) or len(rows) >= len(schedule["jobs"]):
+            raise BenchError("suite output is not a valid schedule prefix")
+        job = schedule["jobs"][len(rows)]
+        for key in ("run_id", "fixture_id", "schedule_id"):
+            expected = schedule["schedule_id"] if key == "schedule_id" else job[key]
+            if row.get(key) != expected:
+                raise BenchError(f"suite output prefix mismatch for {key} at line {line_number}")
+        if row["run_id"] in seen:
+            raise BenchError(f"duplicate suite run_id at line {line_number}")
+        seen.add(row["run_id"])
+        rows.append(row)
+    return rows
+
+
+def score_completed_suite(
+    output: Path, scores_path: Path, schedule: dict[str, Any], suite: Suite
+) -> None:
+    rows = validate_result_prefix(output, schedule)
+    if len(rows) != len(schedule["jobs"]):
+        return
+    if scores_path.exists():
+        existing = load_json_object(scores_path, "suite scores")
+        if (
+            existing.get("schedule_id") != schedule["schedule_id"]
+            or existing.get("inference_jsonl_sha256") != sha256_path(output)
+        ):
+            raise BenchError("existing suite scores do not match completed inference")
+        return
+    by_id = {item.fixture_id: item.fixture for item in suite.fixtures}
+    scores = []
+    for row, job in zip(rows, schedule["jobs"]):
+        score = strict_score(str(row.get("response", "")), by_id[job["fixture_id"]])
+        execution_success = row.get("execution_success") is True
+        scores.append(
+            {
+                "run_id": job["run_id"],
+                "ordinal": job["ordinal"],
+                "fixture_id": job["fixture_id"],
+                "arm": job["arm"],
+                "repetition": job["repetition"],
+                "execution_success": execution_success,
+                "score": score,
+                "success": execution_success and score["correct"],
+            }
+        )
+    artifact = {
+        "schema_version": 1,
+        "record_type": "oolong_deferred_scores",
+        "schedule_id": schedule["schedule_id"],
+        "manifest_sha256": suite.sha256,
+        "inference_jsonl_sha256": sha256_path(output),
+        "scores": scores,
+    }
+    atomic_create_private_json(scores_path, artifact)
+
+
 def parser() -> argparse.ArgumentParser:
     here = Path(__file__).resolve().parent
     p = argparse.ArgumentParser(
         description="Run fair serial OOLONG arms over subscription OAuth (this command performs inference)."
     )
-    p.add_argument("--row", required=True, help="OOLONG row metadata JSON")
-    p.add_argument("--context", help="UTF-8 context fixture (default: context-<row context_len>.txt beside row)")
+    source = p.add_mutually_exclusive_group(required=True)
+    source.add_argument("--row", help="OOLONG row metadata JSON")
+    source.add_argument("--suite-manifest", help="frozen owner-only OOLONG suite manifest")
+    p.add_argument("--context", help="UTF-8 context fixture (row mode only)")
+    p.add_argument("--resume", action="store_true", help="resume an exact frozen suite prefix")
     p.add_argument("--output", required=True, help="append-only result JSONL")
+    p.add_argument("--model", default=MODEL, help="shared model ID for every selected arm")
+    p.add_argument(
+        "--reasoning",
+        choices=("minimal", "low", "medium", "high", "xhigh"),
+        default=REASONING,
+        help="shared reasoning level for every selected arm",
+    )
     p.add_argument("--repetitions", type=int, default=3, help="number of repetitions per arm (default: 3)")
     p.add_argument("--seed", type=int, default=20260812, help="deterministic arm-order seed")
     p.add_argument("--timeout", type=int, default=1800, help="timeout per arm in seconds")
@@ -2073,12 +2359,220 @@ def positive(name: str, value: int) -> None:
         raise BenchError(f"{name} must be positive")
 
 
+def assert_frozen_identities(
+    schedule: dict[str, Any], skill: Path, suite: Suite
+) -> None:
+    configuration = schedule["configuration"]
+    frozen_controller = configuration["controller"]
+    current_controller = controller_identity()
+    if any(
+        current_controller.get(key) != frozen_controller.get(key)
+        for key in ("sha256", "bytes", "path")
+    ):
+        raise BenchError("controller identity drifted after schedule freeze")
+    frozen_candidate = configuration.get("candidate")
+    if frozen_candidate is not None and candidate_identity(skill) != frozen_candidate:
+        raise BenchError("candidate identity drifted after schedule freeze")
+    for label, frozen in configuration.get("executables", {}).items():
+        path = Path(str(frozen.get("path", "")))
+        if (
+            not path.is_file()
+            or path.stat().st_size != frozen.get("bytes")
+            or sha256_path(path) != frozen.get("sha256")
+        ):
+            raise BenchError(f"{label} executable drifted after schedule freeze")
+    if sha256_path(suite.path) != schedule["suite"]["manifest_sha256"]:
+        raise BenchError("suite manifest drifted after schedule freeze")
+    by_id = {item.fixture_id: item for item in suite.fixtures}
+    for frozen in schedule["suite"]["fixtures"]:
+        item = by_id.get(frozen["fixture_id"])
+        if item is None:
+            raise BenchError("suite fixture disappeared after schedule freeze")
+        if (
+            sha256_path(item.fixture.row_path) != frozen["row_sha256"]
+            or sha256_path(item.fixture.context_path) != frozen["context_sha256"]
+        ):
+            raise BenchError(
+                f"suite fixture drifted after schedule freeze: {frozen['fixture_id']}"
+            )
+
+
+def run_suite(args: argparse.Namespace, suite: Suite) -> int:
+    if args.context is not None:
+        raise BenchError("--context is not allowed with --suite-manifest")
+    if not args.yes_run_inference:
+        raise BenchError("refusing to run inference without --yes-run-inference")
+    output = Path(args.output).expanduser().resolve()
+    schedule_path = Path(str(output) + ".schedule.json")
+    scores_path = Path(str(output) + ".scores.json")
+    if not args.resume and (output.exists() or schedule_path.exists() or scores_path.exists()):
+        raise BenchError("fresh suite output, schedule, and scores paths must not exist")
+    root = Path(__file__).resolve().parents[2]
+    home_value = os.environ.get("HOME")
+    if not home_value:
+        raise BenchError("HOME must identify the login directory containing OAuth credentials")
+    source_home = Path(home_value).expanduser().resolve()
+    if not source_home.is_dir():
+        raise BenchError("HOME must identify the login directory containing OAuth credentials")
+    args.jcode = ensure_executable(args.jcode, "jcode") if any(
+        arm.startswith("jcode") for arm in args.arms
+    ) else args.jcode
+    args.prime_agent = ensure_executable(args.prime_agent, "prime-agent") if (
+        "prime-agent" in args.arms
+    ) else args.prime_agent
+    skill = validate_skill(args.azdaja_skill) if "jcode-azdaja" in args.arms else Path(
+        args.azdaja_skill
+    )
+    executable_identities: dict[str, Any] = {}
+    if any(arm.startswith("jcode") for arm in args.arms):
+        executable_identities["jcode"] = executable_identity(args.jcode, "jcode")
+    if "prime-agent" in args.arms:
+        executable_identities["prime-agent"] = executable_identity(
+            args.prime_agent, "prime-agent"
+        )
+    if "jcode-azdaja" in args.arms:
+        executable_identities["azdaja"] = executable_identity(
+            str(skill / "azdaja"), "azdaja"
+        )
+    args.executable_identities = executable_identities
+    candidate = candidate_identity(skill) if "jcode-azdaja" in args.arms else None
+    schedule = build_suite_schedule(
+        suite, args, candidate, controller_identity(), executable_identities
+    )
+    if args.resume:
+        if not schedule_path.exists():
+            raise BenchError("--resume requires the frozen schedule sidecar")
+        frozen = load_json_object(schedule_path, "frozen schedule")
+        if frozen != schedule:
+            raise BenchError("resume configuration or identities differ from frozen schedule")
+    else:
+        atomic_create_private_json(schedule_path, schedule)
+    completed = validate_result_prefix(output, schedule)
+    if len(completed) == len(schedule["jobs"]):
+        score_completed_suite(output, scores_path, schedule, suite)
+        return 0
+    auth_jcode = preflight_jcode(source_home, args.jcode) if any(
+        arm.startswith("jcode") for arm in args.arms
+    ) else {}
+    auth_prime = preflight_prime(source_home) if "prime-agent" in args.arms else {}
+    if "prime-agent" in args.arms:
+        kernel_python = source_home / ".prime" / "agent" / "kernel-venv" / "bin" / "python"
+        if not kernel_python.is_file() or not os.access(kernel_python, os.X_OK):
+            raise BenchError(f"Prime Agent kernel venv is not ready: {kernel_python}")
+    work_base = (
+        Path(args.work_dir).expanduser().resolve()
+        if args.work_dir
+        else Path(str(output) + ".artifacts")
+    )
+    work_base.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name == "posix":
+        os.chmod(work_base, 0o700)
+    schedule_root = work_base / ("schedule-" + schedule["schedule_id"])
+    claims = schedule_root / "claims"
+    claims.mkdir(mode=0o700, parents=True, exist_ok=True)
+    work_root = schedule_root / "runs"
+    work_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    by_id = {item.fixture_id: item.fixture for item in suite.fixtures}
+    for job in schedule["jobs"][len(completed):]:
+        assert_frozen_identities(schedule, skill, suite)
+        if job["arm"].startswith("jcode"):
+            auth_jcode = preflight_jcode(source_home, args.jcode)
+        elif job["arm"] == "prime-agent":
+            auth_prime = preflight_prime(source_home)
+        claim_path = claims / (job["run_id"] + ".json")
+        if claim_path.exists():
+            raise BenchError(
+                f"orphan claim makes inference indeterminate; refusing duplicate: {job['run_id']}"
+            )
+        atomic_create_private_json(
+            claim_path,
+            {
+                "schedule_id": schedule["schedule_id"],
+                "run_id": job["run_id"],
+                "ordinal": job["ordinal"],
+                "pid": os.getpid(),
+            },
+        )
+        try:
+            row = run_one(
+                arm_name=job["arm"],
+                repetition=job["repetition"],
+                ordinal=job["ordinal"],
+                fixture=by_id[job["fixture_id"]],
+                prompt=None,
+                args=args,
+                root=root,
+                source_home=source_home,
+                skill=skill,
+                auth_jcode=auth_jcode,
+                auth_prime=auth_prime,
+                work_root=work_root,
+                defer_scoring=True,
+            )
+        except Exception as exc:
+            row = {
+                "schema_version": SCHEMA_VERSION,
+                "benchmark": "oolong",
+                "arm": job["arm"],
+                "repetition": job["repetition"],
+                "execution_ordinal": job["ordinal"],
+                "model": args.model,
+                "reasoning": args.reasoning,
+                "execution_success": False,
+                "success": None,
+                "scoring_status": "deferred",
+                "response": "",
+                "failure": {
+                    "kind": "controller",
+                    "message": f"{type(exc).__name__}: {exc}",
+                },
+            }
+        row.update(
+            {
+                "record_type": "inference",
+                "schedule_id": schedule["schedule_id"],
+                "run_id": job["run_id"],
+                "fixture_id": job["fixture_id"],
+                "candidate_sha256": None if candidate is None else candidate["sha256"],
+                "controller_sha256": schedule["configuration"]["controller"]["sha256"],
+            }
+        )
+        write_jsonl(output, row)
+        print(
+            json.dumps(
+                {
+                    "ordinal": job["ordinal"],
+                    "fixture_id": job["fixture_id"],
+                    "arm": job["arm"],
+                    "execution_success": row.get("execution_success"),
+                    "scoring_status": "deferred",
+                    "latency_seconds": row.get("latency_seconds"),
+                },
+                sort_keys=True,
+            ),
+            flush=True,
+        )
+    score_completed_suite(output, scores_path, schedule, suite)
+    scores = load_json_object(scores_path, "suite scores").get("scores", [])
+    return 1 if any(not item.get("success") for item in scores) else 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    global MODEL, REASONING
     args = parser().parse_args(argv)
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", args.model) or ":" in args.model:
+        raise BenchError("--model is not a safe unqualified model ID")
+    MODEL = args.model
+    REASONING = args.reasoning
     positive("--repetitions", args.repetitions)
     positive("--timeout", args.timeout)
     if len(set(args.arms)) != len(args.arms):
         raise BenchError("--arms contains duplicates")
+    if args.suite_manifest is not None:
+        suite = load_suite_manifest(args.suite_manifest)
+        return run_suite(args, suite)
+    if args.resume:
+        raise BenchError("--resume is only valid with --suite-manifest")
     fixture = load_fixture(args.row, args.context)
     output = Path(args.output).expanduser().resolve()
     if output in {fixture.row_path, fixture.context_path}:

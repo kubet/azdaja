@@ -8,7 +8,7 @@ Private development fixtures from `oolongbench/oolong-synth`, validation split. 
 
 Every row binds its context filename, SHA-256, byte, character, and line counts. `run.py` fails closed on mismatches, API-key-like environment variables, ambiguous OAuth routing, wrong output format, stale skill config, or a missing explicit inference acknowledgement.
 
-The controller executes arms serially in a deterministic shuffled order with fresh homes/sessions and GPT-5.4 at medium reasoning over ChatGPT subscription OAuth. Each arm receives a random read-only context filename and the same official question; wrapper instructions differ by product and are hashed. Native jcode and Prime retain their ordinary file-analysis tools. The azdaja arm invokes the staged `solo` product directly, eliminating an unrelated outer-agent loop while preserving the same model, reasoning level, fixture, scorer, and timeout.
+The controller executes arms serially in a deterministic frozen order with fresh homes/sessions and GPT-5.6 Luna at medium reasoning over subscription OAuth. Each arm receives a random read-only context filename and the same official question; wrapper instructions differ by product and are hashed. Native jcode and Prime retain their ordinary file-analysis tools. The azdaja arm invokes the staged `solo` product directly, eliminating an unrelated outer-agent loop while preserving the same model, reasoning level, fixture, scorer, and timeout.
 
 Retained artifacts are owner-only, credential-redacted stdout/stderr and azdaja model/solo traces; copied OAuth homes, task copies, histories, and runtime state are deleted after each arm. The tool-event scan catches obvious network or external-dataset commands but is **post-hoc detection, not OS containment**. Until the native-tool processes run behind an enforceable filesystem/network sandbox or broker, these runs are diagnostic and cannot support a superiority claim.
 
@@ -20,5 +20,7 @@ python3 bench/oolong/run.py \
   --output bench/results/oolong-1m.jsonl \
   --repetitions 3 --timeout 1800 --yes-run-inference
 ```
+
+A frozen suite may instead use `--suite-manifest MANIFEST --resume`. The controller creates an immutable owner-only schedule before inference, binds every run to fixture/candidate/controller/executable hashes, rejects duplicate or out-of-order prefixes, and defers gold scoring until every scheduled run is terminal. Crash-orphaned claims fail closed rather than risking duplicate inference.
 
 No benchmark result is a release claim until repeated unseen items establish accuracy noninferiority and paired token/latency advantages.

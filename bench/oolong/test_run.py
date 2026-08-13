@@ -386,5 +386,101 @@ class ControllerTests(unittest.TestCase):
             "User", RUN.strict_score("Answer: 41714", fixture)["parse_error"]
         )
 
+    def test_suite_manifest_and_schedule_are_hash_bound_and_deterministic(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            row = root / "row.json"
+            context = root / "context.txt"
+            shutil.copy2(HERE / "row-645.json", row)
+            shutil.copy2(HERE / "context-131072.txt", context)
+            row.chmod(0o600)
+            context.chmod(0o600)
+            metadata = json.loads(row.read_text(encoding="utf-8"))
+            entry = {
+                "fixture_id": "f-1",
+                "row": row.name,
+                "context": context.name,
+                "row_sha256": RUN.sha256_path(row),
+                "context_sha256": RUN.sha256_path(context),
+            }
+            for key in (
+                "dataset", "context_len", "context_window_id", "task_group", "task"
+            ):
+                entry[key] = metadata[key]
+            manifest = root / "suite.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "source": "oolongbench/oolong-synth",
+                        "split": metadata["split"],
+                        "upstream_commit": "0" * 40,
+                        "selection": "test",
+                        "fixtures": [entry],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            manifest.chmod(0o600)
+            suite = RUN.load_suite_manifest(str(manifest))
+            args = SimpleNamespace(
+                seed=7,
+                repetitions=2,
+                arms=["jcode-azdaja", "jcode-native"],
+                model="gpt-5.6-luna",
+                reasoning="medium",
+                timeout=300,
+            )
+            candidate = {"sha256": "a" * 64, "components": {}}
+            controller = {"sha256": "b" * 64, "bytes": 1, "path": "/controller"}
+            first = RUN.build_suite_schedule(suite, args, candidate, controller, {})
+            second = RUN.build_suite_schedule(suite, args, candidate, controller, {})
+            self.assertEqual(first, second)
+            self.assertEqual(len(first["jobs"]), 4)
+            self.assertEqual(len({job["run_id"] for job in first["jobs"]}), 4)
+            args.model = "other-model"
+            changed = RUN.build_suite_schedule(suite, args, candidate, controller, {})
+            self.assertNotEqual(first["schedule_id"], changed["schedule_id"])
+
+    def test_suite_output_prefix_rejects_duplicates_and_scores_only_when_complete(self):
+        schedule = {
+            "schedule_id": "s",
+            "jobs": [
+                {"run_id": "r1", "fixture_id": "f", "ordinal": 1, "arm": "a", "repetition": 1},
+                {"run_id": "r2", "fixture_id": "f", "ordinal": 2, "arm": "b", "repetition": 1},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "out.jsonl"
+            RUN.write_jsonl(
+                output,
+                {"schedule_id": "s", "run_id": "r1", "fixture_id": "f", "response": "Answer: 0"},
+            )
+            self.assertEqual(len(RUN.validate_result_prefix(output, schedule)), 1)
+            RUN.write_jsonl(
+                output,
+                {"schedule_id": "s", "run_id": "r1", "fixture_id": "f", "response": "Answer: 0"},
+            )
+            with self.assertRaises(RUN.BenchError):
+                RUN.validate_result_prefix(output, schedule)
+
+    def test_model_id_rejects_provider_injection_before_subprocess(self):
+        with mock.patch.object(RUN.subprocess, "run") as run, mock.patch.object(
+            RUN.subprocess, "Popen"
+        ) as popen:
+            with self.assertRaises(RUN.BenchError):
+                RUN.main(
+                    [
+                        "--row",
+                        str(HERE / "row-645.json"),
+                        "--output",
+                        "/tmp/never-written.jsonl",
+                        "--model",
+                        "openai-oauth:gpt-5.6-luna",
+                    ]
+                )
+            run.assert_not_called()
+            popen.assert_not_called()
+
 
 if __name__=="__main__":unittest.main()
