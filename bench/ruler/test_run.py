@@ -32,9 +32,9 @@ TEST_CONTROLLER, TEST_CONTROLLER_SOURCES = RUN.snapshot_controller(
 TEST_CANDIDATE_SOURCE = TEST_IDENTITY_ROOT / "candidate-source"
 TEST_CANDIDATE_SOURCE.mkdir(mode=0o700)
 for _name, _data, _mode in (
-    ("azdaja", b"#!/bin/sh\nexit 0\n", 0o755),
-    ("config.toml", b"x=1\n", 0o644),
-    ("SKILL.md", b"---\nname: azdaja\n---\n# azdaja\n", 0o644),
+    ("azdaja", b"#!/bin/sh\nexit 0\n", 0o700),
+    ("config.toml", b"x=1\n", 0o600),
+    ("SKILL.md", b"---\nname: azdaja\n---\n# azdaja\n", 0o600),
 ):
     _path = TEST_CANDIDATE_SOURCE / _name
     _path.write_bytes(_data)
@@ -348,16 +348,16 @@ class RulerRunnerTests(unittest.TestCase):
             source = root / "source"
             source.mkdir(mode=0o700)
             for name, data, mode in (
-                ("azdaja", b"#!/bin/sh\n", 0o755),
-                ("config.toml", b"x=1\n", 0o644),
-                ("SKILL.md", b"# azdaja\n", 0o644),
+                ("azdaja", b"#!/bin/sh\n", 0o700),
+                ("config.toml", b"x=1\n", 0o600),
+                ("SKILL.md", b"# azdaja\n", 0o600),
             ):
                 path = source / name
                 path.write_bytes(data)
                 os.chmod(path, mode)
             target = root / "target"
             target.write_bytes(b"x=1\n")
-            os.chmod(target, 0o644)
+            os.chmod(target, 0o600)
             (source / "config.toml").unlink()
             (source / "config.toml").symlink_to(target)
             symlink_snapshot = root / "symlink-snapshot"
@@ -377,9 +377,9 @@ class RulerRunnerTests(unittest.TestCase):
             source = root / "source"
             source.mkdir(mode=0o700)
             for name, data, mode in (
-                ("azdaja", b"#!/bin/sh\n", 0o755),
-                ("config.toml", b"x=1\n", 0o644),
-                ("SKILL.md", b"# azdaja\n", 0o644),
+                ("azdaja", b"#!/bin/sh\n", 0o700),
+                ("config.toml", b"x=1\n", 0o600),
+                ("SKILL.md", b"# azdaja\n", 0o600),
             ):
                 path = source / name
                 path.write_bytes(data)

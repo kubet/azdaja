@@ -861,7 +861,7 @@ def snapshot_candidate(source_skill: Path, snapshot_root: Path) -> dict[str, Any
         if source.is_symlink():
             raise BenchError(f"candidate component must not be a symlink: {name}")
         metadata = source.lstat()
-        source_mode = 0o755 if name == "azdaja" else 0o644
+        source_mode = 0o700 if name == "azdaja" else 0o600
         if (
             not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
             or (os.name == "posix" and (
@@ -2063,7 +2063,7 @@ def run_suite(args: argparse.Namespace, suite: PublicSuite) -> int:
         for name, component in candidate["components"].items():
             source_data = read_owner_file_once(
                 skill / name, f"active candidate {name}",
-                exact_mode=(0o755 if name == "azdaja" else 0o644),
+                exact_mode=(0o700 if name == "azdaja" else 0o600),
                 require_single_link=True,
             )
             if sha256_bytes(source_data) != component["sha256"] or len(source_data) != component["bytes"]:
