@@ -1189,13 +1189,9 @@ fn ensure_jcode_bridge(cfg: &Config) -> Result<PathBuf> {
     let mut cmd = Command::new("jcode");
     cmd.args(["api-bridge", "--api-socket"])
         .arg(&paths.socket)
-        .args([
-            "--no-update",
-            "--quiet",
-            "--provider",
-            "openai",
-            "--disable-base-tools",
-        ])
+        .args(["--no-update", "--quiet", "--provider", "openai", "--model"])
+        .arg(&cfg.default_model)
+        .arg("--disable-base-tools")
         .env_clear();
     for key in [
         "HOME",
@@ -1365,7 +1361,8 @@ impl JcodeSession {
             .ok_or_else(|| anyhow!("jcode session setup timed out"))?;
         self.reply_with_timeout(id, kind, remaining)
     }
-    fn attached_before(&mut self, id: u64, deadline: Instant) -> Result<String> {
+    fn attached_before(&mut self, id: u64, deadline: Instant) -> Result<(String, bool)> {
+        let mut saw_model_info = false;
         loop {
             let remaining = deadline
                 .checked_duration_since(Instant::now())
@@ -1382,18 +1379,45 @@ impl JcodeSession {
                         .unwrap_or("error")
                 )
             }
+            if f.get("ev").and_then(serde_json::Value::as_str) == Some("model_info")
+                && f.get("provider").and_then(serde_json::Value::as_str) == Some("OpenAI")
+                && f.get("model").and_then(serde_json::Value::as_str).is_some()
+            {
+                saw_model_info = true;
+            }
             let correlated = f.get("reply_to").and_then(serde_json::Value::as_u64) == Some(id)
                 && f.get("ev").and_then(serde_json::Value::as_str) == Some("attached");
-            let status = f.get("ev").and_then(serde_json::Value::as_str) == Some("session_status")
-                && f.get("status").and_then(serde_json::Value::as_str) == Some("attached");
-            if correlated || status {
+            if correlated {
                 let sid = f
                     .pointer("/session/session_id")
                     .or_else(|| f.get("session_id"))
                     .and_then(serde_json::Value::as_str)
                     .filter(|value| !value.is_empty())
                     .ok_or_else(|| anyhow!("jcode API omitted session id"))?;
-                return Ok(sid.to_owned());
+                return Ok((sid.to_owned(), saw_model_info));
+            }
+        }
+    }
+    fn model_info_before(&mut self, deadline: Instant) -> Result<()> {
+        loop {
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .ok_or_else(|| anyhow!("jcode initial model info timed out"))?;
+            self.stream.set_read_timeout(Some(remaining))?;
+            let f = self.frame()?;
+            if f.get("ev").and_then(serde_json::Value::as_str) == Some("error") {
+                bail!(
+                    "jcode API: {}",
+                    f.get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("error")
+                )
+            }
+            if f.get("ev").and_then(serde_json::Value::as_str) == Some("model_info")
+                && f.get("provider").and_then(serde_json::Value::as_str) == Some("OpenAI")
+                && f.get("model").and_then(serde_json::Value::as_str).is_some()
+            {
+                return Ok(());
             }
         }
     }
@@ -1411,6 +1435,23 @@ impl JcodeSession {
         // their short setup handshakes, then release the lock before concurrent model turns.
         let _guard = JCODE_SETUP_LOCK.lock().unwrap();
         Self::open_for_batch(cfg, model, prompt_chars)
+    }
+    fn runtime_is_subscription_route(rt: &serde_json::Value, model: &str) -> bool {
+        rt.get("provider").and_then(serde_json::Value::as_str) == Some("OpenAI")
+            && rt.get("model").and_then(serde_json::Value::as_str) == Some(model)
+            && rt
+                .get("routes")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|routes| {
+                    routes.iter().any(|route| {
+                        route.get("provider").and_then(serde_json::Value::as_str) == Some("OpenAI")
+                            && route.get("model").and_then(serde_json::Value::as_str) == Some(model)
+                            && route.get("api_method").and_then(serde_json::Value::as_str)
+                                == Some("openai-oauth")
+                            && route.get("available").and_then(serde_json::Value::as_bool)
+                                == Some(true)
+                    })
+                })
     }
     fn open_with_timeout(cfg: &Config, model: &str, timeout: Duration) -> Result<Self> {
         let socket = ensure_jcode_bridge(cfg)?;
@@ -1436,31 +1477,41 @@ impl JcodeSession {
             .context("jcode hello setup")?;
         let id = this
             .send(serde_json::json!({"req":"create_session","working_dir":env::current_dir()?}))?;
-        this.session = this
+        let (session_id, saw_model_info) = this
             .attached_before(id, setup_deadline)
             .context("jcode attach setup")?;
-        let id=this.send(serde_json::json!({"req":"set_model","session_id":this.session,"model":format!("openai-oauth:{model}")}))?;
-        this.reply_before(id, "ok", setup_deadline)
-            .context("jcode model setup")?;
-        let id =
-            this.send(serde_json::json!({"req":"get_runtime_info","session_id":this.session}))?;
-        let rt = this
-            .reply_before(id, "runtime_info", setup_deadline)
-            .context("jcode route setup")?;
-        let provider = rt
-            .get("provider")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("");
-        let resolved = rt
-            .get("model")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("");
-        if provider != "OpenAI" || resolved != model {
-            bail!("subscription route mismatch: provider={provider:?} model={resolved:?}")
+        this.session = session_id;
+        if !saw_model_info {
+            this.model_info_before(setup_deadline)
+                .context("jcode initial model setup")?;
         }
-        // The explicit `openai-oauth:` selector is the fail-closed transport pin.
+        let runtime_info = |session: &mut Self| -> Result<serde_json::Value> {
+            let id = session
+                .send(serde_json::json!({"req":"get_runtime_info","session_id":session.session}))?;
+            session
+                .reply_before(id, "runtime_info", setup_deadline)
+                .context("jcode route setup")
+        };
+        let mut rt = runtime_info(&mut this)?;
+        if !Self::runtime_is_subscription_route(&rt, model) {
+            let id=this.send(serde_json::json!({"req":"set_model","session_id":this.session,"model":format!("openai-oauth:{model}")}))?;
+            this.reply_before(id, "ok", setup_deadline)
+                .context("jcode model setup")?;
+            rt = runtime_info(&mut this)?;
+        }
+        if !Self::runtime_is_subscription_route(&rt, model) {
+            let provider = rt
+                .get("provider")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("");
+            let resolved = rt
+                .get("model")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("");
+            bail!("subscription OAuth route mismatch: provider={provider:?} model={resolved:?}")
+        }
         this.provider = "OpenAI OAuth".into();
-        this.model = resolved.into();
+        this.model = model.into();
         let id=this.send(serde_json::json!({"req":"set_reasoning_effort","session_id":this.session,"effort":cfg.jcode_reasoning}))?;
         this.reply_before(id, "ok", setup_deadline)
             .context("jcode reasoning setup")?;

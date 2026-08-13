@@ -683,7 +683,8 @@ if os.getenv('RLM_DEPTH') == '0':
                 'call the helper exactly once iff semantic judgments are required',
                 'never call llm, llm_batch, or llm_batch_fresh directly',
                 'os, re, json, math, collections, datetime',
-                'globals/locals/callable', 'keep code under 50 nonblank lines')
+                'globals/locals/callable', 'never call mapping.get',
+                'keep code under 50 nonblank lines')
     sample_ok = 'schema-canary' in sample and len(sample) <= 4096 and 'TAIL_NOT_IN_SAMPLE' not in p
     if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
     else: print('```python\nFINAL("done:" + llm("classify"))\n```')
@@ -949,6 +950,11 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
             let mut reader = BufReader::new(stream.try_clone().unwrap());
             let sid = format!("s{session_number}");
             let mut turn_count = 0;
+            let mut active_model = if session_number == 1 {
+                "gpt-5.3"
+            } else {
+                "gpt-5.4"
+            };
             loop {
                 let mut line = String::new();
                 if reader.read_line(&mut line).unwrap() == 0 {
@@ -961,50 +967,62 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
                     "hello" => vec![serde_json::json!({
                         "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
                     })],
-                    "create_session" if session_number == 1 => vec![serde_json::json!({
-                        "v":1,"ev":"session_status","status":"attached","session_id":&sid
-                    })],
-                    "create_session" => vec![serde_json::json!({
-                        "v":1,"reply_to":id,"ev":"attached",
-                        "session":{"session_id":&sid,"status":"idle"}
-                    })],
-                    "get_runtime_info" => vec![serde_json::json!({
-                        "v":1,"reply_to":id,"ev":"runtime_info","session_id":&sid,
-                        "provider":"OpenAI","model":"gpt-5.4"
-                    })],
-                    "set_model" if session_number == 1 => {
-                        assert_eq!(f["model"], "openai-oauth:gpt-5.4");
-                        vec![
-                            serde_json::json!({
-                                "v":1,"reply_to":id - 1,"ev":"attached",
-                                "session":{"session_id":&sid,"status":"idle"}
-                            }),
-                            serde_json::json!({"v":1,"reply_to":id,"ev":"ok"}),
-                        ]
-                    }
+                    "create_session" if session_number == 1 => vec![
+                        serde_json::json!({
+                            "v":1,"ev":"session_status","status":"attached","session_id":&sid
+                        }),
+                        serde_json::json!({
+                            "v":1,"reply_to":id,"ev":"attached",
+                            "session":{"session_id":&sid,"status":"idle"}
+                        }),
+                        serde_json::json!({
+                            "v":1,"ev":"model_info","session_id":&sid,
+                            "provider":"OpenAI","model":active_model
+                        }),
+                    ],
+                    "create_session" => vec![
+                        serde_json::json!({
+                            "v":1,"reply_to":id,"ev":"attached",
+                            "session":{"session_id":&sid,"status":"idle"}
+                        }),
+                        serde_json::json!({
+                            "v":1,"ev":"model_info","session_id":&sid,
+                            "provider":"OpenAI","model":active_model
+                        }),
+                    ],
                     "set_model" => {
                         assert_eq!(f["model"], "openai-oauth:gpt-5.4");
+                        active_model = "gpt-5.4";
                         vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
                     }
+                    "get_runtime_info" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"runtime_info","session_id":&sid,
+                        "provider":"OpenAI","model":active_model,
+                        "routes":[{
+                            "provider":"OpenAI","model":active_model,
+                            "api_method":"openai-oauth","available":true
+                        }]
+                    })],
                     "set_reasoning_effort" => {
                         vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
                     }
                     "send_message" => {
                         turn_count += 1;
                         assert_eq!(turn_count, 1, "batch session received a second turn");
-                        let (suffix, text) = if session_number == 1 {
-                            ("direct secret prompt", "DIRECT_OK")
+                        let content = f["content"].as_str().unwrap();
+                        let text = if content.ends_with("direct secret prompt") {
+                            "DIRECT_OK"
                         } else {
-                            ("second", "SECOND_OK")
+                            assert!(content.ends_with("second"));
+                            "SECOND_OK"
                         };
-                        assert!(f["content"].as_str().unwrap().ends_with(suffix));
                         vec![
                             serde_json::json!({
                                 "v":1,"ev":"message_accepted","session_id":&sid
                             }),
                             serde_json::json!({
                                 "v":1,"ev":"model_info","session_id":&sid,
-                                "provider":"OpenAI","model":"gpt-5.4"
+                                "provider":"OpenAI","model":active_model
                             }),
                             serde_json::json!({
                                 "v":1,"ev":"text_delta","session_id":&sid,"text":text
@@ -1123,17 +1141,27 @@ fn jcode_batch_retries_provider_once_then_preserves_failure() {
                         "v": 1, "reply_to": id, "ev": "hello_ok", "version": 1,
                         "server": "fake"
                     })],
-                    "create_session" => vec![serde_json::json!({
-                        "v": 1, "reply_to": id, "ev": "attached",
-                        "session": {"session_id": &sid, "status": "idle"}
-                    })],
+                    "create_session" => vec![
+                        serde_json::json!({
+                            "v": 1, "reply_to": id, "ev": "attached",
+                            "session": {"session_id": &sid, "status": "idle"}
+                        }),
+                        serde_json::json!({
+                            "v":1,"ev":"model_info","session_id":&sid,
+                            "provider":"OpenAI","model":"gpt-5.4"
+                        }),
+                    ],
                     "set_model" => {
                         assert_eq!(request["model"], "openai-oauth:gpt-5.4");
                         vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
                     }
                     "get_runtime_info" => vec![serde_json::json!({
                         "v": 1, "reply_to": id, "ev": "runtime_info",
-                        "session_id": &sid, "provider": "OpenAI", "model": "gpt-5.4"
+                        "session_id": &sid, "provider": "OpenAI", "model": "gpt-5.4",
+                        "routes":[{
+                            "provider":"OpenAI","model":"gpt-5.4",
+                            "api_method":"openai-oauth","available":true
+                        }]
                     })],
                     "set_reasoning_effort" => {
                         vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
