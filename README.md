@@ -73,19 +73,28 @@ Core commands:
 start  load  exec  final  list  kill  solo  doctor  install  uninstall
 ```
 
-## Current benchmark
+## Benchmark status
 
-Private cross-run diagnostic on official OOLONG row 645, with the same hidden context/question and strict exact scoring. These arms were captured at different development times and are not a paired, contemporaneous cohort; their seeds, timeout conditions, and candidate state were not fully matched:
+These are private, frozen diagnostics—not official leaderboard results or a superiority claim. “Completed accuracy” uses only execution-success rows; “fixed-denominator exact” counts every scheduled row and treats execution failures as incorrect.
 
-| Arm | Output | Correct | Wall time | Provider tokens |
-|---|---:|:---:|---:|---:|
-| Prime Agent | `Answer: 132` | yes | 109.9s | 87,213 |
-| Native jcode | `Answer: 133` | no | 64.6s | 190,356 |
-| Azdaja one-wave v26 | `Answer: 132` | **yes** | **45.1s** | **16,097** |
+### Latest finalized cohorts
 
-Within these historical runs, Azdaja's wall time was 2.44× lower than Prime's and its reported provider-token count was 81.5% lower while matching the strict answer. Those ratios are descriptive only, not controlled estimates or a general superiority claim. Row 645 is now development-contaminated; repeated frozen blind suites remain required before release.
+| Suite / cohort | Arm | Execution success | Completed accuracy | Fixed-denominator exact |
+|---|---|---:|---:|---:|
+| OOLONG diagnostic v29, 26 fixtures | Azdaja | 25/26 (96.15%) | 24/25 (96.00%) | 24/26 (92.31%) |
+| OOLONG diagnostic v29, 26 fixtures | Native jcode | 25/26 (96.15%) | 22/25 (88.00%) | 22/26 (84.62%) |
+| OOLONG diagnostic v29, 26 fixtures | Prime Agent | 25/26 (96.15%) | 20/25 (80.00%) | 20/26 (76.92%) |
+| Derived RULER v3, 90 fixtures | Azdaja | 60/90 (66.67%) | 28/60 (46.67%) | 28/90 (31.11%) |
+| Derived RULER v3, 90 fixtures | Native jcode | 90/90 (100%) | 80/90 (88.89%) | 80/90 (88.89%) |
+| Derived RULER v3, 90 fixtures | Prime Agent | 90/90 (100%) | 80/90 (88.89%) | 80/90 (88.89%) |
 
-The relevant improvement is architectural: the earlier 277.5s multi-pass path was replaced by one compact root plan and one full-coverage semantic wave on the same subscription session. The clean v26 trajectory spent 12.8s in root planning and 22.1s in semantic classification, with no provider error row.
+The two cohorts used different immutable Azdaja candidates and are reported separately. Derived RULER is a project diagnostic, not an official RULER leaderboard. The 30 Azdaja execution failures in RULER v3 comprised 20 transport-affected rows and 10 adapter/parser-protocol rows. LongBench-v2 attempts v1–v5 were preserved as failed, non-resumable cohorts and were never scored; no LongBench number is reported.
+
+### Active same-candidate campaign
+
+Candidate v32 was built from private commit `48b8a16` with binary SHA-256 `f53d43ecde4fd800789d0b7469fa6ad81bb2dd46e41a0c643f90dc8e77a2228d`. It is running a locally frozen, version-stamped serial campaign over derived RULER (270 jobs), LongBench-v2 (189 jobs), and OOLONG (78 jobs). No interim accuracy is inspected or published. Each suite is scored only after exact schedule closure and artifact validation, and the next suite starts only if the prior gate passes.
+
+Every finalized report must include execution success, completed accuracy, fixed-denominator end-to-end accuracy, normalized failure taxonomy, and root-token economy. For Azdaja, any exact substring of at least 100 Unicode characters shared by the loaded long context and the retained root transcript is a hard failure. Missing root-transcript evidence also blocks scoring.
 
 ## Guarantees
 
