@@ -945,8 +945,9 @@ fn call_many_items(
                                 Err(error)=>{
                                     api.discard();drop(api);let _=trace_model_failure(depth+1);
                                     thread::sleep(Duration::from_secs(2));
-                                    let retry=(||{let mut fresh=JcodeSession::open_for_batch(cfg,model,prompts[i].chars().count())?;match fresh.turn(&wire){Ok(reply)=>Ok(reply),Err(error)=>{fresh.discard();Err(error)}}})();
-                                    match retry { Ok(reply)=>{if trace_model_reply(&reply,depth+1).is_err(){let _=trace_model_failure(depth+1);} Ok(reply.text)}, Err(retry_error)=>{let _=trace_model_failure(depth+1);Err(anyhow!("shared turn failed: {error:#}; retry failed: {retry_error:#}"))} }
+                                    let mut retry_entered_turn=false;
+                                    let retry=(||{let mut fresh=JcodeSession::open_for_batch(cfg,model,prompts[i].chars().count())?;retry_entered_turn=true;match fresh.turn(&wire){Ok(reply)=>Ok(reply),Err(error)=>{fresh.discard();Err(error)}}})();
+                                    match retry { Ok(reply)=>{if trace_model_reply(&reply,depth+1).is_err(){let _=trace_model_failure(depth+1);} Ok(reply.text)}, Err(retry_error)=>{let _=if retry_entered_turn { trace_model_failure(depth+1) } else { trace_model_setup_failure(depth+1) };Err(anyhow!("shared turn failed: {error:#}; retry failed: {retry_error:#}"))} }
                                 }
                             }
                         } else {
@@ -959,6 +960,7 @@ fn call_many_items(
                             if physical_attempt == 1 {
                                 thread::sleep(Duration::from_secs(2));
                             }
+                            let mut entered_turn = false;
                             let attempt: Result<ModelReply> = (|| {
                                 let mut api=JcodeSession::open_for_batch(cfg,model,prompts[i].chars().count())?;
                                 let wire = format!(
@@ -967,6 +969,7 @@ fn call_many_items(
                                     cfg.max_depth,
                                     prompts[i]
                                 );
+                                entered_turn = true;
                                 match api.turn(&wire) {
                                     Ok(reply) => Ok(reply),
                                     Err(error) => {
@@ -984,7 +987,11 @@ fn call_many_items(
                                     break;
                                 }
                                 Err(error) => {
-                                    let _ = trace_model_failure(depth + 1);
+                                    let _ = if entered_turn {
+                                        trace_model_failure(depth + 1)
+                                    } else {
+                                        trace_model_setup_failure(depth + 1)
+                                    };
                                     result = Some(Err(error));
                                 }
                             }
@@ -1596,8 +1603,16 @@ impl RootDriver {
 }
 
 fn trace_model_failure(depth: u32) -> Result<()> {
+    trace_model_failure_stage(depth, "turn")
+}
+
+pub fn trace_model_setup_failure(depth: u32) -> Result<()> {
+    trace_model_failure_stage(depth, "session_setup")
+}
+
+fn trace_model_failure_stage(depth: u32, stage: &str) -> Result<()> {
     if let Some(path) = env::var_os("AZDAJA_MODEL_TRACE") {
-        let row = serde_json::json!({"timestamp_ms":now_ms(),"depth":depth,"error":"provider_call_failed"});
+        let row = serde_json::json!({"timestamp_ms":now_ms(),"depth":depth,"error":"provider_call_failed","stage":stage});
         let mut bytes = serde_json::to_vec(&row)?;
         bytes.push(b'\n');
         let mut options = OpenOptions::new();

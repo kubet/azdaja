@@ -341,6 +341,19 @@ class ControllerTests(unittest.TestCase):
                 ) + "\n", encoding="utf-8"
             )
             self.assertIsNone(RUN.parse_azdaja_usage(path))
+            setup_error = {
+                "timestamp_ms": 2,
+                "depth": 1,
+                "error": "provider_call_failed",
+                "stage": "session_setup",
+            }
+            path.write_text(
+                json.dumps(valid) + "\n" + json.dumps(setup_error) + "\n",
+                encoding="utf-8",
+            )
+            setup_usage = RUN.parse_azdaja_usage(path)
+            self.assertIsNotNone(setup_usage)
+            self.assertEqual(setup_usage["calls"], 1)
             route_evidence = RUN.parse_azdaja_route_evidence(path)
             self.assertEqual(route_evidence["depth_counts"], {"0": 1})
             self.assertEqual(route_evidence["transport_error_rows"], 1)

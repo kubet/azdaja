@@ -1095,7 +1095,16 @@ def parse_azdaja_usage(path: Path | None) -> dict[str, Any] | None:
             row = json.loads(line)
         except json.JSONDecodeError:
             return None
-        if not isinstance(row, dict) or "error" in row:
+        if not isinstance(row, dict):
+            return None
+        if "error" in row:
+            if (
+                row.get("error") == "provider_call_failed"
+                and row.get("stage") == "session_setup"
+                and _nonnegative_int(row.get("depth")) is not None
+                and _nonnegative_int(row.get("timestamp_ms")) is not None
+            ):
+                continue
             return None
         depth = _nonnegative_int(row.get("depth"))
         input_tokens = _nonnegative_int(row.get("input_tokens"))

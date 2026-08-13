@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use azdaja::{
     Config, DEFAULT_CONFIG, MONTY_VERSION, RootDriver, SKILL, SoloSession, VERSION, call_model,
-    capability_check, exec, final_answer, kill, list, load, start,
+    capability_check, exec, final_answer, kill, list, load, start, trace_model_setup_failure,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -553,15 +553,19 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
         if attempt == 1 {
             std::thread::sleep(std::time::Duration::from_secs(2));
         }
-        match RootDriver::start(cfg, root_model)
-            .and_then(|mut driver| driver.turn(&prompt).map(|reply| (driver, reply)))
-        {
-            Ok((driver, reply)) => {
-                root_driver = Some(driver);
-                model_reply = Some(reply);
-                break;
+        match RootDriver::start(cfg, root_model) {
+            Ok(mut driver) => match driver.turn(&prompt) {
+                Ok(reply) => {
+                    root_driver = Some(driver);
+                    model_reply = Some(reply);
+                    break;
+                }
+                Err(error) => root_error = Some(error),
+            },
+            Err(error) => {
+                let _ = trace_model_setup_failure(0);
+                root_error = Some(error);
             }
-            Err(error) => root_error = Some(error),
         }
     }
     let model_reply = model_reply
