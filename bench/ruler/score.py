@@ -91,6 +91,18 @@ ARTIFACT_FILENAMES = {
 }
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 SAFE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,191}\Z")
+ROOT_LEAK_MIN_CHARS = 100
+_ROLLING_HASH_BASE = 1_000_003
+_ROLLING_HASH_MASK = (1 << 64) - 1
+OPERATIONAL_FAILURE_PRECEDENCE = (
+    "root_context_leak",
+    "adapter_parser",
+    "transport",
+    "timeout",
+    "depth",
+    "monty_subset_tax",
+    "other_execution",
+)
 
 
 class ScoreError(RuntimeError):
@@ -120,6 +132,70 @@ def sha256_path(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _rolling_windows(text: str, width: int) -> Iterable[tuple[int, int]]:
+    if width <= 0 or len(text) < width:
+        return
+    power = pow(_ROLLING_HASH_BASE, width - 1, 1 << 64)
+    value = 0
+    for char in text[:width]:
+        value = (value * _ROLLING_HASH_BASE + ord(char) + 1) & _ROLLING_HASH_MASK
+    yield 0, value
+    for offset in range(1, len(text) - width + 1):
+        value = (
+            (value - (ord(text[offset - 1]) + 1) * power) * _ROLLING_HASH_BASE
+            + ord(text[offset + width - 1]) + 1
+        ) & _ROLLING_HASH_MASK
+        yield offset, value
+
+
+def exact_unicode_substring_present(
+    public_payload: str, root_transcript: str, *, minimum_chars: int = ROOT_LEAK_MIN_CHARS
+) -> bool:
+    """Rolling-hash candidate search with collision-proof exact verification."""
+    if type(minimum_chars) is not int or minimum_chars <= 0:
+        raise ScoreError("root-context leak threshold must be a positive integer")
+    if len(public_payload) < minimum_chars or len(root_transcript) < minimum_chars:
+        return False
+    if len(public_payload) <= len(root_transcript):
+        indexed, scanned = public_payload, root_transcript
+    else:
+        indexed, scanned = root_transcript, public_payload
+    candidates: dict[int, list[int]] = {}
+    for offset, value in _rolling_windows(indexed, minimum_chars):
+        candidates.setdefault(value, []).append(offset)
+    for scanned_offset, value in _rolling_windows(scanned, minimum_chars):
+        for indexed_offset in candidates.get(value, ()):
+            if all(
+                scanned[scanned_offset + delta] == indexed[indexed_offset + delta]
+                for delta in range(minimum_chars)
+            ):
+                return True
+    return False
+
+
+def root_context_leak_audit(payload_data: bytes, trace_data: bytes) -> dict[str, Any]:
+    """Scan exact decoded code points; never normalize, exempt, or retain a match."""
+    try:
+        payload = payload_data.decode("utf-8")
+        trace = trace_data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ScoreError(f"root-context leak inputs must be exact UTF-8: {exc}") from exc
+    return {
+        "applicable": True,
+        "scanned": True,
+        "detected": exact_unicode_substring_present(payload, trace),
+        "minimum_match_chars": ROOT_LEAK_MIN_CHARS,
+        "payload_chars": len(payload),
+        "trace_chars": len(trace),
+        "payload_sha256": sha256_bytes(payload_data),
+        "trace_sha256": sha256_bytes(trace_data),
+        "algorithm": "uint64 polynomial rolling hash plus exact Unicode-code-point verification",
+        "normalization": "none",
+        "exemptions": "none",
+        "matched_text_retained": False,
+    }
 
 
 def _is_sha256(value: Any) -> bool:
@@ -1021,6 +1097,13 @@ def validate_schedule(
         raise ScoreError(f"cannot enumerate executable snapshot directory: {exc}") from exc
     if executable_entries != expected_executable_entries:
         raise ScoreError("executable snapshot directory inventory is not exact")
+    candidate_binary = candidate_components["azdaja"]
+    executed_binary = executables["azdaja"]
+    for key in ("sha256", "bytes"):
+        _require_equal(
+            candidate_binary[key], executed_binary[key],
+            f"candidate azdaja component equals executed Azdaja {key}",
+        )
     identity_root = executable_snapshot_root.parent
     require_private_directory(identity_root, "immutable identity root")
     if (
@@ -1283,6 +1366,166 @@ def _independent_usage(arm: str, evidence: dict[str, bytes]) -> dict[str, int] |
     return totals
 
 
+def _try_json_lines(data: bytes) -> tuple[list[dict[str, Any]] | None, str | None]:
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None, "authority stream is not UTF-8"
+    rows: list[dict[str, Any]] = []
+    for line_number, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            value = _decode_json(line, f"root-token authority line {line_number}")
+        except ScoreError as exc:
+            return None, str(exc)
+        if not isinstance(value, dict):
+            return None, f"root-token authority line {line_number} is not an object"
+        rows.append(value)
+    return rows, None
+
+
+def _prime_tool_result_chars(result: Any) -> int | None:
+    if isinstance(result, str):
+        return len(result)
+    if not isinstance(result, dict):
+        return None
+    content = result.get("content")
+    if isinstance(content, str):
+        return len(content)
+    if not isinstance(content, list):
+        return None
+    total = 0
+    for item in content:
+        if not isinstance(item, dict) or not isinstance(item.get("text"), str):
+            return None
+        total += len(item["text"])
+    return total
+
+
+def _control_root_token_economy(arm: str, stdout_data: bytes) -> dict[str, Any]:
+    rows, error = _try_json_lines(stdout_data)
+    if rows is None:
+        return {
+            "root_tokens": None,
+            "authority": "retained control stdout tool-result events",
+            "missing": True,
+            "fallback_used": True,
+            "source_chars": None,
+            "missing_reason": error,
+        }
+    total_chars = 0
+    if arm == "jcode-native":
+        events = [row for row in rows if row.get("type") == "tool_done"]
+        for event in events:
+            output = event.get("output")
+            if not isinstance(output, str):
+                return {
+                    "root_tokens": None,
+                    "authority": "jcode tool_done.output Unicode characters / 4",
+                    "missing": True,
+                    "fallback_used": True,
+                    "source_chars": None,
+                    "missing_reason": "a jcode tool_done event lacks exact text output",
+                }
+            total_chars += len(output)
+        authority = "jcode tool_done.output Unicode characters entering root context / 4"
+    elif arm == "prime-agent":
+        events = [row for row in rows if row.get("type") == "tool_execution_end"]
+        for event in events:
+            chars = _prime_tool_result_chars(event.get("result"))
+            if chars is None:
+                return {
+                    "root_tokens": None,
+                    "authority": "Prime tool_execution_end result text Unicode characters / 4",
+                    "missing": True,
+                    "fallback_used": True,
+                    "source_chars": None,
+                    "missing_reason": "a Prime tool result lacks an exact text representation",
+                }
+            total_chars += chars
+        authority = "Prime tool_execution_end result text Unicode characters entering root context / 4"
+    else:
+        raise ScoreError(f"unsupported control arm for root-token economy: {arm}")
+    return {
+        "root_tokens": total_chars / 4.0,
+        "authority": authority,
+        "missing": False,
+        "fallback_used": True,
+        "source_chars": total_chars,
+        "missing_reason": None,
+    }
+
+
+def _exact_root_request_chars(trace_data: bytes) -> tuple[int | None, str | None]:
+    try:
+        trace = trace_data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None, "AZDAJA_SOLO_TRACE is not UTF-8"
+    header = re.compile(
+        r"(?:^|\n)=== root request begin [^\n]* request_chars=([0-9]+) ===\n"
+    )
+    matches = list(header.finditer(trace))
+    if len(matches) != 1:
+        return None, "AZDAJA_SOLO_TRACE does not contain exactly one root request header"
+    declared = int(matches[0].group(1))
+    start = matches[0].end()
+    end = start + declared
+    if end > len(trace) or not trace.startswith("\n=== root request end ", end):
+        return None, "AZDAJA_SOLO_TRACE root request character count/boundary is inconsistent"
+    return declared, None
+
+
+def _treatment_root_token_economy(evidence: dict[str, bytes]) -> dict[str, Any]:
+    model_data = evidence.get("azdaja_model_trace")
+    if model_data is not None:
+        rows, _ = _try_json_lines(model_data)
+        if rows is not None:
+            depth_zero = [
+                row for row in rows
+                if row.get("depth") == 0
+                and "error" not in row
+                and _nonnegative_int(row.get("input_tokens"))
+            ]
+            if depth_zero:
+                return {
+                    "root_tokens": sum(int(row["input_tokens"]) for row in depth_zero),
+                    "authority": "AZDAJA_MODEL_TRACE successful depth-0 input_tokens",
+                    "missing": False,
+                    "fallback_used": False,
+                    "source_chars": None,
+                    "missing_reason": None,
+                }
+    solo_data = evidence.get("azdaja_solo_trace")
+    if solo_data is not None:
+        request_chars, reason = _exact_root_request_chars(solo_data)
+        if request_chars is not None:
+            return {
+                "root_tokens": request_chars / 4.0,
+                "authority": "exact AZDAJA_SOLO_TRACE root request Unicode characters / 4",
+                "missing": False,
+                "fallback_used": True,
+                "source_chars": request_chars,
+                "missing_reason": None,
+            }
+    else:
+        reason = "AZDAJA_SOLO_TRACE is missing"
+    return {
+        "root_tokens": None,
+        "authority": "depth-0 model usage, else exact solo root-request characters / 4",
+        "missing": True,
+        "fallback_used": True,
+        "source_chars": None,
+        "missing_reason": reason,
+    }
+
+
+def root_token_economy(arm: str, evidence: dict[str, bytes]) -> dict[str, Any]:
+    if arm == "jcode-azdaja":
+        return _treatment_root_token_economy(evidence)
+    return _control_root_token_economy(arm, evidence["stdout"])
+
+
 def _validate_artifact_record(
     record: Any, label: str
 ) -> tuple[Path, bytes, tuple[int, int]]:
@@ -1316,7 +1559,9 @@ def _validate_artifact_record(
     return path, data, (metadata.st_dev, metadata.st_ino)
 
 
-def _validate_arm_artifacts(row: dict[str, Any], index: int) -> Path:
+def _validate_arm_artifacts(
+    row: dict[str, Any], index: int, payload_data: bytes
+) -> tuple[Path, dict[str, Any]]:
     evidence = row["arm_evidence"]
     trajectories = evidence.get("trajectory_artifacts")
     base_keys = {"stdout", "stderr"}
@@ -1391,6 +1636,40 @@ def _validate_arm_artifacts(row: dict[str, Any], index: int) -> Path:
                     f"inference row {index} credential cleanup {field} differs from artifacts"
                 )
 
+    if row["arm"] == "jcode-azdaja":
+        solo_trace = retained.get("azdaja_solo_trace")
+        if solo_trace is None:
+            leak_audit = {
+                "applicable": True,
+                "scanned": False,
+                "detected": False,
+                "minimum_match_chars": ROOT_LEAK_MIN_CHARS,
+                "matched_text_retained": False,
+                "missing_reason": "AZDAJA_SOLO_TRACE was not retained",
+            }
+        else:
+            leak_audit = root_context_leak_audit(payload_data, solo_trace)
+        if leak_audit["detected"]:
+            if row["execution_success"]:
+                raise ScoreError(
+                    f"inference row {index} falsely claims success despite hard root_context_leak"
+                )
+            failure = row.get("failure")
+            if not isinstance(failure, dict) or failure.get("kind") != "root_context_leak":
+                raise ScoreError(
+                    f"inference row {index} did not record independently detected root_context_leak"
+                )
+    else:
+        leak_audit = {
+            "applicable": False,
+            "scanned": False,
+            "detected": False,
+            "minimum_match_chars": ROOT_LEAK_MIN_CHARS,
+            "matched_text_retained": False,
+            "missing_reason": "not applicable to control arm",
+        }
+    economy = root_token_economy(row["arm"], retained)
+
     if row["execution_success"]:
         # Hash-check above binds these exact bytes; route and usage are then replayed
         # independently from every nonempty authority-stream line.
@@ -1407,7 +1686,10 @@ def _validate_arm_artifacts(row: dict[str, Any], index: int) -> Path:
                 value, usage.get(key),
                 f"inference row {index} independently recomputed {key}",
             )
-    return run_directory
+    return run_directory, {
+        "root_context_leak": leak_audit,
+        "root_token_economy": economy,
+    }
 
 
 def _validate_telemetry(row: dict[str, Any], index: int) -> None:
@@ -1467,7 +1749,7 @@ def validate_run_rows(
     jobs: list[dict[str, Any]],
     schedule: dict[str, Any],
     fixtures: dict[str, dict[str, Any]],
-) -> None:
+) -> dict[str, dict[str, Any]]:
     if len(rows) != len(jobs):
         raise ScoreError(
             f"frozen inference is not terminal-complete (scheduled={len(jobs)}, rows={len(rows)})"
@@ -1479,6 +1761,7 @@ def validate_run_rows(
     seen: set[str] = set()
     artifact_work_root: Path | None = None
     run_directories: set[Path] = set()
+    independent_audits: dict[str, dict[str, Any]] = {}
     expected_row_keys = {
         "schema_version", "record_type", "schedule_id", "run_id", "fixture_id",
         "payload_sha256", "execution_ordinal", "arm", "repetition", "model",
@@ -1551,7 +1834,10 @@ def validate_run_rows(
                 arm_evidence["staged_filename"], job["staged_filename"],
                 f"inference row {index} staged filename evidence",
             )
-        run_directory = _validate_arm_artifacts(row, index)
+        run_directory, audit = _validate_arm_artifacts(
+            row, index, fixtures[job["fixture_id"]]["_payload_bytes"]
+        )
+        independent_audits[row["run_id"]] = audit
         row_artifact_root = run_directory.parent
         if artifact_work_root is None:
             artifact_work_root = row_artifact_root
@@ -1587,6 +1873,45 @@ def validate_run_rows(
     expected_names = {directory.name for directory in run_directories}
     if len(work_entries) != len(actual_names) or actual_names != expected_names:
         raise ScoreError("frozen artifact work root is not the exact scheduled run-directory set")
+    return independent_audits
+
+
+def validate_pre_gold_root_context_leak_gate(
+    jobs: list[dict[str, Any]], independent_audits: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """Require exact solo-trace scan evidence for every terminal treatment row."""
+    treatment_rows = [
+        (index, job) for index, job in enumerate(jobs, 1)
+        if job["arm"] == "jcode-azdaja"
+    ]
+    for index, job in treatment_rows:
+        audit = independent_audits.get(job["run_id"])
+        leak = audit.get("root_context_leak") if isinstance(audit, dict) else None
+        valid_exact_scan = (
+            isinstance(leak, dict)
+            and leak.get("applicable") is True
+            and leak.get("scanned") is True
+            and type(leak.get("detected")) is bool
+            and leak.get("minimum_match_chars") == ROOT_LEAK_MIN_CHARS
+            and leak.get("payload_sha256") == job["payload_sha256"]
+            and _is_sha256(leak.get("trace_sha256"))
+            and _nonnegative_int(leak.get("trace_chars"))
+            and "missing_reason" not in leak
+        )
+        if not valid_exact_scan:
+            raise ScoreError(
+                "pre-gold root-context leak gate requires a valid exact retained "
+                "AZDAJA_SOLO_TRACE with scanned=true for every jcode-azdaja terminal "
+                f"row, including failed rows (inference row {index})"
+            )
+    count = len(treatment_rows)
+    return {
+        "scope": "every jcode-azdaja terminal row, including failed rows",
+        "treatment_terminal_rows": count,
+        "valid_exact_retained_solo_trace_rows": count,
+        "scanned_rows": count,
+        "complete": True,
+    }
 
 
 def validate_claims(
@@ -1654,8 +1979,11 @@ def validate_frozen_runs(
     runs_path: Path,
     schedule_path: Path | None = None,
     claims_root: Path | None = None,
-) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], tuple[str, ...]]:
-    """Validate terminal completion; this function never receives or reads gold."""
+) -> tuple[
+    dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], tuple[str, ...],
+    dict[str, dict[str, Any]], dict[str, Any],
+]:
+    """Validate terminal completion and all pre-gold audits without reading gold."""
     schedule_path = lexical_absolute(
         schedule_path or Path(str(runs_path) + ".schedule.json")
     )
@@ -1667,9 +1995,10 @@ def validate_frozen_runs(
     schedule = load_json_object(schedule_path, "frozen schedule")
     jobs, arms = validate_schedule(schedule, manifest_path, manifest, fixtures)
     rows = load_run_rows(runs_path)
-    validate_run_rows(rows, jobs, schedule, fixtures)
+    independent_audits = validate_run_rows(rows, jobs, schedule, fixtures)
+    leak_gate = validate_pre_gold_root_context_leak_gate(jobs, independent_audits)
     validate_claims(claims_root, rows, jobs, schedule)
-    return schedule, jobs, rows, arms
+    return schedule, jobs, rows, arms, independent_audits, leak_gate
 
 
 def _valid_gold_value(task: str, value: str) -> bool:
@@ -2383,9 +2712,52 @@ def _percent(value: float | None) -> float | None:
     return None if value is None else round(value * 100.0, 2)
 
 
-def _failure_kind(row: dict[str, Any]) -> str:
-    failure = row.get("failure")
-    return str(failure.get("kind")) if isinstance(failure, dict) else "execution_failure"
+def normalize_operational_failure(
+    row: dict[str, Any], independent_audit: dict[str, Any]
+) -> dict[str, Any] | None:
+    if row.get("execution_success") is True:
+        return None
+    raw = row.get("failure")
+    raw_copy = copy.deepcopy(raw) if isinstance(raw, dict) else raw
+    kind = str(raw.get("kind", "")) if isinstance(raw, dict) else ""
+    message = str(raw.get("message", "")) if isinstance(raw, dict) else ""
+    combined = f"{kind} {message}".lower()
+    candidates: set[str] = {"other_execution"}
+    leak = independent_audit.get("root_context_leak")
+    if isinstance(leak, dict) and leak.get("detected") is True:
+        candidates.add("root_context_leak")
+    if kind in OPERATIONAL_FAILURE_PRECEDENCE:
+        candidates.add(kind)
+    if row.get("timed_out") is True or "timeout" in combined or "timed out" in combined:
+        candidates.add("timeout")
+    if any(token in combined for token in (
+        "maximum rlm depth", "max depth", "depth limit", "recursion depth", "rlm_depth",
+    )) or kind == "depth":
+        candidates.add("depth")
+    if any(token in combined for token in (
+        "monty", "python subset", "unsupported syntax", "unsupported import",
+        "solo solve cell", "patternerror", "semantic prompt envelope",
+    )) or kind == "monty_subset_tax":
+        candidates.add("monty_subset_tax")
+    if any(token in combined for token in (
+        "adapter", "parser", "parse", "malformed", "invalid json", "empty_response",
+        "extract_final", "usage_evidence", "trace_capture",
+    )) or kind == "adapter_parser":
+        candidates.add("adapter_parser")
+    if any(token in combined for token in (
+        "transport", "provider", "connection", "network", "oauth", "route_assertion",
+    )) or kind == "transport":
+        candidates.add("transport")
+    category = next(name for name in OPERATIONAL_FAILURE_PRECEDENCE if name in candidates)
+    return {
+        "category": category,
+        "raw": raw_copy,
+    }
+
+
+def _failure_kind(score_row: dict[str, Any]) -> str:
+    failure = score_row.get("operational_failure")
+    return str(failure["category"]) if isinstance(failure, dict) else "other_execution"
 
 
 def build_score_rows(
@@ -2393,10 +2765,25 @@ def build_score_rows(
     jobs: list[dict[str, Any]],
     fixtures: dict[str, dict[str, Any]],
     outputs_by_id: dict[str, tuple[str, ...]],
+    *,
+    independent_audits: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     scored: list[dict[str, Any]] = []
+    independent_audits = independent_audits or {}
     for row, job in zip(rows, jobs):
         fixture_id = job["fixture_id"]
+        audit = independent_audits.get(job["run_id"], {
+            "root_context_leak": {
+                "applicable": job["arm"] == "jcode-azdaja", "scanned": False,
+                "detected": False, "minimum_match_chars": ROOT_LEAK_MIN_CHARS,
+                "matched_text_retained": False, "missing_reason": "independent audit unavailable",
+            },
+            "root_token_economy": {
+                "root_tokens": None, "authority": "unavailable", "missing": True,
+                "fallback_used": False, "source_chars": None,
+                "missing_reason": "independent audit unavailable",
+            },
+        })
         references = outputs_by_id[fixture_id]
         prediction = row["response"]
         coverage = official_ruler_coverage(prediction, references)
@@ -2412,6 +2799,9 @@ def build_score_rows(
                 "arm": job["arm"],
                 "repetition": job["repetition"],
                 "execution_success": execution_success,
+                "operational_failure": normalize_operational_failure(row, audit),
+                "root_context_leak": audit["root_context_leak"],
+                "root_token_economy": audit["root_token_economy"],
                 "response_sha256": sha256_bytes(prediction.encode("utf-8")),
                 "official_ruler_coverage": coverage,
                 "official_ruler_coverage_percent": round(coverage * 100.0, 2),
@@ -2430,7 +2820,14 @@ def _cell_summary(
     completed = [item for item in score_rows if item["execution_success"]]
     execution_failures = [item for item in score_rows if not item["execution_success"]]
     raw_rows = [raw_by_run[item["run_id"]] for item in score_rows]
-    taxonomy = Counter(_failure_kind(raw_by_run[item["run_id"]]) for item in execution_failures)
+    taxonomy = Counter(_failure_kind(item) for item in execution_failures)
+    raw_taxonomy: Counter[str] = Counter()
+    for item in execution_failures:
+        raw_failure = raw_by_run[item["run_id"]].get("failure")
+        raw_taxonomy[
+            str(raw_failure.get("kind", "missing"))
+            if isinstance(raw_failure, dict) else "missing"
+        ] += 1
     official = _mean(float(item["official_ruler_coverage"]) for item in score_rows)
     exact = _mean(float(item["exact_set"]) for item in score_rows)
     end_official = _mean(float(item["end_to_end_official_ruler_coverage"]) for item in score_rows)
@@ -2460,6 +2857,15 @@ def _cell_summary(
     lifecycle_valid_n = sum(
         all(row["lifecycle_assertion"].values()) for row in raw_rows
     )
+    economy_rows = [item["root_token_economy"] for item in score_rows]
+    economy_values = [
+        float(item["root_tokens"]) for item in economy_rows
+        if item.get("missing") is False
+        and type(item.get("root_tokens")) in (int, float)
+        and math.isfinite(float(item["root_tokens"]))
+        and float(item["root_tokens"]) >= 0
+    ]
+    economy_authorities = Counter(str(item.get("authority")) for item in economy_rows)
     return {
         "scheduled_n": scheduled,
         "execution": {
@@ -2467,6 +2873,18 @@ def _cell_summary(
             "failed_n": len(execution_failures),
             "success_rate": len(completed) / scheduled,
             "failure_taxonomy": dict(sorted(taxonomy.items())),
+            "raw_failure_taxonomy": dict(sorted(raw_taxonomy.items())),
+        },
+        "root_token_economy": {
+            "available_n": len(economy_values),
+            "missing_n": scheduled - len(economy_values),
+            "coverage_rate": len(economy_values) / scheduled,
+            "total_root_tokens": sum(economy_values) if economy_values else None,
+            "mean_root_tokens": _mean(economy_values),
+            "p50_root_tokens": percentile(economy_values, 0.50) if economy_values else None,
+            "p95_root_tokens": percentile(economy_values, 0.95) if economy_values else None,
+            "authority_counts": dict(sorted(economy_authorities.items())),
+            "missing_is_explicit_per_score_row": True,
         },
         "telemetry_all_attempts": {
             "latency_seconds": {
@@ -2529,6 +2947,10 @@ def aggregate_scores(
     cell_documents: list[dict[str, Any]] = []
     for arm in arms:
         arm_rows = [item for item in score_rows if item["arm"] == arm]
+        if len(arm_rows) != EXPECTED_FIXTURES:
+            raise ScoreError(
+                f"arm {arm} must retain the exact {EXPECTED_FIXTURES}-scheduled denominator"
+            )
         summaries: list[dict[str, Any]] = []
         for task in TASKS:
             for length in TARGET_LENGTHS:
@@ -2581,8 +3003,28 @@ def aggregate_scores(
             ) / len(summaries),
         }
         all_summary = _cell_summary(arm_rows, raw_by_run)
+        completed_n = all_summary["execution"]["completed_n"]
+        completed_correct_n = all_summary["correctness_completed_only"]["exact_set_n"]
+        end_to_end_correct_n = all_summary["end_to_end_fixed_denominator"]["exact_set_n"]
+        headline = {
+            "scheduled_n": EXPECTED_FIXTURES,
+            "executed_n": completed_n,
+            "execution_rate": completed_n / EXPECTED_FIXTURES,
+            "completed_correct_n": completed_correct_n,
+            "completed_accuracy_denominator_n": completed_n,
+            "completed_accuracy": (
+                completed_correct_n / completed_n if completed_n else None
+            ),
+            "end_to_end_correct_n": end_to_end_correct_n,
+            "end_to_end_accuracy_denominator_n": EXPECTED_FIXTURES,
+            "end_to_end_accuracy": end_to_end_correct_n / EXPECTED_FIXTURES,
+        }
         arm_documents[arm] = {
-            "scheduled_n": len(arm_rows),
+            "scheduled_n": EXPECTED_FIXTURES,
+            "execution_rate": headline["execution_rate"],
+            "completed_accuracy": headline["completed_accuracy"],
+            "end_to_end_accuracy": headline["end_to_end_accuracy"],
+            "headline": headline,
             "primary_end_to_end_fixed_denominator": {
                 "macro_9_cell_official_ruler_coverage_percent": macro[
                     "end_to_end_official_ruler_coverage_percent"
@@ -2687,6 +3129,35 @@ def paired_comparisons(
     return result
 
 
+def candidate_version_stamp(schedule: dict[str, Any]) -> dict[str, Any]:
+    configuration = schedule["configuration"]
+    candidate = configuration["candidate"]
+    components = {
+        name: {
+            "sha256": item["sha256"],
+            "bytes": item["bytes"],
+            "mode": item["mode"],
+        }
+        for name, item in sorted(candidate["components"].items())
+    }
+    candidate_binary = components["azdaja"]
+    executable = configuration["executables"]["azdaja"]
+    executed_binary = {
+        "sha256": executable["sha256"],
+        "bytes": executable["bytes"],
+        "version": executable["version"],
+    }
+    if any(candidate_binary[key] != executed_binary[key] for key in ("sha256", "bytes")):
+        raise ScoreError("candidate version stamp binary/executable binding changed")
+    return {
+        "candidate_aggregate_sha256": candidate["sha256"],
+        "components": components,
+        "candidate_binary": dict(candidate_binary),
+        "executed_azdaja": executed_binary,
+        "candidate_binary_equals_executed_azdaja": True,
+    }
+
+
 def build_report(
     manifest_path: Path,
     gold_path: Path,
@@ -2711,7 +3182,7 @@ def build_report(
     # gold until validate_frozen_runs has proved every frozen job terminal.
     unresolved_gold = lexical_absolute(Path(gold_path))
     manifest, fixtures = load_public_manifest(manifest_path)
-    schedule, jobs, rows, arms = validate_frozen_runs(
+    schedule, jobs, rows, arms, independent_audits, leak_gate = validate_frozen_runs(
         manifest_path, manifest, fixtures, runs_path, schedule_path, claims_root
     )
     _reject_symlink_components(unresolved_gold)
@@ -2719,7 +3190,9 @@ def build_report(
         raise ScoreError("owner-only gold must not be a symlink")
     gold_path = unresolved_gold
     gold, outputs_by_id = load_gold(gold_path, manifest, fixtures)
-    scores = build_score_rows(rows, jobs, fixtures, outputs_by_id)
+    scores = build_score_rows(
+        rows, jobs, fixtures, outputs_by_id, independent_audits=independent_audits
+    )
     arm_documents, cells = aggregate_scores(scores, rows, arms)
     comparisons = paired_comparisons(
         scores, fixtures, arms, seed=bootstrap_seed, resamples=bootstrap_resamples
@@ -2728,9 +3201,24 @@ def build_report(
         "schema_version": SCHEMA_VERSION,
         "record_type": "ruler_exact_mini_deferred_scores",
         "suite_id": SUITE_ID,
+        "candidate_version_stamp": candidate_version_stamp(schedule),
         "integrity": {
             "validated": True,
             "terminal_complete_before_gold_read": True,
+            "root_context_leak_scan_complete_before_gold_read": leak_gate["complete"],
+            "root_context_leak_pre_gold_gate": leak_gate,
+            "root_context_leak_policy": {
+                "minimum_exact_unicode_characters": ROOT_LEAK_MIN_CHARS,
+                "rolling_hash_exact_verification": True,
+                "normalization": "none",
+                "exemptions": "none",
+                "matched_text_retained": False,
+                "false_success_rejected": True,
+            },
+            "operational_failure_normalization": {
+                "precedence": list(OPERATIONAL_FAILURE_PRECEDENCE),
+                "raw_failure_retained_per_score_row": True,
+            },
             "manifest_sha256": sha256_bytes(canonical_json_file_bytes(manifest)),
             "manifest_identity_sha256": manifest_identity_sha256(manifest),
             "gold_sha256": manifest["gold_sha256"],
@@ -2739,6 +3227,11 @@ def build_report(
             ),
             "schedule_id": schedule["schedule_id"],
             "scheduled_jobs": len(jobs),
+            "scheduled_per_arm": {arm: EXPECTED_FIXTURES for arm in arms},
+            "exact_90_per_arm_asserted": all(
+                sum(job["arm"] == arm for job in jobs) == EXPECTED_FIXTURES
+                for arm in arms
+            ),
             "terminal_rows": len(rows),
             "claims_and_completions": 2 * len(jobs),
             "claim_ledger_authenticated": False,

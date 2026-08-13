@@ -1057,6 +1057,11 @@ def create_snapshots(
             paths.prime_agent, "prime-agent", path_prefix=paths.node.parent
         ),
     }
+    if any(
+        candidate["components"]["azdaja"][field] != executables["azdaja"][field]
+        for field in ("sha256", "bytes")
+    ):
+        raise BenchError("candidate azdaja component differs from invoked azdaja executable")
     controller = _component_identity(paths.controller)
     validator_component = _component_identity(paths.validator)
     adapter_component = _component_identity(paths.adapter)
@@ -1204,6 +1209,12 @@ def validate_snapshot_attestation(value: dict[str, Any]) -> None:
         raise BenchError("snapshot executable schema is invalid")
     for name, component in executables.items():
         SCORE._validate_component_identity(component, f"snapshot executable {name}", version=True, path=True)
+    if any(
+        value["candidate"]["components"]["azdaja"][field]
+        != executables["azdaja"][field]
+        for field in ("sha256", "bytes")
+    ):
+        raise BenchError("snapshot candidate azdaja component/executable identity diverges")
     runtime = value["runtime_closure"]
     _validate_runtime_closure_local(runtime)
     prime = value["prime_package"]
@@ -2103,7 +2114,8 @@ def _validate_adapter_contract(module: Any) -> None:
             raise BenchError(
                 f"frozen OOLONG adapter {name} signature drifted: {actual!r}"
             )
-    if tuple(getattr(module, "ARMS", ())) != ARMS:
+    adapter_arms = tuple(getattr(module, "ARMS", ()))
+    if len(adapter_arms) != len(ARMS) or set(adapter_arms) != set(ARMS):
         raise BenchError("frozen OOLONG adapter arm contract drifted")
 
 
@@ -2892,6 +2904,11 @@ def audit_run_artifacts(
             )
         ):
             raise BenchError(f"retained artifact receipt mismatch: {name}")
+        if name in {"azdaja-model-usage.jsonl", "azdaja-solo-trace.log"} and (
+            receipt.get("exact_text_preserved") is not True
+            or receipt.get("source_sha256_before_redaction") != identity["sha256"]
+        ):
+            raise BenchError(f"retained trace was transformed before exact audit: {name}")
     cleanup = adapter_row.get("credential_cleanup_assertion")
     if not isinstance(cleanup, dict) or (
         cleanup.get("asserted") is not True
@@ -2991,6 +3008,13 @@ def validate_retained_prefix_artifacts(
                         raise BenchError(
                             f"run {job['ordinal']} retained artifact bytes drifted: {name}"
                         )
+                    if name in {"azdaja-model-usage.jsonl", "azdaja-solo-trace.log"} and (
+                        receipt.get("exact_text_preserved") is not True
+                        or receipt.get("source_sha256_before_redaction") != sha256_bytes(data)
+                    ):
+                        raise BenchError(
+                            f"run {job['ordinal']} retained trace text was transformed: {name}"
+                        )
                 assert stdout_bytes is not None
                 try:
                     retained_response = extract_final_raw(
@@ -3021,12 +3045,33 @@ def _invalid_usage(arm: str, message: str) -> tuple[dict[str, Any], dict[str, An
     return usage, evidence
 
 
+def _root_context_receipt(
+    arm: str, public_context: str | None, root_trace: bytes | None
+) -> dict[str, Any] | None:
+    if arm != "jcode-azdaja":
+        return None
+    # Internal convenience callers that do not own a captured fixture can still
+    # build a schema-valid failure row, but production always supplies the exact
+    # captured PUBLIC context and final retained trace bytes.
+    context = public_context if public_context is not None else "<unavailable-public-context>"
+    return SCORE.root_context_leak_assertion(root_trace, context)
+
+
 def controller_failure_row(
     job: dict[str, Any], schedule: dict[str, Any], message: str,
-    trajectory_artifacts: dict[str, Any],
+    trajectory_artifacts: dict[str, Any], *, public_context: str | None = None,
 ) -> dict[str, Any]:
     arm = job["arm"]
     usage, efficiency = _invalid_usage(arm, message)
+    root_context = _root_context_receipt(arm, public_context, None)
+    economy_source = {
+        "efficiency_evidence": efficiency,
+        "root_usage": usage,
+        "azdaja_model_usage": None,
+    }
+    root_economy = SCORE.root_token_economy_receipt(
+        economy_source, arm, b"", None, root_context
+    )
     lifecycle = (
         {
             "asserted": False,
@@ -3093,6 +3138,8 @@ def controller_failure_row(
         "azdaja_model_usage": None,
         "efficiency_evidence": efficiency,
         "usage": usage,
+        "root_token_economy": root_economy,
+        "root_context_leak_assertion": root_context,
         "trajectory_artifacts": trajectory_artifacts,
         "failure": {"kind": "execution", "message": message, "stderr": ""},
     }
@@ -3105,6 +3152,9 @@ def transform_adapter_row(
     *,
     raw_response: str,
     trajectory_artifacts: dict[str, Any],
+    stdout_bytes: bytes = b"",
+    root_trace_bytes: bytes | None = None,
+    public_context: str | None = None,
 ) -> dict[str, Any]:
     config = schedule["configuration"]
     arm = job["arm"]
@@ -3112,6 +3162,10 @@ def transform_adapter_row(
         ("jcode", "azdaja")
         if arm == "jcode-azdaja"
         else (("jcode",) if arm == "jcode-native" else ("prime-agent",))
+    )
+    root_context = _root_context_receipt(arm, public_context, root_trace_bytes)
+    root_economy = SCORE.root_token_economy_receipt(
+        adapter_row, arm, stdout_bytes, root_trace_bytes, root_context
     )
     selected = {
         key: adapter_row.get(key)
@@ -3125,6 +3179,11 @@ def transform_adapter_row(
             "failure",
         )
     }
+    if isinstance(selected["failure"], dict):
+        selected["failure"] = {
+            key: selected["failure"].get(key)
+            for key in ("kind", "message", "stderr")
+        }
     row = {
         "schema_version": SCORE.SCHEMA_VERSION,
         "benchmark": SCORE.SUITE_ID,
@@ -3147,9 +3206,31 @@ def transform_adapter_row(
         "score": None,
         "scoring_status": "deferred",
         "response": raw_response,
+        "root_token_economy": root_economy,
+        "root_context_leak_assertion": root_context,
         "trajectory_artifacts": trajectory_artifacts,
         **selected,
     }
+    if arm == "jcode-azdaja" and isinstance(root_context, dict):
+        existing_failure = row.get("failure")
+        retained_stderr = (
+            existing_failure.get("stderr", "")
+            if isinstance(existing_failure, dict) else ""
+        )
+        if root_context["leak_detected"] is True:
+            row["execution_success"] = False
+            row["failure"] = {
+                "kind": "root_context_leak",
+                "message": "exact PUBLIC-context substring detected in root transcript",
+                "stderr": retained_stderr,
+            }
+        elif root_context["trace_valid"] is not True:
+            row["execution_success"] = False
+            row["failure"] = {
+                "kind": "trace_capture",
+                "message": "AZDAJA_SOLO_TRACE lacks an exact valid root-request transcript",
+                "stderr": retained_stderr,
+            }
     return row
 
 
@@ -3455,16 +3536,20 @@ def _execute_job(
     # empty controller-failure trajectory. Once run_one is entered, a turn may
     # have billed; every later exception propagates, preserving the run dir and
     # leaving the claim orphaned with no row/done.
+    by_id = {item.fixture_id: item for item in suite.fixtures}
+    captured_fixture = by_id[job["fixture_id"]]
+    public_context = captured_fixture.payload["context"]
     try:
-        by_id = {item.fixture_id: item for item in suite.fixtures}
-        fixture = _make_adapter_fixture(adapter, by_id[job["fixture_id"]], paths.public)
+        fixture = _make_adapter_fixture(adapter, captured_fixture, paths.public)
         verify_snapshots(
             paths, attestation, suite, full_prime=job["arm"] == "prime-agent"
         )
     except Exception as exc:
         message = f"{type(exc).__name__}: {exc}"
         artifacts = materialize_controller_failure_artifacts(adapter, run_dir, message)
-        return controller_failure_row(job, schedule, message, artifacts)
+        return controller_failure_row(
+            job, schedule, message, artifacts, public_context=public_context
+        )
 
     adapter_row = adapter.run_one(
         arm_name=job["arm"], repetition=1, ordinal=job["ordinal"], fixture=fixture,
@@ -3476,13 +3561,21 @@ def _execute_job(
     stdout_data, _ = _safe_source_file(
         run_dir / "stdout.ndjson", "retained stdout trajectory"
     )
+    root_trace_data = None
+    if job["arm"] == "jcode-azdaja":
+        trace_path = run_dir / "azdaja-solo-trace.log"
+        if trace_path.exists() and not trace_path.is_symlink():
+            root_trace_data, _ = _safe_source_file(
+                trace_path, "retained exact azdaja root transcript"
+            )
     raw_response = extract_final_raw(adapter, job["arm"], stdout_data.decode("utf-8"))
     verify_snapshots(
         paths, attestation, suite, full_prime=job["arm"] == "prime-agent"
     )
     return transform_adapter_row(
         adapter_row, job, schedule, raw_response=raw_response,
-        trajectory_artifacts=artifacts,
+        trajectory_artifacts=artifacts, stdout_bytes=stdout_data,
+        root_trace_bytes=root_trace_data, public_context=public_context,
     )
 
 

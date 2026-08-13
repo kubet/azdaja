@@ -28,6 +28,14 @@ from typing import Any, Callable, Iterable, Sequence
 SCHEMA_VERSION = 1
 BOOTSTRAP_SEED = 20260812
 BOOTSTRAP_ITERATIONS = 2000
+CAMPAIGN_MODEL = "gpt-5.6-luna"
+CAMPAIGN_REASONING = "medium"
+CAMPAIGN_ARMS = ("jcode-native", "prime-agent", "jcode-azdaja")
+CAMPAIGN_FIXTURE_COUNT = 26
+CAMPAIGN_REPETITIONS = 1
+CAMPAIGN_SEED = 20260813
+CAMPAIGN_TIMEOUT_SECONDS = 600
+CAMPAIGN_ROW_COUNT = CAMPAIGN_FIXTURE_COUNT * len(CAMPAIGN_ARMS) * CAMPAIGN_REPETITIONS
 SMALL_CLUSTER_COUNT = 10
 USAGE_FIELDS = (
     "input_tokens",
@@ -147,6 +155,275 @@ def _require_equal(actual: Any, expected: Any, label: str) -> None:
         raise ReportError(f"{label} mismatch: expected {expected!r}, got {actual!r}")
 
 
+ROOT_CONTEXT_LEAK_MIN_CHARS = 100
+_ROLLING_HASH_BASE = 1_000_003
+_ROLLING_HASH_MASK = (1 << 64) - 1
+_FROZEN_FAILURE_KINDS = {
+    "adapter_parser",
+    "transport",
+    "timeout",
+    "depth",
+    "monty_subset_tax",
+    "other_execution",
+    "root_context_leak",
+}
+_KNOWN_ARMS = set(CAMPAIGN_ARMS)
+
+
+def _rolling_hash_windows(text: str, width: int) -> Iterable[tuple[int, int]]:
+    if width <= 0 or len(text) < width:
+        return
+    power = pow(_ROLLING_HASH_BASE, width - 1, 1 << 64)
+    value = 0
+    for char in text[:width]:
+        value = ((value * _ROLLING_HASH_BASE) + ord(char) + 1) & _ROLLING_HASH_MASK
+    yield 0, value
+    for offset in range(1, len(text) - width + 1):
+        outgoing = ord(text[offset - 1]) + 1
+        incoming = ord(text[offset + width - 1]) + 1
+        value = (value - ((outgoing * power) & _ROLLING_HASH_MASK)) & _ROLLING_HASH_MASK
+        value = ((value * _ROLLING_HASH_BASE) + incoming) & _ROLLING_HASH_MASK
+        yield offset, value
+
+
+def exact_common_substring_scan(
+    context: str, transcript: str, *, minimum_chars: int = ROOT_CONTEXT_LEAK_MIN_CHARS
+) -> dict[str, Any]:
+    """Independent exact-Unicode rolling-hash scan with collision verification."""
+    if type(minimum_chars) is not int or minimum_chars <= 0:
+        raise ReportError("root-context leak threshold must be positive")
+    index_transcript = len(transcript) <= len(context)
+    indexed = transcript if index_transcript else context
+    scanned = context if index_transcript else transcript
+    buckets: dict[int, list[int]] = {}
+    indexed_windows = 0
+    for offset, value in _rolling_hash_windows(indexed, minimum_chars):
+        buckets.setdefault(value, []).append(offset)
+        indexed_windows += 1
+    scanned_windows = 0
+    for scan_offset, value in _rolling_hash_windows(scanned, minimum_chars):
+        scanned_windows += 1
+        for indexed_offset in buckets.get(value, ()):
+            indexed_slice = indexed[indexed_offset : indexed_offset + minimum_chars]
+            scanned_slice = scanned[scan_offset : scan_offset + minimum_chars]
+            if indexed_slice != scanned_slice:
+                continue
+            context_offset = scan_offset if index_transcript else indexed_offset
+            transcript_offset = indexed_offset if index_transcript else scan_offset
+            return {
+                "leak_detected": True,
+                "minimum_match_chars": minimum_chars,
+                "verified_match_chars": minimum_chars,
+                "context_offset_chars": context_offset,
+                "transcript_offset_chars": transcript_offset,
+                "matched_substring_sha256": hashlib.sha256(
+                    indexed_slice.encode("utf-8")
+                ).hexdigest(),
+                "context_chars": len(context),
+                "transcript_chars": len(transcript),
+                "indexed_windows": indexed_windows,
+                "scanned_windows_through_match": scanned_windows,
+                "matched_text_retained": False,
+            }
+    return {
+        "leak_detected": False,
+        "minimum_match_chars": minimum_chars,
+        "verified_match_chars": None,
+        "context_offset_chars": None,
+        "transcript_offset_chars": None,
+        "matched_substring_sha256": None,
+        "context_chars": len(context),
+        "transcript_chars": len(transcript),
+        "indexed_windows": indexed_windows,
+        "scanned_windows_through_match": scanned_windows,
+        "matched_text_retained": False,
+    }
+
+
+def scan_context_file_against_solo_trace(
+    context_path: Path,
+    transcript_path: Path,
+    *,
+    expected_context_sha256: str,
+    exact_transcript_preserved: bool,
+) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "applicable": True,
+        "asserted": False,
+        "scan_complete": False,
+        "leak_detected": None,
+        "minimum_match_chars": ROOT_CONTEXT_LEAK_MIN_CHARS,
+        "algorithm": "uint64 polynomial rolling hash with exact Unicode slice verification",
+        "normalization": "none",
+        "exemptions": "none; the complete AZDAJA_SOLO_TRACE text is scanned",
+        "matched_text_retained": False,
+        "authority": "exact fixture UTF-8 and exact preserved AZDAJA_SOLO_TRACE UTF-8",
+        "missing_reasons": [],
+    }
+    if not exact_transcript_preserved:
+        base["missing_reasons"].append(
+            "AZDAJA_SOLO_TRACE was transformed before exact scanning authority was retained"
+        )
+        return base
+    try:
+        context_sha = sha256_path(context_path)
+        transcript_sha = sha256_path(transcript_path)
+        context = context_path.read_bytes().decode("utf-8")
+        transcript = transcript_path.read_bytes().decode("utf-8")
+    except (OSError, UnicodeError) as exc:
+        base["missing_reasons"].append(
+            f"cannot read exact UTF-8 scan inputs: {type(exc).__name__}: {exc}"
+        )
+        return base
+    base["context_sha256"] = context_sha
+    base["transcript_sha256"] = transcript_sha
+    if context_sha != expected_context_sha256:
+        base["missing_reasons"].append("fixture context SHA-256 differs from the frozen identity")
+        return base
+    finding = exact_common_substring_scan(context, transcript)
+    base.update(finding)
+    base["scan_complete"] = True
+    base["asserted"] = finding["leak_detected"] is False
+    return base
+
+
+def normalize_failure_kind(failure: dict[str, Any] | None) -> str | None:
+    if failure is None:
+        return None
+    raw_kind = failure.get("kind")
+    raw_failure = {key: value for key, value in failure.items() if key != "normalized_kind"}
+    text = json.dumps(raw_failure, sort_keys=True, ensure_ascii=False).lower()
+    if raw_kind == "root_context_leak" or "root_context_leak" in text:
+        return "root_context_leak"
+    if raw_kind == "timeout" or re.search(r"\b(?:timed? out|timeout)\b", text):
+        return "timeout"
+    if raw_kind in {"depth", "depth_limit"} or re.search(
+        r"(?:maximum|max|exceeded|exhausted|limit|budget).{0,32}(?:depth|recursion)|"
+        r"(?:depth|recursion).{0,32}(?:maximum|max|exceeded|exhausted|limit|budget)", text
+    ):
+        return "depth"
+    if raw_kind == "monty_subset_tax" or re.search(
+        r"monty|python[- ]subset|subset.{0,24}(?:syntax|runtime)|"
+        r"unsupported.{0,24}(?:syntax|import|operation|python)|compile error|"
+        r"solo root python compile error|solo solve (?:cell runtime error|invalid regular expression)", text
+    ):
+        return "monty_subset_tax"
+    if raw_kind == "adapter_parser" or re.search(
+        r"adapter.{0,32}pars|pars.{0,32}adapter|response parser|solo root protocol|"
+        r"malformed.{0,24}(?:adapter|provider response|event stream)", text
+    ):
+        return "adapter_parser"
+    if raw_kind in {"route_assertion", "trace_capture", "usage_evidence", "transport"} or re.search(
+        r"provider_call_failed|session_setup|transport|oauth|authentication|"
+        r"connection|socket|http [45][0-9][0-9]|rate.?limit|service unavailable|"
+        r"provider/model/api route|root provider|provider (?:turn|call|request).{0,32}(?:fail|unavailable|did not run)",
+        text,
+    ):
+        return "transport"
+    return "other_execution"
+
+
+def _validate_executable_identity(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "path", "sha256", "bytes", "version", "version_command"
+    }:
+        raise ReportError(f"frozen {label} executable identity fields are invalid")
+    path = value.get("path")
+    if not isinstance(path, str) or not path or not Path(path).is_absolute():
+        raise ReportError(f"frozen {label} executable path is invalid")
+    if not _is_sha256(value.get("sha256")):
+        raise ReportError(f"frozen {label} executable SHA-256 is invalid")
+    if type(value.get("bytes")) is not int or value["bytes"] <= 0:
+        raise ReportError(f"frozen {label} executable byte count is invalid")
+    if not isinstance(value.get("version"), str) or not value["version"].strip():
+        raise ReportError(f"frozen {label} executable version is invalid")
+    if value.get("version_command") != [path, "--version"]:
+        raise ReportError(f"frozen {label} executable version command is invalid")
+    return value
+
+
+def expected_row_executables(arm: str, executables: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        ("jcode", "azdaja")
+        if arm == "jcode-azdaja"
+        else (("jcode",) if arm == "jcode-native" else ("prime-agent",))
+    )
+    try:
+        return {key: executables[key] for key in keys}
+    except KeyError as exc:
+        raise ReportError(f"frozen executable identity missing for arm {arm}: {exc}") from exc
+
+
+def validate_frozen_identity_stamp(
+    configuration: dict[str, Any], arms: list[str]
+) -> None:
+    controller = configuration.get("controller")
+    if not isinstance(controller, dict) or set(controller) != {"path", "sha256", "bytes"}:
+        raise ReportError("frozen controller identity fields are invalid")
+    if (
+        not isinstance(controller.get("path"), str)
+        or not controller["path"]
+        or not _is_sha256(controller.get("sha256"))
+        or type(controller.get("bytes")) is not int
+        or controller["bytes"] <= 0
+    ):
+        raise ReportError("frozen controller identity is invalid")
+    executables = configuration.get("executables")
+    if not isinstance(executables, dict):
+        raise ReportError("frozen executable identities must be an object")
+    if set(arms).issubset(_KNOWN_ARMS):
+        required = set()
+        if any(arm.startswith("jcode") for arm in arms):
+            required.add("jcode")
+        if "jcode-azdaja" in arms:
+            required.add("azdaja")
+        if "prime-agent" in arms:
+            required.add("prime-agent")
+        if set(executables) != required:
+            raise ReportError(
+                f"frozen executable identity set is not exact (expected={sorted(required)}, "
+                f"got={sorted(executables)})"
+            )
+    for label, identity in executables.items():
+        if label not in {"jcode", "azdaja", "prime-agent"}:
+            raise ReportError(f"unknown frozen executable identity: {label}")
+        _validate_executable_identity(identity, label)
+
+    candidate = configuration.get("candidate")
+    treatment = "jcode-azdaja" in arms
+    if not treatment:
+        if candidate is not None:
+            raise ReportError("frozen candidate is present without the Azdaja arm")
+        return
+    if not isinstance(candidate, dict) or set(candidate) != {"sha256", "components"}:
+        raise ReportError("frozen candidate identity fields are invalid")
+    components = candidate.get("components")
+    expected_components = {"azdaja", "config.toml", "SKILL.md"}
+    if not isinstance(components, dict) or set(components) != expected_components:
+        raise ReportError("frozen candidate component set is not exact")
+    for name, component in components.items():
+        if not isinstance(component, dict) or set(component) != {"sha256", "bytes"}:
+            raise ReportError(f"frozen candidate component fields are invalid: {name}")
+        if not _is_sha256(component.get("sha256")):
+            raise ReportError(f"frozen candidate component SHA-256 is invalid: {name}")
+        if type(component.get("bytes")) is not int or component["bytes"] <= 0:
+            raise ReportError(f"frozen candidate component byte count is invalid: {name}")
+    expected_candidate_sha = hashlib.sha256(canonical_json_bytes({
+        name: {"sha256": components[name]["sha256"], "bytes": components[name]["bytes"]}
+        for name in sorted(components)
+    })).hexdigest()
+    _require_equal(candidate.get("sha256"), expected_candidate_sha, "frozen candidate identity")
+    azdaja_executable = executables.get("azdaja")
+    if not isinstance(azdaja_executable, dict):
+        raise ReportError("frozen Azdaja candidate has no executable identity")
+    for field in ("sha256", "bytes"):
+        _require_equal(
+            components["azdaja"].get(field),
+            azdaja_executable.get(field),
+            f"candidate azdaja/executable azdaja {field}",
+        )
+
+
 def validate_schedule(schedule: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     if schedule.get("schema_version") != 1:
         raise ReportError("frozen schedule schema_version must be 1")
@@ -183,13 +460,31 @@ def validate_schedule(schedule: dict[str, Any]) -> tuple[list[dict[str, Any]], l
         raise ReportError("frozen schedule configuration arms are invalid")
     if type(repetitions) is not int or repetitions <= 0:
         raise ReportError("frozen schedule repetitions must be positive")
+    campaign_profile = {
+        "model": CAMPAIGN_MODEL,
+        "reasoning": CAMPAIGN_REASONING,
+        "arms": list(CAMPAIGN_ARMS),
+        "repetitions": CAMPAIGN_REPETITIONS,
+        "seed": CAMPAIGN_SEED,
+        "timeout_seconds": CAMPAIGN_TIMEOUT_SECONDS,
+    }
+    for field, expected in campaign_profile.items():
+        _require_equal(
+            configuration.get(field), expected,
+            f"frozen campaign profile {field}",
+        )
     controller = configuration.get("controller")
     if not isinstance(controller, dict) or not _is_sha256(controller.get("sha256")):
         raise ReportError("frozen schedule controller identity is invalid")
+    validate_frozen_identity_stamp(configuration, list(arms))
 
     fixtures = suite.get("fixtures")
     if not isinstance(fixtures, list) or not fixtures:
         raise ReportError("frozen schedule suite fixtures must be a nonempty list")
+    _require_equal(
+        len(fixtures), CAMPAIGN_FIXTURE_COUNT,
+        "frozen campaign fixture count",
+    )
     fixture_identity: dict[str, tuple[str, str]] = {}
     seen_row_hashes: set[str] = set()
     for item in fixtures:
@@ -214,6 +509,7 @@ def validate_schedule(schedule: dict[str, Any]) -> tuple[list[dict[str, Any]], l
 
     jobs = schedule.get("jobs")
     assert isinstance(jobs, list)  # established on the deep copy above
+    _require_equal(len(jobs), CAMPAIGN_ROW_COUNT, "frozen campaign scheduled row count")
     seen_runs: set[str] = set()
     seen_cells: set[tuple[str, int, str]] = set()
     expected_cells = {
@@ -327,6 +623,36 @@ def validate_rows(
             )
         if type(row.get("execution_success")) is not bool:
             raise ReportError(f"raw row {line_number} lacks terminal execution status")
+        if job["arm"] in _KNOWN_ARMS:
+            expected_executables = expected_row_executables(
+                job["arm"], configuration["executables"]
+            )
+            _require_equal(
+                row.get("executables"), expected_executables,
+                f"raw row {line_number} executable identities",
+            )
+            economy = row.get("root_token_economy")
+            if not isinstance(economy, dict) or type(economy.get("missing")) is not bool:
+                raise ReportError(f"raw row {line_number} root-token economy evidence is invalid")
+            value = economy.get("root_input_tokens")
+            if economy["missing"]:
+                if value is not None or economy.get("authority_kind") != "missing":
+                    raise ReportError(f"raw row {line_number} missing root-token evidence is inconsistent")
+            elif not _is_nonnegative_number(value) or economy.get("authority_kind") not in {
+                "provider_usage", "character_fallback"
+            }:
+                raise ReportError(f"raw row {line_number} root-token evidence is inconsistent")
+            failure = row.get("failure")
+            if failure is not None:
+                if not isinstance(failure, dict):
+                    raise ReportError(f"raw row {line_number} failure must be an object or null")
+                normalized = normalize_failure_kind(failure)
+                if normalized not in _FROZEN_FAILURE_KINDS:
+                    raise ReportError(f"raw row {line_number} normalized failure is invalid")
+                _require_equal(
+                    failure.get("normalized_kind"), normalized,
+                    f"raw row {line_number} normalized failure",
+                )
         nested_fixture = row.get("fixture")
         if nested_fixture is not None:
             if not isinstance(nested_fixture, dict):
@@ -545,6 +871,7 @@ def fixture_clusters(
 def validate_suite_manifest(
     path: Path, schedule: dict[str, Any]
 ) -> dict[str, Any]:
+    """Hash-bind the manifest and its exact ordered fixture identity triples."""
     document = load_json_object(path, "suite manifest")
     _require_equal(
         sha256_path(path), schedule["suite"]["manifest_sha256"],
@@ -552,6 +879,38 @@ def validate_suite_manifest(
     )
     if document.get("schema_version") != 1:
         raise ReportError("suite manifest schema_version must be 1")
+    for field in ("source", "split", "upstream_commit"):
+        _require_equal(
+            document.get(field), schedule["suite"].get(field),
+            f"suite manifest {field}",
+        )
+    entries = document.get("fixtures")
+    if not isinstance(entries, list):
+        raise ReportError("suite manifest fixtures must be a list")
+    identities: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    for index, entry in enumerate(entries, 1):
+        if not isinstance(entry, dict):
+            raise ReportError(f"suite manifest fixture {index} must be an object")
+        fixture_id = entry.get("fixture_id")
+        if not isinstance(fixture_id, str) or not fixture_id:
+            raise ReportError(f"suite manifest fixture {index} fixture_id is invalid")
+        if fixture_id in seen_ids:
+            raise ReportError(f"duplicate suite manifest fixture_id: {fixture_id}")
+        seen_ids.add(fixture_id)
+        row_sha = entry.get("row_sha256")
+        context_sha = entry.get("context_sha256")
+        if not _is_sha256(row_sha) or not _is_sha256(context_sha):
+            raise ReportError(f"suite manifest fixture {fixture_id} hashes are invalid")
+        identities.append({
+            "fixture_id": fixture_id,
+            "row_sha256": row_sha,
+            "context_sha256": context_sha,
+        })
+    _require_equal(
+        identities, schedule["suite"]["fixtures"],
+        "suite manifest fixture identity triples",
+    )
     return document
 
 
@@ -677,6 +1036,132 @@ def validate_independent_scores(
             )
 
 
+def independently_validate_root_context_leaks(
+    manifest_path: Path | None,
+    suite_document: dict[str, Any] | None,
+    rows: list[dict[str, Any]],
+    scores: list[dict[str, Any]],
+    jobs: list[dict[str, Any]],
+) -> dict[str, int]:
+    """Independently re-open exact fixtures/traces and enforce the leak hard gate."""
+    azdaja_indexes = [index for index, job in enumerate(jobs) if job["arm"] == "jcode-azdaja"]
+    if not azdaja_indexes:
+        return {"applicable_rows": 0, "scanned_rows": 0, "leak_rows": 0, "missing_rows": 0}
+    if manifest_path is None or suite_document is None:
+        raise ReportError(
+            "--suite-manifest is required to independently scan Azdaja root transcripts"
+        )
+    entries = suite_document.get("fixtures")
+    if not isinstance(entries, list):
+        raise ReportError("suite manifest fixtures must be a list")
+    parent = manifest_path.parent.resolve()
+    contexts: dict[str, Path] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("fixture_id"), str):
+            raise ReportError("suite manifest contains an invalid fixture entry")
+        fixture_id = entry["fixture_id"]
+        raw_context = entry.get("context")
+        if not isinstance(raw_context, str) or not raw_context or Path(raw_context).is_absolute():
+            raise ReportError(f"suite fixture {fixture_id} context path must be relative")
+        unresolved = manifest_path.parent / raw_context
+        if unresolved.is_symlink():
+            raise ReportError(f"suite fixture {fixture_id} context must not be a symlink")
+        try:
+            context = unresolved.resolve(strict=True)
+        except OSError as exc:
+            raise ReportError(f"suite fixture {fixture_id} context is missing: {exc}") from exc
+        if context.parent != parent:
+            raise ReportError(f"suite fixture {fixture_id} context must stay in manifest directory")
+        require_private_regular(context, f"suite fixture {fixture_id} context")
+        expected_hash = entry.get("context_sha256")
+        if not _is_sha256(expected_hash):
+            raise ReportError(f"suite fixture {fixture_id} context_sha256 is invalid")
+        _require_equal(
+            sha256_path(context), expected_hash,
+            f"suite fixture {fixture_id} context SHA-256",
+        )
+        contexts[fixture_id] = context
+
+    scanned = 0
+    leaked = 0
+    missing = 0
+    for index in azdaja_indexes:
+        row = rows[index]
+        score = scores[index]
+        job = jobs[index]
+        context = contexts.get(job["fixture_id"])
+        if context is None:
+            raise ReportError(f"Azdaja row {index + 1} has no exact fixture context")
+        artifacts = row.get("trajectory_artifacts")
+        metadata = artifacts.get("azdaja_solo_trace") if isinstance(artifacts, dict) else None
+        if not isinstance(metadata, dict):
+            raise ReportError(
+                f"Azdaja row {index + 1} lacks mandatory exact root transcript authority"
+            )
+        raw_trace = metadata.get("path")
+        if not isinstance(raw_trace, str) or not raw_trace:
+            raise ReportError(f"Azdaja row {index + 1} solo trace path is invalid")
+        trace = Path(os.path.abspath(Path(raw_trace).expanduser()))
+        require_private_regular(trace, f"Azdaja row {index + 1} solo trace")
+        if trace.name != "azdaja-solo-trace.log":
+            raise ReportError(f"Azdaja row {index + 1} solo trace filename is invalid")
+        run_directory = row.get("trajectory_run_directory")
+        if not isinstance(run_directory, str) or not run_directory:
+            raise ReportError(f"Azdaja row {index + 1} trajectory directory is invalid")
+        run_path = Path(os.path.abspath(Path(run_directory).expanduser()))
+        require_private_directory(run_path, f"Azdaja row {index + 1} trajectory directory")
+        if trace.parent != run_path:
+            raise ReportError(f"Azdaja row {index + 1} solo trace is outside its trajectory directory")
+        if not _is_sha256(metadata.get("sha256")):
+            raise ReportError(f"Azdaja row {index + 1} solo trace SHA-256 is invalid")
+        _require_equal(
+            sha256_path(trace), metadata["sha256"],
+            f"Azdaja row {index + 1} solo trace SHA-256",
+        )
+        if type(metadata.get("bytes")) is not int or metadata["bytes"] < 0:
+            raise ReportError(f"Azdaja row {index + 1} solo trace byte count is invalid")
+        _require_equal(trace.stat().st_size, metadata["bytes"], f"Azdaja row {index + 1} solo trace bytes")
+        exact_preserved = (
+            metadata.get("exact_text_preserved") is True
+            and metadata.get("source_sha256_before_redaction") == metadata.get("sha256")
+        )
+        assertion = scan_context_file_against_solo_trace(
+            context,
+            trace,
+            expected_context_sha256=job["context_sha256"],
+            exact_transcript_preserved=exact_preserved,
+        )
+        _require_equal(
+            row.get("root_context_leak_assertion"), assertion,
+            f"Azdaja row {index + 1} independent root-context assertion",
+        )
+        if assertion.get("scan_complete") is not True:
+            raise ReportError(
+                f"Azdaja row {index + 1} lacks mandatory complete exact leak scanning"
+            )
+        scanned += 1
+        if assertion.get("leak_detected") is True:
+            leaked += 1
+            failure = row.get("failure")
+            normalized = normalize_failure_kind(failure if isinstance(failure, dict) else None)
+            if (
+                row.get("execution_success") is not False
+                or score.get("success") is not False
+                or normalized != "root_context_leak"
+            ):
+                raise ReportError(
+                    f"Azdaja row {index + 1} contains root_context_leak but was falsely successful"
+                )
+        elif row.get("execution_success") is True and assertion.get("asserted") is not True:
+            raise ReportError(f"successful Azdaja row {index + 1} failed the leak hard gate")
+    return {
+        "applicable_rows": len(azdaja_indexes),
+        "scanned_rows": scanned,
+        "leak_rows": leaked,
+        "missing_rows": missing,
+    }
+
+
 def percentile(values: Sequence[float], probability: float) -> float | None:
     """R-7/NumPy-style linear percentile for finite values."""
     if not values:
@@ -771,6 +1256,19 @@ def _usage(row: dict[str, Any]) -> tuple[bool, dict[str, int] | None]:
     return True, result
 
 
+def _root_economy(row: dict[str, Any]) -> tuple[bool, float | None, str]:
+    evidence = row.get("root_token_economy")
+    if not isinstance(evidence, dict) or evidence.get("missing") is not False:
+        return False, None, "missing"
+    value = evidence.get("root_input_tokens")
+    authority = evidence.get("authority_kind")
+    if not _is_nonnegative_number(value) or authority not in {
+        "provider_usage", "character_fallback"
+    }:
+        return False, None, "missing"
+    return True, float(value), str(authority)
+
+
 def _cluster_warnings(
     records: Sequence[dict[str, Any]], repetitions: int, cluster_by: str
 ) -> list[str]:
@@ -799,16 +1297,36 @@ def arm_metrics(
     scheduled = len(records)
     execution_n = sum(record["execution_success"] for record in records)
     success_n = sum(record["success"] for record in records)
-    failures = Counter()
+    normalized_execution_failures = Counter()
+    raw_execution_failures = Counter()
+    incorrect_completed = 0
     for record in records:
         if record["success"]:
             continue
         if record["execution_success"]:
-            failures["strict_score"] += 1
+            incorrect_completed += 1
         else:
             failure = record["row"].get("failure")
-            kind = failure.get("kind") if isinstance(failure, dict) else None
-            failures[kind if isinstance(kind, str) and kind else "unknown_execution_failure"] += 1
+            raw_kind = failure.get("kind") if isinstance(failure, dict) else None
+            raw_execution_failures[
+                raw_kind if isinstance(raw_kind, str) and raw_kind else "unknown_execution_failure"
+            ] += 1
+            normalized = normalize_failure_kind(failure if isinstance(failure, dict) else None)
+            normalized_execution_failures[normalized or "other_execution"] += 1
+    normalized_outcomes = Counter(normalized_execution_failures)
+    raw_outcomes = Counter(raw_execution_failures)
+    if incorrect_completed:
+        normalized_outcomes["strict_score"] = incorrect_completed
+        raw_outcomes["strict_score"] = incorrect_completed
+    failure_n = scheduled - success_n
+    execution_failure_n = scheduled - execution_n
+    if (
+        sum(normalized_outcomes.values()) != failure_n
+        or sum(raw_outcomes.values()) != failure_n
+        or sum(normalized_execution_failures.values()) != execution_failure_n
+        or sum(raw_execution_failures.values()) != execution_failure_n
+    ):
+        raise ReportError("internal failure taxonomy denominator mismatch")
 
     wall = [
         float(record["latency_seconds"])
@@ -822,6 +1340,10 @@ def arm_metrics(
     }
     missing_usage = scheduled - len(usage_valid)
     unconditional_totals = recorded_totals if missing_usage == 0 else None
+    root_valid = [record for record in records if record["root_tokens_valid"]]
+    root_values = [float(record["root_input_tokens"]) for record in root_valid]
+    missing_root = scheduled - len(root_valid)
+    root_authorities = Counter(record["root_token_authority"] for record in root_valid)
 
     estimators: dict[str, Callable[[Sequence[dict[str, Any]]], float | None]] = {
         "execution_completion_rate": lambda sample: _rate(
@@ -829,6 +1351,16 @@ def arm_metrics(
         ),
         "exact_success_rate": lambda sample: _rate(record["success"] for record in sample),
         "failure_rate": lambda sample: _rate(not record["success"] for record in sample),
+        "completed_accuracy": lambda sample: (
+            sum(record["success"] for record in sample if record["execution_success"])
+            / sum(record["execution_success"] for record in sample)
+            if sum(record["execution_success"] for record in sample) else None
+        ),
+        "root_input_tokens_mean": lambda sample: (
+            sum(float(record["root_input_tokens"]) for record in sample if record["root_tokens_valid"])
+            / sum(record["root_tokens_valid"] for record in sample)
+            if sum(record["root_tokens_valid"] for record in sample) else None
+        ),
         "route_integrity_rate": lambda sample: _rate(
             record["route_asserted"] is True for record in sample
         ),
@@ -852,17 +1384,48 @@ def arm_metrics(
     route_asserted = sum(record["route_asserted"] is True for record in records)
     route_failed = sum(record["route_asserted"] is False for record in records)
     route_missing = scheduled - route_asserted - route_failed
+    completed_accuracy = None if execution_n == 0 else success_n / execution_n
     return {
         "scheduled_n": scheduled,
+        "scheduled": {"n": scheduled},
         "execution": {
             "completed_n": execution_n,
             "completion_rate": execution_n / scheduled,
+        },
+        "execution_rate": {
+            "completed_n": execution_n,
+            "scheduled_n": scheduled,
+            "rate": execution_n / scheduled,
+        },
+        "completed_accuracy": {
+            "correct_n": success_n,
+            "completed_n": execution_n,
+            "rate": completed_accuracy,
+        },
+        "fixed_denominator_e2e_accuracy": {
+            "correct_n": success_n,
+            "scheduled_n": scheduled,
+            "rate": success_n / scheduled,
         },
         "exact_success": {"n": success_n, "rate": success_n / scheduled},
         "failure": {
             "n": scheduled - success_n,
             "rate": (scheduled - success_n) / scheduled,
-            "taxonomy": dict(sorted(failures.items())),
+            "incorrect_completed_n": incorrect_completed,
+            "execution_failure_n": scheduled - execution_n,
+            "taxonomy_scope": "all unsuccessful scheduled attempts",
+            "taxonomy_denominator_n": scheduled - success_n,
+            "taxonomy": dict(sorted(normalized_outcomes.items())),
+            "normalized_taxonomy": dict(sorted(normalized_outcomes.items())),
+            "raw_taxonomy": dict(sorted(raw_outcomes.items())),
+            "execution_failure_taxonomy_scope": "execution failures only",
+            "execution_failure_taxonomy_denominator_n": scheduled - execution_n,
+            "execution_failure_taxonomy": dict(
+                sorted(normalized_execution_failures.items())
+            ),
+            "raw_execution_failure_taxonomy": dict(
+                sorted(raw_execution_failures.items())
+            ),
         },
         "wall_seconds_all_attempts": {
             "observed_n": len(wall),
@@ -879,6 +1442,21 @@ def arm_metrics(
             "unconditional_total_tokens": (
                 recorded_totals["total_tokens"] if missing_usage == 0 else None
             ),
+        },
+        "root_token_economy": {
+            "metric": "root input tokens",
+            "valid_n": len(root_valid),
+            "missing_n": missing_root,
+            "authority_counts": dict(sorted(root_authorities.items())),
+            "recorded_total_root_input_tokens": sum(root_values),
+            "unconditional_total_root_input_tokens": (
+                sum(root_values) if missing_root == 0 else None
+            ),
+            "mean_root_input_tokens": (
+                sum(root_values) / len(root_values) if root_values else None
+            ),
+            "p50_root_input_tokens": percentile(root_values, 0.50),
+            "p95_root_input_tokens": percentile(root_values, 0.95),
         },
         "route_integrity": {
             "asserted_n": route_asserted,
@@ -909,11 +1487,21 @@ def pair_metrics(
         if _is_positive_number(record.get("tokens_a"))
         and _is_positive_number(record.get("tokens_b"))
     ]
+    root_token_eligible = [
+        record for record in records
+        if record["both_correct"]
+        and record["both_valid_root_tokens"]
+        and _is_positive_number(record.get("root_tokens_a"))
+        and _is_positive_number(record.get("root_tokens_b"))
+    ]
     accuracy_a = _rate(record["success_a"] for record in records)
     accuracy_b = _rate(record["success_b"] for record in records)
     delta = None if accuracy_a is None or accuracy_b is None else accuracy_b - accuracy_a
     latency_ratio = _geometric_ratio(latency_eligible, "latency_b", "latency_a")
     token_ratio = _geometric_ratio(token_eligible, "tokens_b", "tokens_a")
+    root_token_ratio = _geometric_ratio(
+        root_token_eligible, "root_tokens_b", "root_tokens_a"
+    )
 
     estimators: dict[str, Callable[[Sequence[dict[str, Any]]], float | None]] = {
         "accuracy_delta": lambda sample: (
@@ -941,6 +1529,17 @@ def pair_metrics(
             ),
             "tokens_b",
             "tokens_a",
+        ),
+        "root_token_geometric_ratio": lambda sample: _geometric_ratio(
+            (
+                record for record in sample
+                if record["both_correct"]
+                and record["both_valid_root_tokens"]
+                and _is_positive_number(record.get("root_tokens_a"))
+                and _is_positive_number(record.get("root_tokens_b"))
+            ),
+            "root_tokens_b",
+            "root_tokens_a",
         ),
     }
     ci = {
@@ -975,6 +1574,11 @@ def pair_metrics(
             "value": token_ratio,
             "gate": "both exact-correct, both valid usage, and both positive total_tokens",
         },
+        "root_token_geometric_ratio": {
+            "eligible_n": len(root_token_eligible),
+            "value": root_token_ratio,
+            "gate": "both exact-correct, both authoritative/nonmissing root-token values, and both positive",
+        },
         "bootstrap_ci95": ci,
     }
 
@@ -996,6 +1600,14 @@ def build_report(
     scores_path = Path(str(raw) + ".scores.json")
     schedule = load_json_object(schedule_path, "frozen schedule")
     jobs, arms = validate_schedule(schedule)
+    if suite_manifest is None:
+        raise ReportError(
+            "--suite-manifest is required for a campaign-certified OOLONG suite report"
+        )
+    manifest_path = Path(os.path.abspath(Path(suite_manifest).expanduser()))
+    # Bind the unique, exact fixture identity triples before any score or leak work.
+    suite_document = validate_suite_manifest(manifest_path, schedule)
+
     rows = load_raw_rows(raw)
     validate_rows(rows, jobs, schedule)
     claims_root = Path(str(raw) + ".claims")
@@ -1004,11 +1616,10 @@ def build_report(
     scores = validate_scores(
         scores_document, scores_path, raw, rows, jobs, schedule
     )
-    suite_document = None
-    if suite_manifest is not None:
-        manifest_path = Path(os.path.abspath(Path(suite_manifest).expanduser()))
-        suite_document = validate_suite_manifest(manifest_path, schedule)
-        validate_independent_scores(manifest_path, suite_document, rows, scores, jobs)
+    validate_independent_scores(manifest_path, suite_document, rows, scores, jobs)
+    root_context_gate = independently_validate_root_context_leaks(
+        manifest_path, suite_document, rows, scores, jobs
+    )
     cluster_for_fixture, cluster_by, warnings = fixture_clusters(
         schedule, suite_document
     )
@@ -1020,6 +1631,7 @@ def build_report(
     }
     for row, score, job in zip(rows, scores, jobs):
         evidence_valid, usage = _usage(row)
+        root_tokens_valid, root_input_tokens, root_token_authority = _root_economy(row)
         route = row.get("runtime_route_assertion")
         route_asserted = (
             route.get("asserted") if isinstance(route, dict)
@@ -1036,6 +1648,9 @@ def build_report(
             "latency_seconds": latency,
             "usage_valid": evidence_valid,
             "usage": usage,
+            "root_tokens_valid": root_tokens_valid,
+            "root_input_tokens": root_input_tokens,
+            "root_token_authority": root_token_authority,
             "route_asserted": route_asserted,
             "_cluster": cluster_for_fixture[job["fixture_id"]],
         }
@@ -1089,6 +1704,11 @@ def build_report(
                             second["usage"]["total_tokens"]
                             if second["usage_valid"] else None
                         ),
+                        "both_valid_root_tokens": (
+                            first["root_tokens_valid"] and second["root_tokens_valid"]
+                        ),
+                        "root_tokens_a": first["root_input_tokens"],
+                        "root_tokens_b": second["root_input_tokens"],
                         "_cluster": cluster_for_fixture[fixture_id],
                     }
                 )
@@ -1115,6 +1735,18 @@ def build_report(
             "scheduled_rows": len(jobs),
             "raw_rows": len(rows),
             "score_rows": len(scores),
+            "campaign_profile": {
+                "certified": True,
+                "fixture_count": CAMPAIGN_FIXTURE_COUNT,
+                "arms": list(CAMPAIGN_ARMS),
+                "repetitions": CAMPAIGN_REPETITIONS,
+                "scheduled_rows": CAMPAIGN_ROW_COUNT,
+                "model": CAMPAIGN_MODEL,
+                "reasoning": CAMPAIGN_REASONING,
+                "seed": CAMPAIGN_SEED,
+                "timeout_seconds": CAMPAIGN_TIMEOUT_SECONDS,
+            },
+            "root_context_leak_hard_gate": root_context_gate,
         },
         "bootstrap": {
             "method": "nonparametric cluster bootstrap with percentile 95% intervals",
@@ -1122,6 +1754,25 @@ def build_report(
             "iterations": bootstrap_iterations,
             "cluster_by": cluster_by,
             "cluster_count": cluster_count,
+        },
+        "frozen_identity_stamp": {
+            "candidate": copy.deepcopy(schedule["configuration"].get("candidate")),
+            "executables": copy.deepcopy(schedule["configuration"].get("executables", {})),
+            "controller": copy.deepcopy(schedule["configuration"]["controller"]),
+            "candidate_version_hash_stamp": (
+                None
+                if schedule["configuration"].get("candidate") is None
+                else {
+                    "candidate_sha256": schedule["configuration"]["candidate"]["sha256"],
+                    "azdaja_sha256": schedule["configuration"]["executables"]["azdaja"]["sha256"],
+                    "azdaja_bytes": schedule["configuration"]["executables"]["azdaja"]["bytes"],
+                    "azdaja_version": schedule["configuration"]["executables"]["azdaja"]["version"],
+                }
+            ),
+            "validation": (
+                "candidate component aggregate recomputed; candidate azdaja hash/bytes "
+                "equal executable azdaja; every row executable identity matched"
+            ),
         },
         "warnings": list(dict.fromkeys(warnings)),
         "arms": arm_results,
@@ -1152,7 +1803,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("raw_suite_output", help="completed inference JSONL")
     result.add_argument(
         "--suite-manifest",
-        help="optional hash-bound owner-only suite manifest, used for cluster metadata",
+        required=True,
+        help="hash-bound owner-only 26-fixture campaign manifest",
     )
     result.add_argument(
         "--bootstrap-iterations",

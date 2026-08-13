@@ -108,7 +108,14 @@ def base26(value: int, width: int, upper: bool = False) -> str:
 
 
 class ScoreTests(unittest.TestCase):
-    def make_artifacts(self, root: Path, *, failed_job: int | None = None):
+    def make_artifacts(
+        self, root: Path, *, failed_job: int | None = None,
+        failed_jobs: set[int] | None = None,
+        candidate_executable_match: bool = True,
+    ):
+        failed_ordinals = set(failed_jobs or ())
+        if failed_job is not None:
+            failed_ordinals.add(failed_job)
         root = root.resolve()
         root.chmod(0o700)
         master_key = bytes(range(32))
@@ -508,7 +515,14 @@ class ScoreTests(unittest.TestCase):
         }
         for executable_name in ("jcode", "azdaja"):
             executable_path = executable_paths[executable_name]
-            private_text(executable_path, executable_name)
+            if executable_name == "azdaja":
+                executable_path.write_bytes(
+                    candidate_paths["azdaja"].read_bytes()
+                    if candidate_executable_match else b"mismatched candidate executable"
+                )
+                executable_path.chmod(0o600)
+            else:
+                private_text(executable_path, executable_name)
             executable_path.chmod(0o500)
 
         source_candidate = root / "source-candidate"
@@ -620,7 +634,7 @@ class ScoreTests(unittest.TestCase):
             artifact_dir.mkdir(mode=0o700)
             stdout_path = artifact_dir / "stdout.ndjson"
             stderr_path = artifact_dir / "stderr.log"
-            execution_success = job["ordinal"] != failed_job
+            execution_success = job["ordinal"] not in failed_ordinals
             if job["arm"] == "prime-agent":
                 stdout_evidence = json.dumps({
                     "type": "message_end",
@@ -652,9 +666,12 @@ class ScoreTests(unittest.TestCase):
             private_text(stderr_path, "test stderr")
             model_trace_path = artifact_dir / "azdaja-model-usage.jsonl"
             solo_trace_path = artifact_dir / "azdaja-solo-trace.log"
-            if job["arm"] == "jcode-azdaja" and execution_success:
-                private_text(model_trace_path, stdout_evidence)
-                private_text(solo_trace_path, json.dumps({"event": "solo_complete"}))
+            if job["arm"] == "jcode-azdaja":
+                # Candidate v32 opens/writes the exact solo trace before provider
+                # execution, so even a provider failure retains scan authority.
+                private_text(solo_trace_path, json.dumps({"event": "solo_started"}))
+                if execution_success:
+                    private_text(model_trace_path, stdout_evidence)
 
             def artifact_record(path):
                 return {
@@ -721,10 +738,11 @@ class ScoreTests(unittest.TestCase):
                         "stdout": artifact_record(stdout_path),
                         "stderr": artifact_record(stderr_path),
                         **(
-                            {
-                                "azdaja_model_trace": artifact_record(model_trace_path),
-                                "azdaja_solo_trace": artifact_record(solo_trace_path),
-                            }
+                            {"azdaja_solo_trace": artifact_record(solo_trace_path)}
+                            if job["arm"] == "jcode-azdaja" else {}
+                        ),
+                        **(
+                            {"azdaja_model_trace": artifact_record(model_trace_path)}
                             if job["arm"] == "jcode-azdaja" and execution_success else {}
                         ),
                     },
@@ -801,6 +819,137 @@ class ScoreTests(unittest.TestCase):
             with self.subTest(prediction=prediction):
                 self.assertFalse(SCORE.exact_set(prediction, refs))
 
+    def test_exact_unicode_root_leak_scan_has_no_normalization_or_match_text(self):
+        payload = "left " + ("🦀Cafe\u0001" * 20) + " right"
+        exact = ("🦀Cafe\u0001" * 20)[:100]
+        transcript = "prefix" + exact + "suffix"
+        self.assertTrue(SCORE.exact_unicode_substring_present(payload, transcript))
+        self.assertFalse(
+            SCORE.exact_unicode_substring_present(payload, transcript.replace("Cafe", "CAFÉ"))
+        )
+        audit = SCORE.root_context_leak_audit(
+            payload.encode("utf-8"), transcript.encode("utf-8")
+        )
+        self.assertTrue(audit["detected"])
+        self.assertEqual(audit["normalization"], "none")
+        self.assertEqual(audit["exemptions"], "none")
+        self.assertFalse(audit["matched_text_retained"])
+        self.assertNotIn(exact, json.dumps(audit, ensure_ascii=False))
+
+    def test_root_context_leak_false_success_is_rejected_before_gold(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest, gold, runs, _, claims_root, schedule, rows = self.make_artifacts(root)
+            row = next(
+                item for item in rows
+                if item["arm"] == "jcode-azdaja" and item["execution_success"]
+            )
+            manifest_doc = json.loads(manifest.read_text(encoding="utf-8"))
+            fixture = next(
+                item for item in manifest_doc["fixtures"]
+                if item["id"] == row["fixture_id"]
+            )
+            payload = (manifest.parent / fixture["payload"]).read_text(encoding="utf-8")
+            leaked = payload[:SCORE.ROOT_LEAK_MIN_CHARS]
+            self.assertEqual(len(leaked), SCORE.ROOT_LEAK_MIN_CHARS)
+            record = row["arm_evidence"]["trajectory_artifacts"]["azdaja_solo_trace"]
+            trace_path = Path(record["path"])
+            private_text(trace_path, "root request\n" + leaked + "\nroot response")
+            record["sha256"] = SCORE.sha256_path(trace_path)
+            record["bytes"] = trace_path.stat().st_size
+            runs.write_bytes(b"".join(SCORE.canonical_json_file_bytes(item) for item in rows))
+            runs.chmod(0o600)
+            done = claims_root / schedule["schedule_id"] / (row["run_id"] + ".done.json")
+            private_json(done, {
+                "schedule_id": schedule["schedule_id"],
+                "run_id": row["run_id"],
+                "row_sha256": SCORE.sha256_bytes(SCORE.canonical_json_bytes(row)),
+            })
+            with mock.patch.object(SCORE, "load_gold", side_effect=AssertionError("gold read")):
+                with self.assertRaisesRegex(SCORE.ScoreError, "falsely claims success.*root_context_leak"):
+                    SCORE.build_report(manifest, gold, runs, bootstrap_resamples=1)
+
+    def test_failed_treatment_missing_solo_trace_blocks_gold(self):
+        with tempfile.TemporaryDirectory() as directory:
+            baseline = self.make_artifacts(Path(directory))
+            failed_ordinal = next(
+                row["execution_ordinal"] for row in baseline[6]
+                if row["arm"] == "jcode-azdaja"
+            )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest, gold, runs, _, claims_root, schedule, rows = self.make_artifacts(
+                root, failed_job=failed_ordinal
+            )
+            row = next(item for item in rows if item["execution_ordinal"] == failed_ordinal)
+            self.assertEqual(row["arm"], "jcode-azdaja")
+            self.assertFalse(row["execution_success"])
+            record = row["arm_evidence"]["trajectory_artifacts"].pop(
+                "azdaja_solo_trace"
+            )
+            Path(record["path"]).unlink()
+            runs.write_bytes(b"".join(SCORE.canonical_json_file_bytes(item) for item in rows))
+            runs.chmod(0o600)
+            done = claims_root / schedule["schedule_id"] / (row["run_id"] + ".done.json")
+            private_json(done, {
+                "schedule_id": schedule["schedule_id"],
+                "run_id": row["run_id"],
+                "row_sha256": SCORE.sha256_bytes(SCORE.canonical_json_bytes(row)),
+            })
+            with mock.patch.object(SCORE, "load_gold", side_effect=AssertionError("gold read")):
+                with self.assertRaisesRegex(
+                    SCORE.ScoreError,
+                    "valid exact retained AZDAJA_SOLO_TRACE.*including failed rows",
+                ):
+                    SCORE.build_report(manifest, gold, runs, bootstrap_resamples=1)
+
+    def test_root_token_economy_authority_preference_fallback_and_missing(self):
+        jcode = "\n".join((
+            json.dumps({"type": "tool_done", "output": "éééé"}),
+            json.dumps({"type": "tool_done", "output": "abcd"}),
+        )).encode()
+        control = SCORE.root_token_economy("jcode-native", {"stdout": jcode})
+        self.assertEqual(control["root_tokens"], 2.0)
+        self.assertTrue(control["fallback_used"])
+        self.assertFalse(control["missing"])
+        trace = (json.dumps({"depth": 0, "input_tokens": 123}) + "\n").encode()
+        treatment = SCORE.root_token_economy(
+            "jcode-azdaja",
+            {"azdaja_model_trace": trace, "azdaja_solo_trace": b"not used"},
+        )
+        self.assertEqual(treatment["root_tokens"], 123)
+        self.assertFalse(treatment["fallback_used"])
+        prompt = "eight123"
+        solo = (
+            f"\n=== root request begin request_id=\"x\" model=\"m\" request_chars={len(prompt)} ===\n"
+            f"{prompt}\n=== root request end request_id=\"x\" ===\n"
+        ).encode()
+        fallback = SCORE.root_token_economy(
+            "jcode-azdaja", {"azdaja_model_trace": b"", "azdaja_solo_trace": solo}
+        )
+        self.assertEqual(fallback["root_tokens"], len(prompt) / 4)
+        self.assertTrue(fallback["fallback_used"])
+        missing = SCORE.root_token_economy(
+            "jcode-azdaja", {"azdaja_model_trace": b"", "azdaja_solo_trace": b"bad"}
+        )
+        self.assertTrue(missing["missing"])
+        self.assertIsNotNone(missing["missing_reason"])
+        self.assertTrue(missing["authority"])
+
+    def test_operational_failure_normalization_has_precedence_and_retains_raw(self):
+        raw = {"kind": "transport", "message": "provider timeout at maximum RLM depth"}
+        row = {"execution_success": False, "timed_out": True, "failure": raw}
+        audit = {"root_context_leak": {"detected": False}}
+        normalized = SCORE.normalize_operational_failure(row, audit)
+        self.assertEqual(normalized["category"], "transport")
+        self.assertEqual(normalized["raw"], raw)
+        raw["message"] = "changed"
+        self.assertNotEqual(normalized["raw"], raw)
+        leak = SCORE.normalize_operational_failure(
+            row, {"root_context_leak": {"detected": True}}
+        )
+        self.assertEqual(leak["category"], "root_context_leak")
+
     def test_full_report_has_macro_cells_and_separates_metric_failures(self):
         with tempfile.TemporaryDirectory() as directory:
             artifacts = self.make_artifacts(Path(directory))
@@ -809,6 +958,26 @@ class ScoreTests(unittest.TestCase):
             )
             self.assertTrue(report["integrity"]["validated"])
             self.assertEqual(report["integrity"]["scheduled_jobs"], 270)
+            self.assertTrue(
+                report["integrity"]["root_context_leak_scan_complete_before_gold_read"]
+            )
+            leak_gate = report["integrity"]["root_context_leak_pre_gold_gate"]
+            self.assertTrue(leak_gate["complete"])
+            self.assertEqual(leak_gate["treatment_terminal_rows"], 90)
+            self.assertEqual(leak_gate["valid_exact_retained_solo_trace_rows"], 90)
+            self.assertEqual(leak_gate["scanned_rows"], 90)
+            self.assertEqual(
+                report["integrity"]["scheduled_per_arm"],
+                {arm: 90 for arm in SCORE.ARMS},
+            )
+            self.assertTrue(report["integrity"]["exact_90_per_arm_asserted"])
+            stamp = report["candidate_version_stamp"]
+            self.assertEqual(set(stamp["components"]), {"azdaja", "config.toml", "SKILL.md"})
+            self.assertTrue(stamp["candidate_binary_equals_executed_azdaja"])
+            self.assertEqual(
+                stamp["candidate_binary"]["sha256"],
+                stamp["executed_azdaja"]["sha256"],
+            )
             self.assertEqual(len(report["cells"]), 27)
             native = report["arms"]["jcode-native"]["macro_9_cell"]
             self.assertEqual(native["cell_count"], 9)
@@ -854,6 +1023,49 @@ class ScoreTests(unittest.TestCase):
             self.assertIsNone(
                 native["telemetry_all_attempts"]["usage"]["unconditional_totals"]
             )
+
+    def test_scorer_rejects_candidate_binary_executable_mismatch_before_gold(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest, gold, runs, _, _, _, _ = self.make_artifacts(
+                Path(directory), candidate_executable_match=False
+            )
+            with mock.patch.object(SCORE, "load_gold", side_effect=AssertionError("gold read")):
+                with self.assertRaisesRegex(SCORE.ScoreError, "candidate azdaja component"):
+                    SCORE.build_report(manifest, gold, runs, bootstrap_resamples=1)
+
+    def test_headline_metrics_keep_90_scheduled_with_88_successes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            baseline = self.make_artifacts(root)
+            native_ordinals = [
+                row["execution_ordinal"] for row in baseline[6]
+                if row["arm"] == "jcode-native"
+            ][:2]
+        with tempfile.TemporaryDirectory() as directory:
+            manifest, gold, runs, _, _, _, _ = self.make_artifacts(
+                Path(directory), failed_jobs=set(native_ordinals)
+            )
+            report = SCORE.build_report(manifest, gold, runs, bootstrap_resamples=1)
+            native = report["arms"]["jcode-native"]
+            self.assertEqual(native["scheduled_n"], 90)
+            self.assertEqual(native["headline"]["executed_n"], 88)
+            self.assertEqual(native["execution_rate"], 88 / 90)
+            self.assertEqual(native["headline"]["completed_correct_n"], 88)
+            self.assertEqual(native["headline"]["completed_accuracy_denominator_n"], 88)
+            self.assertEqual(native["completed_accuracy"], 88 / 88)
+            self.assertEqual(native["headline"]["end_to_end_correct_n"], 88)
+            self.assertEqual(native["headline"]["end_to_end_accuracy_denominator_n"], 90)
+            self.assertEqual(native["end_to_end_accuracy"], 88 / 90)
+
+    def test_an_88_row_prefix_is_not_a_fake_complete_suite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest, gold, runs, _, _, _, _ = self.make_artifacts(root)
+            runs.write_bytes(b"".join(runs.read_bytes().splitlines(keepends=True)[:88]))
+            runs.chmod(0o600)
+            with mock.patch.object(SCORE, "load_gold", side_effect=AssertionError("gold read")):
+                with self.assertRaisesRegex(SCORE.ScoreError, "terminal-complete"):
+                    SCORE.build_report(manifest, gold, runs, bootstrap_resamples=1)
 
     def test_incomplete_runs_are_rejected_before_gold_is_touched(self):
         with tempfile.TemporaryDirectory() as directory:

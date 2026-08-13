@@ -197,6 +197,33 @@ class RulerRunnerTests(unittest.TestCase):
             }
         }
 
+    def test_exact_unicode_root_context_scan_uses_exact_code_points(self):
+        payload = "prefix" + ("🦀e\u0301" * 40) + "suffix"
+        exact = ("🦀e\u0301" * 40)[:RUN.ROOT_LEAK_MIN_CHARS]
+        self.assertTrue(
+            RUN.exact_unicode_substring_present(payload, "before" + exact + "after")
+        )
+        self.assertFalse(
+            RUN.exact_unicode_substring_present(payload, "before" + exact.replace("e\u0301", "é") + "after")
+        )
+        audit = RUN.root_context_leak_audit(
+            payload.encode("utf-8"), ("before" + exact + "after").encode("utf-8")
+        )
+        self.assertTrue(audit["detected"])
+        self.assertFalse(audit["matched_text_retained"])
+        self.assertNotIn(exact, json.dumps(audit, ensure_ascii=False))
+
+    def test_candidate_binary_must_equal_executed_azdaja(self):
+        candidate = copy.deepcopy(TEST_CANDIDATE)
+        executable = candidate["components"]["azdaja"]
+        RUN.validate_candidate_executable_binding(
+            candidate, {"azdaja": {"sha256": executable["sha256"], "bytes": executable["bytes"]}}
+        )
+        with self.assertRaisesRegex(RUN.BenchError, "differ"):
+            RUN.validate_candidate_executable_binding(
+                candidate, {"azdaja": {"sha256": "f" * 64, "bytes": executable["bytes"]}}
+            )
+
     def test_atomic_private_json_rejects_existing_symlink_and_hardlink(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -769,7 +796,10 @@ class RulerRunnerTests(unittest.TestCase):
             executable_root.mkdir(mode=0o700)
             for name in ("jcode", "azdaja"):
                 executable_path = executable_root / f"identity-{name}"
-                executable_path.write_bytes(f"{name} immutable bytes".encode())
+                executable_path.write_bytes(
+                    Path(candidate["components"]["azdaja"]["path"]).read_bytes()
+                    if name == "azdaja" else f"{name} immutable bytes".encode()
+                )
                 if os.name == "posix":
                     os.chmod(executable_path, 0o500)
                 executables[name] = {

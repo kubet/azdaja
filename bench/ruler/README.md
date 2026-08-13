@@ -224,6 +224,39 @@ and opens gold only after terminal schedule/run validation. Owner-only modes
 reduce accidental disclosure; they are not encryption or an information-flow
 sandbox.
 
+## Scored cohort gates and denominators
+
+A frozen cohort is exactly 90 scheduled fixtures **per arm** (270 terminal
+rows). Operational failures remain terminal rows; an 88-row result is never
+accepted as a smaller suite. Each arm reports the scheduled count, execution
+rate, exact-set accuracy among completed executions, and end-to-end exact-set
+accuracy on the fixed 90-row denominator. Thus 88 correct completions report
+88/90 execution, 88/88 completed accuracy, and 88/90 end-to-end accuracy.
+
+Before opening gold, the scorer rehashes each treatment
+`AZDAJA_SOLO_TRACE` and independently compares its exact UTF-8 Unicode code
+points with the exact public payload. A 64-bit rolling hash locates candidates
+and a code-point comparison verifies them. Any common substring of 100 or more
+characters is the hard `root_context_leak` failure; there is no normalization or
+exemption, a claimed success is rejected, and matched text is never placed in
+the report. The runner preserves the solo trace byte-for-byte (and fails capture
+if credential redaction would alter it) so the scorer audits the same authority.
+
+Root-token economy is reported per row with authority and missingness explicit.
+For control arms it is the sum of Unicode characters in tool outputs entering
+the root context divided by four. For Azdaja, successful depth-0 model-trace
+`input_tokens` are preferred; if unavailable, the exact counted root request in
+the solo transcript is divided by four. Aggregates never silently substitute
+zero for missing evidence.
+
+Operational failures are normalized with the disclosed precedence
+`root_context_leak`, `adapter_parser`, `transport`, `timeout`, `depth`,
+`monty_subset_tax`, `other_execution`; each scored failure also retains its raw
+runner failure object. The report includes a candidate version stamp for all
+three frozen components plus the candidate binary and executed Azdaja identity.
+Scoring fails unless the candidate `azdaja` SHA-256 and byte count exactly equal
+the executable actually scheduled.
+
 ## Release review / tests
 
 Before publication, reviewers should procedurally verify: the recorded plan hash

@@ -53,6 +53,20 @@ def private_bytes(path: Path, value: bytes) -> None:
     path.chmod(0o600)
 
 
+def synthetic_root_transcript(request: str) -> bytes:
+    request_id = json.dumps("synthetic-request")
+    model = json.dumps(SCORE.MODEL)
+    return (
+        f"\n=== root request begin request_id={request_id} model={model} "
+        f"request_chars={len(request)} ===\n{request}"
+        f"\n=== root request end request_id={request_id} ===\n"
+        f"=== turn 0 request_id={request_id} attempt=1 session_id=\"session\" "
+        f"category=turn outcome=succeeded degraded_transport=false "
+        f"failed_attempts_before_success=0 provider=\"openai\" model={model} "
+        f"input=1 output=1 cache_read=0 latency_ms=1 ===\nreply\n"
+    ).encode("utf-8")
+
+
 def make_writable(root: Path) -> None:
     if not root.exists():
         return
@@ -185,8 +199,8 @@ class RunnerTests(unittest.TestCase):
             path = f"/frozen/{name}"
             executables[name] = {
                 "path": path,
-                "sha256": digit * 64,
-                "bytes": 11,
+                "sha256": ("2" * 64 if name == "azdaja" else digit * 64),
+                "bytes": (2 if name == "azdaja" else 11),
                 "version": f"{name} test",
                 "version_command": [path, "--version"],
             }
@@ -653,20 +667,30 @@ class RunnerTests(unittest.TestCase):
 
     def artifact_receipt(self, path: Path):
         data = path.read_bytes()
+        digest = hashlib.sha256(data).hexdigest()
         return {
             "path": str(path),
-            "sha256": hashlib.sha256(data).hexdigest(),
+            "sha256": digest,
             "bytes": len(data),
             "mode": "0600",
             "contains_private_raw_trajectory": False,
             "credential_redacted": True,
             "sensitivity": "redacted retained trace",
+            **(
+                {"source_sha256_before_redaction": digest, "exact_text_preserved": True}
+                if path.name in {"azdaja-model-usage.jsonl", "azdaja-solo-trace.log"}
+                else {}
+            ),
         }
 
     def load_binding_adapter(self, original_arm_for, *, original_cleanup_run=None):
         source_adapter = RUN._load_python(
             "lb2_binding_source_" + os.urandom(4).hex(), RUN.OOLONG_SOURCE
         )
+        # These unit tests replace the loaded frozen module with a deterministic
+        # adapter double.  Pin its contract to LongBench rather than inheriting
+        # unrelated in-progress OOLONG campaign arm ordering from the worktree.
+        source_adapter.ARMS = RUN.ARMS
         source = RUN.OOLONG_SOURCE.read_bytes()
         frozen_root = self.root / ("binding-frozen-" + os.urandom(4).hex())
         frozen_root.mkdir(mode=0o700)
@@ -936,7 +960,7 @@ class RunnerTests(unittest.TestCase):
                     for row in trace_rows
                 ),
             )
-            private_bytes(state["solo_trace"], b"deterministic solo trace\n")
+            private_bytes(state["solo_trace"], synthetic_root_transcript("safe root request"))
             return 0, stdout, "", False, 0.25
 
         work_root = self.root / "transport-incident-runs"
@@ -990,6 +1014,9 @@ class RunnerTests(unittest.TestCase):
             schedule,
             raw_response=raw_response,
             trajectory_artifacts=adapter_row["trajectory_artifacts"],
+            stdout_bytes=(run_dir / "stdout.ndjson").read_bytes(),
+            root_trace_bytes=(run_dir / "azdaja-solo-trace.log").read_bytes(),
+            public_context="Context 0.",
         )
         # This exercises the scorer's full terminal-row contract: a detailed false
         # route is an accepted execution failure, never a degraded success.
@@ -1171,7 +1198,11 @@ class RunnerTests(unittest.TestCase):
         work_root = self.root / "cleanup-exception-work"
         args = argparse.Namespace(
             timeout=10, seed=RUN.DEFAULT_SEED, jcode="jcode",
-            executable_identities={},
+            executable_identities={
+                "jcode": {"path": "/frozen/jcode", "sha256": "c" * 64,
+                          "bytes": 1, "version": "test",
+                          "version_command": ["/frozen/jcode", "--version"]},
+            },
         )
         with mock.patch.object(adapter, "execute", side_effect=successful_execute):
             row = adapter.run_one(
@@ -1622,6 +1653,12 @@ class RunnerTests(unittest.TestCase):
         kernel = Path.home() / ".prime" / "agent" / "kernel-venv"
         if any(value is None for value in required.values()) or not (kernel / "bin" / "python").exists():
             self.skipTest("Prime/Jcode/Node/kernel runtime closure is unavailable")
+        source_adapter = RUN._load_python(
+            "lb2_actual_contract_" + os.urandom(4).hex(), RUN.OOLONG_SOURCE
+        )
+        adapter_arms = tuple(getattr(source_adapter, "ARMS", ()))
+        if len(adapter_arms) != len(RUN.ARMS) or set(adapter_arms) != set(RUN.ARMS):
+            self.skipTest("working OOLONG adapter arm contract is incompatible")
         manifest, _, _ = self.make_public()
         suite = RUN.capture_public_suite(manifest)
         candidate = self.root / "candidate-source"
@@ -1714,6 +1751,107 @@ class RunnerTests(unittest.TestCase):
         artifact_schedule["jobs"] = [job]
         RUN.validate_retained_prefix_artifacts(work, artifact_schedule, [row])
 
+
+
+    def test_build_schedule_independently_rejects_candidate_binary_hash_mismatch(self):
+        manifest, _, _ = self.make_public()
+        suite = RUN.capture_public_suite(manifest)
+        valid = self.fake_schedule(suite)["configuration"]
+        candidate = copy.deepcopy(valid["candidate"])
+        candidate["components"]["azdaja"]["sha256"] = "9" * 64
+        candidate["sha256"] = SCORE.sha256_bytes(
+            SCORE.canonical_json_bytes(candidate["components"])
+        )
+        with self.assertRaisesRegex(RUN.BenchError, "component/executable"):
+            RUN.build_schedule(
+                suite, seed=RUN.DEFAULT_SEED, timeout=60,
+                candidate=candidate, controller=valid["controller"],
+                executables=valid["executables"],
+                runtime_closure=valid["runtime_closure"],
+            )
+
+    def test_transform_legacy_missing_root_transcript_is_terminal_trace_failure(self):
+        manifest, _, _ = self.make_public()
+        suite = RUN.capture_public_suite(manifest)
+        schedule = self.fake_schedule(suite)
+        job = next(item for item in schedule["jobs"] if item["arm"] == "jcode-azdaja")
+        run_dir = self.root / "legacy-transform"
+        run_dir.mkdir(mode=0o700)
+        private_bytes(run_dir / "stdout.ndjson", b"")
+        private_bytes(run_dir / "stderr.log", b"")
+        artifacts = {
+            "stdout": self.artifact_receipt(run_dir / "stdout.ndjson"),
+            "stderr": self.artifact_receipt(run_dir / "stderr.log"),
+        }
+        context = "safe public context"
+        base = RUN.controller_failure_row(
+            job, schedule, "synthetic", artifacts, public_context=context
+        )
+        row = RUN.transform_adapter_row(
+            base, job, schedule, raw_response="", trajectory_artifacts=artifacts,
+            stdout_bytes=b"", root_trace_bytes=None, public_context=context,
+        )
+        self.assertFalse(row["execution_success"])
+        self.assertEqual(row["failure"]["kind"], "trace_capture")
+        self.assertFalse(row["root_context_leak_assertion"]["trace_valid"])
+        RUN._verify_row_live(row, job, schedule, suite)
+
+    def test_transform_exact_root_context_leak_has_terminal_precedence(self):
+        manifest, _, _ = self.make_public()
+        suite = RUN.capture_public_suite(manifest)
+        schedule = self.fake_schedule(suite)
+        job = next(item for item in schedule["jobs"] if item["arm"] == "jcode-azdaja")
+        run_dir = self.root / "leak-transform"
+        run_dir.mkdir(mode=0o700)
+        private_bytes(run_dir / "stdout.ndjson", b"")
+        private_bytes(run_dir / "stderr.log", b"")
+        artifacts = {
+            "stdout": self.artifact_receipt(run_dir / "stdout.ndjson"),
+            "stderr": self.artifact_receipt(run_dir / "stderr.log"),
+        }
+        context = "Ω" * 120
+        base = RUN.controller_failure_row(
+            job, schedule, "synthetic", artifacts, public_context=context
+        )
+        trace = synthetic_root_transcript("prefix" + context + "suffix")
+        row = RUN.transform_adapter_row(
+            base, job, schedule, raw_response="", trajectory_artifacts=artifacts,
+            stdout_bytes=b"", root_trace_bytes=trace, public_context=context,
+        )
+        self.assertFalse(row["execution_success"])
+        self.assertEqual(row["failure"]["kind"], "root_context_leak")
+        self.assertTrue(row["root_context_leak_assertion"]["leak_detected"])
+        RUN._verify_row_live(row, job, schedule, suite)
+
+    def test_transform_control_missing_usage_uses_tool_output_char_fallback(self):
+        manifest, _, _ = self.make_public()
+        suite = RUN.capture_public_suite(manifest)
+        schedule = self.fake_schedule(suite)
+        job = next(item for item in schedule["jobs"] if item["arm"] == "jcode-native")
+        run_dir = self.root / "control-economy-transform"
+        run_dir.mkdir(mode=0o700)
+        stdout = (json.dumps({
+            "type": "tool_done", "id": "call-1", "output": "abcdefgh"
+        }, separators=(",", ":")) + "\n").encode()
+        private_bytes(run_dir / "stdout.ndjson", stdout)
+        private_bytes(run_dir / "stderr.log", b"")
+        artifacts = {
+            "stdout": self.artifact_receipt(run_dir / "stdout.ndjson"),
+            "stderr": self.artifact_receipt(run_dir / "stderr.log"),
+        }
+        base = RUN.controller_failure_row(job, schedule, "synthetic", artifacts)
+        row = RUN.transform_adapter_row(
+            base, job, schedule, raw_response="", trajectory_artifacts=artifacts,
+            stdout_bytes=stdout,
+        )
+        economy = row["root_token_economy"]
+        self.assertTrue(economy["available"])
+        self.assertEqual(economy["tokens"], 2.0)
+        self.assertEqual(
+            economy["authority"],
+            "exact_control_tool_output_unicode_characters_div_4",
+        )
+        RUN._verify_row_live(row, job, schedule, suite)
 
 
 if __name__ == "__main__":

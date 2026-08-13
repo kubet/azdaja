@@ -75,6 +75,9 @@ WRAPPER_TEMPLATE = (
 SAFE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,191}\Z")
 SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 STAGED_NAME_RE = re.compile(r"[0-9a-f]{32}\.txt\Z")
+ROOT_LEAK_MIN_CHARS = 100
+_ROLLING_HASH_BASE = 1_000_003
+_ROLLING_HASH_MASK = (1 << 64) - 1
 
 
 class BenchError(RuntimeError):
@@ -144,6 +147,74 @@ def sha256_path(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _rolling_windows(text: str, width: int) -> Iterable[tuple[int, int]]:
+    """Yield (offset, uint64 hash) for exact Unicode-code-point windows."""
+    if width <= 0 or len(text) < width:
+        return
+    power = pow(_ROLLING_HASH_BASE, width - 1, 1 << 64)
+    value = 0
+    for char in text[:width]:
+        value = (value * _ROLLING_HASH_BASE + ord(char) + 1) & _ROLLING_HASH_MASK
+    yield 0, value
+    for offset in range(1, len(text) - width + 1):
+        value = (
+            (value - (ord(text[offset - 1]) + 1) * power) * _ROLLING_HASH_BASE
+            + ord(text[offset + width - 1]) + 1
+        ) & _ROLLING_HASH_MASK
+        yield offset, value
+
+
+def exact_unicode_substring_present(
+    public_payload: str, root_transcript: str, *, minimum_chars: int = ROOT_LEAK_MIN_CHARS
+) -> bool:
+    """Detect an exact common code-point substring without retaining matched text."""
+    if type(minimum_chars) is not int or minimum_chars <= 0:
+        raise BenchError("root-context leak threshold must be a positive integer")
+    if len(public_payload) < minimum_chars or len(root_transcript) < minimum_chars:
+        return False
+    # Index the shorter stream's hashes. Hash equality is only a candidate: every
+    # code point is then compared exactly, so uint64 collisions cannot create a hit.
+    if len(public_payload) <= len(root_transcript):
+        indexed, scanned = public_payload, root_transcript
+    else:
+        indexed, scanned = root_transcript, public_payload
+    candidates: dict[int, list[int]] = {}
+    for offset, value in _rolling_windows(indexed, minimum_chars):
+        candidates.setdefault(value, []).append(offset)
+    for scanned_offset, value in _rolling_windows(scanned, minimum_chars):
+        for indexed_offset in candidates.get(value, ()):
+            if all(
+                scanned[scanned_offset + delta] == indexed[indexed_offset + delta]
+                for delta in range(minimum_chars)
+            ):
+                return True
+    return False
+
+
+def root_context_leak_audit(payload_data: bytes, trace_data: bytes) -> dict[str, Any]:
+    """Audit the exact UTF-8 payload and exact retained solo transcript."""
+    try:
+        payload = payload_data.decode("utf-8")
+        trace = trace_data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise BenchError(f"root-context leak inputs must be exact UTF-8: {exc}") from exc
+    detected = exact_unicode_substring_present(payload, trace)
+    return {
+        "applicable": True,
+        "scanned": True,
+        "detected": detected,
+        "minimum_match_chars": ROOT_LEAK_MIN_CHARS,
+        "payload_chars": len(payload),
+        "trace_chars": len(trace),
+        "payload_sha256": sha256_bytes(payload_data),
+        "trace_sha256": sha256_bytes(trace_data),
+        "algorithm": "uint64 polynomial rolling hash plus exact Unicode-code-point verification",
+        "normalization": "none",
+        "exemptions": "none",
+        "matched_text_retained": False,
+    }
 
 
 def _reject_constant(value: str) -> None:
@@ -932,6 +1003,23 @@ def validate_candidate_snapshot(candidate: Any) -> Path:
     return root
 
 
+def validate_candidate_executable_binding(
+    candidate: dict[str, Any], executables: dict[str, Any]
+) -> None:
+    """Require the snapshotted candidate binary to be the executed Azdaja bytes."""
+    try:
+        component = candidate["components"]["azdaja"]
+        executable = executables["azdaja"]
+    except (KeyError, TypeError) as exc:
+        raise BenchError("candidate/Azdaja executable binding is missing") from exc
+    if not isinstance(component, dict) or not isinstance(executable, dict):
+        raise BenchError("candidate/Azdaja executable binding is invalid")
+    if any(component.get(key) != executable.get(key) for key in ("sha256", "bytes")):
+        raise BenchError(
+            "candidate azdaja component hash/bytes differ from the executed Azdaja binary"
+        )
+
+
 def build_schedule(
     suite: PublicSuite,
     *,
@@ -1634,8 +1722,14 @@ def _normalized_route(
     }
 
 
-def capture_trace_artifact_secure(path: Path, label: str) -> dict[str, Any]:
-    """Redact and seal one stopped-writer trace through a single O_NOFOLLOW fd."""
+def capture_trace_artifact_secure(
+    path: Path, label: str, *, preserve_exact: bool = False
+) -> dict[str, Any]:
+    """Seal one stopped-writer trace through a single O_NOFOLLOW fd.
+
+    The solo transcript is an exact audit authority. It is never normalized or
+    rewritten; capture fails if the credential scanner would have changed it.
+    """
     nofollow = getattr(os, "O_NOFOLLOW", None)
     if nofollow is None:
         raise BenchError(f"this platform cannot securely capture {label}")
@@ -1664,10 +1758,15 @@ def capture_trace_artifact_secure(path: Path, label: str) -> dict[str, Any]:
             redacted = OOLONG.redact_sensitive(raw.decode("utf-8")).encode("utf-8")
         except UnicodeError as exc:
             raise BenchError(f"{label} is not UTF-8: {exc}") from exc
-        if redacted != raw:
+        if preserve_exact and redacted != raw:
+            raise BenchError(
+                f"{label} contains credential-shaped text and cannot be retained as exact audit evidence"
+            )
+        sealed = raw if preserve_exact else redacted
+        if sealed != raw:
             os.lseek(fd, 0, os.SEEK_SET)
             os.ftruncate(fd, 0)
-            view = memoryview(redacted)
+            view = memoryview(sealed)
             while view:
                 written = os.write(fd, view)
                 if written <= 0:
@@ -1682,15 +1781,15 @@ def capture_trace_artifact_secure(path: Path, label: str) -> dict[str, Any]:
             stat.S_ISLNK(lexical.st_mode)
             or not stat.S_ISREG(lexical.st_mode)
             or (lexical.st_dev, lexical.st_ino) != (final.st_dev, final.st_ino)
-            or final.st_size != len(redacted)
+            or final.st_size != len(sealed)
         ):
             raise BenchError(f"{label} path identity changed during capture")
     finally:
         os.close(fd)
     return {
         "path": str(path),
-        "sha256": sha256_bytes(redacted),
-        "bytes": len(redacted),
+        "sha256": sha256_bytes(sealed),
+        "bytes": len(sealed),
         "mode": "0600",
         "contains_private_raw_trajectory": False,
         "credential_redacted": True,
@@ -1833,7 +1932,8 @@ def execute_product_arm(
                 continue
             try:
                 trajectory_artifacts[trace_name] = capture_trace_artifact_secure(
-                    trace_path, trace_name
+                    trace_path, trace_name,
+                    preserve_exact=(trace_name == "azdaja_solo_trace"),
                 )
                 retained.add(trace_path.name)
                 trace_captured.add(trace_name)
@@ -1869,6 +1969,27 @@ def execute_product_arm(
         "captured": sorted(trace_captured),
         "missing": sorted(expected_traces - trace_captured),
     }
+    root_leak_audit: dict[str, Any] = {
+        "applicable": job["arm"] == "jcode-azdaja",
+        "scanned": False,
+        "detected": False,
+        "minimum_match_chars": ROOT_LEAK_MIN_CHARS,
+        "matched_text_retained": False,
+        "missing_reason": (
+            "AZDAJA_SOLO_TRACE was not captured"
+            if job["arm"] == "jcode-azdaja" else "not applicable to control arm"
+        ),
+    }
+    if job["arm"] == "jcode-azdaja" and "azdaja_solo_trace" in trace_captured:
+        solo_path = trace_paths["azdaja_solo_trace"]
+        try:
+            solo_data = read_owner_file_once(
+                solo_path, "exact AZDAJA_SOLO_TRACE", exact_mode=0o600
+            )
+            root_leak_audit = root_context_leak_audit(fixture.payload_data, solo_data)
+        except Exception as exc:
+            root_leak_audit["missing_reason"] = f"exact solo trace scan failed: {type(exc).__name__}: {exc}"
+            cleanup_errors.append(root_leak_audit["missing_reason"])
     if job["arm"] == "jcode-azdaja":
         product_lifecycle = OOLONG.direct_solo_lifecycle_assertion(
             exit_code=exit_code,
@@ -1916,13 +2037,22 @@ def execute_product_arm(
         and normalized_usage is not None
         and lifecycle["asserted"]
         and trace_assertion["asserted"]
+        and (job["arm"] != "jcode-azdaja" or (
+            root_leak_audit.get("scanned") is True
+            and root_leak_audit.get("detected") is False
+        ))
         and payload_asserted
         and skill_asserted
         and tool_policy.get("asserted") is True
     )
     failure: dict[str, Any] | None = None
     if not execution_success:
-        if execution_error is not None:
+        if root_leak_audit.get("detected") is True:
+            kind, message = (
+                "root_context_leak",
+                f"exact public payload and root transcript share at least {ROOT_LEAK_MIN_CHARS} Unicode characters",
+            )
+        elif execution_error is not None:
             kind, message = "execution", execution_error
         elif timed_out:
             kind, message = "timeout", "arm exceeded the frozen timeout"
@@ -1938,6 +2068,8 @@ def execute_product_arm(
             kind, message = "lifecycle_assertion", "fresh isolated lifecycle or cleanup was not verified"
         elif not trace_assertion["asserted"]:
             kind, message = "trace_capture", "required product traces were not captured"
+        elif job["arm"] == "jcode-azdaja" and root_leak_audit.get("scanned") is not True:
+            kind, message = "trace_capture", "exact root-context leak scan was unavailable"
         elif not payload_asserted:
             kind, message = "payload_integrity", "sealed/staged payload integrity changed"
         elif not skill_asserted:
@@ -1972,6 +2104,7 @@ def execute_product_arm(
             "payload_integrity": payload_evidence,
             "candidate_staging": staged_skill,
             "trace_capture": trace_assertion,
+            "root_context_leak": root_leak_audit,
             "tool_access_policy": tool_policy,
             "credential_cleanup": retention,
             "cleanup_errors": cleanup_errors,
@@ -2080,6 +2213,7 @@ def run_suite(args: argparse.Namespace, suite: PublicSuite) -> int:
                 for key in ("sha256", "bytes", "version")
             ):
                 raise BenchError(f"active {name} executable drifted after schedule freeze")
+        validate_candidate_executable_binding(candidate, executables)
         validate_schedule(
             schedule, suite, seed=args.seed, timeout=args.timeout,
             candidate=candidate, candidate_source_path=candidate_source_path,
@@ -2106,6 +2240,7 @@ def run_suite(args: argparse.Namespace, suite: PublicSuite) -> int:
         frozen_skill = validate_candidate_snapshot(candidate)
         controller, controller_source_paths = snapshot_controller(controller_root)
         executables = snapshot_executables(source_executables, executable_root)
+        validate_candidate_executable_binding(candidate, executables)
         if controller["sha256"] != source_controller["sha256"]:
             raise BenchError("immutable controller snapshot differs from active source")
         schedule = build_schedule(

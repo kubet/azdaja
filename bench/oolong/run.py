@@ -35,7 +35,15 @@ from typing import Any, Iterable
 
 MODEL = "gpt-5.6-luna"
 REASONING = "medium"
-ARMS = ("jcode-native", "jcode-azdaja", "prime-agent")
+ARMS = ("jcode-native", "prime-agent", "jcode-azdaja")
+CAMPAIGN_MODEL = "gpt-5.6-luna"
+CAMPAIGN_REASONING = "medium"
+CAMPAIGN_ARMS = ARMS
+CAMPAIGN_FIXTURE_COUNT = 26
+CAMPAIGN_REPETITIONS = 1
+CAMPAIGN_SEED = 20260813
+CAMPAIGN_TIMEOUT_SECONDS = 600
+CAMPAIGN_ROW_COUNT = CAMPAIGN_FIXTURE_COUNT * len(CAMPAIGN_ARMS) * CAMPAIGN_REPETITIONS
 JCODE_PROVIDER = "openai"
 PRIME_PROVIDER = "openai-codex"
 SCHEMA_VERSION = 1
@@ -562,16 +570,16 @@ def skill_component_hashes(skill: Path, staged_skill: Path | None = None) -> dic
     files: dict[str, Any] = {}
     for name in ("azdaja", "config.toml", "SKILL.md"):
         source = skill / name
-        if not source.is_file():
-            raise BenchError(f"required skill component is missing: {source}")
+        if source.is_symlink() or not source.is_file():
+            raise BenchError(f"required skill component must be a regular non-symlink file: {source}")
         entry: dict[str, Any] = {
             "source_sha256": sha256_path(source),
             "source_bytes": source.stat().st_size,
         }
         if staged_skill is not None:
             staged = staged_skill / name
-            if not staged.is_file():
-                raise BenchError(f"staged skill component is missing: {staged}")
+            if staged.is_symlink() or not staged.is_file():
+                raise BenchError(f"staged skill component must be a regular non-symlink file: {staged}")
             entry.update(
                 {
                     "staged_sha256": sha256_path(staged),
@@ -607,6 +615,16 @@ def finalize_staged_skill_hashes(manifest: dict[str, Any]) -> dict[str, Any]:
             and entry["staged_sha256"] == entry["staged_sha256_after"]
         )
         asserted = asserted and entry["unchanged_during_arm"]
+    initial_binary = result.get("staged_binary_identity")
+    if isinstance(initial_binary, dict):
+        after_binary = executable_identity(str(staged / "azdaja"), "staged azdaja")
+        result["staged_binary_identity_after"] = after_binary
+        binary_unchanged = all(
+            after_binary.get(key) == initial_binary.get(key)
+            for key in ("path", "sha256", "bytes", "version", "version_command")
+        )
+        result["staged_binary_identity_unchanged"] = binary_unchanged
+        asserted = asserted and binary_unchanged
     result["asserted_after"] = asserted
     return result
 
@@ -924,6 +942,315 @@ def json_objects(text: str) -> Iterable[dict[str, Any]]:
             yield value
 
 
+ROOT_CONTEXT_LEAK_MIN_CHARS = 100
+_ROLLING_HASH_BASE = 1_000_003
+_ROLLING_HASH_MASK = (1 << 64) - 1
+
+
+def _rolling_hash_windows(text: str, width: int) -> Iterable[tuple[int, int]]:
+    """Yield exact-Unicode rolling hashes without normalizing the input text."""
+    if width <= 0 or len(text) < width:
+        return
+    power = pow(_ROLLING_HASH_BASE, width - 1, 1 << 64)
+    value = 0
+    for char in text[:width]:
+        value = ((value * _ROLLING_HASH_BASE) + ord(char) + 1) & _ROLLING_HASH_MASK
+    yield 0, value
+    for offset in range(1, len(text) - width + 1):
+        outgoing = ord(text[offset - 1]) + 1
+        incoming = ord(text[offset + width - 1]) + 1
+        value = (value - ((outgoing * power) & _ROLLING_HASH_MASK)) & _ROLLING_HASH_MASK
+        value = ((value * _ROLLING_HASH_BASE) + incoming) & _ROLLING_HASH_MASK
+        yield offset, value
+
+
+def exact_common_substring_scan(
+    context: str, transcript: str, *, minimum_chars: int = ROOT_CONTEXT_LEAK_MIN_CHARS
+) -> dict[str, Any]:
+    """Find a common exact Unicode substring, retaining only offsets and a digest.
+
+    A match of at least ``minimum_chars`` exists iff an exact window of exactly
+    that size exists. The rolling hash is only an index: every candidate is
+    verified by an exact Python Unicode slice comparison, so hash collisions
+    cannot create a leak finding. No case folding, newline conversion, Unicode
+    normalization, or content exemption is applied.
+    """
+    if type(minimum_chars) is not int or minimum_chars <= 0:
+        raise BenchError("root-context leak threshold must be positive")
+    # Index the shorter window stream to keep the large frozen fixture scan bounded.
+    index_transcript = len(transcript) <= len(context)
+    indexed = transcript if index_transcript else context
+    scanned = context if index_transcript else transcript
+    buckets: dict[int, list[int]] = {}
+    indexed_windows = 0
+    for offset, value in _rolling_hash_windows(indexed, minimum_chars):
+        buckets.setdefault(value, []).append(offset)
+        indexed_windows += 1
+    scanned_windows = 0
+    for scan_offset, value in _rolling_hash_windows(scanned, minimum_chars):
+        scanned_windows += 1
+        for indexed_offset in buckets.get(value, ()):
+            indexed_slice = indexed[indexed_offset : indexed_offset + minimum_chars]
+            scanned_slice = scanned[scan_offset : scan_offset + minimum_chars]
+            if indexed_slice != scanned_slice:
+                continue
+            context_offset = scan_offset if index_transcript else indexed_offset
+            transcript_offset = indexed_offset if index_transcript else scan_offset
+            return {
+                "leak_detected": True,
+                "minimum_match_chars": minimum_chars,
+                "verified_match_chars": minimum_chars,
+                "context_offset_chars": context_offset,
+                "transcript_offset_chars": transcript_offset,
+                "matched_substring_sha256": hashlib.sha256(
+                    indexed_slice.encode("utf-8")
+                ).hexdigest(),
+                "context_chars": len(context),
+                "transcript_chars": len(transcript),
+                "indexed_windows": indexed_windows,
+                "scanned_windows_through_match": scanned_windows,
+                "matched_text_retained": False,
+            }
+    return {
+        "leak_detected": False,
+        "minimum_match_chars": minimum_chars,
+        "verified_match_chars": None,
+        "context_offset_chars": None,
+        "transcript_offset_chars": None,
+        "matched_substring_sha256": None,
+        "context_chars": len(context),
+        "transcript_chars": len(transcript),
+        "indexed_windows": indexed_windows,
+        "scanned_windows_through_match": scanned_windows,
+        "matched_text_retained": False,
+    }
+
+
+def scan_context_file_against_solo_trace(
+    context_path: Path,
+    transcript_path: Path | None,
+    *,
+    expected_context_sha256: str,
+    exact_transcript_preserved: bool = True,
+) -> dict[str, Any]:
+    """Hash-bind and scan exact UTF-8 context/trace Unicode code points."""
+    base: dict[str, Any] = {
+        "applicable": True,
+        "asserted": False,
+        "scan_complete": False,
+        "leak_detected": None,
+        "minimum_match_chars": ROOT_CONTEXT_LEAK_MIN_CHARS,
+        "algorithm": "uint64 polynomial rolling hash with exact Unicode slice verification",
+        "normalization": "none",
+        "exemptions": "none; the complete AZDAJA_SOLO_TRACE text is scanned",
+        "matched_text_retained": False,
+        "authority": "exact fixture UTF-8 and exact preserved AZDAJA_SOLO_TRACE UTF-8",
+        "missing_reasons": [],
+    }
+    if transcript_path is None:
+        base["missing_reasons"].append("AZDAJA_SOLO_TRACE was not captured")
+        return base
+    if not exact_transcript_preserved:
+        base["missing_reasons"].append(
+            "AZDAJA_SOLO_TRACE was transformed before exact scanning authority was retained"
+        )
+        return base
+    try:
+        context_sha = sha256_path(context_path)
+        transcript_sha = sha256_path(transcript_path)
+        context = context_path.read_bytes().decode("utf-8")
+        transcript = transcript_path.read_bytes().decode("utf-8")
+    except (OSError, UnicodeError) as exc:
+        base["missing_reasons"].append(f"cannot read exact UTF-8 scan inputs: {type(exc).__name__}: {exc}")
+        return base
+    base["context_sha256"] = context_sha
+    base["transcript_sha256"] = transcript_sha
+    if context_sha != expected_context_sha256:
+        base["missing_reasons"].append("fixture context SHA-256 differs from the frozen identity")
+        return base
+    finding = exact_common_substring_scan(context, transcript)
+    base.update(finding)
+    base["scan_complete"] = True
+    base["asserted"] = finding["leak_detected"] is False
+    return base
+
+
+def _prime_terminal_result_chars(result: Any) -> int | None:
+    """Count only canonical Prime ``result`` content text Unicode characters."""
+    if isinstance(result, str):
+        return len(result)
+    if not isinstance(result, dict):
+        return None
+    content = result.get("content")
+    if isinstance(content, str):
+        return len(content)
+    if not isinstance(content, list):
+        return None
+    total = 0
+    for part in content:
+        if not isinstance(part, dict) or not isinstance(part.get("text"), str):
+            return None
+        total += len(part["text"])
+    return total
+
+
+def tool_result_root_token_economy(name: str, stdout: str) -> dict[str, Any]:
+    """Count only the canonical terminal result event for each control.
+
+    Jcode streams may contain input deltas, output updates, and compatibility
+    aliases for a single invocation; only ``tool_done.output`` is the result
+    entering the next root turn. Prime is analogous: only
+    ``tool_execution_end.result`` content text is authoritative. This prevents
+    updates and aliases from double-counting the same tool result.
+    """
+    rows = list(json_objects(stdout))
+    if name == "jcode-native":
+        events = [row for row in rows if row.get("type") == "tool_done"]
+        counts = [len(row["output"]) if isinstance(row.get("output"), str) else None for row in events]
+        authority = "jcode tool_done.output Unicode characters entering root context divided by 4"
+        malformed_reason = "one or more jcode tool_done events lacked exact text output"
+    elif name == "prime-agent":
+        events = [row for row in rows if row.get("type") == "tool_execution_end"]
+        counts = [_prime_terminal_result_chars(row.get("result")) for row in events]
+        authority = (
+            "Prime tool_execution_end.result content text Unicode characters "
+            "entering root context divided by 4"
+        )
+        malformed_reason = (
+            "one or more Prime tool_execution_end events lacked exact result content text"
+        )
+    else:
+        raise BenchError(f"unsupported control arm for root-token economy: {name}")
+
+    malformed = sum(value is None for value in counts)
+    stream_authority = bool(rows)
+    missing = not stream_authority or malformed > 0
+    result_chars = sum(value for value in counts if value is not None)
+    return {
+        "root_input_tokens": None if missing else result_chars / 4.0,
+        "source_characters": None if missing else result_chars,
+        "authority": authority,
+        "authority_kind": "missing" if missing else "character_fallback",
+        "estimated": None if missing else True,
+        "missing": missing,
+        "result_events": len(events),
+        "malformed_result_events": malformed,
+        "reasons": (
+            (["missing structured root event stream"] if not stream_authority else [])
+            + ([malformed_reason] if malformed else [])
+        ),
+    }
+
+
+_ROOT_REQUEST_BEGIN = re.compile(
+    r"(?:^|\n)=== root request begin [^\n]*request_chars=([0-9]+) ===\n"
+)
+_ROOT_REQUEST_END = re.compile(r"\n=== root request end [^\n]* ===(?:\n|$)")
+
+
+def exact_solo_root_request_chars(transcript: str) -> int | None:
+    """Return the verified exact Unicode length of the sole traced root request."""
+    begins = list(_ROOT_REQUEST_BEGIN.finditer(transcript))
+    if len(begins) != 1:
+        return None
+    ends = [match for match in _ROOT_REQUEST_END.finditer(transcript) if match.start() >= begins[0].end()]
+    if len(ends) != 1:
+        return None
+    declared = int(begins[0].group(1))
+    request = transcript[begins[0].end() : ends[0].start()]
+    return declared if len(request) == declared else None
+
+
+def azdaja_root_token_economy(
+    trace_usage: dict[str, Any] | None,
+    solo_trace_path: Path | None,
+    route_evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    depth_zero = None if trace_usage is None else trace_usage.get("depth_usage", {}).get("0")
+    value = (
+        _nonnegative_int(depth_zero.get("input_tokens"))
+        if isinstance(depth_zero, dict)
+        else None
+    )
+    if value is None and isinstance(route_evidence, dict):
+        value = _nonnegative_int(route_evidence.get("depth_zero_input_tokens"))
+    if value is not None:
+        return {
+            "root_input_tokens": value,
+            "source_characters": None,
+            "authority": "AZDAJA_MODEL_TRACE depth=0 input_tokens",
+            "authority_kind": "provider_usage",
+            "estimated": False,
+            "missing": False,
+            "reasons": [],
+        }
+    if solo_trace_path is not None:
+        try:
+            transcript = solo_trace_path.read_bytes().decode("utf-8")
+        except (OSError, UnicodeError):
+            transcript = ""
+        chars = exact_solo_root_request_chars(transcript)
+        if chars is not None:
+            return {
+                "root_input_tokens": chars / 4.0,
+                "source_characters": chars,
+                "authority": "verified AZDAJA_SOLO_TRACE root request characters divided by 4",
+                "authority_kind": "character_fallback",
+                "estimated": True,
+                "missing": False,
+                "reasons": ["depth-0 provider usage was unavailable"],
+            }
+    return {
+        "root_input_tokens": None,
+        "source_characters": None,
+        "authority": None,
+        "authority_kind": "missing",
+        "estimated": None,
+        "missing": True,
+        "reasons": ["depth-0 provider usage and a verified exact traced root request were unavailable"],
+    }
+
+
+def normalize_failure_kind(failure: dict[str, Any] | None) -> str | None:
+    """Map raw execution failures into the frozen, reportable taxonomy."""
+    if failure is None:
+        return None
+    raw_kind = failure.get("kind")
+    raw_failure = {key: value for key, value in failure.items() if key != "normalized_kind"}
+    text = json.dumps(raw_failure, sort_keys=True, ensure_ascii=False).lower()
+    if raw_kind == "root_context_leak" or "root_context_leak" in text:
+        return "root_context_leak"
+    if raw_kind == "timeout" or re.search(r"\b(?:timed? out|timeout)\b", text):
+        return "timeout"
+    if raw_kind in {"depth", "depth_limit"} or re.search(
+        r"(?:maximum|max|exceeded|exhausted|limit|budget).{0,32}(?:depth|recursion)|"
+        r"(?:depth|recursion).{0,32}(?:maximum|max|exceeded|exhausted|limit|budget)",
+        text,
+    ):
+        return "depth"
+    if raw_kind == "monty_subset_tax" or re.search(
+        r"monty|python[- ]subset|subset.{0,24}(?:syntax|runtime)|"
+        r"unsupported.{0,24}(?:syntax|import|operation|python)|compile error|"
+        r"solo root python compile error|solo solve (?:cell runtime error|invalid regular expression)",
+        text,
+    ):
+        return "monty_subset_tax"
+    if raw_kind == "adapter_parser" or re.search(
+        r"adapter.{0,32}pars|pars.{0,32}adapter|response parser|solo root protocol|"
+        r"malformed.{0,24}(?:adapter|provider response|event stream)",
+        text,
+    ):
+        return "adapter_parser"
+    if raw_kind in {"route_assertion", "trace_capture", "usage_evidence", "transport"} or re.search(
+        r"provider_call_failed|session_setup|transport|oauth|authentication|"
+        r"connection|socket|http [45][0-9][0-9]|rate.?limit|service unavailable|"
+        r"provider/model/api route|root provider|provider (?:turn|call|request).{0,32}(?:fail|unavailable|did not run)",
+        text,
+    ):
+        return "transport"
+    return "other_execution"
+
+
 def empty_usage() -> dict[str, int | None]:
     return {
         "input_tokens": None,
@@ -1041,6 +1368,8 @@ def parse_azdaja_route_evidence(path: Path | None) -> dict[str, Any] | None:
     routes: set[str] = set()
     depth_counts: dict[str, int] = {}
     error_depth_counts: dict[str, int] = {}
+    depth_zero_input_tokens = 0
+    depth_zero_usage_valid = True
     for line in raw_rows:
         try:
             row = json.loads(line)
@@ -1070,12 +1399,23 @@ def parse_azdaja_route_evidence(path: Path | None) -> dict[str, Any] | None:
             return None
         routes.add(f"{provider}/{model}")
         depth_counts[depth_key] = depth_counts.get(depth_key, 0) + 1
+        if depth == 0:
+            input_tokens = _nonnegative_int(row.get("input_tokens"))
+            if input_tokens is None:
+                depth_zero_usage_valid = False
+            else:
+                depth_zero_input_tokens += input_tokens
     return {
         "routes": sorted(routes),
         "depth_counts": depth_counts,
         "transport_error_rows": sum(error_depth_counts.values()),
         "transport_error_depth_counts": error_depth_counts,
         "all_rows_structurally_valid": True,
+        "depth_zero_input_tokens": (
+            depth_zero_input_tokens
+            if depth_counts.get("0", 0) > 0 and depth_zero_usage_valid
+            else None
+        ),
     }
 
 
@@ -1718,17 +2058,23 @@ def capture_trace_artifact(path: Path) -> dict[str, Any]:
     meta = path.lstat()
     if stat.S_ISLNK(meta.st_mode) or not stat.S_ISREG(meta.st_mode):
         raise BenchError(f"azdaja trace is not a regular non-symlink file: {path}")
-    # Solo traces include generated code/results. Preserve the full trace but
-    # apply the same non-truncating credential redaction as stdout/stderr.
-    content = path.read_text(encoding="utf-8")
+    # Preserve an explicit pre-redaction identity. Exact root-context validation
+    # is authoritative only when credential filtering did not transform the trace.
+    source_data = path.read_bytes()
+    content = source_data.decode("utf-8")
+    source_sha256 = hashlib.sha256(source_data).hexdigest()
     redacted = redact_sensitive(content)
-    if redacted != content:
+    exact_text_preserved = redacted == content
+    if not exact_text_preserved:
         path.write_text(redacted, encoding="utf-8")
     if os.name == "posix":
         os.chmod(path, 0o600)
+    retained_sha256 = sha256_path(path)
     return {
         "path": str(path),
-        "sha256": sha256_path(path),
+        "sha256": retained_sha256,
+        "source_sha256_before_redaction": source_sha256,
+        "exact_text_preserved": exact_text_preserved,
         "bytes": path.stat().st_size,
         "mode": "0600",
         "contains_private_raw_trajectory": False,
@@ -1844,6 +2190,7 @@ def run_one(
     defer_scoring: bool = False,
 ) -> dict[str, Any]:
     del root, prompt  # Inference prompts/cwd are always rebuilt from the staged copy.
+    frozen_suite = bool(getattr(args, "oolong_private_frozen_suite", False))
     run_dir = work_root / f"r{repetition:03d}-{ordinal:03d}-{arm_name}"
     try:
         run_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -1868,6 +2215,7 @@ def run_one(
     trajectory_artifacts: dict[str, Any] = {}
     retained_names: set[str] = set()
     trace_captured: set[str] = set()
+    root_context_pre_capture_scan: dict[str, Any] | None = None
 
     try:
         task_dir, task_context, context_integrity = stage_task_context(fixture, run_dir)
@@ -1915,6 +2263,13 @@ def run_one(
             if not trace_path.exists():
                 continue
             try:
+                if trace_name == "azdaja_solo_trace":
+                    root_context_pre_capture_scan = scan_context_file_against_solo_trace(
+                        fixture.context_path,
+                        trace_path,
+                        expected_context_sha256=fixture.context_sha256,
+                        exact_transcript_preserved=True,
+                    )
                 trajectory_artifacts[trace_name] = capture_trace_artifact(trace_path)
                 retained_names.add(trace_path.name)
                 trace_captured.add(trace_name)
@@ -1935,6 +2290,32 @@ def run_one(
         else None
     )
     route = runtime_assertion(arm_name, stdout, azdaja_route_evidence)
+    solo_trace = trace_paths.get("azdaja_solo_trace")
+    if arm_name == "jcode-azdaja":
+        solo_meta = trajectory_artifacts.get("azdaja_solo_trace")
+        root_context_leak_assertion = (
+            root_context_pre_capture_scan
+            if root_context_pre_capture_scan is not None
+            else scan_context_file_against_solo_trace(
+                fixture.context_path,
+                solo_trace if "azdaja_solo_trace" in trace_captured else None,
+                expected_context_sha256=fixture.context_sha256,
+                exact_transcript_preserved=(
+                    isinstance(solo_meta, dict)
+                    and solo_meta.get("exact_text_preserved") is True
+                ),
+            )
+        )
+    else:
+        root_context_leak_assertion = {
+            "applicable": False,
+            "asserted": True,
+            "scan_complete": True,
+            "leak_detected": False,
+            "minimum_match_chars": ROOT_CONTEXT_LEAK_MIN_CHARS,
+            "authority": "not applicable to a non-Azdaja control arm",
+            "matched_text_retained": False,
+        }
     execution_parse_error = (
         execution_error
         if execution_error is not None
@@ -1945,13 +2326,25 @@ def run_one(
         if defer_scoring
         else (
             strict_score(response, fixture)
-            if execution_error is None and exit_code == 0 and not timed_out
+            if (
+                execution_error is None
+                and exit_code == 0
+                and not timed_out
+                and (
+                    not frozen_suite
+                    or root_context_leak_assertion.get("asserted") is True
+                )
+            )
             else {
                 "correct": False,
                 "strict_exact": True,
                 "expected": fixture.expected_canonical,
                 "parsed_value": None,
-                "parse_error": execution_parse_error,
+                "parse_error": (
+                    "root_context_leak: exact fixture substring entered the Azdaja root transcript"
+                    if root_context_leak_assertion.get("leak_detected") is True
+                    else execution_parse_error
+                ),
             }
         )
     )
@@ -1964,6 +2357,14 @@ def run_one(
         effective_usage = usage_fields_from_azdaja(azdaja_usage)
         efficiency_evidence = direct_solo_usage_evidence(
             effective_usage, azdaja_usage
+        )
+        root_token_economy = azdaja_root_token_economy(
+            azdaja_usage,
+            solo_trace if (
+                "azdaja_solo_trace" in trace_captured
+                and root_context_leak_assertion.get("scan_complete") is True
+            ) else None,
+            azdaja_route_evidence,
         )
         lifecycle = direct_solo_lifecycle_assertion(
             exit_code=exit_code,
@@ -1984,6 +2385,7 @@ def run_one(
             subusage_required=False,
             azdaja_usage=None,
         )
+        root_token_economy = tool_result_root_token_economy(arm_name, stdout)
         lifecycle = {
             "asserted": True,
             "requirement": "not applicable: non-product control arm",
@@ -2011,7 +2413,16 @@ def run_one(
     )
 
     failure: dict[str, Any] | None = None
-    if execution_error is not None:
+    if frozen_suite and root_context_leak_assertion.get("leak_detected") is True:
+        failure = {
+            "kind": "root_context_leak",
+            "message": (
+                f"exact fixture substring of at least {ROOT_CONTEXT_LEAK_MIN_CHARS} "
+                "Unicode characters occurred in the complete Azdaja root transcript"
+            ),
+            "stderr": bounded(stderr),
+        }
+    elif execution_error is not None:
         failure = {"kind": "execution", "message": execution_error, "stderr": bounded(stderr)}
     elif timed_out:
         failure = {"kind": "timeout", "message": execution_parse_error, "stderr": bounded(stderr)}
@@ -2031,10 +2442,20 @@ def run_one(
             "message": "direct azdaja solo lifecycle lacked a successful result or valid depth-0 model call",
             "stderr": bounded(stderr),
         }
-    elif not trace_capture_assertion["asserted"]:
+    elif (
+        not trace_capture_assertion["asserted"]
+        or (
+            frozen_suite
+            and root_context_leak_assertion.get("scan_complete") is not True
+        )
+    ):
         failure = {
             "kind": "trace_capture",
-            "message": f"required product traces were not captured: {trace_capture_assertion['missing']}",
+            "message": (
+                f"required product traces were not captured: {trace_capture_assertion['missing']}"
+                if not trace_capture_assertion["asserted"]
+                else "exact root-context leak scan authority was missing"
+            ),
             "stderr": bounded(stderr),
         }
     elif not context_integrity_asserted:
@@ -2064,14 +2485,20 @@ def run_one(
     elif cleanup_errors:
         failure = {"kind": "cleanup", "message": "; ".join(cleanup_errors), "stderr": bounded(stderr)}
 
+    if failure is not None:
+        failure["normalized_kind"] = normalize_failure_kind(failure)
+
     assert arm is not None and task_dir is not None and task_context is not None
     executable_identities = getattr(args, "executable_identities", {})
-    arm_executables: dict[str, Any] = {}
-    executable_key = "jcode" if arm_name.startswith("jcode") else "prime-agent"
-    if executable_key in executable_identities:
-        arm_executables[executable_key] = executable_identities[executable_key]
-    if arm_name == "jcode-azdaja" and "azdaja" in executable_identities:
-        arm_executables["azdaja"] = executable_identities["azdaja"]
+    if frozen_suite:
+        arm_executables = expected_row_executables(arm_name, executable_identities)
+    else:
+        arm_executables = {}
+        executable_key = "jcode" if arm_name.startswith("jcode") else "prime-agent"
+        if executable_key in executable_identities:
+            arm_executables[executable_key] = executable_identities[executable_key]
+        if arm_name == "jcode-azdaja" and "azdaja" in executable_identities:
+            arm_executables["azdaja"] = executable_identities["azdaja"]
     direct_solo = arm_name == "jcode-azdaja"
     treatment_input = fixture.metadata["question"] if direct_solo else arm.command[-1]
     command_prompt_index = 2 if direct_solo else -1
@@ -2135,6 +2562,8 @@ def run_one(
             "context_lines": fixture.context_lines,
         },
         "task_context_integrity": context_integrity,
+        "root_context_leak_assertion": root_context_leak_assertion,
+        "root_token_economy": root_token_economy,
         "root_usage": root_usage,
         "azdaja_model_usage": azdaja_usage,
         "usage": effective_usage,
@@ -2192,6 +2621,45 @@ def controller_identity() -> dict[str, Any]:
     return {"path": str(path), "sha256": sha256_path(path), "bytes": path.stat().st_size}
 
 
+def expected_row_executables(
+    arm: str, executables: dict[str, Any]
+) -> dict[str, Any]:
+    keys = (
+        ("jcode", "azdaja")
+        if arm == "jcode-azdaja"
+        else (("jcode",) if arm == "jcode-native" else ("prime-agent",))
+    )
+    missing = [key for key in keys if key not in executables]
+    if missing:
+        raise BenchError(f"frozen executable identities are missing for {arm}: {missing}")
+    return {key: executables[key] for key in keys}
+
+
+def assert_candidate_executable_binding(
+    candidate: dict[str, Any] | None,
+    executables: dict[str, Any],
+    arms: Iterable[str],
+) -> None:
+    treatment = "jcode-azdaja" in set(arms)
+    if not treatment:
+        if candidate is not None:
+            raise BenchError("a candidate identity is not allowed without the Azdaja arm")
+        return
+    if not isinstance(candidate, dict):
+        raise BenchError("the Azdaja arm requires a frozen candidate identity")
+    components = candidate.get("components")
+    if not isinstance(components, dict) or set(components) != {"azdaja", "config.toml", "SKILL.md"}:
+        raise BenchError("candidate identity must bind exactly azdaja, config.toml, and SKILL.md")
+    executable = executables.get("azdaja")
+    if not isinstance(executable, dict):
+        raise BenchError("the Azdaja arm requires an azdaja executable identity")
+    component = components["azdaja"]
+    if not isinstance(component, dict) or any(
+        component.get(key) != executable.get(key) for key in ("sha256", "bytes")
+    ):
+        raise BenchError("candidate azdaja component differs from executable azdaja")
+
+
 def build_suite_schedule(
     suite: Suite,
     args: argparse.Namespace,
@@ -2199,6 +2667,7 @@ def build_suite_schedule(
     controller: dict[str, Any],
     executables: dict[str, Any],
 ) -> dict[str, Any]:
+    assert_candidate_executable_binding(candidate, executables, args.arms)
     jobs: list[dict[str, Any]] = []
     rng = random.Random(args.seed)
     ordinal = 0
@@ -2306,6 +2775,18 @@ def validate_result_prefix(
                 )
         if type(row.get("execution_success")) is not bool:
             raise BenchError(f"invalid terminal execution status at line {line_number}")
+        if "executables" in schedule["configuration"]:
+            expected_executables = expected_row_executables(
+                job["arm"], schedule["configuration"]["executables"]
+            )
+            if row.get("executables") != expected_executables:
+                raise BenchError(
+                    f"suite row executable identity mismatch at line {line_number}"
+                )
+        failure = row.get("failure")
+        if isinstance(failure, dict) and "normalized_kind" in failure:
+            if failure.get("normalized_kind") != normalize_failure_kind(failure):
+                raise BenchError(f"suite row normalized failure mismatch at line {line_number}")
         if row["run_id"] in seen:
             raise BenchError(f"duplicate suite run_id at line {line_number}")
         if claims is not None:
@@ -2335,6 +2816,49 @@ def validate_result_prefix(
     return rows
 
 
+def independently_rescan_suite_root_context(
+    row: dict[str, Any], fixture: Fixture
+) -> dict[str, Any] | None:
+    """Re-open the exact retained solo transcript immediately before scoring."""
+    if row.get("arm") != "jcode-azdaja":
+        return None
+    artifacts = row.get("trajectory_artifacts")
+    metadata = (
+        artifacts.get("azdaja_solo_trace") if isinstance(artifacts, dict) else None
+    )
+    if not isinstance(metadata, dict):
+        raise BenchError("Azdaja row has no solo trace for mandatory root-context rescan")
+    raw_path = metadata.get("path")
+    if not isinstance(raw_path, str) or not raw_path:
+        raise BenchError("Azdaja solo trace artifact path is invalid")
+    path = Path(raw_path)
+    _private_regular_file(path, "Azdaja solo trace artifact")
+    if path.name != "azdaja-solo-trace.log":
+        raise BenchError("Azdaja solo trace artifact has the wrong filename")
+    if sha256_path(path) != metadata.get("sha256"):
+        raise BenchError("Azdaja solo trace artifact SHA-256 changed before scoring")
+    exact_preserved = (
+        metadata.get("exact_text_preserved") is True
+        and metadata.get("source_sha256_before_redaction") == metadata.get("sha256")
+    )
+    assertion = scan_context_file_against_solo_trace(
+        fixture.context_path,
+        path,
+        expected_context_sha256=fixture.context_sha256,
+        exact_transcript_preserved=exact_preserved,
+    )
+    if assertion != row.get("root_context_leak_assertion"):
+        raise BenchError("pre-score root-context leak rescan differs from inference row")
+    failure = row.get("failure")
+    normalized = normalize_failure_kind(failure if isinstance(failure, dict) else None)
+    if assertion.get("leak_detected") is True:
+        if row.get("execution_success") is not False or normalized != "root_context_leak":
+            raise BenchError("root_context_leak was falsely recorded as successful")
+    elif row.get("execution_success") is True and assertion.get("asserted") is not True:
+        raise BenchError("successful Azdaja row lacks an authoritative root-context leak scan")
+    return assertion
+
+
 def score_completed_suite(
     output: Path,
     scores_path: Path,
@@ -2348,7 +2872,9 @@ def score_completed_suite(
     by_id = {item.fixture_id: item.fixture for item in suite.fixtures}
     scores = []
     for row, job in zip(rows, schedule["jobs"]):
-        score = strict_score(str(row.get("response", "")), by_id[job["fixture_id"]])
+        fixture = by_id[job["fixture_id"]]
+        independently_rescan_suite_root_context(row, fixture)
+        score = strict_score(str(row.get("response", "")), fixture)
         execution_success = row.get("execution_success") is True
         scores.append(
             {
@@ -2397,9 +2923,18 @@ def parser() -> argparse.ArgumentParser:
         default=REASONING,
         help="shared reasoning level for every selected arm",
     )
-    p.add_argument("--repetitions", type=int, default=3, help="number of repetitions per arm (default: 3)")
-    p.add_argument("--seed", type=int, default=20260812, help="deterministic arm-order seed")
-    p.add_argument("--timeout", type=int, default=1800, help="timeout per arm in seconds")
+    p.add_argument(
+        "--repetitions", type=int, default=CAMPAIGN_REPETITIONS,
+        help=f"repetitions per arm (suite campaign requires {CAMPAIGN_REPETITIONS})",
+    )
+    p.add_argument(
+        "--seed", type=int, default=CAMPAIGN_SEED,
+        help=f"deterministic arm-order seed (suite campaign requires {CAMPAIGN_SEED})",
+    )
+    p.add_argument(
+        "--timeout", type=int, default=CAMPAIGN_TIMEOUT_SECONDS,
+        help=f"timeout per arm in seconds (suite campaign requires {CAMPAIGN_TIMEOUT_SECONDS})",
+    )
     p.add_argument("--arms", nargs="+", choices=ARMS, default=list(ARMS), help="arms to run")
     p.add_argument("--jcode", default="jcode", help="jcode executable")
     p.add_argument("--prime-agent", default="prime-agent", help="prime-agent executable")
@@ -2439,14 +2974,16 @@ def assert_frozen_identities(
     frozen_candidate = configuration.get("candidate")
     if frozen_candidate is not None and candidate_identity(skill) != frozen_candidate:
         raise BenchError("candidate identity drifted after schedule freeze")
+    assert_candidate_executable_binding(
+        frozen_candidate, configuration.get("executables", {}), configuration.get("arms", [])
+    )
     for label, frozen in configuration.get("executables", {}).items():
-        path = Path(str(frozen.get("path", "")))
-        if (
-            not path.is_file()
-            or path.stat().st_size != frozen.get("bytes")
-            or sha256_path(path) != frozen.get("sha256")
-        ):
-            raise BenchError(f"{label} executable drifted after schedule freeze")
+        try:
+            current = executable_identity(str(frozen.get("path", "")), label)
+        except (OSError, BenchError) as exc:
+            raise BenchError(f"{label} executable drifted after schedule freeze: {exc}") from exc
+        if current != frozen:
+            raise BenchError(f"{label} executable version/hash identity drifted after schedule freeze")
     if sha256_path(suite.path) != schedule["suite"]["manifest_sha256"]:
         raise BenchError("suite manifest drifted after schedule freeze")
     by_id = {item.fixture_id: item for item in suite.fixtures}
@@ -2463,11 +3000,46 @@ def assert_frozen_identities(
             )
 
 
+def assert_campaign_profile(args: argparse.Namespace, suite: Suite) -> None:
+    """Fail closed unless suite mode is the one certified OOLONG campaign."""
+    expected = {
+        "fixture_count": CAMPAIGN_FIXTURE_COUNT,
+        "model": CAMPAIGN_MODEL,
+        "reasoning": CAMPAIGN_REASONING,
+        "arms": CAMPAIGN_ARMS,
+        "repetitions": CAMPAIGN_REPETITIONS,
+        "seed": CAMPAIGN_SEED,
+        "timeout_seconds": CAMPAIGN_TIMEOUT_SECONDS,
+    }
+    actual = {
+        "fixture_count": len(suite.fixtures),
+        "model": args.model,
+        "reasoning": args.reasoning,
+        "arms": tuple(args.arms),
+        "repetitions": args.repetitions,
+        "seed": args.seed,
+        "timeout_seconds": args.timeout,
+    }
+    mismatches = [
+        f"{key}: expected {expected[key]!r}, got {actual[key]!r}"
+        for key in expected
+        if actual[key] != expected[key]
+    ]
+    if mismatches:
+        raise BenchError(
+            "suite mode is restricted to the frozen OOLONG campaign profile ("
+            + "; ".join(mismatches)
+            + ")"
+        )
+
+
 def run_suite(args: argparse.Namespace, suite: Suite) -> int:
     if args.context is not None:
         raise BenchError("--context is not allowed with --suite-manifest")
+    assert_campaign_profile(args, suite)
     if not args.yes_run_inference:
         raise BenchError("refusing to run inference without --yes-run-inference")
+    args.oolong_private_frozen_suite = True
     output = Path(args.output).expanduser().resolve()
     schedule_path = Path(str(output) + ".schedule.json")
     scores_path = Path(str(output) + ".scores.json")
@@ -2505,6 +3077,10 @@ def run_suite(args: argparse.Namespace, suite: Suite) -> int:
     schedule = build_suite_schedule(
         suite, args, candidate, controller_identity(), executable_identities
     )
+    if len(schedule["jobs"]) != CAMPAIGN_ROW_COUNT:
+        raise BenchError(
+            f"frozen OOLONG campaign must schedule exactly {CAMPAIGN_ROW_COUNT} rows"
+        )
     if args.resume:
         if not schedule_path.exists():
             raise BenchError("--resume requires the frozen schedule sidecar")
@@ -2594,8 +3170,30 @@ def run_suite(args: argparse.Namespace, suite: Suite) -> int:
                 "success": None,
                 "scoring_status": "deferred",
                 "response": "",
+                "executables": expected_row_executables(
+                    job["arm"], schedule["configuration"]["executables"]
+                ),
+                "root_context_leak_assertion": {
+                    "applicable": job["arm"] == "jcode-azdaja",
+                    "asserted": job["arm"] != "jcode-azdaja",
+                    "scan_complete": job["arm"] != "jcode-azdaja",
+                    "leak_detected": None if job["arm"] == "jcode-azdaja" else False,
+                    "minimum_match_chars": ROOT_CONTEXT_LEAK_MIN_CHARS,
+                    "matched_text_retained": False,
+                    "missing_reasons": ["controller exception occurred before trace scanning"],
+                },
+                "root_token_economy": {
+                    "root_input_tokens": None,
+                    "source_characters": None,
+                    "authority": None,
+                    "authority_kind": "missing",
+                    "estimated": None,
+                    "missing": True,
+                    "reasons": ["controller exception occurred before root-token accounting"],
+                },
                 "failure": {
                     "kind": "controller",
+                    "normalized_kind": "other_execution",
                     "message": f"{type(exc).__name__}: {exc}",
                 },
             }

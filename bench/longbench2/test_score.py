@@ -35,8 +35,25 @@ def sha(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def synthetic_root_transcript(request: str) -> bytes:
+    request_id = json.dumps("synthetic-request")
+    model = json.dumps(SCORE.MODEL)
+    return (
+        f"\n=== root request begin request_id={request_id} model={model} "
+        f"request_chars={len(request)} ===\n{request}"
+        f"\n=== root request end request_id={request_id} ===\n"
+        f"=== turn 0 request_id={request_id} attempt=1 session_id=\"session\" "
+        f"category=turn outcome=succeeded degraded_transport=false "
+        f"failed_attempts_before_success=0 provider=\"openai\" model={model} "
+        f"input=1 output=1 cache_read=0 latency_ms=1 ===\nreply\n"
+    ).encode("utf-8")
+
+
 class ScoreTests(unittest.TestCase):
-    def make_artifacts(self, root: Path, *, failed_job: int | None = None):
+    def make_artifacts(
+        self, root: Path, *, failed_job: int | None = None,
+        long_context: bool = False,
+    ):
         root.chmod(0o700)
         public_root = root / "public"
         gold_root = root / "gold-root"
@@ -66,7 +83,10 @@ class ScoreTests(unittest.TestCase):
             fixture_id = f"lb2-{index:032x}"
             payload = {
                 "question": f"Synthetic private question {index}?",
-                "context": f"Synthetic private context {index}.",
+                "context": (
+                    ("λ" * 140) if long_context and index == 0
+                    else f"Synthetic private context {index}."
+                ),
                 "choices": {label: f"choice {label} {index}" for label in SCORE.CHOICE_LABELS},
             }
             payload_path = payload_dir / f"{fixture_id}.json"
@@ -183,8 +203,8 @@ class ScoreTests(unittest.TestCase):
                         "version_command": ["/bin/jcode", "--version"],
                     },
                     "azdaja": {
-                        "path": "/bin/azdaja", "sha256": "d" * 64,
-                        "bytes": 14, "version": "azdaja test",
+                        "path": "/bin/azdaja", "sha256": "2" * 64,
+                        "bytes": 102, "version": "azdaja test",
                         "version_command": ["/bin/azdaja", "--version"],
                     },
                     "prime-agent": {
@@ -393,7 +413,10 @@ class ScoreTests(unittest.TestCase):
             if job["arm"] == "jcode-azdaja":
                 artifact_files.update({
                     "azdaja_model_trace": ("azdaja-model-usage.jsonl", b"{}\n"),
-                    "azdaja_solo_trace": ("azdaja-solo-trace.log", b"trace\n"),
+                    "azdaja_solo_trace": (
+                        "azdaja-solo-trace.log",
+                        synthetic_root_transcript("synthetic exact root request"),
+                    ),
                 })
             trajectory_artifacts = {}
             for artifact_name, (basename, data) in artifact_files.items():
@@ -404,6 +427,14 @@ class ScoreTests(unittest.TestCase):
                     "contains_private_raw_trajectory": False,
                     "credential_redacted": True,
                     "sensitivity": "synthetic redacted trajectory",
+                    **(
+                        {
+                            "source_sha256_before_redaction": SCORE.sha256_bytes(data),
+                            "exact_text_preserved": True,
+                        }
+                        if artifact_name in {"azdaja_model_trace", "azdaja_solo_trace"}
+                        else {}
+                    ),
                 }
             retained_basenames = sorted(value[0] for value in artifact_files.values())
             row = {
@@ -485,12 +516,31 @@ class ScoreTests(unittest.TestCase):
                     }
                 ),
                 "usage": usage,
+                "root_token_economy": None,
+                "root_context_leak_assertion": None,
                 "trajectory_artifacts": trajectory_artifacts,
                 "failure": (
                     None if execution_success
                     else {"kind": "timeout", "message": "timed out", "stderr": ""}
                 ),
             }
+            root_trace = (
+                artifact_files["azdaja_solo_trace"][1]
+                if job["arm"] == "jcode-azdaja" else None
+            )
+            root_assertion = (
+                SCORE.root_context_leak_assertion(
+                    root_trace,
+                    json.loads(
+                        (payload_dir / f"{job['fixture_id']}.json").read_text()
+                    )["context"],
+                )
+                if job["arm"] == "jcode-azdaja" else None
+            )
+            row["root_context_leak_assertion"] = root_assertion
+            row["root_token_economy"] = SCORE.root_token_economy_receipt(
+                row, job["arm"], stdout.encode(), root_trace, root_assertion
+            )
             rows.append(row)
         runs_path.write_bytes(b"".join(SCORE.canonical_json_file_bytes(row) for row in rows))
         runs_path.chmod(0o600)
@@ -527,6 +577,15 @@ class ScoreTests(unittest.TestCase):
         }
 
     def rewrite_rows_and_receipts(self, artifacts) -> None:
+        for row, job in zip(artifacts["rows"], artifacts["schedule"]["jobs"]):
+            run_dir = artifacts["artifacts_root"] / f"r001-{job['ordinal']:03d}-{job['arm']}"
+            stdout = (run_dir / "stdout.ndjson").read_bytes()
+            root_trace_path = run_dir / "azdaja-solo-trace.log"
+            root_trace = root_trace_path.read_bytes() if root_trace_path.exists() else None
+            row["root_token_economy"] = SCORE.root_token_economy_receipt(
+                row, job["arm"], stdout, root_trace,
+                row["root_context_leak_assertion"],
+            )
         artifacts["runs_path"].write_bytes(
             b"".join(SCORE.canonical_json_file_bytes(row) for row in artifacts["rows"])
         )
@@ -538,6 +597,32 @@ class ScoreTests(unittest.TestCase):
                 "row_sha256": SCORE.sha256_bytes(SCORE.canonical_json_bytes(row)),
             })
 
+
+    def resign_schedule(self, schedule: dict[str, object]) -> dict[str, object]:
+        value = copy.deepcopy(schedule)
+        value.pop("schedule_id", None)
+        for job in value["jobs"]:
+            job.pop("run_id", None)
+        schedule_id = SCORE.sha256_bytes(SCORE.canonical_json_bytes(value))
+        for job in value["jobs"]:
+            job["run_id"] = SCORE.sha256_bytes(
+                SCORE.RUN_ID_DOMAIN
+                + schedule_id.encode("ascii")
+                + SCORE.canonical_json_bytes(job)
+            )
+        value["schedule_id"] = schedule_id
+        return value
+
+    def refresh_artifact_receipt(
+        self, row: dict[str, object], key: str, path: Path
+    ) -> None:
+        data = path.read_bytes()
+        receipt = row["trajectory_artifacts"][key]
+        receipt["sha256"] = SCORE.sha256_bytes(data)
+        receipt["bytes"] = len(data)
+        if key in {"azdaja_model_trace", "azdaja_solo_trace"}:
+            receipt["source_sha256_before_redaction"] = receipt["sha256"]
+            receipt["exact_text_preserved"] = True
 
     def test_official_metric_is_pinned_and_strict_metric_rejects_extra_text(self):
         accepted_official = (
@@ -1211,6 +1296,268 @@ class ScoreTests(unittest.TestCase):
                     )
                 opened.assert_not_called()
 
+
+
+    def test_exact_unicode_rolling_hash_detects_100_character_root_leak(self):
+        context = "αβγδ" * 35
+        transcript = synthetic_root_transcript("prefix:" + context + ":suffix")
+        receipt = SCORE.root_context_leak_assertion(transcript, context)
+        self.assertTrue(receipt["trace_valid"])
+        self.assertTrue(receipt["leak_detected"])
+        self.assertFalse(receipt["asserted"])
+        self.assertIsNotNone(receipt["matched_substring_sha256"])
+
+    def test_exact_unicode_leak_threshold_does_not_flag_99_characters(self):
+        context = "界" * 99
+        receipt = SCORE.root_context_leak_assertion(
+            synthetic_root_transcript(context), context
+        )
+        self.assertTrue(receipt["trace_valid"])
+        self.assertFalse(receipt["leak_detected"])
+        self.assertTrue(receipt["asserted"])
+
+    def test_exact_unicode_leak_scan_performs_no_normalization(self):
+        context = "é" * 100
+        decomposed = "é" * 100
+        receipt = SCORE.root_context_leak_assertion(
+            synthetic_root_transcript(decomposed), context
+        )
+        self.assertFalse(receipt["leak_detected"])
+        self.assertTrue(receipt["asserted"])
+
+    def test_root_transcript_character_count_tamper_invalidates_trace(self):
+        transcript = synthetic_root_transcript("exact request")
+        transcript = transcript.replace(b"request_chars=13", b"request_chars=14", 1)
+        receipt = SCORE.root_context_leak_assertion(transcript, "unrelated context")
+        self.assertFalse(receipt["trace_valid"])
+        self.assertFalse(receipt["asserted"])
+
+    def test_root_context_receipt_is_hash_only_not_payload_text(self):
+        context = "PRIVATE-CONTEXT-CANARY-" * 7
+        receipt = SCORE.root_context_leak_assertion(
+            synthetic_root_transcript("safe request"), context
+        )
+        self.assertNotIn(context, json.dumps(receipt, sort_keys=True))
+        self.assertEqual(receipt["context_sha256"], sha(context))
+
+    def test_root_token_economy_prefers_validated_control_usage(self):
+        usage = {
+            "input_tokens": 20, "output_tokens": 4, "cache_read_tokens": 0,
+            "cache_write_tokens": 0, "total_tokens": 24,
+        }
+        row = {
+            "root_usage": usage, "azdaja_model_usage": None,
+            "efficiency_evidence": {"valid": True},
+        }
+        receipt = SCORE.root_token_economy_receipt(
+            row, "jcode-native", b'not needed', None, None
+        )
+        self.assertEqual(receipt["tokens"], 20)
+        self.assertFalse(receipt["estimated"])
+        self.assertEqual(receipt["authority"], "provider_usage_api_root_input_tokens")
+
+    def test_root_token_economy_control_fallback_counts_exact_tool_output_chars(self):
+        stdout = (json.dumps({
+            "type": "tool_done", "id": "call-1", "output": "abcdefgh"
+        }, separators=(",", ":")) + "\n").encode()
+        row = {"root_usage": {}, "efficiency_evidence": {"valid": False}}
+        receipt = SCORE.root_token_economy_receipt(
+            row, "jcode-native", stdout, None, None
+        )
+        self.assertEqual(receipt["observed_characters"], 8)
+        self.assertEqual(receipt["tokens"], 2.0)
+        self.assertTrue(receipt["estimated"])
+
+    def test_root_token_economy_duplicate_update_and_terminal_is_counted_once(self):
+        jcode_stdout = b"".join(
+            (json.dumps(item, separators=(",", ":")) + "\n").encode()
+            for item in (
+                {"type": "tool_result", "id": "call-1", "output": "abcdefgh"},
+                {"type": "tool_done", "id": "call-1", "output": "abcdefgh"},
+            )
+        )
+        prime_stdout = b"".join(
+            (json.dumps(item, separators=(",", ":")) + "\n").encode()
+            for item in (
+                {
+                    "type": "message_end",
+                    "message": {
+                        "role": "toolResult", "toolCallId": "call-2",
+                        "content": [{"type": "text", "text": "abcdefgh"}],
+                    },
+                },
+                {
+                    "type": "tool_execution_end", "toolCallId": "call-2",
+                    "result": {"content": [{"type": "text", "text": "abcdefgh"}]},
+                },
+            )
+        )
+        self.assertEqual(
+            SCORE._control_tool_output_characters("jcode-native", jcode_stdout), 8
+        )
+        self.assertEqual(
+            SCORE._control_tool_output_characters("prime-agent", prime_stdout), 8
+        )
+
+    def test_root_token_economy_unknown_or_ambiguous_schema_is_missing(self):
+        unknown = (json.dumps({
+            "type": "tool_result", "id": "call-1", "output": "abcdefgh"
+        }) + "\n").encode()
+        duplicate_terminal = b"".join(
+            (json.dumps({
+                "type": "tool_done", "id": "call-1", "output": "abcdefgh"
+            }) + "\n").encode()
+            for _ in range(2)
+        )
+        prime_alias = (json.dumps({
+            "type": "tool_execution_end", "toolCallId": "call-2",
+            "result": "abcdefgh",
+        }) + "\n").encode()
+        for arm, stdout in (
+            ("jcode-native", unknown),
+            ("jcode-native", duplicate_terminal),
+            ("prime-agent", prime_alias),
+        ):
+            with self.subTest(arm=arm, stdout=stdout):
+                self.assertIsNone(
+                    SCORE._control_tool_output_characters(arm, stdout)
+                )
+
+    def test_root_token_economy_malformed_control_stream_is_missing_not_zero(self):
+        row = {"root_usage": {}, "efficiency_evidence": {"valid": False}}
+        receipt = SCORE.root_token_economy_receipt(
+            row, "jcode-native", b"not-json\n", None, None
+        )
+        self.assertFalse(receipt["available"])
+        self.assertIsNone(receipt["tokens"])
+        self.assertEqual(receipt["authority"], "unavailable")
+
+    def test_root_token_economy_azdaja_fallback_uses_validated_transcript_chars(self):
+        transcript = synthetic_root_transcript("safe request")
+        assertion = SCORE.root_context_leak_assertion(transcript, "short context")
+        row = {"root_usage": {}, "efficiency_evidence": {"valid": False}}
+        receipt = SCORE.root_token_economy_receipt(
+            row, "jcode-azdaja", b"", transcript, assertion
+        )
+        self.assertEqual(receipt["tokens"], len("safe request") / 4.0)
+        self.assertEqual(
+            receipt["authority"],
+            "validated_AZDAJA_SOLO_TRACE_root_request_unicode_characters_div_4",
+        )
+
+    def test_normalized_failure_taxonomy_root_leak_has_terminal_precedence(self):
+        receipt = SCORE.root_context_leak_assertion(
+            synthetic_root_transcript("Z" * 120), "Z" * 120
+        )
+        row = {
+            "failure": {"kind": "timeout", "message": "timeout", "stderr": ""},
+            "timed_out": True, "cleanup_errors": [],
+            "root_context_leak_assertion": receipt,
+        }
+        self.assertEqual(SCORE._normalized_failure_kind(row), "root_context_leak")
+
+    def test_normalized_failure_taxonomy_recognizes_monty_subset_tax(self):
+        row = {
+            "failure": {
+                "kind": "execution",
+                "message": "Monty Python subset unsupported syntax compile error",
+                "stderr": "",
+            },
+            "timed_out": False, "cleanup_errors": [],
+            "root_context_leak_assertion": None,
+        }
+        self.assertEqual(SCORE._normalized_failure_kind(row), "monty_subset_tax")
+
+    def test_candidate_component_executable_mismatch_rejected_before_gold(self):
+        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+            artifacts = self.make_artifacts(Path(directory))
+            schedule = copy.deepcopy(artifacts["schedule"])
+            components = schedule["configuration"]["candidate"]["components"]
+            components["azdaja"]["sha256"] = "4" * 64
+            schedule["configuration"]["candidate"]["sha256"] = SCORE.sha256_bytes(
+                SCORE.canonical_json_bytes(components)
+            )
+            schedule = self.resign_schedule(schedule)
+            private_json(artifacts["schedule_path"], schedule)
+            with mock.patch.object(
+                SCORE, "load_gold", side_effect=AssertionError("gold touched")
+            ) as gold:
+                with self.assertRaisesRegex(SCORE.ScoreError, "component/executable"):
+                    SCORE.build_report(
+                        artifacts["manifest_path"], artifacts["gold_path"],
+                        artifacts["runs_path"], bootstrap_resamples=1,
+                    )
+                gold.assert_not_called()
+
+    def test_legacy_missing_exact_root_trace_rejected_before_gold(self):
+        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+            artifacts = self.make_artifacts(Path(directory))
+            index = next(
+                i for i, row in enumerate(artifacts["rows"])
+                if row["arm"] == "jcode-azdaja"
+            )
+            job = artifacts["schedule"]["jobs"][index]
+            row = artifacts["rows"][index]
+            path = artifacts["artifacts_root"] / f"r001-{job['ordinal']:03d}-{job['arm']}" / "azdaja-solo-trace.log"
+            private_text(path, b"legacy trace without exact root request\n")
+            self.refresh_artifact_receipt(row, "azdaja_solo_trace", path)
+            self.rewrite_rows_and_receipts(artifacts)
+            with mock.patch.object(
+                SCORE, "load_gold", side_effect=AssertionError("gold touched")
+            ) as gold:
+                with self.assertRaisesRegex(SCORE.ScoreError, "root-context artifact receipt"):
+                    SCORE.build_report(
+                        artifacts["manifest_path"], artifacts["gold_path"],
+                        artifacts["runs_path"], bootstrap_resamples=1,
+                    )
+                gold.assert_not_called()
+
+    def test_forged_leak_free_success_rejected_from_exact_artifact_before_gold(self):
+        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+            artifacts = self.make_artifacts(Path(directory), long_context=True)
+            target_id = "lb2-" + f"{0:032x}"
+            index = next(
+                i for i, row in enumerate(artifacts["rows"])
+                if row["arm"] == "jcode-azdaja" and row["fixture_id"] == target_id
+            )
+            row = artifacts["rows"][index]
+            job = artifacts["schedule"]["jobs"][index]
+            context = json.loads(
+                (artifacts["manifest_path"].parent / f"payloads/{target_id}.json").read_text()
+            )["context"]
+            path = artifacts["artifacts_root"] / f"r001-{job['ordinal']:03d}-{job['arm']}" / "azdaja-solo-trace.log"
+            private_text(path, synthetic_root_transcript("prefix" + context + "suffix"))
+            self.refresh_artifact_receipt(row, "azdaja_solo_trace", path)
+            # Keep the old leak-free row assertion to model a falsely successful row.
+            self.rewrite_rows_and_receipts(artifacts)
+            with mock.patch.object(
+                SCORE, "load_gold", side_effect=AssertionError("gold touched")
+            ) as gold:
+                with self.assertRaisesRegex(SCORE.ScoreError, "root-context artifact receipt"):
+                    SCORE.build_report(
+                        artifacts["manifest_path"], artifacts["gold_path"],
+                        artifacts["runs_path"], bootstrap_resamples=1,
+                    )
+                gold.assert_not_called()
+
+    def test_report_surfaces_exact_version_stamp_and_arm_campaign_metrics(self):
+        with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
+            artifacts = self.make_artifacts(Path(directory))
+            report = SCORE.build_report(
+                artifacts["manifest_path"], artifacts["gold_path"],
+                artifacts["runs_path"], bootstrap_resamples=1,
+            )
+            stamp = report["version_stamp"]
+            self.assertTrue(stamp["candidate_azdaja_component_equals_executable"])
+            self.assertEqual(
+                stamp["candidate_azdaja_component"]["sha256"],
+                stamp["candidate_azdaja_executable"]["sha256"],
+            )
+            for arm in SCORE.ARMS:
+                self.assertEqual(report["arms"][arm]["scheduled"], SCORE.EXPECTED_FIXTURES)
+                self.assertIn("execution_rate", report["arms"][arm])
+                self.assertIn("completed_accuracy", report["arms"][arm])
+                self.assertIn("end_to_end_accuracy", report["arms"][arm])
 
 
 if __name__ == "__main__":

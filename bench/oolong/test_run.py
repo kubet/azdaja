@@ -371,6 +371,126 @@ class ControllerTests(unittest.TestCase):
             usage = RUN.usage_fields_from_azdaja(RUN.parse_azdaja_usage(path))
             self.assertFalse(RUN.direct_solo_usage_evidence(usage, None)["valid"])
 
+    def test_exact_unicode_root_context_scan_and_no_text_retention(self):
+        exact = "".join(chr(0x400 + index) for index in range(120))
+        context = "prefix\r\n" + exact + "\nsuffix"
+        transcript = "root:" + exact + ":reply"
+        finding = RUN.exact_common_substring_scan(context, transcript)
+        self.assertTrue(finding["leak_detected"])
+        self.assertEqual(finding["verified_match_chars"], 100)
+        self.assertFalse(finding["matched_text_retained"])
+        self.assertNotIn(exact[:100], json.dumps(finding, ensure_ascii=False))
+        decomposed = "e\u0301" * 60
+        composed = "é" * 60
+        self.assertFalse(
+            RUN.exact_common_substring_scan(decomposed, composed)["leak_detected"]
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            context_path = root / "context.txt"
+            trace_path = root / "azdaja-solo-trace.log"
+            raw = ("A\r\n" * 34).encode("utf-8")
+            context_path.write_bytes(raw)
+            trace_path.write_bytes(b"before" + raw + b"after")
+            assertion = RUN.scan_context_file_against_solo_trace(
+                context_path,
+                trace_path,
+                expected_context_sha256=RUN.sha256_path(context_path),
+            )
+            self.assertTrue(assertion["leak_detected"])
+            self.assertEqual(assertion["normalization"], "none")
+
+    def test_root_token_economy_authority_fallback_and_failure_normalization(self):
+        native = "\n".join(json.dumps(row) for row in (
+            {"type": "tool_output", "output": "ignore-update"},
+            {"type": "tool_result", "content": "ignore-alias"},
+            {"type": "tool_done", "output": "abcdefgh"},
+            {"type": "done", "provider": "OpenAI", "model": RUN.MODEL},
+        ))
+        economy = RUN.tool_result_root_token_economy("jcode-native", native)
+        self.assertEqual(economy["root_input_tokens"], 2.0)
+        self.assertEqual(economy["authority_kind"], "character_fallback")
+        usage = {"depth_usage": {"0": {"input_tokens": 17}}}
+        self.assertEqual(
+            RUN.azdaja_root_token_economy(usage, None)["root_input_tokens"], 17
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            trace = Path(directory) / "trace"
+            request = "🦀abc"
+            trace.write_bytes(
+                (
+                    f'=== root request begin request_id="r" model="m" '
+                    f'request_chars={len(request)} ===\n{request}\n'
+                    '=== root request end request_id="r" ===\n'
+                ).encode("utf-8")
+            )
+            fallback = RUN.azdaja_root_token_economy(None, trace)
+            self.assertEqual(fallback["root_input_tokens"], len(request) / 4)
+            self.assertTrue(fallback["estimated"])
+        cases = {
+            "adapter_parser": {"kind": "execution", "message": "adapter response parser failed"},
+            "transport": {"kind": "route_assertion", "message": "bad route"},
+            "timeout": {"kind": "timeout", "message": "turn timed out"},
+            "depth": {"kind": "execution", "message": "maximum recursion depth exceeded"},
+            "monty_subset_tax": {"kind": "execution", "message": "Monty unsupported syntax"},
+            "other_execution": {"kind": "controller", "message": "disk failure"},
+            "root_context_leak": {"kind": "root_context_leak", "message": "leak"},
+        }
+        for expected, failure in cases.items():
+            self.assertEqual(RUN.normalize_failure_kind(failure), expected)
+
+    def test_control_root_economy_uses_only_canonical_terminal_events(self):
+        prime = "\n".join(json.dumps(row) for row in (
+            {"type": "tool_execution_update", "result": {"content": "ignore"}},
+            {"type": "tool_result", "result": {"content": "ignore-alias"}},
+            {"type": "tool_execution_end", "result": {
+                "content": [{"type": "text", "text": "éé"}, {"text": "ab"}]
+            }},
+        ))
+        economy = RUN.tool_result_root_token_economy("prime-agent", prime)
+        self.assertEqual(economy["source_characters"], 4)
+        self.assertEqual(economy["root_input_tokens"], 1.0)
+        self.assertEqual(economy["result_events"], 1)
+
+        malformed_jcode = "\n".join(json.dumps(row) for row in (
+            {"type": "tool_done", "content": "wrong alias"},
+            {"type": "done"},
+        ))
+        missing = RUN.tool_result_root_token_economy("jcode-native", malformed_jcode)
+        self.assertTrue(missing["missing"])
+        self.assertIsNone(missing["root_input_tokens"])
+        self.assertEqual(missing["authority_kind"], "missing")
+        self.assertEqual(missing["malformed_result_events"], 1)
+
+        malformed_prime = json.dumps({
+            "type": "tool_execution_end", "output": "wrong alias"
+        })
+        self.assertTrue(
+            RUN.tool_result_root_token_economy("prime-agent", malformed_prime)["missing"]
+        )
+
+    def test_suite_campaign_profile_is_exact_and_has_78_rows(self):
+        suite = SimpleNamespace(fixtures=tuple(range(RUN.CAMPAIGN_FIXTURE_COUNT)))
+        args = SimpleNamespace(
+            model=RUN.CAMPAIGN_MODEL,
+            reasoning=RUN.CAMPAIGN_REASONING,
+            arms=list(RUN.CAMPAIGN_ARMS),
+            repetitions=RUN.CAMPAIGN_REPETITIONS,
+            seed=RUN.CAMPAIGN_SEED,
+            timeout=RUN.CAMPAIGN_TIMEOUT_SECONDS,
+        )
+        RUN.assert_campaign_profile(args, suite)
+        self.assertEqual(RUN.CAMPAIGN_ROW_COUNT, 78)
+        mutations = {
+            "fixtures": (args, SimpleNamespace(fixtures=tuple(range(25)))),
+            "arms": (SimpleNamespace(**{**vars(args), "arms": list(reversed(args.arms))}), suite),
+            "seed": (SimpleNamespace(**{**vars(args), "seed": args.seed + 1}), suite),
+            "timeout": (SimpleNamespace(**{**vars(args), "timeout": 601}), suite),
+        }
+        for label, (bad_args, bad_suite) in mutations.items():
+            with self.subTest(label=label), self.assertRaises(RUN.BenchError):
+                RUN.assert_campaign_profile(bad_args, bad_suite)
+
     def test_without_acknowledgement_never_invokes_a_cli(self):
         with tempfile.TemporaryDirectory() as directory, \
                 mock.patch.object(RUN.subprocess, "run") as run, \
@@ -444,15 +564,36 @@ class ControllerTests(unittest.TestCase):
                 reasoning="medium",
                 timeout=300,
             )
-            candidate = {"sha256": "a" * 64, "components": {}}
+            components = {
+                "azdaja": {"sha256": "a" * 64, "bytes": 1},
+                "config.toml": {"sha256": "c" * 64, "bytes": 2},
+                "SKILL.md": {"sha256": "d" * 64, "bytes": 3},
+            }
+            candidate = {
+                "sha256": RUN.hashlib.sha256(
+                    RUN.canonical_json_bytes(dict(sorted(components.items())))
+                ).hexdigest(),
+                "components": components,
+            }
             controller = {"sha256": "b" * 64, "bytes": 1, "path": "/controller"}
-            first = RUN.build_suite_schedule(suite, args, candidate, controller, {})
-            second = RUN.build_suite_schedule(suite, args, candidate, controller, {})
+            executable = {
+                "path": "/azdaja", "sha256": "a" * 64, "bytes": 1,
+                "version": "azdaja 1", "version_command": ["/azdaja", "--version"],
+            }
+            jcode = {
+                "path": "/jcode", "sha256": "e" * 64, "bytes": 1,
+                "version": "jcode 1", "version_command": ["/jcode", "--version"],
+            }
+            executables = {"azdaja": executable, "jcode": jcode}
+            first = RUN.build_suite_schedule(suite, args, candidate, controller, executables)
+            second = RUN.build_suite_schedule(suite, args, candidate, controller, executables)
             self.assertEqual(first, second)
             self.assertEqual(len(first["jobs"]), 4)
             self.assertEqual(len({job["run_id"] for job in first["jobs"]}), 4)
             args.model = "other-model"
-            changed = RUN.build_suite_schedule(suite, args, candidate, controller, {})
+            changed = RUN.build_suite_schedule(
+                suite, args, candidate, controller, executables
+            )
             self.assertNotEqual(first["schedule_id"], changed["schedule_id"])
 
     def test_suite_output_prefix_rejects_duplicates_and_scores_only_when_complete(self):

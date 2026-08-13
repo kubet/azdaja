@@ -100,7 +100,26 @@ FIXTURE_ID_RE = re.compile(r"lb2-[0-9a-f]{32}\Z")
 EXECUTION_FAILURE_KINDS = frozenset({
     "execution", "timeout", "process_exit", "route_assertion", "product_lifecycle",
     "trace_capture", "context_integrity", "skill_integrity", "tool_policy",
-    "usage_evidence", "cleanup",
+    "usage_evidence", "cleanup", "root_context_leak",
+})
+ROOT_CONTEXT_MATCH_CHARACTERS = 100
+ROOT_CONTEXT_ROLLING_HASH = "rabin-karp-u64-unicode-codepoints-plus-exact-verification"
+FAILURE_TAXONOMY = (
+    "adapter_parser", "transport", "timeout", "depth", "monty_subset_tax",
+    "other_execution", "root_context_leak",
+)
+# A failure can expose more than one textual signal.  Apply this order rather
+# than relying on whichever adapter diagnostic happened to be rendered first.
+FAILURE_TAXONOMY_PRECEDENCE = (
+    "root_context_leak", "timeout", "transport", "adapter_parser", "depth",
+    "monty_subset_tax", "other_execution",
+)
+ROOT_TOKEN_ECONOMY_AUTHORITIES = frozenset({
+    "provider_usage_api_root_input_tokens",
+    "validated_AZDAJA_MODEL_TRACE_depth_0_input_tokens",
+    "exact_control_tool_output_unicode_characters_div_4",
+    "validated_AZDAJA_SOLO_TRACE_root_request_unicode_characters_div_4",
+    "unavailable",
 })
 INFERENCE_ROW_KEYS = frozenset({
     "schema_version", "benchmark", "record_type", "schedule_id", "run_id",
@@ -115,7 +134,8 @@ INFERENCE_ROW_KEYS = frozenset({
     "trace_capture_assertion", "task_context_integrity",
     "tool_access_policy_assertion", "credential_cleanup_assertion",
     "cleanup_errors", "root_usage", "azdaja_model_usage",
-    "efficiency_evidence", "usage", "trajectory_artifacts", "failure",
+    "efficiency_evidence", "usage", "root_token_economy",
+    "root_context_leak_assertion", "trajectory_artifacts", "failure",
 })
 
 
@@ -135,6 +155,281 @@ def canonical_json_file_bytes(value: Any) -> bytes:
 
 def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _rolling_window_hashes(text: str, width: int) -> Iterable[tuple[int, int]]:
+    """Yield deterministic unsigned-64-bit hashes of exact Unicode windows."""
+    if width <= 0 or len(text) < width:
+        return
+    mask = (1 << 64) - 1
+    base = 1_000_003
+    high = pow(base, width - 1, 1 << 64)
+    value = 0
+    for character in text[:width]:
+        value = ((value * base) + ord(character) + 1) & mask
+    yield 0, value
+    for start in range(1, len(text) - width + 1):
+        value = (value - ((ord(text[start - 1]) + 1) * high)) & mask
+        value = ((value * base) + ord(text[start + width - 1]) + 1) & mask
+        yield start, value
+
+
+def _exact_unicode_substring_match(
+    left: str, right: str, width: int = ROOT_CONTEXT_MATCH_CHARACTERS
+) -> str | None:
+    """Return only a match hash, using rolling candidates plus exact verification."""
+    if len(left) < width or len(right) < width:
+        return None
+    # Index the smaller transcript side.  Real LongBench contexts can be much
+    # larger, so this keeps the per-row auxiliary memory bounded by its trace.
+    indexed: dict[int, list[int]] = {}
+    for start, value in _rolling_window_hashes(right, width):
+        indexed.setdefault(value, []).append(start)
+    for left_start, value in _rolling_window_hashes(left, width):
+        for right_start in indexed.get(value, ()):
+            candidate = left[left_start : left_start + width]
+            if candidate == right[right_start : right_start + width]:
+                return sha256_bytes(candidate.encode("utf-8"))
+    return None
+
+
+def _parse_exact_root_request(transcript: str) -> tuple[str, int] | None:
+    """Parse the exact v32 AZDAJA_SOLO_TRACE root-request frame by char count."""
+    quoted = r'"(?:[^"\\]|\\.)*"'
+    match = re.match(
+        rf'\A\n=== root request begin request_id=(?P<request>{quoted}) '
+        rf'model=(?P<model>{quoted}) request_chars=(?P<characters>0|[1-9][0-9]*) ===\n',
+        transcript,
+    )
+    if match is None:
+        return None
+    try:
+        request_id = json.loads(match.group("request"))
+        model = json.loads(match.group("model"))
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(request_id, str) or not request_id or model != MODEL:
+        return None
+    character_count = int(match.group("characters"))
+    request_start = match.end()
+    request_end = request_start + character_count
+    if request_end > len(transcript):
+        return None
+    request = transcript[request_start:request_end]
+    end_frame = f'\n=== root request end request_id={match.group("request")} ===\n'
+    if not transcript.startswith(end_frame, request_end):
+        return None
+    # A counted prefix is not enough: successful product traces must contain
+    # subsequent root-turn evidence rather than only a preflight header.
+    remainder = transcript[request_end + len(end_frame) :]
+    if not re.search(
+        rf'(?m)^=== turn 0 request_id={re.escape(match.group("request"))} '
+        rf'.* outcome=succeeded .* model={re.escape(match.group("model"))} '
+        rf'input=[0-9]+ output=[0-9]+ cache_read=[0-9]+ latency_ms=[0-9]+ ===$',
+        remainder,
+    ):
+        return None
+    return request, character_count
+
+
+def root_context_leak_assertion(
+    transcript_bytes: bytes | None, context: str
+) -> dict[str, Any]:
+    """Hash-only receipt for exact root-trace validation and PUBLIC-context leakage."""
+    if not isinstance(context, str):
+        raise ScoreError("PUBLIC payload context must be a string for root leak validation")
+    context_sha256 = sha256_bytes(context.encode("utf-8"))
+    transcript_sha256 = None if transcript_bytes is None else sha256_bytes(transcript_bytes)
+    transcript: str | None = None
+    if transcript_bytes is not None:
+        try:
+            transcript = transcript_bytes.decode("utf-8")
+        except UnicodeError:
+            transcript = None
+    parsed = None if transcript is None else _parse_exact_root_request(transcript)
+    match_sha256 = (
+        None if transcript is None
+        else _exact_unicode_substring_match(context, transcript)
+    )
+    leak_detected = None if transcript is None else match_sha256 is not None
+    trace_valid = parsed is not None
+    request = None if parsed is None else parsed[0]
+    request_characters = None if parsed is None else parsed[1]
+    return {
+        "asserted": trace_valid and leak_detected is False,
+        "trace_present": transcript_bytes is not None,
+        "trace_valid": trace_valid,
+        "leak_detected": leak_detected,
+        "minimum_match_characters": ROOT_CONTEXT_MATCH_CHARACTERS,
+        "rolling_hash_algorithm": ROOT_CONTEXT_ROLLING_HASH,
+        "context_sha256": context_sha256,
+        "context_characters": len(context),
+        "transcript_sha256": transcript_sha256,
+        "transcript_characters": None if transcript is None else len(transcript),
+        "root_request_sha256": (
+            None if request is None else sha256_bytes(request.encode("utf-8"))
+        ),
+        "root_request_characters": request_characters,
+        "matched_substring_sha256": match_sha256,
+    }
+
+
+def _usage_root_input(row: dict[str, Any], arm: str) -> tuple[int, str] | None:
+    evidence = row.get("efficiency_evidence")
+    root = row.get("root_usage")
+    if not isinstance(evidence, dict) or evidence.get("valid") is not True:
+        return None
+    if not isinstance(root, dict) or set(root) != set(USAGE_FIELDS):
+        return None
+    if any(type(root[field]) is not int or root[field] < 0 for field in USAGE_FIELDS):
+        return None
+    if root["input_tokens"] <= 0 or root["output_tokens"] <= 0:
+        return None
+    if arm == "jcode-azdaja":
+        trace = row.get("azdaja_model_usage")
+        if (
+            not isinstance(trace, dict)
+            or trace.get("all_rows_valid") is not True
+            or not isinstance(trace.get("depth_usage"), dict)
+            or trace["depth_usage"].get("0") != root
+        ):
+            return None
+        authority = "validated_AZDAJA_MODEL_TRACE_depth_0_input_tokens"
+    else:
+        authority = "provider_usage_api_root_input_tokens"
+    return root["input_tokens"], authority
+
+
+def _text_content_characters(value: Any) -> int | None:
+    if isinstance(value, str):
+        return len(value)
+    if not isinstance(value, list):
+        return None
+    total = 0
+    for item in value:
+        if not isinstance(item, dict) or item.get("type") != "text" or not isinstance(item.get("text"), str):
+            return None
+        total += len(item["text"])
+    return total
+
+
+def _control_tool_output_characters(arm: str, stdout: bytes) -> int | None:
+    """Count each adapter's canonical final tool-result representation exactly once."""
+    try:
+        text = stdout.decode("utf-8")
+    except UnicodeError:
+        return None
+    objects: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        if not line:
+            continue
+        try:
+            item = json.loads(
+                line, object_pairs_hook=_object_no_duplicates, parse_constant=_reject_constant
+            )
+        except (json.JSONDecodeError, ValueError):
+            return None
+        if not isinstance(item, dict):
+            return None
+        objects.append(item)
+    if not objects:
+        return None
+
+    if arm == "jcode-native":
+        # Jcode also emits tool_start/tool_input/tool_exec updates.  Only the
+        # final tool_done.output is the text placed back into root context.
+        events = [item for item in objects if item.get("type") == "tool_done"]
+        id_field = "id"
+    elif arm == "prime-agent":
+        # Prime repeats tool results inside message/turn snapshots.  The
+        # canonical final representation is tool_execution_end.result.content.
+        events = [
+            item for item in objects if item.get("type") == "tool_execution_end"
+        ]
+        id_field = "toolCallId"
+    else:
+        return None
+    # With no canonical terminal event, an arbitrary NDJSON stream cannot
+    # prove a zero-character tool result.  Treat it as missing, not zero.
+    if not events:
+        return None
+
+    invocation_ids: list[str | None] = []
+    total = 0
+    for event in events:
+        invocation_id = event.get(id_field)
+        if invocation_id is not None and (
+            not isinstance(invocation_id, str) or not invocation_id
+        ):
+            return None
+        invocation_ids.append(invocation_id)
+        if arm == "jcode-native":
+            # Do not guess from content/result aliases: those are not Jcode's
+            # canonical terminal schema.
+            if (
+                "output" not in event
+                or not isinstance(event["output"], str)
+                or any(key in event for key in ("content", "result"))
+            ):
+                return None
+            count = len(event["output"])
+        else:
+            result = event.get("result")
+            if not isinstance(result, dict) or "content" not in result:
+                return None
+            count = _text_content_characters(result["content"])
+        if count is None:
+            return None
+        total += count
+
+    # Real multi-call streams provide stable invocation IDs.  Missing IDs are
+    # unambiguous only for a single terminal event; repeated terminal IDs are
+    # duplicate representations and must never be summed.
+    if len(events) > 1 and any(value is None for value in invocation_ids):
+        return None
+    present_ids = [value for value in invocation_ids if value is not None]
+    if len(present_ids) != len(set(present_ids)):
+        return None
+    return total
+
+
+def root_token_economy_receipt(
+    row: dict[str, Any], arm: str, stdout: bytes,
+    root_trace: bytes | None,
+    root_assertion: dict[str, Any] | None,
+) -> dict[str, Any]:
+    usage = _usage_root_input(row, arm)
+    if usage is not None:
+        tokens, authority = usage
+        return {
+            "available": True, "tokens": tokens, "authority": authority,
+            "estimated": False, "observed_characters": None,
+            "usage_input_tokens": tokens,
+        }
+    observed: int | None
+    authority: str
+    if arm == "jcode-azdaja":
+        if not isinstance(root_assertion, dict) or root_assertion.get("trace_valid") is not True:
+            observed = None
+        else:
+            observed = root_assertion.get("root_request_characters")
+            if type(observed) is not int or observed < 0:
+                observed = None
+        authority = "validated_AZDAJA_SOLO_TRACE_root_request_unicode_characters_div_4"
+    else:
+        observed = _control_tool_output_characters(arm, stdout)
+        authority = "exact_control_tool_output_unicode_characters_div_4"
+    if observed is None:
+        return {
+            "available": False, "tokens": None, "authority": "unavailable",
+            "estimated": None, "observed_characters": None,
+            "usage_input_tokens": None,
+        }
+    return {
+        "available": True, "tokens": observed / 4.0, "authority": authority,
+        "estimated": True, "observed_characters": observed,
+        "usage_input_tokens": None,
+    }
 
 
 def _absolute_lexical(path: Path) -> Path:
@@ -825,6 +1120,16 @@ def validate_schedule(
         _validate_component_identity(
             executable, f"schedule executable {name}", version=True, path=True
         )
+    candidate_binary = candidate["components"]["azdaja"]
+    executable_binary = executables["azdaja"]
+    _require_equal(
+        candidate_binary["sha256"], executable_binary["sha256"],
+        "candidate azdaja component/executable SHA-256 binding",
+    )
+    _require_equal(
+        candidate_binary["bytes"], executable_binary["bytes"],
+        "candidate azdaja component/executable byte-length binding",
+    )
     _validate_runtime_closure(configuration["runtime_closure"])
 
     jobs = schedule["jobs"]
@@ -987,6 +1292,111 @@ def _validate_lifecycle(lifecycle: Any, row: dict[str, Any], arm: str, index: in
         raise ScoreError(f"inference row {index} product_execution_asserted is malformed")
     _require_equal(row["product_execution_asserted"], asserted, f"inference row {index} lifecycle summary")
     return asserted
+
+
+def _validate_root_context_receipt(
+    value: Any, arm: str, index: int, *, execution_success: bool
+) -> None:
+    if arm != "jcode-azdaja":
+        _require_equal(value, None, f"inference row {index} unexpected root-context receipt")
+        return
+    expected = {
+        "asserted", "trace_present", "trace_valid", "leak_detected",
+        "minimum_match_characters", "rolling_hash_algorithm", "context_sha256",
+        "context_characters", "transcript_sha256", "transcript_characters",
+        "root_request_sha256", "root_request_characters", "matched_substring_sha256",
+    }
+    if not isinstance(value, dict) or set(value) != expected:
+        raise ScoreError(f"inference row {index} root-context receipt shape is invalid")
+    for key in ("asserted", "trace_present", "trace_valid"):
+        if type(value[key]) is not bool:
+            raise ScoreError(f"inference row {index} root-context {key} is invalid")
+    if value["leak_detected"] is not None and type(value["leak_detected"]) is not bool:
+        raise ScoreError(f"inference row {index} root-context leak flag is invalid")
+    _require_equal(
+        value["minimum_match_characters"], ROOT_CONTEXT_MATCH_CHARACTERS,
+        f"inference row {index} root-context match threshold",
+    )
+    _require_equal(
+        value["rolling_hash_algorithm"], ROOT_CONTEXT_ROLLING_HASH,
+        f"inference row {index} root-context rolling-hash authority",
+    )
+    if not _is_sha256(value["context_sha256"]) or type(value["context_characters"]) is not int or value["context_characters"] <= 0:
+        raise ScoreError(f"inference row {index} root-context PUBLIC identity is invalid")
+    for field in ("transcript_sha256", "root_request_sha256", "matched_substring_sha256"):
+        if value[field] is not None and not _is_sha256(value[field]):
+            raise ScoreError(f"inference row {index} root-context {field} is invalid")
+    for field in ("transcript_characters", "root_request_characters"):
+        if value[field] is not None and (type(value[field]) is not int or value[field] < 0):
+            raise ScoreError(f"inference row {index} root-context {field} is invalid")
+    expected_asserted = value["trace_valid"] and value["leak_detected"] is False
+    _require_equal(value["asserted"], expected_asserted, f"inference row {index} root-context assertion summary")
+    if value["trace_present"] != (value["transcript_sha256"] is not None):
+        raise ScoreError(f"inference row {index} root-context trace presence/hash disagree")
+    if value["trace_valid"] != (value["root_request_sha256"] is not None):
+        raise ScoreError(f"inference row {index} root-context request validity/hash disagree")
+    if (value["leak_detected"] is True) != (value["matched_substring_sha256"] is not None):
+        raise ScoreError(f"inference row {index} root-context leak/hash disagree")
+    if execution_success and value["asserted"] is not True:
+        raise ScoreError(f"inference row {index} reports success without a valid leak-free exact root transcript")
+
+
+def _validate_root_token_economy(value: Any, arm: str, index: int) -> None:
+    expected = {
+        "available", "tokens", "authority", "estimated", "observed_characters",
+        "usage_input_tokens",
+    }
+    if not isinstance(value, dict) or set(value) != expected:
+        raise ScoreError(f"inference row {index} root-token-economy receipt shape is invalid")
+    if type(value["available"]) is not bool or value["authority"] not in ROOT_TOKEN_ECONOMY_AUTHORITIES:
+        raise ScoreError(f"inference row {index} root-token-economy authority is invalid")
+    if not value["available"]:
+        _require_equal(
+            value,
+            {
+                "available": False, "tokens": None, "authority": "unavailable",
+                "estimated": None, "observed_characters": None,
+                "usage_input_tokens": None,
+            },
+            f"inference row {index} unavailable root-token economy",
+        )
+        return
+    tokens = value["tokens"]
+    if not _nonnegative_number(tokens):
+        raise ScoreError(f"inference row {index} root-token economy tokens are invalid")
+    if type(value["estimated"]) is not bool:
+        raise ScoreError(f"inference row {index} root-token economy estimate flag is invalid")
+    if value["estimated"]:
+        if (
+            value["authority"] not in {
+                "exact_control_tool_output_unicode_characters_div_4",
+                "validated_AZDAJA_SOLO_TRACE_root_request_unicode_characters_div_4",
+            }
+            or type(value["observed_characters"]) is not int
+            or value["observed_characters"] < 0
+            or tokens != value["observed_characters"] / 4.0
+            or value["usage_input_tokens"] is not None
+        ):
+            raise ScoreError(f"inference row {index} estimated root-token economy is inconsistent")
+        expected_authority = (
+            "validated_AZDAJA_SOLO_TRACE_root_request_unicode_characters_div_4"
+            if arm == "jcode-azdaja"
+            else "exact_control_tool_output_unicode_characters_div_4"
+        )
+        _require_equal(value["authority"], expected_authority, f"inference row {index} root-token fallback authority")
+    else:
+        expected_authority = (
+            "validated_AZDAJA_MODEL_TRACE_depth_0_input_tokens"
+            if arm == "jcode-azdaja" else "provider_usage_api_root_input_tokens"
+        )
+        _require_equal(value["authority"], expected_authority, f"inference row {index} root-token usage authority")
+        if (
+            value["observed_characters"] is not None
+            or type(value["usage_input_tokens"]) is not int
+            or value["usage_input_tokens"] <= 0
+            or tokens != value["usage_input_tokens"]
+        ):
+            raise ScoreError(f"inference row {index} usage-authoritative root-token economy is inconsistent")
 
 
 def _validate_usage(row: dict[str, Any], arm: str, index: int) -> tuple[bool, dict[str, int] | None]:
@@ -1251,10 +1661,13 @@ def _validate_trajectory_artifacts(
     }
     paths: set[str] = set()
     for name, receipt in value.items():
-        if not isinstance(receipt, dict) or set(receipt) != {
+        expected_receipt = {
             "path", "sha256", "bytes", "mode", "contains_private_raw_trajectory",
             "credential_redacted", "sensitivity",
-        }:
+        }
+        if name in treatment:
+            expected_receipt |= {"source_sha256_before_redaction", "exact_text_preserved"}
+        if not isinstance(receipt, dict) or set(receipt) != expected_receipt:
             raise ScoreError(f"inference row {index} trajectory receipt {name} shape is invalid")
         raw_path = receipt["path"]
         if (
@@ -1272,6 +1685,12 @@ def _validate_trajectory_artifacts(
             or not receipt["sensitivity"].strip()
         ):
             raise ScoreError(f"inference row {index} trajectory receipt {name} is invalid")
+        if name in treatment and (
+            receipt["exact_text_preserved"] is not True
+            or not _is_sha256(receipt["source_sha256_before_redaction"])
+            or receipt["source_sha256_before_redaction"] != receipt["sha256"]
+        ):
+            raise ScoreError(f"inference row {index} trajectory receipt {name} did not preserve exact trace text")
         paths.add(raw_path)
 
 
@@ -1319,6 +1738,7 @@ def validate_artifact_rows(
     artifacts_root: Path,
     rows: Sequence[dict[str, Any]],
     jobs: Sequence[dict[str, Any]],
+    fixtures: dict[str, dict[str, Any]],
 ) -> None:
     absolute_root, root_fd = _open_directory_fd(artifacts_root, "trajectory artifacts root")
     try:
@@ -1350,6 +1770,7 @@ def validate_artifact_rows(
                 if not isinstance(retained, dict) or retained.get("retained_entries") != sorted(expected_names) or retained.get("retention_allowlist") != sorted(expected_names):
                     raise ScoreError(f"inference row {index} cleanup/artifact inventories disagree")
                 stdout: bytes | None = None
+                root_trace: bytes | None = None
                 for key, receipt in receipts.items():
                     data, _ = _read_private_regular_at(fd, basename[key], f"trajectory {index} {key}")
                     expected_path = absolute_root / run_name / basename[key]
@@ -1357,9 +1778,32 @@ def validate_artifact_rows(
                         raise ScoreError(f"trajectory artifact {index} {key} bytes/path differ from receipt")
                     if key == "stdout":
                         stdout = data
+                    elif key == "azdaja_solo_trace":
+                        root_trace = data
                 assert stdout is not None
                 if _trajectory_response(job["arm"], stdout, index) != row["response"]:
                     raise ScoreError(f"inference row {index} response differs from retained stdout")
+                root_assertion = None
+                if job["arm"] == "jcode-azdaja":
+                    fixture = fixtures[job["fixture_id"]]
+                    payload = _json_object_from_captured_bytes(
+                        fixture["_payload_bytes_captured"],
+                        f"fixture {job['fixture_id']} payload root-context validation",
+                    )
+                    root_assertion = root_context_leak_assertion(
+                        root_trace, payload["context"]
+                    )
+                _require_equal(
+                    row["root_context_leak_assertion"], root_assertion,
+                    f"inference row {index} exact root-context artifact receipt",
+                )
+                expected_economy = root_token_economy_receipt(
+                    row, job["arm"], stdout, root_trace, root_assertion
+                )
+                _require_equal(
+                    row["root_token_economy"], expected_economy,
+                    f"inference row {index} root-token-economy artifact receipt",
+                )
             finally:
                 os.close(fd)
         if _directory_fingerprint(os.fstat(root_fd)) != fingerprint:
@@ -1443,6 +1887,11 @@ def validate_run_rows(
         route_ok = _validate_route(row.get("runtime_route_assertion"), job["arm"], index)
         lifecycle_ok = _validate_lifecycle(row.get("product_lifecycle_assertion"), row, job["arm"], index)
         usage_ok, _ = _validate_usage(row, job["arm"], index)
+        _validate_root_context_receipt(
+            row.get("root_context_leak_assertion"), job["arm"], index,
+            execution_success=row["execution_success"],
+        )
+        _validate_root_token_economy(row.get("root_token_economy"), job["arm"], index)
         if row["execution_success"] and not (route_ok and lifecycle_ok and usage_ok):
             raise ScoreError(f"inference row {index} reports execution success without valid route/lifecycle/usage")
         failure = row.get("failure")
@@ -1468,6 +1917,16 @@ def validate_run_rows(
                 raise ScoreError(f"inference row {index} lifecycle failure contradicts asserted lifecycle evidence")
             if kind == "usage_evidence" and usage_ok:
                 raise ScoreError(f"inference row {index} usage failure contradicts valid usage evidence")
+            root_receipt = row["root_context_leak_assertion"]
+            if job["arm"] == "jcode-azdaja" and root_receipt["leak_detected"] is True:
+                _require_equal(
+                    kind, "root_context_leak",
+                    f"inference row {index} leaked root-context terminal failure kind",
+                )
+            if kind == "root_context_leak" and (
+                job["arm"] != "jcode-azdaja" or root_receipt["leak_detected"] is not True
+            ):
+                raise ScoreError(f"inference row {index} root-context-leak kind lacks exact leak evidence")
 
 
 def validate_claims(
@@ -1576,7 +2035,7 @@ def validate_frozen_runs(
     validate_claims(
         claims_root, rows, jobs, schedule, held_root_fd=held_claims_root_fd
     )
-    validate_artifact_rows(artifacts_root, rows, jobs)
+    validate_artifact_rows(artifacts_root, rows, jobs, fixtures)
     return schedule, jobs, rows, arms
 
 
@@ -1821,6 +2280,47 @@ def _failure_kind(row: dict[str, Any]) -> str:
     return str(failure.get("kind")) if isinstance(failure, dict) else "unknown_execution_failure"
 
 
+def _normalized_failure_kind(row: dict[str, Any]) -> str:
+    failure = row.get("failure")
+    raw = _failure_kind(row)
+    message = failure.get("message", "") if isinstance(failure, dict) else ""
+    stderr = failure.get("stderr", "") if isinstance(failure, dict) else ""
+    cleanup = row.get("cleanup_errors")
+    cleanup_text = " ".join(cleanup) if isinstance(cleanup, list) else ""
+    signal = " ".join((raw, str(message), str(stderr), cleanup_text)).lower()
+    matches = {
+        "root_context_leak": (
+            raw == "root_context_leak"
+            or isinstance(row.get("root_context_leak_assertion"), dict)
+            and row["root_context_leak_assertion"].get("leak_detected") is True
+        ),
+        "timeout": raw == "timeout" or row.get("timed_out") is True or bool(
+            re.search(r"\b(?:timed[ -]?out|timeout|deadline exceeded)\b", signal)
+        ),
+        "transport": raw == "route_assertion" or bool(re.search(
+            r"\b(?:transport|provider_call_failed|session_setup|connection|oauth|route assertion|http 5[0-9][0-9])\b",
+            signal,
+        )),
+        "adapter_parser": bool(re.search(
+            r"\b(?:adapter parser|adapter parse|malformed (?:json|tool|argument)|response parser|extract(?:ion)? failed|protocol parse)\b",
+            signal,
+        )),
+        "depth": raw == "product_lifecycle" or bool(re.search(
+            r"\b(?:depth[ -]?0|depth zero|recursion depth|recursive depth|missing root call)\b",
+            signal,
+        )),
+        "monty_subset_tax": bool(re.search(
+            r"\b(?:monty|python subset|subset runtime|unsupported (?:syntax|operation|import)|compile error|generator expression|mapping\.get)\b",
+            signal,
+        )),
+        "other_execution": True,
+    }
+    for category in FAILURE_TAXONOMY_PRECEDENCE:
+        if matches[category]:
+            return category
+    raise AssertionError("failure taxonomy precedence is incomplete")
+
+
 def build_score_rows(
     rows: list[dict[str, Any]],
     jobs: list[dict[str, Any]],
@@ -1866,6 +2366,12 @@ def build_score_rows(
             "end_to_end_official_correct": execution_success and official_correct,
             "end_to_end_strict_correct": execution_success and strict_correct,
             "failure_class": failure_class,
+            "raw_execution_failure_kind": (
+                None if execution_success else _failure_kind(row)
+            ),
+            "normalized_execution_failure_kind": (
+                None if execution_success else _normalized_failure_kind(row)
+            ),
         })
     return scored
 
@@ -1899,6 +2405,25 @@ def _usage_for_row(row: dict[str, Any]) -> dict[str, int] | None:
     return {field: int(row["usage"][field]) for field in USAGE_FIELDS}
 
 
+def _root_token_economy_summary(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    available = [row["root_token_economy"] for row in rows if row["root_token_economy"]["available"]]
+    values = [float(item["tokens"]) for item in available]
+    missing = len(rows) - len(available)
+    recorded_total = sum(values)
+    return {
+        "available_n": len(available),
+        "missing_n": missing,
+        "authority_counts": dict(sorted(Counter(item["authority"] for item in available).items())),
+        "recorded_tokens_total": recorded_total,
+        "unconditional_tokens_total": recorded_total if missing == 0 else None,
+        "recorded_tokens_p50": percentile(values, 0.50),
+        "recorded_tokens_p95": percentile(values, 0.95),
+        "unconditional_tokens_p50": percentile(values, 0.50) if missing == 0 else None,
+        "unconditional_tokens_p95": percentile(values, 0.95) if missing == 0 else None,
+        "missing_values_are_zero": False,
+    }
+
+
 def _fixed_denominator_summary(
     score_rows: Sequence[dict[str, Any]], raw_by_run: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:
@@ -1907,7 +2432,13 @@ def _fixed_denominator_summary(
         raise ScoreError("cannot summarize an empty score cell")
     completed = [item for item in score_rows if item["execution_success"]]
     execution_failures = [item for item in score_rows if not item["execution_success"]]
-    execution_taxonomy = Counter(_failure_kind(raw_by_run[item["run_id"]]) for item in execution_failures)
+    raw_execution_taxonomy = Counter(
+        _failure_kind(raw_by_run[item["run_id"]]) for item in execution_failures
+    )
+    execution_taxonomy = Counter(
+        _normalized_failure_kind(raw_by_run[item["run_id"]])
+        for item in execution_failures
+    )
     answer_taxonomy = Counter(
         str(item["failure_class"]) for item in completed if item["failure_class"] is not None
     )
@@ -1929,6 +2460,8 @@ def _fixed_denominator_summary(
             "failed_n": len(execution_failures),
             "completion_rate": len(completed) / scheduled,
             "failure_taxonomy": dict(sorted(execution_taxonomy.items())),
+            "raw_failure_kinds": dict(sorted(raw_execution_taxonomy.items())),
+            "failure_taxonomy_precedence": list(FAILURE_TAXONOMY_PRECEDENCE),
         },
         "answer_scoring_all_terminal_outputs": {
             "official_longbench_v2_correct_n": sum(item["official_longbench_v2_correct"] for item in score_rows),
@@ -1983,6 +2516,7 @@ def _fixed_denominator_summary(
             "unconditional_total_tokens_p50": percentile(total_values, 0.50) if missing_usage == 0 else None,
             "unconditional_total_tokens_p95": percentile(total_values, 0.95) if missing_usage == 0 else None,
         },
+        "root_token_economy_all_attempts": _root_token_economy_summary(raw_rows),
     }
 
 
@@ -2006,8 +2540,18 @@ def aggregate_scores(
             summary.update({"arm": arm, "domain": domain})
             domains.append(summary)
             domain_documents.append(summary)
+        completed = [item for item in selected if item["execution_success"]]
         arm_documents[arm] = {
+            "scheduled": EXPECTED_FIXTURES,
             "scheduled_n": EXPECTED_FIXTURES,
+            "execution_rate": len(completed) / EXPECTED_FIXTURES,
+            "completed_accuracy": _mean_bool(
+                item["official_longbench_v2_correct"] for item in completed
+            ),
+            "end_to_end_accuracy": _mean_bool(
+                item["end_to_end_official_correct"] for item in selected
+            ),
+            "metric_authority": "pinned official LongBench-v2 answer extraction",
             "overall": overall,
             "domains": domains,
         }
@@ -2178,6 +2722,15 @@ def build_report(
     comparisons = paired_comparisons(
         score_rows, fixtures, arms, seed=bootstrap_seed, resamples=bootstrap_resamples
     )
+    configuration = schedule["configuration"]
+    candidate_binary = configuration["candidate"]["components"]["azdaja"]
+    executable_binary = configuration["executables"]["azdaja"]
+    candidate_binary_matches_executable = (
+        candidate_binary["sha256"] == executable_binary["sha256"]
+        and candidate_binary["bytes"] == executable_binary["bytes"]
+    )
+    if not candidate_binary_matches_executable:
+        raise ScoreError("candidate azdaja component/executable identity diverged after validation")
     disclosure = (
         "Private execution of a derived, publicly answer-joinable lb2-hard-long-63-v1 "
         "cohort; it is not blind/secret gold, not the complete official LongBench-v2 "
@@ -2202,6 +2755,14 @@ def build_report(
             ),
             "statement": disclosure,
         },
+        "version_stamp": {
+            "candidate": copy.deepcopy(configuration["candidate"]),
+            "candidate_azdaja_component": copy.deepcopy(candidate_binary),
+            "candidate_azdaja_executable": copy.deepcopy(executable_binary),
+            "candidate_azdaja_component_equals_executable": candidate_binary_matches_executable,
+            "controller": copy.deepcopy(configuration["controller"]),
+            "executables": copy.deepcopy(configuration["executables"]),
+        },
         "protocol": {
             "model": MODEL,
             "reasoning": REASONING,
@@ -2219,6 +2780,11 @@ def build_report(
                 "version_command_rule": "[executable.path, '--version']",
                 "ordering": "random.Random(seed): shuffle fixtures once, then shuffle three arms per fixture",
                 "execution_failure_kinds": sorted(EXECUTION_FAILURE_KINDS),
+                "normalized_failure_taxonomy": list(FAILURE_TAXONOMY),
+                "failure_taxonomy_precedence": list(FAILURE_TAXONOMY_PRECEDENCE),
+                "root_context_match_characters": ROOT_CONTEXT_MATCH_CHARACTERS,
+                "root_context_rolling_hash": ROOT_CONTEXT_ROLLING_HASH,
+                "root_token_economy_authorities": sorted(ROOT_TOKEN_ECONOMY_AUTHORITIES),
             },
             "official_metric": (
                 "Pinned upstream LongBench-v2 pred.py extract_answer followed by exact answer equality"
@@ -2249,6 +2815,15 @@ def build_report(
             "scheduled_jobs": len(jobs),
             "terminal_rows": len(rows),
             "claims_and_completions": 2 * len(jobs),
+            "candidate_azdaja_component_equals_executable": candidate_binary_matches_executable,
+            "treatment_exact_root_transcripts_valid_n": sum(
+                row["root_context_leak_assertion"]["trace_valid"]
+                for row in rows if row["arm"] == "jcode-azdaja"
+            ),
+            "treatment_root_context_leaks_n": sum(
+                row["root_context_leak_assertion"]["leak_detected"] is True
+                for row in rows if row["arm"] == "jcode-azdaja"
+            ),
         },
         "bootstrap": {
             "seed": bootstrap_seed,
