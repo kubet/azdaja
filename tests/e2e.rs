@@ -676,6 +676,7 @@ if os.getenv('RLM_DEPTH') == '0':
     end = '--- END UNTRUSTED SCHEMA SAMPLE ---'
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
     required = ('parse only the observed schema', 'every source occurrence', 'integer multiplicity',
+                'source_count = len(rows)', 'never overwrite rows',
                 'semantic_manifest(items, task, labels)', 'two blind independent full manifests',
                 'strictly validates both', 'blindly adjudicates every disagreement',
                 'two-key dicts named id and evidence', 'nonempty unique string',
@@ -960,6 +961,9 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
                     "hello" => vec![serde_json::json!({
                         "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
                     })],
+                    "create_session" if session_number == 1 => vec![serde_json::json!({
+                        "v":1,"ev":"session_status","status":"attached","session_id":&sid
+                    })],
                     "create_session" => vec![serde_json::json!({
                         "v":1,"reply_to":id,"ev":"attached",
                         "session":{"session_id":&sid,"status":"idle"}
@@ -968,6 +972,16 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
                         "v":1,"reply_to":id,"ev":"runtime_info","session_id":&sid,
                         "provider":"OpenAI","model":"gpt-5.4"
                     })],
+                    "set_model" if session_number == 1 => {
+                        assert_eq!(f["model"], "openai-oauth:gpt-5.4");
+                        vec![
+                            serde_json::json!({
+                                "v":1,"reply_to":id - 1,"ev":"attached",
+                                "session":{"session_id":&sid,"status":"idle"}
+                            }),
+                            serde_json::json!({"v":1,"reply_to":id,"ev":"ok"}),
+                        ]
+                    }
                     "set_model" => {
                         assert_eq!(f["model"], "openai-oauth:gpt-5.4");
                         vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]

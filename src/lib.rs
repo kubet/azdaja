@@ -1365,6 +1365,38 @@ impl JcodeSession {
             .ok_or_else(|| anyhow!("jcode session setup timed out"))?;
         self.reply_with_timeout(id, kind, remaining)
     }
+    fn attached_before(&mut self, id: u64, deadline: Instant) -> Result<String> {
+        loop {
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .ok_or_else(|| anyhow!("jcode session attach timed out"))?;
+            self.stream.set_read_timeout(Some(remaining))?;
+            let f = self.frame()?;
+            if f.get("reply_to").and_then(serde_json::Value::as_u64) == Some(id)
+                && f.get("ev").and_then(serde_json::Value::as_str) == Some("error")
+            {
+                bail!(
+                    "jcode API: {}",
+                    f.get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("error")
+                )
+            }
+            let correlated = f.get("reply_to").and_then(serde_json::Value::as_u64) == Some(id)
+                && f.get("ev").and_then(serde_json::Value::as_str) == Some("attached");
+            let status = f.get("ev").and_then(serde_json::Value::as_str) == Some("session_status")
+                && f.get("status").and_then(serde_json::Value::as_str) == Some("attached");
+            if correlated || status {
+                let sid = f
+                    .pointer("/session/session_id")
+                    .or_else(|| f.get("session_id"))
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| anyhow!("jcode API omitted session id"))?;
+                return Ok(sid.to_owned());
+            }
+        }
+    }
     fn open(cfg: &Config, model: &str) -> Result<Self> {
         Self::open_with_timeout(cfg, model, Duration::from_secs(cfg.sub_timeout))
     }
@@ -1375,9 +1407,8 @@ impl JcodeSession {
         Self::open_with_timeout(cfg, model, jcode_batch_timeout(cfg, prompt_chars))
     }
     fn open_for_batch_serialized(cfg: &Config, model: &str, prompt_chars: usize) -> Result<Self> {
-        // The private bridge can serve concurrent turns, but its subscription control plane
-        // intermittently stalls when multiple sessions are created at once. Serialize only
-        // setup; release the lock before inference so independent turns still overlap.
+        // Independence requires one API connection and session per item. Conservatively order
+        // their short setup handshakes, then release the lock before concurrent model turns.
         let _guard = JCODE_SETUP_LOCK.lock().unwrap();
         Self::open_for_batch(cfg, model, prompt_chars)
     }
@@ -1401,20 +1432,21 @@ impl JcodeSession {
         };
         let setup_deadline = Instant::now() + Duration::from_secs(12);
         let id=this.send(serde_json::json!({"req":"hello","min_version":1,"max_version":1,"client":format!("azdaja/{VERSION}")}))?;
-        this.reply_before(id, "hello_ok", setup_deadline)?;
+        this.reply_before(id, "hello_ok", setup_deadline)
+            .context("jcode hello setup")?;
         let id = this
             .send(serde_json::json!({"req":"create_session","working_dir":env::current_dir()?}))?;
-        let f = this.reply_before(id, "attached", setup_deadline)?;
-        this.session = f
-            .pointer("/session/session_id")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| anyhow!("jcode API omitted session id"))?
-            .into();
+        this.session = this
+            .attached_before(id, setup_deadline)
+            .context("jcode attach setup")?;
         let id=this.send(serde_json::json!({"req":"set_model","session_id":this.session,"model":format!("openai-oauth:{model}")}))?;
-        this.reply_before(id, "ok", setup_deadline)?;
+        this.reply_before(id, "ok", setup_deadline)
+            .context("jcode model setup")?;
         let id =
             this.send(serde_json::json!({"req":"get_runtime_info","session_id":this.session}))?;
-        let rt = this.reply_before(id, "runtime_info", setup_deadline)?;
+        let rt = this
+            .reply_before(id, "runtime_info", setup_deadline)
+            .context("jcode route setup")?;
         let provider = rt
             .get("provider")
             .and_then(serde_json::Value::as_str)
@@ -1430,7 +1462,8 @@ impl JcodeSession {
         this.provider = "OpenAI OAuth".into();
         this.model = resolved.into();
         let id=this.send(serde_json::json!({"req":"set_reasoning_effort","session_id":this.session,"effort":cfg.jcode_reasoning}))?;
-        this.reply_before(id, "ok", setup_deadline)?;
+        this.reply_before(id, "ok", setup_deadline)
+            .context("jcode reasoning setup")?;
         this.cancel_before_archive = false;
         Ok(this)
     }
