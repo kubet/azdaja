@@ -921,6 +921,65 @@ def parse_jcode_usage(stdout: str, stderr: str) -> dict[str, int | None]:
     return result
 
 
+def parse_azdaja_route_evidence(path: Path | None) -> dict[str, Any] | None:
+    """Parse route/lifecycle evidence without treating transport errors as routes.
+
+    Every row must still be structurally valid. Error rows are counted separately;
+    they invalidate complete usage accounting but do not erase successful route facts.
+    """
+    if path is None or not path.exists():
+        return None
+    try:
+        raw_rows = [
+            line
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    except (OSError, UnicodeError):
+        return None
+    if not raw_rows:
+        return None
+    routes: set[str] = set()
+    depth_counts: dict[str, int] = {}
+    error_depth_counts: dict[str, int] = {}
+    for line in raw_rows:
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(row, dict):
+            return None
+        depth = _nonnegative_int(row.get("depth"))
+        timestamp_ms = _nonnegative_int(row.get("timestamp_ms"))
+        if depth is None or timestamp_ms is None:
+            return None
+        depth_key = str(depth)
+        if "error" in row:
+            error = row.get("error")
+            if not isinstance(error, str) or not error.strip():
+                return None
+            error_depth_counts[depth_key] = error_depth_counts.get(depth_key, 0) + 1
+            continue
+        provider = row.get("provider")
+        model = row.get("model")
+        if (
+            not isinstance(provider, str)
+            or not provider.strip()
+            or not isinstance(model, str)
+            or not model.strip()
+        ):
+            return None
+        routes.add(f"{provider}/{model}")
+        depth_counts[depth_key] = depth_counts.get(depth_key, 0) + 1
+    return {
+        "routes": sorted(routes),
+        "depth_counts": depth_counts,
+        "transport_error_rows": sum(error_depth_counts.values()),
+        "transport_error_depth_counts": error_depth_counts,
+        "all_rows_structurally_valid": True,
+    }
+
+
 def parse_azdaja_usage(path: Path | None) -> dict[str, Any] | None:
     """Strictly sum every model-trace row, including depth zero and recursion.
 
@@ -1314,7 +1373,10 @@ def runtime_assertion(
             "routes": parsed_routes,
             "expected_provider": "OpenAI subscription OAuth",
             "expected_model": MODEL,
-            "authority": "strict AZDAJA_MODEL_TRACE",
+            "transport_error_rows": (
+                0 if azdaja_usage is None else azdaja_usage.get("transport_error_rows", 0)
+            ),
+            "authority": "structurally valid successful rows in AZDAJA_MODEL_TRACE",
         }
     if name == "jcode-native":
         done = None
@@ -1758,7 +1820,12 @@ def run_one(
         if "azdaja_model_trace" in trace_captured
         else None
     )
-    route = runtime_assertion(arm_name, stdout, azdaja_usage)
+    azdaja_route_evidence = (
+        parse_azdaja_route_evidence(model_trace)
+        if "azdaja_model_trace" in trace_captured
+        else None
+    )
+    route = runtime_assertion(arm_name, stdout, azdaja_route_evidence)
     score = (
         strict_score(response, fixture)
         if execution_error is None and exit_code == 0 and not timed_out
@@ -1788,7 +1855,7 @@ def run_one(
             exit_code=exit_code,
             timed_out=timed_out,
             response=response,
-            trace_usage=azdaja_usage,
+            trace_usage=azdaja_route_evidence,
         )
         expected_traces = {"azdaja_model_trace", "azdaja_solo_trace"}
     else:

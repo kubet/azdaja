@@ -341,6 +341,20 @@ class ControllerTests(unittest.TestCase):
                 ) + "\n", encoding="utf-8"
             )
             self.assertIsNone(RUN.parse_azdaja_usage(path))
+            route_evidence = RUN.parse_azdaja_route_evidence(path)
+            self.assertEqual(route_evidence["depth_counts"], {"0": 1})
+            self.assertEqual(route_evidence["transport_error_rows"], 1)
+            self.assertTrue(
+                RUN.runtime_assertion("jcode-azdaja", "", route_evidence)["asserted"]
+            )
+            self.assertTrue(
+                RUN.direct_solo_lifecycle_assertion(
+                    exit_code=0,
+                    timed_out=False,
+                    response="Answer: 1",
+                    trace_usage=route_evidence,
+                )["asserted"]
+            )
             usage = RUN.usage_fields_from_azdaja(RUN.parse_azdaja_usage(path))
             self.assertFalse(RUN.direct_solo_usage_evidence(usage, None)["valid"])
 
