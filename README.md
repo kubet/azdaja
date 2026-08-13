@@ -73,30 +73,21 @@ Core commands:
 start  load  exec  final  list  kill  solo  doctor  install  uninstall
 ```
 
-## Benchmark status
+## Current benchmark
 
-These are private, frozen diagnostics—not official leaderboard results or a superiority claim. “Completed accuracy” uses only execution-success rows; “fixed-denominator exact” counts every scheduled row and treats execution failures as incorrect.
+One immutable current Azdaja candidate is evaluated against the controls. Historical development versions are intentionally omitted from this headline. This is a private derived-RULER diagnostic, not an official leaderboard result or a superiority claim.
 
-### Latest finalized cohorts
+| Arm | Execution | Completed exact | End-to-end exact | Mean root tokens | Mean time / item | Total time |
+|---|---:|---:|---:|---:|---:|---:|
+| **Azdaja** | 52/90 (57.78%) | 38/52 (73.08%) | 38/90 (42.22%) | **2,747** | 31.0s | 46.5m |
+| Native jcode | 90/90 (100%) | 84/90 (93.33%) | 84/90 (93.33%) | 16,318 | **10.5s** | **15.7m** |
+| Prime Agent | 90/90 (100%) | 85/90 (94.44%) | 85/90 (94.44%) | 7,064 | 12.8s | 19.3m |
 
-| Suite / cohort | Arm | Execution success | Completed accuracy | Fixed-denominator exact | Mean root tokens |
-|---|---|---:|---:|---:|---:|
-| Derived RULER v32b, 90 fixtures | Azdaja | 52/90 (57.78%) | 38/52 (73.08%) | 38/90 (42.22%) | 2,746.98 |
-| Derived RULER v32b, 90 fixtures | Native jcode | 90/90 (100%) | 84/90 (93.33%) | 84/90 (93.33%) | 16,318.49 |
-| Derived RULER v32b, 90 fixtures | Prime Agent | 90/90 (100%) | 85/90 (94.44%) | 85/90 (94.44%) | 7,064.26 |
-| OOLONG diagnostic v29, 26 fixtures | Azdaja | 25/26 (96.15%) | 24/25 (96.00%) | 24/26 (92.31%) | — |
-| OOLONG diagnostic v29, 26 fixtures | Native jcode | 25/26 (96.15%) | 22/25 (88.00%) | 22/26 (84.62%) | — |
-| OOLONG diagnostic v29, 26 fixtures | Prime Agent | 25/26 (96.15%) | 20/25 (80.00%) | 20/26 (76.92%) | — |
+Azdaja used 83.2% less root context than native jcode and 61.1% less than Prime Agent. That efficiency did **not** translate into a better overall result: 38 Monty/runtime process exits reduced fixed-denominator accuracy to 42.22%, while both controls exceeded 93%. Among completed Azdaja executions, accuracy was 73.08%. The clear current engineering target is execution reliability, not further context reduction.
 
-RULER v32b passed its frozen candidate regression floor: Azdaja improved from the historical v3 fixed-denominator result of 28/90 to 38/90, despite execution success falling from 60/90 to 52/90. All 90 Azdaja root transcripts—including failed attempts—passed the exact pre-gold scan with no common loaded-context substring of 100 or more Unicode characters. Its 38 execution failures were all normalized as `other_execution` from raw `process_exit`; controls had none. Root-token evidence covered 90/90 rows for every arm. Azdaja’s recorded mean root context was 83.2% lower than native jcode and 61.1% lower than Prime Agent, but its end-to-end accuracy was also much lower; this is an accuracy/economy trade-off, not a win over the controls.
+Root-token evidence covers 90/90 attempts for every arm and measures context entering each arm’s root, not total provider compute. Full provider-token totals are available for both controls (native 5.18M; Prime 4.59M), but Azdaja provider usage covers only its 52 successful executions, so no misleading all-attempt Azdaja provider-total comparison is shown. All 90 Azdaja root transcripts, including failures, passed the exact pre-gold leak gate: no loaded-context substring of 100 or more Unicode characters appeared at the root.
 
-Derived RULER is a project diagnostic, not an official RULER leaderboard. An earlier complete v32a cohort was preserved unscored after an OrbStack-driven disk-full incident caused one treatment row to lack mandatory transcript authority; v32b is a complete fresh cohort, not a selected retry. LongBench-v2 attempts v1–v5 were likewise preserved as failed, non-resumable, unscored cohorts.
-
-### Active same-candidate campaign
-
-Candidate v32 was built from private commit `48b8a16` with binary SHA-256 `f53d43ecde4fd800789d0b7469fa6ad81bb2dd46e41a0c643f90dc8e77a2228d`. RULER v32b passed; fresh LongBench-v2 (189 jobs) is next, followed only on a pass by OOLONG (78 jobs), using exactly the same candidate. Each suite is scored only after exact schedule closure and artifact validation.
-
-Every finalized report includes execution success, completed accuracy, fixed-denominator end-to-end accuracy, normalized failure taxonomy, root-token economy, and missingness. For Azdaja, any exact substring of at least 100 Unicode characters shared by the loaded long context and retained root transcript is a hard failure. Missing root-transcript evidence also blocks scoring.
+The candidate was built from private commit `48b8a16`; binary SHA-256 is `f53d43ecde4fd800789d0b7469fa6ad81bb2dd46e41a0c643f90dc8e77a2228d`. The same bytes are now running the frozen LongBench-v2 suite and will run OOLONG only if that gate passes. “Completed exact” excludes execution failures; “end-to-end exact” keeps the fixed 90-item denominator and counts failures as incorrect.
 
 ## Guarantees
 
