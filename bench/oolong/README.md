@@ -23,4 +23,12 @@ python3 bench/oolong/run.py \
 
 A frozen suite may instead use `--suite-manifest MANIFEST --resume`. The controller creates an immutable owner-only schedule before inference, binds every run to fixture/candidate/controller/executable hashes, rejects duplicate or out-of-order prefixes, and defers gold scoring until every scheduled run is terminal. Crash-orphaned claims fail closed rather than risking duplicate inference.
 
+After a suite is terminal and its deferred scores exist, `report.py` independently verifies the frozen schedule and run IDs, raw JSONL hash, every claim/completion receipt, manifest fixture hashes, and every recomputed strict score before reporting. It reports fixed-denominator completion/exactness/failures, all-attempt latency and token coverage, route integrity, paired both-correct efficiency ratios, and deterministic context-cluster bootstrap intervals. It refuses partial or tampered artifacts:
+
+```bash
+python3 bench/oolong/report.py /private/tmp/suite.jsonl \
+  --suite-manifest /private/tmp/sealed-suite/suite-manifest.json \
+  --bootstrap-iterations 20000 --pretty
+```
+
 No benchmark result is a release claim until repeated unseen items establish accuracy noninferiority and paired token/latency advantages.
