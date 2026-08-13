@@ -1138,7 +1138,9 @@ if os.getenv('RLM_DEPTH') == '0':
     begin = '--- BEGIN UNTRUSTED OFFSET-LABELLED STRUCTURAL SAMPLE ---'
     end = '--- END UNTRUSTED OFFSET-LABELLED STRUCTURAL SAMPLE ---'
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
-    required = ('inspect and parse complete ctx', 'preserve source occurrences',
+    required = ('full ctx is the original raw input string',
+                'not the sample encoding and not json unless the input itself is json',
+                'inspect and parse complete ctx', 'preserve source occurrences',
                 'semantic_manifest(items, task, labels) exactly once',
                 'nonempty list of exactly two-key dicts named id and evidence',
                 'nonempty unique string', 'complete faithful nonempty item evidence',
