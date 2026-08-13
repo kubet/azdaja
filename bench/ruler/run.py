@@ -1309,7 +1309,7 @@ def append_private_jsonl(
             metadata.st_uid != os.geteuid() or stat.S_IMODE(metadata.st_mode) != 0o600
         ):
             raise BenchError("inference output must be owned by current user with mode 0600")
-        if expected_token is not Ellipsis and (
+        if expected_token is not Ellipsis and expected_token is not None and (
             metadata.st_dev, metadata.st_ino, metadata.st_size
         ) != expected_token:
             raise BenchError("inference output identity/size changed after prefix validation")

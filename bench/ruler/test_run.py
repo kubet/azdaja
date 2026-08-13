@@ -220,6 +220,14 @@ class RulerRunnerTests(unittest.TestCase):
             output = root / "runs.jsonl"
             expected = RUN.secure_private_file_token(output, "test output")
             self.assertIsNone(expected)
+            first = root / "first.jsonl"
+            first_token = RUN.append_private_jsonl(
+                first, {"x": 1}, expected_token=None
+            )
+            self.assertEqual(first.read_bytes(), RUN.canonical_json_file_bytes({"x": 1}))
+            self.assertEqual(
+                first_token, RUN.secure_private_file_token(first, "first output")
+            )
             output.write_text("intrusion\n", encoding="utf-8")
             os.chmod(output, 0o600)
             with self.assertRaises(RUN.BenchError):
