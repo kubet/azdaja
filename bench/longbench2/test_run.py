@@ -771,6 +771,76 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(nested_receipt["events_scanned"], 1)
         self.assertEqual(nested_receipt["violations"], [])
 
+        # Jcode streams a JSON-encoded argument object through delta events. Decode
+        # the completed stream before scanning so JSON ``\ncat`` cannot become
+        # the synthetic token ``ncat``.
+        jcode_arguments = json.dumps(
+            {"command": safe_code, "intent": "inspect local fixture"},
+            separators=(",", ":"),
+        )
+        split = len(jcode_arguments) // 2
+        jcode_stdout = "\n".join(
+            json.dumps(event, separators=(",", ":"))
+            for event in (
+                {"type": "tool_start", "name": "bash"},
+                {"type": "tool_input", "delta": jcode_arguments[:split]},
+                {"type": "tool_input", "delta": jcode_arguments[split:]},
+                {"type": "tool_exec", "name": "bash"},
+            )
+        ) + "\n"
+        jcode_invocations = adapter._tool_invocations("jcode-native", jcode_stdout)
+        self.assertEqual(len(jcode_invocations), 1)
+        self.assertIn(safe_code, jcode_invocations[0][1].split("\0"))
+        jcode_receipt = adapter.scan_tool_policy(
+            "jcode-native", jcode_stdout,
+            task_dir=task_dir, context_path=context_path,
+        )
+        self.assertTrue(jcode_receipt["asserted"])
+
+        malformed_stdout = "\n".join(
+            json.dumps(event, separators=(",", ":"))
+            for event in (
+                {"type": "tool_start", "name": "bash"},
+                {
+                    "type": "tool_input",
+                    "delta": r'{"command":"\u0063url https://example.test"',
+                },
+                {"type": "tool_exec", "name": "bash"},
+            )
+        ) + "\n"
+        malformed_receipt = adapter.scan_tool_policy(
+            "jcode-native", malformed_stdout,
+            task_dir=task_dir, context_path=context_path,
+        )
+        self.assertFalse(malformed_receipt["asserted"])
+        self.assertIn(
+            "malformed tool arguments",
+            {item["category"] for item in malformed_receipt["violations"]},
+        )
+
+        # All aliases are inspected and a nonmatching boundary prevents distinct
+        # leaves from manufacturing ``git\s+clone``.
+        aliases_stdout = json.dumps(
+            {
+                "type": "tool_execution_start",
+                "toolName": "bash",
+                "args": {"left": "git", "right": "clone"},
+                "arguments": {"command": "curl https://example.test"},
+            },
+            separators=(",", ":"),
+        ) + "\n"
+        aliases = adapter._tool_invocations("prime-agent", aliases_stdout)
+        self.assertNotRegex(aliases[0][1], r"git\s+clone")
+        alias_receipt = adapter.scan_tool_policy(
+            "prime-agent", aliases_stdout,
+            task_dir=task_dir, context_path=context_path,
+        )
+        self.assertFalse(alias_receipt["asserted"])
+        self.assertIn(
+            "network access",
+            {item["category"] for item in alias_receipt["violations"]},
+        )
+
         network_code = (
             "%%bash\nncat host",
             "%%bash\ncurl https://example.test/data",

@@ -2108,7 +2108,7 @@ def _validate_adapter_contract(module: Any) -> None:
 
 
 def _argument_string_leaves(value: Any) -> list[str]:
-    """Extract only string argument values in a deterministic, boundary-safe order."""
+    """Extract only string argument values in deterministic container order."""
     if isinstance(value, str):
         return [value]
     if isinstance(value, dict):
@@ -2124,49 +2124,86 @@ def _argument_string_leaves(value: Any) -> list[str]:
     return []
 
 
+MALFORMED_ARGUMENT_STREAM = "AZDAJA_MALFORMED_TOOL_ARGUMENT_STREAM"
+
+
+def _decoded_stream_leaves(value: str) -> list[str]:
+    """Decode a complete streamed JSON argument object without serializing it."""
+    try:
+        decoded = json.loads(value)
+    except json.JSONDecodeError:
+        stripped = value.lstrip()
+        # Some Jcode versions may stream a bare command. A JSON-looking but
+        # malformed stream is different: its executed arguments are ambiguous,
+        # so surface a marker that the strict policy wrapper rejects.
+        if stripped.startswith(("{", "[", '"')):
+            return [MALFORMED_ARGUMENT_STREAM]
+        return [value] if value else []
+    return _argument_string_leaves(decoded)
+
+
+def _join_argument_leaves(leaves: Iterable[str]) -> str:
+    # NUL is not whitespace or a path/word character in any policy regexp, so
+    # separate argument values cannot manufacture cross-leaf command tokens.
+    return "\0".join(leaves)
+
+
 def _frozen_tool_invocations(module: Any, name: str, stdout: str) -> list[tuple[str, str]]:
-    """Read executed argument strings without inventing text through JSON escaping."""
+    """Read executed argument strings without inventing JSON or leaf-boundary text."""
     invocations: list[tuple[str, str]] = []
+    argument_keys = ("arguments", "args", "input", "command", "code")
     if name.startswith("jcode"):
         current_name: str | None = None
         starting_fields: list[str] = []
-        streamed_input = ""
+        streamed_delta = ""
+        streamed_fields: list[str] = []
         for obj in module.json_objects(stdout):
             typ = obj.get("type")
             if typ == "tool_start":
                 current_name = str(obj.get("name", "unknown"))
                 starting_fields = []
-                streamed_input = ""
-                for key in ("arguments", "args", "input", "command", "code"):
+                streamed_delta = ""
+                streamed_fields = []
+                for key in argument_keys:
                     if key in obj:
                         starting_fields.extend(_argument_string_leaves(obj[key]))
             elif typ == "tool_input":
-                value = obj.get("delta", obj.get("input", obj.get("arguments", "")))
-                # Input events are stream fragments, so join events exactly while
-                # retaining boundaries between distinct leaves within one event.
-                streamed_input += "\n".join(_argument_string_leaves(value))
+                if "delta" in obj:
+                    delta = obj["delta"]
+                    if isinstance(delta, str):
+                        streamed_delta += delta
+                    else:
+                        streamed_fields.extend(_argument_string_leaves(delta))
+                # Never let one supported alias mask another.
+                for key in argument_keys:
+                    if key in obj:
+                        streamed_fields.extend(_argument_string_leaves(obj[key]))
             elif typ == "tool_exec":
                 tool_name = str(obj.get("name", current_name or "unknown"))
                 direct_fields: list[str] = []
-                for key in ("arguments", "args", "input", "command", "code"):
+                for key in argument_keys:
                     if key in obj:
                         direct_fields.extend(_argument_string_leaves(obj[key]))
                 fields = list(starting_fields)
-                if streamed_input:
-                    fields.append(streamed_input)
+                fields.extend(_decoded_stream_leaves(streamed_delta))
+                fields.extend(streamed_fields)
                 fields.extend(direct_fields)
-                invocations.append((tool_name, "\n".join(fields)))
+                invocations.append((tool_name, _join_argument_leaves(fields)))
                 current_name = None
                 starting_fields = []
-                streamed_input = ""
+                streamed_delta = ""
+                streamed_fields = []
         return invocations
 
     for obj in module.json_objects(stdout):
         if obj.get("type") != "tool_execution_start":
             continue
         tool_name = str(obj.get("toolName", obj.get("name", "unknown")))
-        value = obj.get("args", obj.get("arguments", obj.get("input", "")))
-        invocations.append((tool_name, "\n".join(_argument_string_leaves(value))))
+        fields: list[str] = []
+        for key in argument_keys:
+            if key in obj:
+                fields.extend(_argument_string_leaves(obj[key]))
+        invocations.append((tool_name, _join_argument_leaves(fields)))
     return invocations
 
 
@@ -2193,6 +2230,33 @@ def _load_frozen_adapter(
     module._tool_invocations = lambda name, stdout: _frozen_tool_invocations(
         module, name, stdout
     )
+    original_scan_tool_policy = module.scan_tool_policy
+
+    def strict_scan_tool_policy(name: str, stdout: str, **kwargs: Any) -> dict[str, Any]:
+        receipt = original_scan_tool_policy(name, stdout, **kwargs)
+        invocations = _frozen_tool_invocations(module, name, stdout)
+        malformed = [
+            (tool_name, payload)
+            for tool_name, payload in invocations
+            if MALFORMED_ARGUMENT_STREAM in payload
+        ]
+        if not malformed:
+            return receipt
+        receipt = dict(receipt)
+        violations = list(receipt["violations"])
+        for tool_name, payload in malformed:
+            violations.append(
+                {
+                    "tool": tool_name,
+                    "category": "malformed tool arguments",
+                    "payload_sha256": sha256_bytes(payload.encode("utf-8")),
+                }
+            )
+        receipt["asserted"] = False
+        receipt["violations"] = violations
+        return receipt
+
+    module.scan_tool_policy = strict_scan_tool_policy
 
     original_runtime_assertion = module.runtime_assertion
 
