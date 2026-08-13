@@ -708,6 +708,225 @@ class RunnerTests(unittest.TestCase):
             "source_home": run_dir / "source", "skill": run_dir / "skill",
         }
 
+    def test_frozen_prime_tool_policy_scans_argument_leaves_without_json_escape_tokens(self):
+        def unused_arm_for(name, **kwargs):
+            del name, kwargs
+            raise AssertionError("arm creation is not used")
+
+        adapter = self.load_binding_adapter(unused_arm_for)
+        task_dir = self.root / "tool-policy-task"
+        task_dir.mkdir(mode=0o700)
+        context_path = task_dir / "payload.json"
+        private_bytes(context_path, b"{}\n")
+
+        safe_code = "%%bash\npwd\nls -l\ncat file"
+        safe_stdout = json.dumps(
+            {
+                "type": "tool_execution_start",
+                "toolName": "bash",
+                "args": {"code": safe_code},
+            },
+            separators=(",", ":"),
+        ) + "\n"
+        self.assertEqual(
+            adapter._tool_invocations("prime-agent", safe_stdout),
+            [("bash", safe_code)],
+        )
+        # Serializing structured args would turn the final ``\ncat`` escape into
+        # the apparent command token ``ncat``. The loaded adapter must scan the
+        # actual string value instead, including when it is nested more deeply.
+        self.assertIsNotNone(
+            adapter.NETWORK_ACCESS.search(json.dumps({"code": safe_code}))
+        )
+        self.assertIsNone(adapter.NETWORK_ACCESS.search(safe_code))
+        safe_receipt = adapter.scan_tool_policy(
+            "prime-agent", safe_stdout,
+            task_dir=task_dir, context_path=context_path,
+        )
+        self.assertTrue(safe_receipt["asserted"])
+        self.assertEqual(safe_receipt["events_scanned"], 1)
+        self.assertEqual(safe_receipt["violations"], [])
+
+        nested_args = {
+            "metadata": {"attempt": 1, "enabled": True},
+            "payload": [{"ignored": None}, {"code": safe_code}],
+        }
+        nested_stdout = json.dumps(
+            {
+                "type": "tool_execution_start",
+                "toolName": "bash",
+                "args": nested_args,
+            },
+            separators=(",", ":"),
+        ) + "\n"
+        self.assertEqual(
+            adapter._tool_invocations("prime-agent", nested_stdout),
+            [("bash", safe_code)],
+        )
+        nested_receipt = adapter.scan_tool_policy(
+            "prime-agent", nested_stdout,
+            task_dir=task_dir, context_path=context_path,
+        )
+        self.assertTrue(nested_receipt["asserted"])
+        self.assertEqual(nested_receipt["events_scanned"], 1)
+        self.assertEqual(nested_receipt["violations"], [])
+
+        network_code = (
+            "%%bash\nncat host",
+            "%%bash\ncurl https://example.test/data",
+            "import urllib.request\nurllib.request.urlopen('https://example.test')",
+        )
+        for code in network_code:
+            with self.subTest(code=code):
+                stdout = json.dumps(
+                    {
+                        "type": "tool_execution_start",
+                        "toolName": "bash",
+                        "args": {"code": code},
+                    },
+                    separators=(",", ":"),
+                ) + "\n"
+                receipt = adapter.scan_tool_policy(
+                    "prime-agent", stdout,
+                    task_dir=task_dir, context_path=context_path,
+                )
+                self.assertFalse(receipt["asserted"])
+                self.assertEqual(receipt["events_scanned"], 1)
+                self.assertIn(
+                    "network access",
+                    {item["category"] for item in receipt["violations"]},
+                )
+
+    def test_transport_error_then_success_is_route_failure_accepted_by_live_scorer(self):
+        manifest, public, _ = self.make_public()
+        suite = RUN.capture_public_suite(manifest)
+        schedule = self.fake_schedule(suite)
+        job = next(item for item in schedule["jobs"] if item["arm"] == "jcode-azdaja")
+        state: dict[str, Path] = {}
+
+        def treatment_arm_for(name, **kwargs):
+            self.assertEqual(name, "jcode-azdaja")
+            run_dir = Path(kwargs["run_dir"])
+            (run_dir / "home").mkdir(mode=0o700)
+            state["model_trace"] = run_dir / "azdaja-model-usage.jsonl"
+            state["solo_trace"] = run_dir / "azdaja-solo-trace.log"
+            arm = mock.Mock()
+            arm.command = ["azdaja", "--solo", "prompt"]
+            arm.auth_assertion = {"asserted": True}
+            arm.activation_mode = "direct_solo_product"
+            arm.skill_instructions_sha256 = None
+            arm.staged_skill = None
+            return arm, {}, {
+                "azdaja_model_trace": state["model_trace"],
+                "azdaja_solo_trace": state["solo_trace"],
+            }
+
+        def no_cleanup(arm_name, args, env, run_dir):
+            del arm_name, args, env, run_dir
+            return []
+
+        adapter = self.load_binding_adapter(
+            treatment_arm_for, original_cleanup_run=no_cleanup
+        )
+        fixture = RUN._make_adapter_fixture(
+            adapter,
+            next(item for item in suite.fixtures if item.fixture_id == job["fixture_id"]),
+            public,
+        )
+        answer = "The correct answer is (A)"
+        stdout = json.dumps(
+            {"type": "result", "response": answer}, separators=(",", ":")
+        ) + "\n"
+        trace_rows = [
+            {
+                "timestamp_ms": 1,
+                "depth": 0,
+                "error": "provider_call_failed",
+                "stage": "turn",
+                "detail": "TimeoutError: deterministic injected timeout",
+            },
+            {
+                "timestamp_ms": 2,
+                "depth": 0,
+                "provider": "openai",
+                "model": RUN.MODEL,
+                "input_tokens": 11,
+                "output_tokens": 3,
+                "cache_read_tokens": 2,
+                "cache_write_tokens": 0,
+                "latency_ms": 7,
+            },
+        ]
+
+        def successful_retry_execute(*_args):
+            private_bytes(
+                state["model_trace"],
+                b"".join(
+                    (json.dumps(row, separators=(",", ":")) + "\n").encode()
+                    for row in trace_rows
+                ),
+            )
+            private_bytes(state["solo_trace"], b"deterministic solo trace\n")
+            return 0, stdout, "", False, 0.25
+
+        work_root = self.root / "transport-incident-runs"
+        args = argparse.Namespace(
+            timeout=60,
+            seed=RUN.DEFAULT_SEED,
+            jcode="jcode",
+            executable_identities=schedule["configuration"]["executables"],
+        )
+        with mock.patch.object(
+            adapter, "execute", side_effect=successful_retry_execute
+        ):
+            adapter_row = adapter.run_one(
+                arm_name="jcode-azdaja",
+                repetition=1,
+                ordinal=job["ordinal"],
+                fixture=fixture,
+                prompt=None,
+                args=args,
+                root=self.root,
+                source_home=self.root / "source-home",
+                skill=self.root / "candidate",
+                auth_jcode={},
+                auth_prime={},
+                work_root=work_root,
+                defer_scoring=True,
+            )
+
+        route = adapter_row["runtime_route_assertion"]
+        self.assertFalse(route["asserted"])
+        self.assertEqual(route["transport_error_rows"], 1)
+        self.assertEqual(
+            route["routes"], [{"provider": "openai", "model": RUN.MODEL}]
+        )
+        self.assertFalse(adapter_row["execution_success"])
+        self.assertEqual(adapter_row["failure"]["kind"], "route_assertion")
+        self.assertIsNone(adapter_row["azdaja_model_usage"])
+        self.assertFalse(adapter_row["efficiency_evidence"]["valid"])
+        self.assertIsNone(adapter_row["usage"]["total_tokens"])
+
+        run_dir = work_root / f"r001-{job['ordinal']:03d}-jcode-azdaja"
+        retained_trace = (run_dir / "azdaja-model-usage.jsonl").read_text()
+        self.assertIn("provider_call_failed", retained_trace)
+        self.assertIn("deterministic injected timeout", retained_trace)
+        raw_response = RUN.extract_final_raw(
+            adapter, "jcode-azdaja", (run_dir / "stdout.ndjson").read_text()
+        )
+        row = RUN.transform_adapter_row(
+            adapter_row,
+            job,
+            schedule,
+            raw_response=raw_response,
+            trajectory_artifacts=adapter_row["trajectory_artifacts"],
+        )
+        # This exercises the scorer's full terminal-row contract: a detailed false
+        # route is an accepted execution failure, never a degraded success.
+        RUN._verify_row_live(row, job, schedule, suite)
+        self.assertFalse(row["execution_success"])
+        self.assertEqual(row["failure"]["kind"], "route_assertion")
+
     def test_mandatory_artifacts_and_exact_run_directory_inventory(self):
         run_dir = self.root / "run-artifacts"
         run_dir.mkdir(mode=0o700)

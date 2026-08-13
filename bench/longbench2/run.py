@@ -2107,6 +2107,69 @@ def _validate_adapter_contract(module: Any) -> None:
         raise BenchError("frozen OOLONG adapter arm contract drifted")
 
 
+def _argument_string_leaves(value: Any) -> list[str]:
+    """Extract only string argument values in a deterministic, boundary-safe order."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        leaves: list[str] = []
+        for key in sorted(value):
+            leaves.extend(_argument_string_leaves(value[key]))
+        return leaves
+    if isinstance(value, list):
+        leaves = []
+        for item in value:
+            leaves.extend(_argument_string_leaves(item))
+        return leaves
+    return []
+
+
+def _frozen_tool_invocations(module: Any, name: str, stdout: str) -> list[tuple[str, str]]:
+    """Read executed argument strings without inventing text through JSON escaping."""
+    invocations: list[tuple[str, str]] = []
+    if name.startswith("jcode"):
+        current_name: str | None = None
+        starting_fields: list[str] = []
+        streamed_input = ""
+        for obj in module.json_objects(stdout):
+            typ = obj.get("type")
+            if typ == "tool_start":
+                current_name = str(obj.get("name", "unknown"))
+                starting_fields = []
+                streamed_input = ""
+                for key in ("arguments", "args", "input", "command", "code"):
+                    if key in obj:
+                        starting_fields.extend(_argument_string_leaves(obj[key]))
+            elif typ == "tool_input":
+                value = obj.get("delta", obj.get("input", obj.get("arguments", "")))
+                # Input events are stream fragments, so join events exactly while
+                # retaining boundaries between distinct leaves within one event.
+                streamed_input += "\n".join(_argument_string_leaves(value))
+            elif typ == "tool_exec":
+                tool_name = str(obj.get("name", current_name or "unknown"))
+                direct_fields: list[str] = []
+                for key in ("arguments", "args", "input", "command", "code"):
+                    if key in obj:
+                        direct_fields.extend(_argument_string_leaves(obj[key]))
+                fields = list(starting_fields)
+                if streamed_input:
+                    fields.append(streamed_input)
+                fields.extend(direct_fields)
+                invocations.append((tool_name, "\n".join(fields)))
+                current_name = None
+                starting_fields = []
+                streamed_input = ""
+        return invocations
+
+    for obj in module.json_objects(stdout):
+        if obj.get("type") != "tool_execution_start":
+            continue
+        tool_name = str(obj.get("toolName", obj.get("name", "unknown")))
+        value = obj.get("args", obj.get("arguments", obj.get("input", "")))
+        invocations.append((tool_name, "\n".join(_argument_string_leaves(value))))
+    return invocations
+
+
 def _load_frozen_adapter(
     paths: FrozenPaths, *, kernel_environment: Path
 ):
@@ -2122,6 +2185,36 @@ def _load_frozen_adapter(
     # snapshot. The adapter still stages and audits its isolated copy, but the
     # executable actually invoked is the exact path bound by the schedule.
     module.build_prompt = build_lb2_prompt
+
+    # The copied adapter used JSON serialization for structured tool arguments.
+    # Escaped newlines can synthesize command tokens (for example ``\\ncat``
+    # becoming a lexical ``ncat`` match), so scan only the recursively extracted
+    # string leaves and keep each distinct argument leaf on its own boundary.
+    module._tool_invocations = lambda name, stdout: _frozen_tool_invocations(
+        module, name, stdout
+    )
+
+    original_runtime_assertion = module.runtime_assertion
+
+    def transport_strict_runtime_assertion(
+        name: str, stdout: str, azdaja_usage: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        route = original_runtime_assertion(name, stdout, azdaja_usage)
+        # A structurally valid later success still proves the observed route, but
+        # it must not turn a trajectory containing a typed transport failure into
+        # an execution success. Preserve every evidence field and billed-usage
+        # receipt; only withdraw the positive route assertion.
+        if (
+            name == "jcode-azdaja"
+            and isinstance(route, dict)
+            and type(route.get("transport_error_rows")) is int
+            and route["transport_error_rows"] > 0
+        ):
+            route = dict(route)
+            route["asserted"] = False
+        return route
+
+    module.runtime_assertion = transport_strict_runtime_assertion
 
     def forbidden_adapter_scoring(*_args: Any, **_kwargs: Any):
         raise BenchError("runner invariant: adapter scoring is forbidden; scoring is owner-deferred")
