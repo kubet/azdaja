@@ -982,16 +982,13 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
                             "provider":"OpenAI","model":active_model
                         }),
                     ],
-                    "create_session" => vec![
-                        serde_json::json!({
-                            "v":1,"reply_to":id,"ev":"attached",
-                            "session":{"session_id":&sid,"status":"idle"}
-                        }),
-                        serde_json::json!({
-                            "v":1,"ev":"model_info","session_id":&sid,
-                            "provider":"OpenAI","model":active_model
-                        }),
-                    ],
+                    // A correlated attached reply is the completion barrier. The
+                    // unsolicited initial model_info event is optional; runtime_info
+                    // below is the authoritative route check.
+                    "create_session" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"attached",
+                        "session":{"session_id":&sid,"status":"idle"}
+                    })],
                     "set_model" => {
                         assert_eq!(f["model"], "openai-oauth:gpt-5.4");
                         active_model = "gpt-5.4";
@@ -1110,6 +1107,272 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
 }
 
 #[cfg(unix)]
+#[test]
+#[cfg(unix)]
+fn jcode_fresh_batch_retries_setup_without_repeating_model_turn() {
+    use std::io::{BufRead, BufReader, Write as _};
+    use std::os::unix::net::UnixListener;
+    use std::thread;
+
+    let t = temp("jsr");
+    let socket = t.join("api.sock");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = thread::spawn(move || {
+        let mut messages = Vec::new();
+        for session_number in 1..=3 {
+            let (probe, _) = listener.accept().unwrap();
+            drop(probe);
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let sid = format!("s{session_number}");
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 {
+                    break;
+                }
+                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let id = request["id"].as_u64().unwrap();
+                let req = request["req"].as_str().unwrap();
+                let frames = match req {
+                    "hello" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
+                    })],
+                    "create_session" if session_number < 3 => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"error","message":"injected setup failure"
+                    })],
+                    "create_session" => vec![
+                        serde_json::json!({
+                            "v":1,"reply_to":id,"ev":"attached",
+                            "session":{"session_id":&sid,"status":"idle"}
+                        }),
+                        serde_json::json!({
+                            "v":1,"ev":"model_info","session_id":&sid,
+                            "provider":"OpenAI","model":"gpt-5.4"
+                        }),
+                    ],
+                    "get_runtime_info" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"runtime_info","session_id":&sid,
+                        "provider":"OpenAI","model":"gpt-5.4",
+                        "routes":[{"provider":"OpenAI","model":"gpt-5.4",
+                            "api_method":"openai-oauth","available":true}]
+                    })],
+                    "set_reasoning_effort" => {
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    "send_message" => {
+                        messages.push(request["content"].as_str().unwrap().to_owned());
+                        vec![
+                            serde_json::json!({
+                                "v":1,"ev":"model_info","session_id":&sid,
+                                "provider":"OpenAI","model":"gpt-5.4"
+                            }),
+                            serde_json::json!({
+                                "v":1,"ev":"text_delta","session_id":&sid,"text":"ONLY_OK"
+                            }),
+                            serde_json::json!({
+                                "v":1,"ev":"token_usage","session_id":&sid,
+                                "input":7,"output":1,"cache_read_input":0
+                            }),
+                            serde_json::json!({"v":1,"ev":"turn_done","session_id":&sid}),
+                        ]
+                    }
+                    "archive_session" => {
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    other => panic!("unexpected {other}"),
+                };
+                for frame in frames {
+                    serde_json::to_writer(&mut stream, &frame).unwrap();
+                    stream.write_all(b"\n").unwrap();
+                    stream.flush().unwrap();
+                }
+            }
+        }
+        messages
+    });
+
+    let cfg = config(&t, "jcode-api", 1024, 1, 3, 4);
+    let id = sid(&t, &cfg);
+    let trace = t.join("usage.jsonl");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+    command
+        .args(["exec", &id])
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_API_SOCKET", &socket)
+        .env("AZDAJA_MODEL_TRACE", &trace)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"print(llm_batch_fresh(['once'],model='gpt-5.4',workers=1))\n")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    let out = ok(output);
+    assert!(out.contains("ONLY_OK"), "{out}");
+    assert_eq!(server.join().unwrap().len(), 1);
+
+    let rows: Vec<serde_json::Value> = fs::read_to_string(trace)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    assert_eq!(
+        rows.iter()
+            .filter(|row| row["stage"] == "session_setup")
+            .count(),
+        2
+    );
+    assert!(
+        rows[..2]
+            .iter()
+            .all(|row| row["setup_substage"] == "attach")
+    );
+    assert_eq!(
+        rows.iter().filter(|row| row.get("model").is_some()).count(),
+        1
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn jcode_fresh_batch_stops_after_four_failed_setups() {
+    use std::io::{BufRead, BufReader, Write as _};
+    use std::os::unix::net::UnixListener;
+    use std::thread;
+
+    let t = temp("jsb");
+    let socket = t.join("api.sock");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = thread::spawn(move || {
+        let mut messages = Vec::new();
+        let mut archives = Vec::new();
+        for session_number in 1..=4 {
+            let (probe, _) = listener.accept().unwrap();
+            drop(probe);
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let sid = format!("s{session_number}");
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 {
+                    break;
+                }
+                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let id = request["id"].as_u64().unwrap();
+                let req = request["req"].as_str().unwrap();
+                let frames = match req {
+                    "hello" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
+                    })],
+                    "create_session" => vec![
+                        serde_json::json!({
+                            "v":1,"reply_to":id,"ev":"attached",
+                            "session":{"session_id":&sid,"status":"idle"}
+                        }),
+                        serde_json::json!({
+                            "v":1,"ev":"model_info","session_id":&sid,
+                            "provider":"OpenAI","model":"gpt-5.4"
+                        }),
+                    ],
+                    "get_runtime_info" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"runtime_info","session_id":&sid,
+                        "provider":"OpenAI","model":"gpt-5.4",
+                        "routes":[{"provider":"OpenAI","model":"gpt-5.4",
+                            "api_method":"openai-oauth","available":true}]
+                    })],
+                    "set_reasoning_effort" => vec![serde_json::json!({
+                        "v":1,"reply_to":id,"ev":"error","message":"injected setup failure"
+                    })],
+                    "send_message" => {
+                        messages.push(request["content"].as_str().unwrap().to_owned());
+                        vec![
+                            serde_json::json!({
+                                "v":1,"ev":"model_info","session_id":&sid,
+                                "provider":"OpenAI","model":"gpt-5.4"
+                            }),
+                            serde_json::json!({
+                                "v":1,"ev":"text_delta","session_id":&sid,"text":"ONLY_OK"
+                            }),
+                            serde_json::json!({
+                                "v":1,"ev":"token_usage","session_id":&sid,
+                                "input":7,"output":1,"cache_read_input":0
+                            }),
+                            serde_json::json!({"v":1,"ev":"turn_done","session_id":&sid}),
+                        ]
+                    }
+                    "cancel" => {
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    "archive_session" => {
+                        archives.push(sid.clone());
+                        vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
+                    }
+                    other => panic!("unexpected {other}"),
+                };
+                for frame in frames {
+                    serde_json::to_writer(&mut stream, &frame).unwrap();
+                    stream.write_all(b"\n").unwrap();
+                    stream.flush().unwrap();
+                }
+            }
+        }
+        (messages, archives)
+    });
+
+    let cfg = config(&t, "jcode-api", 1024, 1, 3, 4);
+    let id = sid(&t, &cfg);
+    let trace = t.join("usage.jsonl");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+    command
+        .args(["exec", &id])
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_API_SOCKET", &socket)
+        .env("AZDAJA_MODEL_TRACE", &trace)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"print(llm_batch_fresh(['once'],model='gpt-5.4',workers=1))\n")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    let out = ok(output);
+    assert!(out.contains("provider_call_failed_retry_item"), "{out}");
+    let (messages, archives) = server.join().unwrap();
+    assert!(messages.is_empty());
+    assert_eq!(archives, vec!["s1", "s2", "s3", "s4"]);
+
+    let rows: Vec<serde_json::Value> = fs::read_to_string(trace)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(rows.len(), 4, "{rows:?}");
+    assert_eq!(
+        rows.iter()
+            .filter(|row| row["stage"] == "session_setup")
+            .count(),
+        4
+    );
+    assert!(rows.iter().all(|row| row["setup_substage"] == "reasoning"));
+    assert_eq!(
+        rows.iter().filter(|row| row.get("model").is_some()).count(),
+        0
+    );
+}
+
 #[test]
 fn jcode_batch_retries_provider_once_then_preserves_failure() {
     use std::io::{BufRead, BufReader, Write as _};

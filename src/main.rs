@@ -649,7 +649,7 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
                 Err(error) => root_error = Some(error),
             },
             Err(error) => {
-                let _ = trace_model_setup_failure(0);
+                let _ = trace_model_setup_failure(0, &error);
                 root_error = Some(error);
             }
         }

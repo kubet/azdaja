@@ -960,17 +960,20 @@ fn call_many_items(
                                     thread::sleep(Duration::from_secs(2));
                                     let mut retry_entered_turn=false;
                                     let retry=(||{let mut fresh=JcodeSession::open_for_batch_serialized(cfg,model,prompts[i].chars().count())?;retry_entered_turn=true;match fresh.turn(&wire){Ok(reply)=>Ok(reply),Err(error)=>{fresh.discard();Err(error)}}})();
-                                    match retry { Ok(reply)=>{if trace_model_reply(&reply,depth+1).is_err(){let _=trace_model_failure(depth+1);} Ok(reply.text)}, Err(retry_error)=>{let _=if retry_entered_turn { trace_model_failure(depth+1) } else { trace_model_setup_failure(depth+1) };Err(anyhow!("shared turn failed: {error:#}; retry failed: {retry_error:#}"))} }
+                                    match retry { Ok(reply)=>{if trace_model_reply(&reply,depth+1).is_err(){let _=trace_model_failure(depth+1);} Ok(reply.text)}, Err(retry_error)=>{let _=if retry_entered_turn { trace_model_failure(depth+1) } else { trace_model_setup_failure(depth+1, &retry_error) };Err(anyhow!("shared turn failed: {error:#}; retry failed: {retry_error:#}"))} }
                                 }
                             }
                         } else {
-                        // Transport owns one bounded retry for a transient provider failure;
-                        // solve code owns contract validation and never repeats valid work. Cleanup
-                        // completes before the short backoff, so the retry cannot race a poisoned
-                        // subscription session.
+                        // Transport owns one bounded retry after an entered model turn and up to
+                        // four failed setups. Setup failures provably spend no model tokens; solve
+                        // code owns contract validation and never repeats a locally valid result.
+                        // The session is dropped before the short backoff, so a retry cannot reuse
+                        // a poisoned subscription connection.
                         let mut result = None;
-                        for physical_attempt in 0..2 {
-                            if physical_attempt == 1 {
+                        let mut turn_attempts = 0;
+                        let mut setup_attempts = 0;
+                        for physical_attempt in 0..5 {
+                            if physical_attempt > 0 {
                                 thread::sleep(Duration::from_secs(2));
                             }
                             let mut entered_turn = false;
@@ -1001,11 +1004,16 @@ fn call_many_items(
                                 }
                                 Err(error) => {
                                     let _ = if entered_turn {
+                                        turn_attempts += 1;
                                         trace_model_failure(depth + 1)
                                     } else {
-                                        trace_model_setup_failure(depth + 1)
+                                        setup_attempts += 1;
+                                        trace_model_setup_failure(depth + 1, &error)
                                     };
                                     result = Some(Err(error));
+                                    if turn_attempts >= 2 || setup_attempts >= 4 {
+                                        break
+                                    }
                                 }
                             }
                         }
@@ -1361,8 +1369,7 @@ impl JcodeSession {
             .ok_or_else(|| anyhow!("jcode session setup timed out"))?;
         self.reply_with_timeout(id, kind, remaining)
     }
-    fn attached_before(&mut self, id: u64, deadline: Instant) -> Result<(String, bool)> {
-        let mut saw_model_info = false;
+    fn attached_before(&mut self, id: u64, deadline: Instant) -> Result<String> {
         loop {
             let remaining = deadline
                 .checked_duration_since(Instant::now())
@@ -1379,12 +1386,6 @@ impl JcodeSession {
                         .unwrap_or("error")
                 )
             }
-            if f.get("ev").and_then(serde_json::Value::as_str) == Some("model_info")
-                && f.get("provider").and_then(serde_json::Value::as_str) == Some("OpenAI")
-                && f.get("model").and_then(serde_json::Value::as_str).is_some()
-            {
-                saw_model_info = true;
-            }
             let correlated = f.get("reply_to").and_then(serde_json::Value::as_u64) == Some(id)
                 && f.get("ev").and_then(serde_json::Value::as_str) == Some("attached");
             if correlated {
@@ -1394,30 +1395,7 @@ impl JcodeSession {
                     .and_then(serde_json::Value::as_str)
                     .filter(|value| !value.is_empty())
                     .ok_or_else(|| anyhow!("jcode API omitted session id"))?;
-                return Ok((sid.to_owned(), saw_model_info));
-            }
-        }
-    }
-    fn model_info_before(&mut self, deadline: Instant) -> Result<()> {
-        loop {
-            let remaining = deadline
-                .checked_duration_since(Instant::now())
-                .ok_or_else(|| anyhow!("jcode initial model info timed out"))?;
-            self.stream.set_read_timeout(Some(remaining))?;
-            let f = self.frame()?;
-            if f.get("ev").and_then(serde_json::Value::as_str) == Some("error") {
-                bail!(
-                    "jcode API: {}",
-                    f.get("message")
-                        .and_then(serde_json::Value::as_str)
-                        .unwrap_or("error")
-                )
-            }
-            if f.get("ev").and_then(serde_json::Value::as_str) == Some("model_info")
-                && f.get("provider").and_then(serde_json::Value::as_str) == Some("OpenAI")
-                && f.get("model").and_then(serde_json::Value::as_str).is_some()
-            {
-                return Ok(());
+                return Ok(sid.to_owned());
             }
         }
     }
@@ -1477,14 +1455,13 @@ impl JcodeSession {
             .context("jcode hello setup")?;
         let id = this
             .send(serde_json::json!({"req":"create_session","working_dir":env::current_dir()?}))?;
-        let (session_id, saw_model_info) = this
+        let session_id = this
             .attached_before(id, setup_deadline)
             .context("jcode attach setup")?;
         this.session = session_id;
-        if !saw_model_info {
-            this.model_info_before(setup_deadline)
-                .context("jcode initial model setup")?;
-        }
+        // Runtime info is the authoritative post-attach route barrier. An uncorrelated
+        // model_info may arrive before or after the correlated attached reply, so do not
+        // make its timing part of session setup.
         let runtime_info = |session: &mut Self| -> Result<serde_json::Value> {
             let id = session
                 .send(serde_json::json!({"req":"get_runtime_info","session_id":session.session}))?;
@@ -1709,16 +1686,33 @@ impl RootDriver {
 }
 
 fn trace_model_failure(depth: u32) -> Result<()> {
-    trace_model_failure_stage(depth, "turn")
+    trace_model_failure_stage(depth, "turn", None)
 }
 
-pub fn trace_model_setup_failure(depth: u32) -> Result<()> {
-    trace_model_failure_stage(depth, "session_setup")
+pub fn trace_model_setup_failure(depth: u32, error: &anyhow::Error) -> Result<()> {
+    let message = format!("{error:#}");
+    let substage = if message.contains("hello setup") {
+        "hello"
+    } else if message.contains("attach setup") {
+        "attach"
+    } else if message.contains("route setup") {
+        "runtime_info"
+    } else if message.contains("model setup") {
+        "set_model"
+    } else if message.contains("reasoning setup") {
+        "reasoning"
+    } else {
+        "connect"
+    };
+    trace_model_failure_stage(depth, "session_setup", Some(substage))
 }
 
-fn trace_model_failure_stage(depth: u32, stage: &str) -> Result<()> {
+fn trace_model_failure_stage(depth: u32, stage: &str, setup_substage: Option<&str>) -> Result<()> {
     if let Some(path) = env::var_os("AZDAJA_MODEL_TRACE") {
-        let row = serde_json::json!({"timestamp_ms":now_ms(),"depth":depth,"error":"provider_call_failed","stage":stage});
+        let mut row = serde_json::json!({"timestamp_ms":now_ms(),"depth":depth,"error":"provider_call_failed","stage":stage});
+        if let Some(substage) = setup_substage {
+            row["setup_substage"] = serde_json::Value::String(substage.to_owned());
+        }
         let mut bytes = serde_json::to_vec(&row)?;
         bytes.push(b'\n');
         let mut options = OpenOptions::new();
