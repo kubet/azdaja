@@ -26,7 +26,7 @@ FINAL(answer)
 FINAL_VAR("variable_name")
 ```
 
-`solo` additionally preloads `semantic_manifest(items, task, labels)`: one full-coverage semantic wave, internal boundary review, strict validation, and bounded transient recovery.
+`solo` additionally preloads `semantic_manifest(items, task, labels)`: two blind independent full manifests, strict validation, and one blind complete adjudication of every disagreement within a preflighted call envelope.
 
 ## Install
 

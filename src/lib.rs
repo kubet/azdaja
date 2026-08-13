@@ -487,8 +487,9 @@ fn external(
             *final_out = Some(Final::Var(name));
             Ok(MontyObject::None)
         }
-        "llm" | "llm_batch" => {
-            let batch = name == "llm_batch";
+        "llm" | "llm_batch" | "llm_batch_fresh" => {
+            let batch = name != "llm";
+            let use_shared = name != "llm_batch_fresh";
             let (prompts, model, workers) = parse_call(args, kwargs, batch)?;
             let model = model
                 .as_deref()
@@ -502,7 +503,7 @@ fn external(
                     cfg.max_calls_per_cell
                 )
             }
-            let values = call_many_items(&prompts, model, workers, cfg, batch)?;
+            let values = call_many_items(&prompts, model, workers, cfg, batch, use_shared)?;
             if batch {
                 Ok(MontyObject::List(
                     values
@@ -601,7 +602,7 @@ fn run_cell(
 ) -> (MontyRepl, String, bool, Option<Final>) {
     repl.tracker_mut()
         .set_max_duration(Duration::from_secs(cfg.cell_timeout));
-    let inputs = ["llm", "llm_batch", "FINAL", "FINAL_VAR"]
+    let inputs = ["llm", "llm_batch", "llm_batch_fresh", "FINAL", "FINAL_VAR"]
         .into_iter()
         .map(|n| {
             (
@@ -895,6 +896,7 @@ fn call_many_items(
     workers: usize,
     cfg: &Config,
     batch: bool,
+    use_shared: bool,
 ) -> Result<Vec<CallItemResult>> {
     let depth = env::var("RLM_DEPTH")
         .ok()
@@ -937,7 +939,11 @@ fn call_many_items(
                     };
                     #[cfg(unix)]
                     let result = if batch && cfg.sub_llm_cmd == "jcode-api" {
-                        let shared=SOLO_SHARED_JCODE.lock().unwrap().take();
+                        let shared = if use_shared {
+                            SOLO_SHARED_JCODE.lock().unwrap().take()
+                        } else {
+                            None
+                        };
                         if let Some(mut api)=shared {
                             let wire=format!("[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",depth+1,cfg.max_depth,prompts[i]);
                             match api.turn(&wire) {
@@ -1029,7 +1035,7 @@ pub fn call_many(
     workers: usize,
     cfg: &Config,
 ) -> Result<Vec<String>> {
-    Ok(call_many_items(prompts, model, workers, cfg, true)?
+    Ok(call_many_items(prompts, model, workers, cfg, true, true)?
         .into_iter()
         .map(batch_item_value)
         .collect())

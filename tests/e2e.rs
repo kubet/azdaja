@@ -401,7 +401,7 @@ fn concurrent_starts_respect_limit() {
 }
 
 #[test]
-fn solo_fixed_manifest_prelude_owns_one_wave_provider_plumbing() {
+fn solo_fixed_manifest_prelude_owns_dual_provider_plumbing() {
     let t = temp("solo-manifest");
     let mock = t.join("semantic.py");
     fs::write(
@@ -422,6 +422,55 @@ else:
         &t,
         &cfg,
         &["solo", "binary annotation", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham:spam");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_dual_manifest_blindly_adjudicates_every_disagreement() {
+    let t = temp("solo-dual-adjudicate");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        r#"import os,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[{"id":"x","evidence":"first raw"},{"id":"y","evidence":"second raw"}]\nlabels=semantic_manifest(items,"official binary task",["ham","spam"])\nFINAL(labels["x"]+":"+labels["y"])\n```')
+elif 'annotator A' in p:
+    print('R00000000|ham\nR00000001|ham')
+elif 'annotator B' in p:
+    assert 'Allowed labels: spam, ham' in p
+    print('R00000000|ham\nR00000001|spam')
+elif 'final blind source-annotation adjudicator' in p:
+    assert 'R00000001 || second raw' in p
+    assert 'R00000000 || first raw' not in p
+    assert 'annotator A' not in p and 'annotator B' not in p
+    print('R00000001|spam')
+else:
+    raise SystemExit('unexpected prompt')
+"#,
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "official binary task",
+            "-f",
+            input.to_str().unwrap(),
+        ],
         "",
     );
     assert!(
@@ -476,6 +525,145 @@ else:
 }
 
 #[test]
+fn solo_dual_manifest_retries_only_malformed_primary_shard() {
+    let t = temp("solo-dual-contract-retry");
+    let a_seen = t.join("a-seen");
+    let calls = t.join("calls");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import os,sys,pathlib
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[{{"id":"x","evidence":"raw"}}]\nlabels=semantic_manifest(items,"official binary task",["ham","spam"])\nFINAL(labels["x"])\n```')
+else:
+    with open({calls:?}, 'a') as f: f.write('x')
+    if 'annotator A' in p and not pathlib.Path({a_seen:?}).exists():
+        pathlib.Path({a_seen:?}).write_text('seen')
+        print('malformed')
+    else:
+        print('R00000000|ham')
+"#,
+            calls = calls,
+            a_seen = a_seen,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "official binary task",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham");
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 3);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_dual_manifest_never_contract_retries_provider_errors() {
+    let t = temp("solo-dual-provider-error");
+    let calls = t.join("calls");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import os,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[{{"id":"x","evidence":"raw"}}]\nsemantic_manifest(items,"official binary task",["ham","spam"])\nFINAL("unreachable")\n```')
+else:
+    with open({calls:?}, 'a') as f: f.write('x')
+    if 'annotator A' in p:
+        print('{{"azdaja_error":"provider_call_failed_retry_item"}}')
+    else:
+        print('R00000000|ham')
+"#,
+            calls = calls,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "official binary task",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("semantic provider failure"));
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 2);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_dual_manifest_preflights_worst_case_call_budget() {
+    let t = temp("solo-dual-budget");
+    let marker = t.join("child-called");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import os,sys,pathlib
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[{{"id":"x","evidence":"raw"}}]\nsemantic_manifest(items,"official binary task",["ham","spam"])\nFINAL("unreachable")\n```')
+else:
+    pathlib.Path({marker:?}).write_text('called')
+    print('R00000000|ham')
+"#,
+            marker = marker,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("max_calls_per_cell = 64", "max_calls_per_cell = 4");
+    fs::write(&cfg, text).unwrap();
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "official binary task",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("semantic dual/adjudication call envelope")
+    );
+    assert!(!marker.exists(), "preflight must precede every child call");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
 fn solo_prompt_guides_exact_aggregation_in_one_root_turn() {
     let t = temp("solo");
     let mock = t.join("solo.py");
@@ -488,11 +676,12 @@ if os.getenv('RLM_DEPTH') == '0':
     end = '--- END UNTRUSTED SCHEMA SAMPLE ---'
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
     required = ('parse only the observed schema', 'every source occurrence', 'integer multiplicity',
-                'semantic_manifest(items, task, labels)', 'sharded full-coverage wave',
-                'strict manifest validation', 'one contract retry',
+                'semantic_manifest(items, task, labels)', 'two blind independent full manifests',
+                'strictly validates both', 'blindly adjudicates every disagreement',
                 'two-key dicts named id and evidence', 'nonempty unique string',
                 'call the helper exactly once iff semantic judgments are required',
-                'never call llm/llm_batch directly', 'os, re, json, math, collections, datetime',
+                'never call llm, llm_batch, or llm_batch_fresh directly',
+                'os, re, json, math, collections, datetime',
                 'globals/locals/callable', 'keep code under 50 nonblank lines')
     sample_ok = 'schema-canary' in sample and len(sample) <= 4096 and 'TAIL_NOT_IN_SAMPLE' not in p
     if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
@@ -659,7 +848,8 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
     assert!(skill.contains("actual rendered character length"));
     assert!(skill.contains("complete manifest"));
     assert!(skill.contains("Omission is unresolved"));
-    assert!(skill.contains("No second full pass"));
+    assert!(skill.contains("two independent complete manifests"));
+    assert!(skill.contains("Blindly adjudicate every A/B disagreement"));
     assert!(skill.contains("`yield`/generators"));
     assert!(skill.contains("`FINAL(answer)` is always defined"));
     assert!(skill.contains("`csv` and other imports are unavailable"));
@@ -741,111 +931,7 @@ fn cumulative_llm_budget_stops_repeated_calls_in_one_cell() {
 
 #[cfg(unix)]
 #[test]
-fn solo_jcode_reuses_root_session_for_one_semantic_wave() {
-    use std::io::{BufRead, BufReader, Write as _};
-    use std::os::unix::net::UnixListener;
-    use std::thread;
-
-    let t = temp("sjr");
-    let socket = t.join("api.sock");
-    let listener = UnixListener::bind(&socket).unwrap();
-    let server = thread::spawn(move || {
-        // RootDriver probes bridge liveness, then opens one protocol stream. The semantic wave
-        // must be a second turn on that same session, not another subscription session.
-        let (probe, _) = listener.accept().unwrap();
-        drop(probe);
-        let (mut stream, _) = listener.accept().unwrap();
-        let mut reader = BufReader::new(stream.try_clone().unwrap());
-        let mut events = Vec::new();
-        let mut turns = 0;
-        loop {
-            let mut line = String::new();
-            if reader.read_line(&mut line).unwrap() == 0 {
-                events.push("close:root".to_owned());
-                break;
-            }
-            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
-            let id = request["id"].as_u64().unwrap();
-            let req = request["req"].as_str().unwrap();
-            let frames = match req {
-                "hello" => vec![
-                    serde_json::json!({"v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"}),
-                ],
-                "create_session" => {
-                    events.push("create:root".to_owned());
-                    vec![
-                        serde_json::json!({"v":1,"reply_to":id,"ev":"attached","session":{"session_id":"root","status":"idle"}}),
-                    ]
-                }
-                "set_model" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
-                "get_runtime_info" => vec![
-                    serde_json::json!({"v":1,"reply_to":id,"ev":"runtime_info","session_id":"root","provider":"OpenAI","model":"mock"}),
-                ],
-                "set_reasoning_effort" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
-                "send_message" => {
-                    turns += 1;
-                    events.push(format!("turn:{turns}"));
-                    let answer = if turns == 1 {
-                        "```python\nitems=[{\"id\":\"R1\",\"evidence\":\"ordinary note\"}]\nlabels=semantic_manifest(items,\"binary annotation\",[\"ham\",\"spam\"])\nFINAL(labels[\"R1\"])\n```"
-                    } else {
-                        assert_eq!(turns, 2, "unexpected third model turn");
-                        "R00000000|ham"
-                    };
-                    vec![
-                        serde_json::json!({"v":1,"ev":"model_info","session_id":"root","provider":"OpenAI","model":"mock"}),
-                        serde_json::json!({"v":1,"ev":"text_delta","session_id":"root","text":answer}),
-                        serde_json::json!({"v":1,"ev":"turn_done","session_id":"root"}),
-                    ]
-                }
-                "archive_session" => {
-                    events.push("archive:root".to_owned());
-                    vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
-                }
-                other => panic!("unexpected {other}"),
-            };
-            for frame in frames {
-                serde_json::to_writer(&mut stream, &frame).unwrap();
-                stream.write_all(b"\n").unwrap();
-                stream.flush().unwrap();
-            }
-        }
-        events
-    });
-
-    let cfg = config(&t, "jcode-api", 2048, 1, 3, 4);
-    let input = t.join("input.txt");
-    fs::write(&input, "deterministic context").unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
-        .args(["solo", "question", "-f", input.to_str().unwrap()])
-        .env_remove("RLM_DEPTH")
-        .env("AZDAJA_HOME", t.join("state"))
-        .env("AZDAJA_CONFIG", &cfg)
-        .env("AZDAJA_JCODE_API_SOCKET", &socket)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "stdout={} stderr={}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham");
-    assert_eq!(
-        server.join().unwrap(),
-        [
-            "create:root",
-            "turn:1",
-            "turn:2",
-            "archive:root",
-            "close:root"
-        ]
-    );
-    fs::remove_dir_all(t).unwrap();
-}
-
-#[cfg(unix)]
-#[test]
-fn jcode_api_batch_uses_one_fresh_session_per_item_and_streams_usage() {
+fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
     use std::io::{BufRead, BufReader, Write as _};
     use std::os::unix::net::UnixListener;
     use std::thread;
@@ -949,7 +1035,7 @@ fn jcode_api_batch_uses_one_fresh_session_per_item_and_streams_usage() {
         .take()
         .unwrap()
         .write_all(
-            b"print(llm_batch(['direct secret prompt','second'],model='gpt-5.4',workers=1))\n",
+            b"print(llm_batch_fresh(['direct secret prompt','second'],model='gpt-5.4',workers=1))\n",
         )
         .unwrap();
     let out = child.wait_with_output().unwrap();
