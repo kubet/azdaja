@@ -104,8 +104,38 @@ its median attempt was 2.77x native, so the <=1.5x speed gate did not pass.
 
 ### Derived LongBench-v2 hard/long subset, 63 fixtures
 
-The pinned official LongBench-v2 answer extractor is the primary metric here.
-Every scheduled failure remains a fixed-denominator zero.
+#### Latest exact-v43 refresh: terminal-invalid and unscored
+
+A new exact-v43 refresh completed all 189 scheduled inference rows and all 378
+claim/completion receipts. Execution was 48/63 for Azdaja, 63/63 for native
+jcode, and 57/63 for Prime Agent. The preregistered no-gold terminal validator
+then rejected the first Azdaja trace because it required alphabetically sorted
+JSON keys while the unchanged Rust binary emitted valid duplicate-free compact
+Serde struct-field order. A retained transient turn timeout followed by a
+successful retry also exposed a second failed-row compatibility omission.
+
+The frozen predicate controls: this refresh is permanently **terminal-invalid,
+unscored, and ineligible for promotion**. Gold was not opened; its execution
+counts must not be combined with an older score; it cannot authorize OOLONG or
+RAH; and it will not be retried, resumed, replayed, or post-hoc relabeled. The
+preserved inference output has SHA-256
+`1578d7a38200f0c7631f90f17bc7b233f735af6b0ecd0792f540b1cc66fe3062`
+and its schedule has SHA-256
+`f7de7ed119347a9cea27ace3bb9cc1b7a6879e781a6e50da5f8c014ba68d4249`.
+
+Trace ordering and conservative retry handling have been corrected and
+regression-tested for future protocol work. No new freeze is authorized yet: a
+version-bound, fixed 20x3 offline synthetic-gold dress rehearsal must first pass
+independent protocol audit while exercising the real production execution,
+receipt, terminal-validation, and scoring path end to end. The current rehearsal
+implementation remains audit-only and cannot authorize inference. None of this
+work salvages the invalid run or creates a benchmark result.
+
+#### Last valid frozen diagnostic
+
+The table below remains the most recent valid scored comparison for this same
+immutable candidate. The pinned official LongBench-v2 answer extractor is the
+primary metric, and every scheduled failure is a fixed-denominator zero.
 
 | Arm | Execution | Completed official accuracy | Fixed-63 official accuracy | Mean root tokens | Median time / item |
 |---|---:|---:|---:|---:|---:|
@@ -113,8 +143,9 @@ Every scheduled failure remains a fixed-denominator zero.
 | Native jcode | **63/63 (100%)** | **35/63 (55.56%)** | **35/63 (55.56%)** | 63,223 | **19.8s** |
 | Prime Agent | 56/63 (88.89%) | 12/56 (21.43%) | 12/63 (19.05%) | 9,827 | 39.4s |
 
-Azdaja failed the preregistered 16/63 fixed-denominator gate, so the same-candidate
-OOLONG run and the 199-item RAH protocol are blocked. Its 15 execution failures
+In that last valid run, Azdaja failed the preregistered 16/63
+fixed-denominator gate, so OOLONG and the 199-item RAH protocol remained blocked.
+Its 15 execution failures
 were 14 deterministic Monty/program, assertion, or semantic-envelope failures and
 one inner 30-second cell timeout; the frozen report conservatively normalizes all
 15 raw `process_exit` rows as `other_execution`. Prime's seven `tool_policy` rows
