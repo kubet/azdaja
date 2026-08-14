@@ -429,7 +429,13 @@ class ScoreTests(unittest.TestCase):
             for name in ("azdaja", "config.toml", "SKILL.md")
         }
         for name, path in candidate_paths.items():
-            private_text(path, f"test candidate {name}")
+            content = (
+                'default_model="gpt-5.6-luna"\n'
+                'jcode_repair_model="gpt-5.6-luna"\n'
+                if name == "config.toml"
+                else f"test candidate {name}"
+            )
+            private_text(path, content)
             path.chmod(0o500 if name == "azdaja" else 0o400)
         candidate_components = {
             name: {
@@ -1240,6 +1246,75 @@ class ScoreTests(unittest.TestCase):
                 SCORE.build_report(manifest, nonexistent, runs, bootstrap_resamples=1)
 
 
+
+    def test_candidate_config_pins_root_and_repair_models(self):
+        mini = (
+            b'default_model="gpt-5.6-luna"\n'
+            b'jcode_repair_model="gpt-5.4-mini"\n'
+        )
+        SCORE._validate_candidate_model_config(mini, "gpt-5.4-mini")
+        with self.assertRaisesRegex(SCORE.ScoreError, "repair model"):
+            SCORE._validate_candidate_model_config(mini, SCORE.MODEL)
+        bad_root = (
+            b'default_model="gpt-5.4-mini"\n'
+            b'jcode_repair_model="gpt-5.4-mini"\n'
+        )
+        with self.assertRaisesRegex(SCORE.ScoreError, "root model"):
+            SCORE._validate_candidate_model_config(bad_root, "gpt-5.4-mini")
+
+    def test_independent_route_allows_mini_only_for_depth_zero_repairs(self):
+        def row(depth, category, model, request):
+            return {
+                "schema_version": 2,
+                "event": "model_attempt",
+                "timestamp_ms": 1,
+                "depth": depth,
+                "request_id": request,
+                "attempt": 1,
+                "category": category,
+                "outcome": "succeeded",
+                "provider": "OpenAI OAuth",
+                "model": model,
+            }
+
+        rows = [
+            row(0, "turn", SCORE.MODEL, "root"),
+            row(0, "repair", "gpt-5.4-mini", "repair"),
+            row(1, "turn", SCORE.MODEL, "child"),
+        ]
+        evidence = {
+            "azdaja_model_trace": b"".join(
+                SCORE.canonical_json_file_bytes(item) for item in rows
+            )
+        }
+        self.assertTrue(
+            SCORE._independent_route("jcode-azdaja", evidence, "gpt-5.4-mini")
+        )
+        rows[0]["model"] = "gpt-5.4-mini"
+        bad_root = {"azdaja_model_trace": b"".join(
+            SCORE.canonical_json_file_bytes(item) for item in rows
+        )}
+        self.assertFalse(
+            SCORE._independent_route("jcode-azdaja", bad_root, "gpt-5.4-mini")
+        )
+        rows[0]["model"] = SCORE.MODEL
+        rows[2]["model"] = "gpt-5.4-mini"
+        bad_child = {"azdaja_model_trace": b"".join(
+            SCORE.canonical_json_file_bytes(item) for item in rows
+        )}
+        self.assertFalse(
+            SCORE._independent_route("jcode-azdaja", bad_child, "gpt-5.4-mini")
+        )
+        downgraded = row(0, "repair", "gpt-5.4-mini", "downgraded")
+        downgraded["schema_version"] = 1
+        downgraded_evidence = {
+            "azdaja_model_trace": SCORE.canonical_json_file_bytes(downgraded)
+        }
+        self.assertFalse(
+            SCORE._independent_route(
+                "jcode-azdaja", downgraded_evidence, "gpt-5.4-mini"
+            )
+        )
 
     def test_runner_build_schedule_contract_validates_in_scorer(self):
         runner_spec = importlib.util.spec_from_file_location(

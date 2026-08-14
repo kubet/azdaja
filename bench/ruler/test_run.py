@@ -36,7 +36,7 @@ TEST_CANDIDATE_SOURCE = TEST_IDENTITY_ROOT / "candidate-source"
 TEST_CANDIDATE_SOURCE.mkdir(mode=0o700)
 for _name, _data, _mode in (
     ("azdaja", b"#!/bin/sh\nexit 0\n", 0o700),
-    ("config.toml", b"x=1\n", 0o600),
+    ("config.toml", b"default_model=\"gpt-5.6-luna\"\njcode_repair_model=\"gpt-5.6-luna\"\n", 0o600),
     ("SKILL.md", b"---\nname: azdaja\n---\n# azdaja\n", 0o600),
 ):
     _path = TEST_CANDIDATE_SOURCE / _name
@@ -548,7 +548,7 @@ class RulerRunnerTests(unittest.TestCase):
             source.mkdir(mode=0o700)
             for name, data, mode in (
                 ("azdaja", b"#!/bin/sh\n", 0o700),
-                ("config.toml", b"x=1\n", 0o600),
+                ("config.toml", b"default_model=\"gpt-5.6-luna\"\njcode_repair_model=\"gpt-5.6-luna\"\n", 0o600),
                 ("SKILL.md", b"# azdaja\n", 0o600),
             ):
                 path = source / name
@@ -577,7 +577,7 @@ class RulerRunnerTests(unittest.TestCase):
             source.mkdir(mode=0o700)
             for name, data, mode in (
                 ("azdaja", b"#!/bin/sh\n", 0o700),
-                ("config.toml", b"x=1\n", 0o600),
+                ("config.toml", b"default_model=\"gpt-5.6-luna\"\njcode_repair_model=\"gpt-5.6-luna\"\n", 0o600),
                 ("SKILL.md", b"# azdaja\n", 0o600),
             ):
                 path = source / name
@@ -711,6 +711,53 @@ class RulerRunnerTests(unittest.TestCase):
             self.assertEqual(len({job["run_id"] for job in schedule["jobs"]}), 270)
             self.assertFalse(schedule["configuration"]["containment"]["os_level_asserted"])
             self.assertIn("not authenticated", schedule["configuration"]["containment"]["claim_ledger"])
+
+    def test_fresh_candidate_requires_exact_explicit_repair_model(self):
+        with tempfile.TemporaryDirectory() as directory:
+            skill = Path(directory)
+            (skill / "config.toml").write_text(
+                'default_model="gpt-5.6-luna"\n', encoding="utf-8"
+            )
+            with self.assertRaisesRegex(RUN.BenchError, "explicit"):
+                RUN.candidate_repair_model(skill)
+            (skill / "config.toml").write_text(
+                'default_model="gpt-5.6-luna"\n'
+                'jcode_repair_model=" gpt-5.4-mini "\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RUN.BenchError, "invalid"):
+                RUN.candidate_repair_model(skill)
+
+    def test_mini_repair_model_is_bound_and_reconstructs_exactly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            suite = fake_suite(Path(directory))
+            candidate, controller, executables = self.identities()
+            source_paths = {
+                "ruler_runner": controller["components"]["ruler_runner"]["path"],
+                "oolong_execution_module": controller["components"]["oolong_execution_module"]["path"],
+            }
+            names = [f"{index:032x}.txt" for index in range(90)]
+            schedule = RUN.build_schedule(
+                suite, seed=17, timeout=1800, candidate=candidate,
+                candidate_source_path="/test/candidate-source",
+                controller=controller, controller_source_paths=source_paths,
+                executables=executables, repair_model="gpt-5.4-mini",
+                random_names=names,
+            )
+            self.assertEqual(schedule["configuration"]["repair_model"], "gpt-5.4-mini")
+            RUN.validate_schedule(
+                schedule, suite, seed=17, timeout=1800, candidate=candidate,
+                candidate_source_path="/test/candidate-source",
+                controller=controller, controller_source_paths=source_paths,
+                executables=executables, repair_model="gpt-5.4-mini",
+            )
+            with self.assertRaisesRegex(RUN.BenchError, "configuration|reconstruction"):
+                RUN.validate_schedule(
+                    schedule, suite, seed=17, timeout=1800, candidate=candidate,
+                    candidate_source_path="/test/candidate-source",
+                    controller=controller, controller_source_paths=source_paths,
+                    executables=executables,
+                )
 
     def test_schedule_tampering_and_resume_identity_drift_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:

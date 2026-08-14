@@ -51,7 +51,14 @@ pub struct Config {
     pub idle_timeout: u64,
     pub clean_patterns: Vec<String>,
     pub jcode_provider: String,
+    /// Reasoning effort for the initial root planning turn.
     pub jcode_reasoning: String,
+    /// Reasoning effort for semantic child turns.
+    pub jcode_sub_reasoning: String,
+    /// Model pin for same-session root repair turns.
+    pub jcode_repair_model: String,
+    /// Reasoning effort for same-session root repair turns.
+    pub jcode_repair_reasoning: String,
     pub max_calls_per_cell: usize,
 }
 impl Default for Config {
@@ -68,6 +75,9 @@ impl Default for Config {
             clean_patterns: Vec::new(),
             jcode_provider: "openai".into(),
             jcode_reasoning: "medium".into(),
+            jcode_sub_reasoning: "low".into(),
+            jcode_repair_model: "gpt-5.4-mini".into(),
+            jcode_repair_reasoning: "low".into(),
             max_calls_per_cell: 64,
         }
     }
@@ -93,6 +103,12 @@ impl Config {
     pub fn validate(self) -> Result<Self> {
         if self.sub_llm_cmd.trim().is_empty() {
             bail!("sub_llm_cmd cannot be empty")
+        }
+        if self.jcode_repair_model.trim().is_empty() {
+            bail!("jcode_repair_model cannot be empty")
+        }
+        if self.jcode_repair_model.trim() != self.jcode_repair_model {
+            bail!("jcode_repair_model cannot have surrounding whitespace")
         }
         if self.output_cap < 256 {
             bail!("output_cap must be at least 256")
@@ -408,6 +424,25 @@ pub enum ExecFailureKind {
     Other,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TracebackSnippetOrigin {
+    CurrentSnippet,
+    EarlierSnippet,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecTracebackFrame {
+    pub origin: TracebackSnippetOrigin,
+    pub function_name: Option<String>,
+    pub preview_line: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecFailureTraceback {
+    pub caller: ExecTracebackFrame,
+    pub terminal: ExecTracebackFrame,
+}
+
 pub struct ExecResult {
     pub output: String,
     pub success: bool,
@@ -417,6 +452,14 @@ pub struct ExecResult {
     pub sub_call_wall_ns: u128,
     pub failure_kind: ExecFailureKind,
     pub failure_line: Option<String>,
+}
+
+/// Additive solo-only diagnostics kept separate so [`ExecResult`] remains source-compatible.
+pub struct SoloExecResult {
+    pub result: ExecResult,
+    /// Bounded raw exception message. Never trust it without validating traceback provenance.
+    pub failure_message: Option<String>,
+    pub failure_traceback: Option<ExecFailureTraceback>,
 }
 fn exec_failure_kind(exception: Option<ExcType>) -> ExecFailureKind {
     match exception {
@@ -453,13 +496,65 @@ fn exec_failure_kind(exception: Option<ExcType>) -> ExecFailureKind {
     }
 }
 
-fn monty_exception_info(error: &MontyException) -> (ExcType, Option<String>) {
-    let failure_line = error
-        .traceback()
-        .last()
-        .and_then(|frame| frame.preview_line.as_deref())
-        .map(str::to_owned);
-    (error.exc_type(), failure_line)
+struct MontyFailureInfo {
+    exception: ExcType,
+    message: Option<String>,
+    traceback: Option<ExecFailureTraceback>,
+}
+
+fn bounded_monty_field(value: &str) -> String {
+    value.chars().take(1024).collect()
+}
+
+fn monty_exception_info(error: &MontyException) -> MontyFailureInfo {
+    let traceback = error.traceback();
+    let structured = traceback
+        .first()
+        .zip(traceback.last())
+        .map(|(caller, terminal)| {
+            let current_filename = &caller.filename;
+            let convert = |frame: &monty_types::StackFrame| ExecTracebackFrame {
+                origin: if frame.filename == *current_filename {
+                    TracebackSnippetOrigin::CurrentSnippet
+                } else {
+                    TracebackSnippetOrigin::EarlierSnippet
+                },
+                function_name: frame.frame_name.clone(),
+                preview_line: frame.preview_line.as_deref().map(bounded_monty_field),
+            };
+            ExecFailureTraceback {
+                caller: convert(caller),
+                terminal: convert(terminal),
+            }
+        });
+    MontyFailureInfo {
+        exception: error.exc_type(),
+        message: error.message().map(bounded_monty_field),
+        traceback: structured,
+    }
+}
+
+fn exec_failure_fields(
+    failure: Option<MontyFailureInfo>,
+) -> (
+    ExecFailureKind,
+    Option<String>,
+    Option<String>,
+    Option<ExecFailureTraceback>,
+) {
+    let Some(failure) = failure else {
+        return (ExecFailureKind::None, None, None, None);
+    };
+    let terminal_line = failure
+        .traceback
+        .as_ref()
+        .and_then(|traceback| traceback.terminal.preview_line.clone());
+    (
+        exec_failure_kind(Some(failure.exception)),
+        terminal_line,
+        failure.message,
+        failure.traceback,
+    )
 }
 
 fn as_string(o: &MontyObject, name: &str) -> Result<String> {
@@ -528,6 +623,8 @@ fn parse_call(
     };
     Ok((prompts, model, workers))
 }
+// Keep callback plumbing explicit: these borrowed counters and outputs share one call lifetime.
+#[allow(clippy::too_many_arguments)]
 fn external(
     name: &str,
     args: &[MontyObject],
@@ -684,8 +781,7 @@ fn run_cell(
     Option<Final>,
     usize,
     Duration,
-    Option<ExcType>,
-    Option<String>,
+    Option<MontyFailureInfo>,
 ) {
     repl.tracker_mut()
         .set_max_duration(Duration::from_secs(cfg.cell_timeout));
@@ -709,7 +805,7 @@ fn run_cell(
         Ok(p) => p,
         Err(e) => {
             let e = *e;
-            let (exception, failure_line) = monty_exception_info(&e.error);
+            let failure = monty_exception_info(&e.error);
             printed.push_str(&e.error.to_string());
             return (
                 e.repl,
@@ -718,8 +814,7 @@ fn run_cell(
                 final_out,
                 call_count,
                 sub_call_wall,
-                Some(exception),
-                failure_line,
+                Some(failure),
             );
         }
     };
@@ -745,7 +840,6 @@ fn run_cell(
                     call_count,
                     sub_call_wall,
                     None,
-                    None,
                 );
             }
             ReplProgress::FunctionCall(call) => {
@@ -768,13 +862,7 @@ fn run_cell(
                     Ok(p) => p,
                     Err(e) => {
                         let e = *e;
-                        let exception = e.error.exc_type();
-                        let failure_line = e
-                            .error
-                            .traceback()
-                            .last()
-                            .and_then(|frame| frame.preview_line.as_deref())
-                            .map(str::to_owned);
+                        let failure = monty_exception_info(&e.error);
                         printed.push_str(&e.error.to_string());
                         return (
                             e.repl,
@@ -783,8 +871,7 @@ fn run_cell(
                             final_out,
                             call_count,
                             sub_call_wall,
-                            Some(exception),
-                            failure_line,
+                            Some(failure),
                         );
                     }
                 }
@@ -796,13 +883,7 @@ fn run_cell(
                 Ok(p) => p,
                 Err(e) => {
                     let e = *e;
-                    let exception = e.error.exc_type();
-                    let failure_line = e
-                        .error
-                        .traceback()
-                        .last()
-                        .and_then(|frame| frame.preview_line.as_deref())
-                        .map(str::to_owned);
+                    let failure = monty_exception_info(&e.error);
                     printed.push_str(&e.error.to_string());
                     return (
                         e.repl,
@@ -811,8 +892,7 @@ fn run_cell(
                         final_out,
                         call_count,
                         sub_call_wall,
-                        Some(exception),
-                        failure_line,
+                        Some(failure),
                     );
                 }
             },
@@ -823,13 +903,7 @@ fn run_cell(
                 Ok(p) => p,
                 Err(e) => {
                     let e = *e;
-                    let exception = e.error.exc_type();
-                    let failure_line = e
-                        .error
-                        .traceback()
-                        .last()
-                        .and_then(|frame| frame.preview_line.as_deref())
-                        .map(str::to_owned);
+                    let failure = monty_exception_info(&e.error);
                     printed.push_str(&e.error.to_string());
                     return (
                         e.repl,
@@ -838,8 +912,7 @@ fn run_cell(
                         final_out,
                         call_count,
                         sub_call_wall,
-                        Some(exception),
-                        failure_line,
+                        Some(failure),
                     );
                 }
             },
@@ -852,7 +925,6 @@ fn run_cell(
                     final_out,
                     call_count,
                     sub_call_wall,
-                    None,
                     None,
                 );
             }
@@ -1259,6 +1331,9 @@ impl SoloSession {
         Ok(())
     }
     pub fn exec(&mut self, code: &str, cfg: &Config) -> Result<ExecResult> {
+        Ok(self.exec_detailed(code, cfg)?.result)
+    }
+    pub fn exec_detailed(&mut self, code: &str, cfg: &Config) -> Result<SoloExecResult> {
         let repl = self
             .repl
             .take()
@@ -1270,8 +1345,7 @@ impl SoloSession {
             mut final_out,
             external_calls,
             sub_call_wall,
-            mut exception,
-            mut failure_line,
+            mut failure,
         ) = run_cell(repl, code, cfg, &self.sub_model);
         let mut success = success;
         if success
@@ -1289,9 +1363,7 @@ impl SoloSession {
                 Final::Var(name) => match repl.feed_run(&name, vec![], PrintWriter::Disabled) {
                     Ok(v) => Some(v),
                     Err(e) => {
-                        let (kind, line) = monty_exception_info(&e);
-                        exception = Some(kind);
-                        failure_line = line;
+                        failure = Some(monty_exception_info(&e));
                         output.push_str(&format!("\n{e}"));
                         success = false;
                         None
@@ -1304,14 +1376,20 @@ impl SoloSession {
             }
         }
         self.repl = Some(repl);
-        Ok(ExecResult {
-            output: cap(&output, cfg.output_cap),
-            success,
-            finalized,
-            external_calls,
-            sub_call_wall_ns: sub_call_wall.as_nanos(),
-            failure_kind: exec_failure_kind(exception),
-            failure_line,
+        let (failure_kind, failure_line, failure_message, failure_traceback) =
+            exec_failure_fields(failure);
+        Ok(SoloExecResult {
+            result: ExecResult {
+                output: cap(&output, cfg.output_cap),
+                success,
+                finalized,
+                external_calls,
+                sub_call_wall_ns: sub_call_wall.as_nanos(),
+                failure_kind,
+                failure_line,
+            },
+            failure_message,
+            failure_traceback,
         })
     }
     pub fn final_answer_is_blank(&self) -> Result<bool> {
@@ -1335,16 +1413,8 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
     let meta = read_meta(&dir)?;
     let model = meta.sub_model.as_deref().unwrap_or(&cfg.default_model);
     let repl = load_repl(&dir)?;
-    let (
-        mut repl,
-        mut output,
-        success,
-        mut final_out,
-        external_calls,
-        sub_call_wall,
-        mut exception,
-        mut failure_line,
-    ) = run_cell(repl, code, cfg, model);
+    let (mut repl, mut output, success, mut final_out, external_calls, sub_call_wall, mut failure) =
+        run_cell(repl, code, cfg, model);
     let mut success = success;
     // Paper-style trajectories sometimes assign `FINAL = answer` instead of calling it.
     if success
@@ -1362,9 +1432,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
             Final::Var(name) => match repl.feed_run(&name, vec![], PrintWriter::Disabled) {
                 Ok(v) => Some(v),
                 Err(e) => {
-                    let (kind, line) = monty_exception_info(&e);
-                    exception = Some(kind);
-                    failure_line = line;
+                    failure = Some(monty_exception_info(&e));
                     output.push_str(&format!("\n{e}"));
                     success = false;
                     None
@@ -1377,13 +1445,15 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         }
     }
     save_repl(&dir, &repl)?;
+    let (failure_kind, failure_line, _failure_message, _failure_traceback) =
+        exec_failure_fields(failure);
     Ok(ExecResult {
         output: cap(&output, cfg.output_cap),
         success,
         finalized,
         external_calls,
         sub_call_wall_ns: sub_call_wall.as_nanos(),
-        failure_kind: exec_failure_kind(exception),
+        failure_kind,
         failure_line,
     })
 }
@@ -1518,6 +1588,42 @@ fn call_many_items(
                             None
                         };
                         if let Some(mut api) = shared {
+                            let model_started = Instant::now();
+                            if let Err(error) = api.set_model(model) {
+                                let observation = JcodeSetupObservation {
+                                    session_id: Some(api.session.clone()),
+                                    substage: ModelSetupSubstage::SetModel,
+                                };
+                                record_model_trace_result(trace_model_setup_failure_attempt(
+                                    depth + 1,
+                                    &request_id,
+                                    1,
+                                    &observation,
+                                    &error,
+                                    Some(model_started.elapsed().as_millis()),
+                                ));
+                                api.discard();
+                                return Err(error.context("configure shared subcall model"));
+                            }
+                            let reasoning_started = Instant::now();
+                            if let Err(error) =
+                                api.set_reasoning_effort(&cfg.jcode_sub_reasoning)
+                            {
+                                let observation = JcodeSetupObservation {
+                                    session_id: Some(api.session.clone()),
+                                    substage: ModelSetupSubstage::Reasoning,
+                                };
+                                record_model_trace_result(trace_model_setup_failure_attempt(
+                                    depth + 1,
+                                    &request_id,
+                                    1,
+                                    &observation,
+                                    &error,
+                                    Some(reasoning_started.elapsed().as_millis()),
+                                ));
+                                api.discard();
+                                return Err(error.context("configure shared subcall reasoning"));
+                            }
                             let entered_turn = entered_turn_budget.try_enter()?;
                             let first_started = Instant::now();
                             match api.turn(&wire) {
@@ -2806,9 +2912,14 @@ impl JcodeSession {
             }
         }
     }
-    fn open(cfg: &Config, model: &str, observation: &mut JcodeSetupObservation) -> Result<Self> {
+    fn open(
+        cfg: &Config,
+        model: &str,
+        reasoning_effort: &str,
+        observation: &mut JcodeSetupObservation,
+    ) -> Result<Self> {
         let timeout = Duration::from_secs(cfg.sub_timeout);
-        Self::open_with_timeout(cfg, model, timeout, timeout, observation)
+        Self::open_with_timeout(cfg, model, reasoning_effort, timeout, timeout, observation)
     }
     fn open_for_root(
         cfg: &Config,
@@ -2818,6 +2929,7 @@ impl JcodeSession {
         Self::open_with_timeout(
             cfg,
             model,
+            &cfg.jcode_reasoning,
             jcode_root_timeout(cfg),
             jcode_root_idle_timeout(cfg),
             observation,
@@ -2830,7 +2942,14 @@ impl JcodeSession {
         observation: &mut JcodeSetupObservation,
     ) -> Result<Self> {
         let timeout = jcode_batch_timeout(cfg, prompt_chars);
-        Self::open_with_timeout(cfg, model, timeout, timeout, observation)
+        Self::open_with_timeout(
+            cfg,
+            model,
+            &cfg.jcode_sub_reasoning,
+            timeout,
+            timeout,
+            observation,
+        )
     }
     fn open_for_batch_serialized(
         cfg: &Config,
@@ -2863,6 +2982,7 @@ impl JcodeSession {
     fn open_with_timeout(
         cfg: &Config,
         model: &str,
+        reasoning_effort: &str,
         timeout: Duration,
         idle_timeout: Duration,
         observation: &mut JcodeSetupObservation,
@@ -2967,12 +3087,50 @@ impl JcodeSession {
         this.model = model.into();
         thread::sleep(Duration::from_millis(50));
         observation.substage = ModelSetupSubstage::Reasoning;
-        let id=this.send(serde_json::json!({"req":"set_reasoning_effort","session_id":this.session,"effort":cfg.jcode_reasoning}))?;
+        let id=this.send(serde_json::json!({"req":"set_reasoning_effort","session_id":this.session,"effort":reasoning_effort}))?;
         this.reply_before(id, "ok", setup_deadline)
             .context("jcode reasoning setup")?;
         this.cancel_before_archive = false;
         Ok(this)
     }
+    fn set_model(&mut self, model: &str) -> Result<()> {
+        if self.model == model {
+            return Ok(());
+        }
+        let id = self.send(serde_json::json!({
+            "req": "set_model",
+            "session_id": self.session,
+            "model": format!("openai-oauth:{model}"),
+        }))?;
+        self.reply_with_timeout(id, "ok", Duration::from_secs(10))
+            .context("jcode repair model reconfiguration")?;
+        let id = self.send(serde_json::json!({
+            "req": "get_runtime_info",
+            "session_id": self.session,
+        }))?;
+        let runtime = self
+            .reply_with_timeout(id, "runtime_info", Duration::from_secs(10))
+            .context("jcode repair model route assertion")?;
+        if !Self::runtime_is_subscription_route(&runtime, model) {
+            bail!("repair subscription OAuth route mismatch for model {model:?}")
+        }
+        self.requested_model = model.to_owned();
+        self.model = model.to_owned();
+        self.provider = "OpenAI OAuth".into();
+        Ok(())
+    }
+
+    fn set_reasoning_effort(&mut self, effort: &str) -> Result<()> {
+        let id = self.send(serde_json::json!({
+            "req": "set_reasoning_effort",
+            "session_id": self.session,
+            "effort": effort,
+        }))?;
+        self.reply_with_timeout(id, "ok", Duration::from_secs(10))
+            .context("jcode reasoning reconfiguration")?;
+        Ok(())
+    }
+
     fn discard(&mut self) {
         // A failed turn can leave unread frames on the stream. Mark it for an ordered, bounded
         // cancel-before-archive cleanup rather than trying to reuse the poisoned protocol state.
@@ -3274,6 +3432,40 @@ impl RootDriver {
         let repair_request_id = format!("{}-repair-{repair_index}", self.request_id);
         #[cfg(unix)]
         if let Some(api) = &mut self.api {
+            let model_started = Instant::now();
+            if let Err(error) = api.set_model(&self.cfg.jcode_repair_model) {
+                let observation = JcodeSetupObservation {
+                    session_id: Some(api.session.clone()),
+                    substage: ModelSetupSubstage::SetModel,
+                };
+                record_model_trace_result(trace_model_setup_failure_attempt(
+                    0,
+                    &repair_request_id,
+                    1,
+                    &observation,
+                    &error,
+                    Some(model_started.elapsed().as_millis()),
+                ));
+                api.discard();
+                return Err(error.context("configure root repair model"));
+            }
+            let reasoning_started = Instant::now();
+            if let Err(error) = api.set_reasoning_effort(&self.cfg.jcode_repair_reasoning) {
+                let observation = JcodeSetupObservation {
+                    session_id: Some(api.session.clone()),
+                    substage: ModelSetupSubstage::Reasoning,
+                };
+                record_model_trace_result(trace_model_setup_failure_attempt(
+                    0,
+                    &repair_request_id,
+                    1,
+                    &observation,
+                    &error,
+                    Some(reasoning_started.elapsed().as_millis()),
+                ));
+                api.discard();
+                return Err(error.context("configure root repair reasoning"));
+            }
             let entered_turn = self.entered_turn_budget.try_enter()?;
             let started = Instant::now();
             let reply = match api.turn(prompt) {
@@ -3794,7 +3986,12 @@ fn call_model_reply_with_attempt(
         {
             let setup_started = Instant::now();
             let mut observation = JcodeSetupObservation::default();
-            let mut api = match JcodeSession::open(cfg, model, &mut observation) {
+            let reasoning_effort = if depth == 0 {
+                &cfg.jcode_reasoning
+            } else {
+                &cfg.jcode_sub_reasoning
+            };
+            let mut api = match JcodeSession::open(cfg, model, reasoning_effort, &mut observation) {
                 Ok(api) => api,
                 Err(error) => {
                     record_model_trace_result(trace_model_setup_failure_attempt(
@@ -4040,6 +4237,87 @@ mod unit_tests {
     use super::*;
 
     #[test]
+    fn monty_traceback_distinguishes_current_and_earlier_snippets_structurally() {
+        let cfg = Config::default();
+        let tracker = ResourceTracker::new(
+            ResourceLimits::default().max_duration(Duration::from_secs(cfg.cell_timeout)),
+        );
+        let repl = MontyRepl::new("traceback-test", tracker, CompileOptions::default());
+        let (repl, _, success, _, _, _, failure) =
+            run_cell(repl, "raise ValueError(\"authored\")", &cfg, "unused");
+        assert!(!success);
+        let direct = failure.unwrap().traceback.unwrap();
+        assert_eq!(direct.caller.origin, TracebackSnippetOrigin::CurrentSnippet);
+        assert_eq!(
+            direct.terminal.origin,
+            TracebackSnippetOrigin::CurrentSnippet
+        );
+        assert_eq!(
+            direct.caller.preview_line.as_deref(),
+            Some("raise ValueError(\"authored\")")
+        );
+        assert_eq!(direct.terminal.preview_line, direct.caller.preview_line);
+
+        let (repl, _, success, _, _, _, failure) = run_cell(
+            repl,
+            "def _az_pack():\n    raise AssertionError(\"AZH1|prompt_envelope|item_index=0\")",
+            &cfg,
+            "unused",
+        );
+        assert!(success);
+        assert!(failure.is_none());
+        let (repl, _output, success, _, _, _, failure) =
+            run_cell(repl, "_az_pack()", &cfg, "unused");
+        assert!(!success);
+        let helper = failure.unwrap();
+        assert_eq!(
+            helper.message.as_deref(),
+            Some("AZH1|prompt_envelope|item_index=0")
+        );
+        let helper_traceback = helper.traceback.unwrap();
+        assert_eq!(
+            helper_traceback.caller.origin,
+            TracebackSnippetOrigin::CurrentSnippet
+        );
+        assert_eq!(
+            helper_traceback.terminal.origin,
+            TracebackSnippetOrigin::EarlierSnippet
+        );
+        assert_eq!(
+            helper_traceback.caller.preview_line.as_deref(),
+            Some("_az_pack()")
+        );
+        assert_eq!(
+            helper_traceback.terminal.preview_line.as_deref(),
+            Some("    raise AssertionError(\"AZH1|prompt_envelope|item_index=0\")")
+        );
+        assert_eq!(
+            helper_traceback.terminal.function_name.as_deref(),
+            Some("_az_pack")
+        );
+
+        let (_, fake_output, success, _, _, _, failure) = run_cell(
+            repl,
+            "print(\"AZH1|prompt_envelope|item_index=0\")\nraise AssertionError(\"authored\")",
+            &cfg,
+            "unused",
+        );
+        assert!(!success);
+        assert!(fake_output.contains("AZH1|prompt_envelope"));
+        let fake = failure.unwrap();
+        assert_eq!(fake.message.as_deref(), Some("authored"));
+        let fake_traceback = fake.traceback.unwrap();
+        assert_eq!(
+            fake_traceback.caller.origin,
+            TracebackSnippetOrigin::CurrentSnippet
+        );
+        assert_eq!(
+            fake_traceback.terminal.origin,
+            TracebackSnippetOrigin::CurrentSnippet
+        );
+    }
+
+    #[test]
     fn monty_failure_kinds_separate_program_bugs_from_resource_and_host_classes() {
         for ordinary in [
             ExcType::IndexError,
@@ -4264,6 +4542,32 @@ mod unit_tests {
     }
 
     #[test]
+    fn blank_repair_model_is_rejected_by_config_validation() {
+        let cfg = Config {
+            jcode_repair_model: "  \t".into(),
+            ..Config::default()
+        };
+        let error = match cfg.validate() {
+            Ok(_) => panic!("blank repair model unexpectedly passed validation"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("jcode_repair_model cannot be empty")
+        );
+        let padded = Config {
+            jcode_repair_model: " gpt-5.4-mini ".into(),
+            ..Config::default()
+        };
+        let error = match padded.validate() {
+            Ok(_) => panic!("padded repair model unexpectedly passed validation"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("surrounding whitespace"));
+    }
+
+    #[test]
     fn root_and_batch_timeouts_are_capped_without_changing_config() {
         let mut cfg = Config {
             sub_timeout: 300,
@@ -4350,6 +4654,212 @@ mod unit_tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("hard deadline timed out"), "{error}");
+    }
+
+    #[test]
+    fn repair_model_reconfiguration_failure_does_not_enter_a_provider_turn() {
+        let (stream, peer) = UnixStream::pair().unwrap();
+        let reader = BufReader::new(stream.try_clone().unwrap());
+        let server = thread::spawn(move || {
+            let mut peer = BufReader::new(peer);
+            let mut request = String::new();
+            peer.read_line(&mut request).unwrap();
+            let first: serde_json::Value = serde_json::from_str(&request).unwrap();
+            assert_eq!(first["req"], "set_model");
+            assert_eq!(first["model"], "openai-oauth:gpt-5.4-mini");
+            writeln!(
+                peer.get_mut(),
+                "{{\"ev\":\"error\",\"code\":\"invalid_request\",\"message\":\"unsupported model\"}}"
+            )
+            .unwrap();
+            peer.get_mut().flush().unwrap();
+            request.clear();
+            peer.read_line(&mut request).unwrap();
+            let cancel: serde_json::Value = serde_json::from_str(&request).unwrap();
+            assert_eq!(cancel["req"], "cancel");
+            assert_eq!(cancel["session_id"], "repair-model");
+            request.clear();
+            peer.read_line(&mut request).unwrap();
+            let archive: serde_json::Value = serde_json::from_str(&request).unwrap();
+            assert_eq!(archive["req"], "archive_session");
+            assert_eq!(archive["session_id"], "repair-model");
+            let reply_to = archive["id"].as_u64().unwrap();
+            writeln!(peer.get_mut(), "{{\"ev\":\"ok\",\"reply_to\":{reply_to}}}").unwrap();
+            peer.get_mut().flush().unwrap();
+        });
+        let api = JcodeSession {
+            stream,
+            reader,
+            next_id: 1,
+            session: "repair-model".into(),
+            usage: ModelUsage::default(),
+            usage_observed: false,
+            provider: "OpenAI OAuth".into(),
+            model: "gpt-5.6-luna".into(),
+            requested_model: "gpt-5.6-luna".into(),
+            timeout: Duration::from_secs(30),
+            idle_timeout: Duration::from_secs(30),
+            cancel_before_archive: false,
+            workspace: None,
+        };
+        let entered = Arc::new(EnteredTurnBudget::new(3));
+        let mut driver = RootDriver {
+            cfg: Config::default(),
+            model: "mock".into(),
+            request_id: "repair-model-request".into(),
+            attempt: 1,
+            entered_turn_budget: Arc::clone(&entered),
+            api: Some(api),
+            history: String::new(),
+        };
+        let error = driver.repair_turn("replacement", 1).unwrap_err();
+        assert!(error.to_string().contains("configure root repair model"));
+        assert_eq!(entered.entered(), 0);
+        assert!(driver.api.as_ref().unwrap().cancel_before_archive);
+        drop(driver);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn repair_reasoning_reconfiguration_failure_does_not_enter_a_provider_turn() {
+        let (stream, peer) = UnixStream::pair().unwrap();
+        let reader = BufReader::new(stream.try_clone().unwrap());
+        let server = thread::spawn(move || {
+            let mut peer = BufReader::new(peer);
+            let mut request = String::new();
+            peer.read_line(&mut request).unwrap();
+            let request: serde_json::Value = serde_json::from_str(&request).unwrap();
+            assert_eq!(request["req"], "set_reasoning_effort");
+            assert_eq!(request["effort"], "low");
+            writeln!(
+                peer.get_mut(),
+                "{{\"ev\":\"error\",\"code\":\"invalid_request\",\"message\":\"unsupported effort\"}}"
+            )
+            .unwrap();
+            peer.get_mut().flush().unwrap();
+        });
+        let api = JcodeSession {
+            stream,
+            reader,
+            next_id: 1,
+            session: "repair-reasoning".into(),
+            usage: ModelUsage::default(),
+            usage_observed: false,
+            provider: "OpenAI OAuth".into(),
+            model: "gpt-5.4-mini".into(),
+            requested_model: "gpt-5.4-mini".into(),
+            timeout: Duration::from_secs(30),
+            idle_timeout: Duration::from_secs(30),
+            cancel_before_archive: false,
+            workspace: None,
+        };
+        let entered = Arc::new(EnteredTurnBudget::new(3));
+        let mut driver = RootDriver {
+            cfg: Config::default(),
+            model: "mock".into(),
+            request_id: "repair-reasoning-request".into(),
+            attempt: 1,
+            entered_turn_budget: Arc::clone(&entered),
+            api: Some(api),
+            history: String::new(),
+        };
+        let error = driver.repair_turn("replacement", 1).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("configure root repair reasoning")
+        );
+        assert_eq!(entered.entered(), 0);
+        assert!(driver.api.as_ref().unwrap().cancel_before_archive);
+        driver.api.as_mut().unwrap().session.clear();
+        drop(driver);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn jcode_repair_model_reconfiguration_pins_and_asserts_the_oauth_route() {
+        let (stream, peer) = UnixStream::pair().unwrap();
+        let reader = BufReader::new(stream.try_clone().unwrap());
+        let server = thread::spawn(move || {
+            let mut peer = BufReader::new(peer);
+            let mut line = String::new();
+            peer.read_line(&mut line).unwrap();
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            assert_eq!(request["req"], "set_model");
+            assert_eq!(request["model"], "openai-oauth:gpt-5.4-mini");
+            let id = request["id"].as_u64().unwrap();
+            writeln!(peer.get_mut(), "{{\"ev\":\"ok\",\"reply_to\":{id}}}").unwrap();
+            peer.get_mut().flush().unwrap();
+            line.clear();
+            peer.read_line(&mut line).unwrap();
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            assert_eq!(request["req"], "get_runtime_info");
+            let id = request["id"].as_u64().unwrap();
+            writeln!(
+                peer.get_mut(),
+                "{{\"ev\":\"runtime_info\",\"reply_to\":{id},\"provider\":\"OpenAI\",\"model\":\"gpt-5.4-mini\",\"routes\":[{{\"provider\":\"OpenAI\",\"model\":\"gpt-5.4-mini\",\"api_method\":\"openai-oauth\",\"available\":true}}]}}"
+            )
+            .unwrap();
+            peer.get_mut().flush().unwrap();
+        });
+        let mut api = JcodeSession {
+            stream,
+            reader,
+            next_id: 1,
+            session: "repair-model".into(),
+            usage: ModelUsage::default(),
+            usage_observed: false,
+            provider: "OpenAI OAuth".into(),
+            model: "gpt-5.6-luna".into(),
+            requested_model: "gpt-5.6-luna".into(),
+            timeout: Duration::from_secs(30),
+            idle_timeout: Duration::from_secs(30),
+            cancel_before_archive: false,
+            workspace: None,
+        };
+        api.set_model("gpt-5.4-mini").unwrap();
+        assert_eq!(api.model, "gpt-5.4-mini");
+        assert_eq!(api.requested_model, "gpt-5.4-mini");
+        api.session.clear();
+        drop(api);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn jcode_reasoning_reconfiguration_sends_the_exact_requested_effort() {
+        let (stream, peer) = UnixStream::pair().unwrap();
+        let reader = BufReader::new(stream.try_clone().unwrap());
+        let server = thread::spawn(move || {
+            let mut peer = BufReader::new(peer);
+            let mut request = String::new();
+            peer.read_line(&mut request).unwrap();
+            let request: serde_json::Value = serde_json::from_str(&request).unwrap();
+            assert_eq!(request["req"], "set_reasoning_effort");
+            assert_eq!(request["session_id"], "reasoning-session");
+            assert_eq!(request["effort"], "low");
+            let id = request["id"].as_u64().unwrap();
+            writeln!(peer.get_mut(), "{{\"ev\":\"ok\",\"reply_to\":{id}}}").unwrap();
+            peer.get_mut().flush().unwrap();
+        });
+        let mut api = JcodeSession {
+            stream,
+            reader,
+            next_id: 1,
+            session: "reasoning-session".into(),
+            usage: ModelUsage::default(),
+            usage_observed: false,
+            provider: "OpenAI OAuth".into(),
+            model: "mock".into(),
+            requested_model: "mock".into(),
+            timeout: Duration::from_secs(30),
+            idle_timeout: Duration::from_secs(30),
+            cancel_before_archive: false,
+            workspace: None,
+        };
+        api.set_reasoning_effort("low").unwrap();
+        api.session.clear();
+        drop(api);
+        server.join().unwrap();
     }
 
     #[test]
@@ -4791,6 +5301,47 @@ mod unit_tests {
         );
         assert!(session.load(&invalid, "ctx", &cfg).is_err());
         assert!(session.structural_sample().is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn fixed_line_evidence_assumption_fails_closed_without_publishing_final() {
+        let dir = env::temp_dir().join(format!(
+            "azdaja-fixed-line-assumption-{}-{}",
+            std::process::id(),
+            now_ms()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let input = dir.join("input.txt");
+        let mut text = "alpha beta gamma ".repeat(2_000);
+        text.push_str(
+            "
+Question: identify the requested aggregate",
+        );
+        fs::write(&input, text).unwrap();
+
+        let cfg = Config::default();
+        let mut session = SoloSession::new(&cfg, None).unwrap();
+        session.load(&input, "ctx", &cfg).unwrap();
+        let bad_fixed_line_program = r#"
+lines = ctx.split("\n")
+assert len(lines) == 2
+body = lines[1]
+end = body.rfind("Question:")
+assert end >= 0
+source = body[:end]
+words = re.findall(r"[a-z]+", source)
+counts = collections.Counter(words)
+top = counts.most_common(3)
+assert len(top) == 3
+FINAL(", ".join(item[0] for item in top))
+"#;
+        let result = session.exec_detailed(bad_fixed_line_program, &cfg).unwrap();
+        assert!(!result.result.success);
+        assert!(!result.result.finalized);
+        assert_eq!(result.result.failure_kind, ExecFailureKind::Assertion);
+        assert_eq!(result.result.external_calls, 0);
+        assert!(session.final_answer(&cfg).is_err());
         fs::remove_dir_all(dir).unwrap();
     }
 

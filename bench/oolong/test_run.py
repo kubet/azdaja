@@ -371,6 +371,109 @@ class ControllerTests(unittest.TestCase):
             usage = RUN.usage_fields_from_azdaja(RUN.parse_azdaja_usage(path))
             self.assertFalse(RUN.direct_solo_usage_evidence(usage, None)["valid"])
 
+    def test_fresh_candidate_requires_exact_explicit_repair_model(self):
+        with tempfile.TemporaryDirectory() as directory:
+            skill = Path(directory)
+            (skill / "config.toml").write_text(
+                'default_model="gpt-5.6-luna"\n', encoding="utf-8"
+            )
+            self.assertEqual(
+                RUN.configure_azdaja_repair_model_from_skill(skill), RUN.MODEL
+            )
+            with self.assertRaisesRegex(RUN.BenchError, "explicit"):
+                RUN.configure_azdaja_repair_model_from_skill(
+                    skill, require_explicit=True
+                )
+            (skill / "config.toml").write_text(
+                'default_model="gpt-5.6-luna"\n'
+                'jcode_repair_model=" gpt-5.4-mini "\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(RUN.BenchError, "whitespace"):
+                RUN.configure_azdaja_repair_model_from_skill(
+                    skill, require_explicit=True
+                )
+
+    def test_v2_route_rows_require_typed_category_and_setup_error_shape(self):
+        base = {
+            "schema_version": 2,
+            "event": "model_attempt",
+            "timestamp_ms": 1,
+            "depth": 0,
+            "request_id": "request",
+            "attempt": 1,
+            "outcome": "succeeded",
+            "provider": "OpenAI OAuth",
+            "model": RUN.MODEL,
+            "input_tokens": 1,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "trace.jsonl"
+            path.write_text(json.dumps(base) + "\n", encoding="utf-8")
+            self.assertIsNone(RUN.parse_azdaja_route_evidence(path))
+            failed = dict(base)
+            failed.update({
+                "category": "turn",
+                "outcome": "failed",
+                "error": "provider_call_failed",
+                "stage": "session_setup",
+            })
+            path.write_text(json.dumps(failed) + "\n", encoding="utf-8")
+            self.assertIsNone(RUN.parse_azdaja_route_evidence(path))
+            downgraded = dict(base)
+            downgraded.update({
+                "schema_version": 1,
+                "category": "repair",
+                "model": "gpt-5.4-mini",
+            })
+            path.write_text(json.dumps(downgraded) + "\n", encoding="utf-8")
+            evidence = RUN.parse_azdaja_route_evidence(path)
+            self.assertEqual(evidence["route_rows"][0]["category"], "turn")
+            self.assertFalse(
+                RUN.runtime_assertion(
+                    "jcode-azdaja", evidence,
+                    repair_model="gpt-5.4-mini",
+                )["asserted"]
+            )
+
+    def test_category_aware_route_assertion_requires_mini_only_for_root_repairs(self):
+        original = RUN.AZDAJA_REPAIR_MODEL
+        try:
+            RUN.configure_azdaja_repair_model("gpt-5.4-mini")
+            evidence = {
+                "routes": ["openai/gpt-5.4-mini", f"openai/{RUN.MODEL}"],
+                "route_rows": [
+                    {"depth": 0, "category": "turn", "provider": "openai", "model": RUN.MODEL},
+                    {"depth": 0, "category": "repair", "provider": "openai", "model": "gpt-5.4-mini"},
+                    {"depth": 1, "category": "turn", "provider": "openai", "model": RUN.MODEL},
+                ],
+                "transport_error_rows": 0,
+            }
+            route = RUN.runtime_assertion("jcode-azdaja", "", evidence)
+            self.assertTrue(route["asserted"])
+            self.assertEqual(route["expected_repair_model"], "gpt-5.4-mini")
+            evidence["route_rows"][0]["model"] = "gpt-5.4-mini"
+            self.assertFalse(
+                RUN.runtime_assertion("jcode-azdaja", "", evidence)["asserted"]
+            )
+            repair_only = {
+                "routes": ["openai/gpt-5.4-mini"],
+                "route_rows": [{
+                    "depth": 0,
+                    "category": "repair",
+                    "provider": "openai",
+                    "model": "gpt-5.4-mini",
+                }],
+                "transport_error_rows": 0,
+            }
+            self.assertFalse(
+                RUN.runtime_assertion(
+                    "jcode-azdaja", "", repair_only
+                )["asserted"]
+            )
+        finally:
+            RUN.configure_azdaja_repair_model(original)
+
     def test_exact_unicode_root_context_scan_and_no_text_retention(self):
         exact = "".join(chr(0x400 + index) for index in range(120))
         context = "prefix\r\n" + exact + "\nsuffix"

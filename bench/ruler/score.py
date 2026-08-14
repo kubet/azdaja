@@ -22,6 +22,7 @@ import re
 import stat
 import string
 import sys
+import tomllib
 import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path, PurePosixPath
@@ -867,6 +868,32 @@ def _schedule_fixture_id(item: dict[str, Any], label: str) -> str:
     return value
 
 
+def _validate_candidate_model_config(
+    config_bytes: bytes, repair_model: str
+) -> None:
+    try:
+        candidate_config = tomllib.loads(config_bytes.decode("utf-8"))
+    except (UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise ScoreError(f"schedule candidate config is invalid: {exc}") from exc
+    _require_equal(
+        candidate_config.get("default_model"), MODEL,
+        "schedule candidate config root model",
+    )
+    if "jcode_repair_model" not in candidate_config:
+        raise ScoreError("schedule candidate config lacks explicit repair model")
+    configured_repair_model = candidate_config["jcode_repair_model"]
+    if (
+        not isinstance(configured_repair_model, str)
+        or not configured_repair_model
+        or configured_repair_model.strip() != configured_repair_model
+    ):
+        raise ScoreError("schedule candidate config repair model is invalid")
+    _require_equal(
+        configured_repair_model, repair_model,
+        "schedule candidate config repair model",
+    )
+
+
 def validate_schedule(
     schedule: dict[str, Any],
     manifest_path: Path,
@@ -901,12 +928,16 @@ def validate_schedule(
         raise ScoreError("schedule must contain suite and configuration objects")
     if set(suite) != {"suite_id", "manifest_sha256", "fixtures"}:
         raise ScoreError("schedule suite binding has an unexpected object shape")
-    if set(configuration) != {
+    required_configuration_keys = {
         "model", "reasoning", "arms", "repetitions", "seed", "timeout_seconds",
         "workflow", "workflow_fixture_ids", "workflow_fixture_ids_sha256",
         "parallel_width", "configured_global_width", "parallel_width_scope",
         "wrapper_template_sha256", "candidate", "candidate_source_path",
         "controller", "controller_source_paths", "executables", "containment",
+    }
+    if set(configuration) not in {
+        frozenset(required_configuration_keys),
+        frozenset(required_configuration_keys | {"repair_model"}),
     }:
         raise ScoreError("schedule configuration has an unexpected object shape")
     _require_equal(suite.get("suite_id"), SUITE_ID, "schedule suite_id")
@@ -952,6 +983,13 @@ def validate_schedule(
     _require_equal(configuration.get("repetitions"), 1, "schedule repetitions")
     _require_equal(configuration.get("model"), MODEL, "schedule model")
     _require_equal(configuration.get("reasoning"), REASONING, "schedule reasoning")
+    repair_model = configuration.get("repair_model", MODEL)
+    if (
+        not isinstance(repair_model, str)
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", repair_model)
+        or ":" in repair_model
+    ):
+        raise ScoreError("schedule repair model is invalid")
     _require_equal(configuration.get("workflow"), FULL_WORKFLOW, "schedule scored workflow")
     _require_equal(configuration.get("parallel_width"), PARALLEL_WIDTH, "schedule parallel width")
     _require_equal(
@@ -1008,6 +1046,7 @@ def validate_schedule(
     if os.name == "posix" and stat.S_IMODE(candidate_snapshot_root.stat().st_mode) != 0o700:
         raise ScoreError("candidate snapshot directory must have exact mode 0700")
     candidate_bound: dict[str, dict[str, Any]] = {}
+    candidate_config_bytes: bytes | None = None
     for name, component in candidate_components.items():
         expected_mode = "0500" if name == "azdaja" else "0400"
         if (
@@ -1038,6 +1077,12 @@ def validate_schedule(
             "sha256": component["sha256"], "bytes": component["bytes"],
             "mode": component["mode"],
         }
+        if name == "config.toml":
+            candidate_config_bytes = data
+    if candidate_config_bytes is None:
+        raise ScoreError("schedule candidate config snapshot is missing")
+    if "repair_model" in configuration:
+        _validate_candidate_model_config(candidate_config_bytes, repair_model)
     try:
         candidate_entries = {entry.name for entry in candidate_snapshot_root.iterdir()}
     except OSError as exc:
@@ -1368,23 +1413,47 @@ def _json_objects_authoritative(data: bytes, label: str) -> list[dict[str, Any]]
     return _json_lines(data, label)
 
 
-def _independent_route(arm: str, evidence: dict[str, bytes]) -> bool:
+def _independent_route(
+    arm: str, evidence: dict[str, bytes], repair_model: str = MODEL
+) -> bool:
     if arm == "jcode-azdaja":
         rows = _json_lines(evidence["azdaja_model_trace"], "Azdaja model trace")
-        successful = [row for row in rows if "error" not in row]
-        return (
-            bool(successful)
-            and any(row.get("depth") == 0 for row in successful)
-            and all(
-                type(row.get("depth")) is int
-                and row["depth"] >= 0
-                and isinstance(row.get("provider"), str)
-                and row["provider"].lower().startswith("openai")
-                and row.get("model") == MODEL
-                for row in successful
+        if not rows or any("error" in row for row in rows):
+            return False
+        saw_initial_root = False
+        for row in rows:
+            depth = row.get("depth")
+            schema_version = row.get("schema_version")
+            if schema_version not in {None, 1, 2}:
+                return False
+            category = row.get("category") if schema_version == 2 else "turn"
+            if schema_version == 2:
+                if (
+                    row.get("event") != "model_attempt"
+                    or row.get("outcome") != "succeeded"
+                    or category not in {"turn", "repair"}
+                    or not isinstance(row.get("request_id"), str)
+                    or not row["request_id"]
+                    or type(row.get("attempt")) is not int
+                    or row["attempt"] <= 0
+                ):
+                    return False
+            if (
+                type(depth) is not int
+                or depth < 0
+                or category not in {"turn", "repair"}
+                or not isinstance(row.get("provider"), str)
+                or not row["provider"].lower().startswith("openai")
+            ):
+                return False
+            expected_model = (
+                repair_model if depth == 0 and category == "repair" else MODEL
             )
-            and all("error" not in row for row in rows)
-        )
+            if row.get("model") != expected_model:
+                return False
+            if depth == 0 and category == "turn":
+                saw_initial_root = True
+        return saw_initial_root
     rows = _json_objects_authoritative(evidence["stdout"], f"{arm} stdout")
     if arm == "jcode-native":
         done = [row for row in rows if (row.get("type") or row.get("ev")) == "done"]
@@ -1997,7 +2066,7 @@ def _validate_artifact_record(
 
 
 def _validate_arm_artifacts(
-    row: dict[str, Any], index: int, payload_data: bytes
+    row: dict[str, Any], index: int, payload_data: bytes, *, repair_model: str = MODEL
 ) -> tuple[Path, dict[str, Any]]:
     evidence = row["arm_evidence"]
     trajectories = evidence.get("trajectory_artifacts")
@@ -2111,7 +2180,7 @@ def _validate_arm_artifacts(
     if row["execution_success"]:
         # Hash-check above binds these exact bytes; route and usage are then replayed
         # independently from every nonempty authority-stream line.
-        if not _independent_route(row["arm"], retained):
+        if not _independent_route(row["arm"], retained, repair_model):
             raise ScoreError(f"inference row {index} retained route evidence is invalid")
         recomputed = _independent_usage(row["arm"], retained)
         if recomputed is None:
@@ -2288,7 +2357,10 @@ def validate_run_rows(
                 f"inference row {index} staged filename evidence",
             )
         run_directory, audit = _validate_arm_artifacts(
-            row, index, fixtures[job["fixture_id"]]["_payload_bytes"]
+            row,
+            index,
+            fixtures[job["fixture_id"]]["_payload_bytes"],
+            repair_model=configuration.get("repair_model", MODEL),
         )
         independent_audits[row["run_id"]] = audit
         row_artifact_root = run_directory.parent

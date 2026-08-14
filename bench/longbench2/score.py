@@ -1097,10 +1097,20 @@ def validate_schedule(
         "model", "reasoning", "arms", "repetitions", "seed", "timeout_seconds",
         "candidate", "controller", "executables", "runtime_closure",
     }
-    if set(configuration) != required_config:
+    if set(configuration) not in {
+        frozenset(required_config),
+        frozenset(required_config | {"repair_model"}),
+    }:
         raise ScoreError("schedule configuration has an unexpected object shape")
     _require_equal(configuration["model"], MODEL, "schedule exact model")
     _require_equal(configuration["reasoning"], REASONING, "schedule reasoning")
+    repair_model = configuration.get("repair_model", MODEL)
+    if (
+        not isinstance(repair_model, str)
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", repair_model)
+        or ":" in repair_model
+    ):
+        raise ScoreError("schedule repair model is invalid")
     arms_raw = configuration["arms"]
     _require_equal(arms_raw, list(ARMS), "schedule exact three-arm order")
     arms = tuple(arms_raw)
@@ -1214,7 +1224,94 @@ def load_run_rows(path: Path) -> list[dict[str, Any]]:
     return _load_run_rows_captured(captured_runs)
 
 
-def _validate_route(route: Any, arm: str, index: int) -> bool:
+def _category_routes_from_retained_trace(
+    data: bytes, index: int, repair_model: str
+) -> list[dict[str, Any]]:
+    routes: list[dict[str, Any]] = []
+    for line_number, line in enumerate(data.splitlines(keepends=True), 1):
+        if not line.endswith(b"\n") or not line[:-1].strip():
+            raise ScoreError(
+                f"trajectory {index} model trace row {line_number} is blank or incomplete"
+            )
+        try:
+            text = line.decode("utf-8")
+        except UnicodeError as exc:
+            raise ScoreError(
+                f"trajectory {index} model trace row {line_number} is not UTF-8"
+            ) from exc
+        value = _decode_json(
+            text, f"trajectory {index} model trace row {line_number}"
+        )
+        if not isinstance(value, dict) or line != canonical_json_file_bytes(value):
+            raise ScoreError(
+                f"trajectory {index} model trace row {line_number} is not canonical"
+            )
+        if value.get("schema_version") != 2 or value.get("event") != "model_attempt":
+            raise ScoreError(
+                f"trajectory {index} model trace row {line_number} is not typed schema v2"
+            )
+        depth = value.get("depth")
+        category = value.get("category")
+        request_id = value.get("request_id")
+        attempt = value.get("attempt")
+        if (
+            type(value.get("timestamp_ms")) is not int
+            or value["timestamp_ms"] < 0
+            or type(depth) is not int
+            or depth < 0
+            or not isinstance(request_id, str)
+            or not request_id
+            or type(attempt) is not int
+            or attempt < 1
+        ):
+            raise ScoreError(
+                f"trajectory {index} model trace row {line_number} identity is invalid"
+            )
+        outcome = value.get("outcome")
+        if outcome == "failed" and value.get("stage") == "session_setup":
+            if (
+                category != "session_setup"
+                or not isinstance(value.get("error"), str)
+                or not value["error"]
+            ):
+                raise ScoreError(
+                    f"trajectory {index} model trace row {line_number} setup failure is invalid"
+                )
+            continue
+        if outcome != "succeeded" or category not in {"turn", "repair"}:
+            raise ScoreError(
+                f"trajectory {index} model trace row {line_number} outcome is invalid"
+            )
+        provider = value.get("provider")
+        model = value.get("model")
+        if not isinstance(provider, str) or not provider.lower().startswith("openai"):
+            raise ScoreError(
+                f"trajectory {index} model trace row {line_number} provider is invalid"
+            )
+        expected_model = (
+            repair_model if depth == 0 and category == "repair" else MODEL
+        )
+        if model != expected_model:
+            raise ScoreError(
+                f"trajectory {index} model trace row {line_number} model is invalid"
+            )
+        routes.append({
+            "depth": depth,
+            "category": category,
+            "provider": provider,
+            "model": model,
+            "expected_model": expected_model,
+        })
+    if not routes or not any(
+        item["depth"] == 0 and item["category"] == "turn" for item in routes
+    ):
+        raise ScoreError(f"trajectory {index} model trace has no initial root route")
+    return routes
+
+
+def _validate_route(
+    route: Any, arm: str, index: int, repair_model: str = MODEL
+) -> bool:
     if not isinstance(route, dict) or type(route.get("asserted")) is not bool:
         raise ScoreError(f"inference row {index} runtime route assertion is malformed")
     if not route["asserted"]:
@@ -1226,20 +1323,54 @@ def _validate_route(route: Any, arm: str, index: int) -> bool:
         _require_equal(route["model"], MODEL, f"inference row {index} route model")
         _require_equal(route["expected_provider"], "OpenAI", f"inference row {index} expected route provider")
     elif arm == "jcode-azdaja":
-        if set(route) != {
+        legacy_keys = {
             "asserted", "routes", "expected_provider", "expected_model",
             "transport_error_rows", "authority",
-        }:
+        }
+        category_keys = legacy_keys | {"category_routes", "expected_repair_model"}
+        if set(route) not in {frozenset(legacy_keys), frozenset(category_keys)}:
             raise ScoreError(f"inference row {index} treatment route receipt shape is invalid")
         routes = route["routes"]
         if not isinstance(routes, list) or not routes:
             raise ScoreError(f"inference row {index} treatment route has no evidence")
+        allowed_models = {MODEL, repair_model}
         for item in routes:
             if not isinstance(item, dict) or set(item) != {"provider", "model"}:
                 raise ScoreError(f"inference row {index} treatment route item shape is invalid")
             if not isinstance(item["provider"], str) or not item["provider"].lower().startswith("openai"):
                 raise ScoreError(f"inference row {index} treatment route provider is invalid")
-            _require_equal(item["model"], MODEL, f"inference row {index} treatment route model")
+            if item["model"] not in allowed_models:
+                raise ScoreError(f"inference row {index} treatment route model is invalid")
+        if set(route) == legacy_keys:
+            if repair_model != MODEL or any(item["model"] != MODEL for item in routes):
+                raise ScoreError(f"inference row {index} legacy route cannot assert a repair model")
+        else:
+            _require_equal(
+                route["expected_repair_model"], repair_model,
+                f"inference row {index} expected repair model",
+            )
+            category_routes = route["category_routes"]
+            if not isinstance(category_routes, list) or not category_routes:
+                raise ScoreError(f"inference row {index} category routes are missing")
+            saw_initial_root = False
+            for item in category_routes:
+                if not isinstance(item, dict) or set(item) != {
+                    "depth", "category", "provider", "model", "expected_model"
+                }:
+                    raise ScoreError(f"inference row {index} category route shape is invalid")
+                depth = item["depth"]
+                category = item["category"]
+                if type(depth) is not int or depth < 0 or category not in {"turn", "repair"}:
+                    raise ScoreError(f"inference row {index} category route identity is invalid")
+                if not isinstance(item["provider"], str) or not item["provider"].lower().startswith("openai"):
+                    raise ScoreError(f"inference row {index} category route provider is invalid")
+                expected_model = repair_model if depth == 0 and category == "repair" else MODEL
+                _require_equal(item["expected_model"], expected_model, f"inference row {index} category expected model")
+                _require_equal(item["model"], expected_model, f"inference row {index} category observed model")
+                if depth == 0 and category == "turn":
+                    saw_initial_root = True
+            if not saw_initial_root:
+                raise ScoreError(f"inference row {index} has no initial root route")
         _require_equal(route["expected_provider"], "OpenAI subscription OAuth", f"inference row {index} expected route provider")
         _require_equal(route["transport_error_rows"], 0, f"inference row {index} route transport errors")
         if not isinstance(route["authority"], str) or "AZDAJA_MODEL_TRACE" not in route["authority"]:
@@ -1770,6 +1901,7 @@ def validate_artifact_rows(
                 if not isinstance(retained, dict) or retained.get("retained_entries") != sorted(expected_names) or retained.get("retention_allowlist") != sorted(expected_names):
                     raise ScoreError(f"inference row {index} cleanup/artifact inventories disagree")
                 stdout: bytes | None = None
+                model_trace: bytes | None = None
                 root_trace: bytes | None = None
                 for key, receipt in receipts.items():
                     data, _ = _read_private_regular_at(fd, basename[key], f"trajectory {index} {key}")
@@ -1778,6 +1910,8 @@ def validate_artifact_rows(
                         raise ScoreError(f"trajectory artifact {index} {key} bytes/path differ from receipt")
                     if key == "stdout":
                         stdout = data
+                    elif key == "azdaja_model_trace":
+                        model_trace = data
                     elif key == "azdaja_solo_trace":
                         root_trace = data
                 assert stdout is not None
@@ -1785,6 +1919,18 @@ def validate_artifact_rows(
                     raise ScoreError(f"inference row {index} response differs from retained stdout")
                 root_assertion = None
                 if job["arm"] == "jcode-azdaja":
+                    assert model_trace is not None
+                    runtime_route = row["runtime_route_assertion"]
+                    if "category_routes" in runtime_route:
+                        repair_model = runtime_route["expected_repair_model"]
+                        retained_routes = _category_routes_from_retained_trace(
+                            model_trace, index, repair_model
+                        )
+                        _require_equal(
+                            runtime_route["category_routes"],
+                            retained_routes,
+                            f"inference row {index} category route/retained trace binding",
+                        )
                     fixture = fixtures[job["fixture_id"]]
                     payload = _json_object_from_captured_bytes(
                         fixture["_payload_bytes_captured"],
@@ -1884,7 +2030,12 @@ def validate_run_rows(
             row.get("trajectory_artifacts"), job["arm"], index,
             execution_success=row["execution_success"],
         )
-        route_ok = _validate_route(row.get("runtime_route_assertion"), job["arm"], index)
+        route_ok = _validate_route(
+            row.get("runtime_route_assertion"),
+            job["arm"],
+            index,
+            configuration.get("repair_model", MODEL),
+        )
         lifecycle_ok = _validate_lifecycle(row.get("product_lifecycle_assertion"), row, job["arm"], index)
         usage_ok, _ = _validate_usage(row, job["arm"], index)
         _validate_root_context_receipt(

@@ -29,12 +29,41 @@ import stat
 import subprocess
 import sys
 import time
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
 MODEL = "gpt-5.6-luna"
 REASONING = "medium"
+AZDAJA_REPAIR_MODEL = MODEL
+
+
+def configure_azdaja_repair_model(model: str) -> None:
+    """Bind the per-adapter repair route before any inference starts."""
+    if not isinstance(model, str) or not model.strip():
+        raise BenchError("candidate repair model must be a nonempty string")
+    global AZDAJA_REPAIR_MODEL
+    AZDAJA_REPAIR_MODEL = model.strip()
+
+
+def configure_azdaja_repair_model_from_skill(
+    skill: Path, *, require_explicit: bool = False
+) -> str:
+    try:
+        config = tomllib.loads((skill / "config.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise BenchError(f"cannot parse candidate config: {exc}") from exc
+    if config.get("default_model") != MODEL:
+        raise BenchError("candidate root model does not match the frozen benchmark model")
+    if require_explicit and "jcode_repair_model" not in config:
+        raise BenchError("fresh candidate config lacks explicit jcode_repair_model")
+    model = config.get("jcode_repair_model", MODEL)
+    if not isinstance(model, str) or not model or model.strip() != model:
+        raise BenchError("candidate repair model must be nonempty without surrounding whitespace")
+    configure_azdaja_repair_model(model)
+    return AZDAJA_REPAIR_MODEL
+
 ARMS = ("jcode-native", "prime-agent", "jcode-azdaja")
 CAMPAIGN_MODEL = "gpt-5.6-luna"
 CAMPAIGN_REASONING = "medium"
@@ -1366,6 +1395,7 @@ def parse_azdaja_route_evidence(path: Path | None) -> dict[str, Any] | None:
     if not raw_rows:
         return None
     routes: set[str] = set()
+    route_rows: list[dict[str, Any]] = []
     depth_counts: dict[str, int] = {}
     error_depth_counts: dict[str, int] = {}
     depth_zero_input_tokens = 0
@@ -1381,10 +1411,27 @@ def parse_azdaja_route_evidence(path: Path | None) -> dict[str, Any] | None:
         timestamp_ms = _nonnegative_int(row.get("timestamp_ms"))
         if depth is None or timestamp_ms is None:
             return None
+        schema_version = row.get("schema_version")
+        if schema_version not in {None, 1, 2}:
+            return None
+        if schema_version == 2 and (
+            row.get("event") != "model_attempt"
+            or not isinstance(row.get("request_id"), str)
+            or not row["request_id"]
+            or _nonnegative_int(row.get("attempt")) in {None, 0}
+        ):
+            return None
         depth_key = str(depth)
         if "error" in row:
             error = row.get("error")
             if not isinstance(error, str) or not error.strip():
+                return None
+            if schema_version == 2 and (
+                row.get("category") != "session_setup"
+                or row.get("outcome") != "failed"
+                or row.get("stage") != "session_setup"
+                or error != "provider_call_failed"
+            ):
                 return None
             error_depth_counts[depth_key] = error_depth_counts.get(depth_key, 0) + 1
             continue
@@ -1397,7 +1444,19 @@ def parse_azdaja_route_evidence(path: Path | None) -> dict[str, Any] | None:
             or not model.strip()
         ):
             return None
+        category = row.get("category") if schema_version == 2 else "turn"
+        if (
+            category not in {"turn", "repair"}
+            or (schema_version == 2 and row.get("outcome") != "succeeded")
+        ):
+            return None
         routes.add(f"{provider}/{model}")
+        route_rows.append({
+            "depth": depth,
+            "category": category,
+            "provider": provider,
+            "model": model,
+        })
         depth_counts[depth_key] = depth_counts.get(depth_key, 0) + 1
         if depth == 0:
             input_tokens = _nonnegative_int(row.get("input_tokens"))
@@ -1407,6 +1466,7 @@ def parse_azdaja_route_evidence(path: Path | None) -> dict[str, Any] | None:
                 depth_zero_input_tokens += input_tokens
     return {
         "routes": sorted(routes),
+        "route_rows": route_rows,
         "depth_counts": depth_counts,
         "transport_error_rows": sum(error_depth_counts.values()),
         "transport_error_depth_counts": error_depth_counts,
@@ -1801,30 +1861,69 @@ def direct_solo_lifecycle_assertion(
 
 
 def runtime_assertion(
-    name: str, stdout: str, azdaja_usage: dict[str, Any] | None = None
+    name: str,
+    stdout: str,
+    azdaja_usage: dict[str, Any] | None = None,
+    *,
+    repair_model: str | None = None,
 ) -> dict[str, Any]:
     if name == "jcode-azdaja":
-        routes = [] if azdaja_usage is None else azdaja_usage.get("routes", [])
-        parsed_routes: list[dict[str, str]] = []
-        valid = bool(routes)
-        for route in routes:
-            provider, separator, model = str(route).rpartition("/")
-            parsed_routes.append({"provider": provider, "model": model})
+        effective_repair_model = (
+            AZDAJA_REPAIR_MODEL if repair_model is None else repair_model
+        )
+        route_rows = [] if azdaja_usage is None else azdaja_usage.get("route_rows", [])
+        parsed_routes: list[dict[str, Any]] = []
+        valid = bool(route_rows)
+        saw_initial_root = False
+        for route in route_rows:
+            if not isinstance(route, dict):
+                valid = False
+                continue
+            provider = route.get("provider")
+            model = route.get("model")
+            category = route.get("category")
+            depth = route.get("depth")
+            expected_model = (
+                effective_repair_model
+                if depth == 0 and category == "repair"
+                else MODEL
+            )
+            parsed_routes.append({
+                "depth": depth,
+                "category": category,
+                "provider": provider,
+                "model": model,
+                "expected_model": expected_model,
+            })
             valid = (
                 valid
-                and bool(separator)
+                and isinstance(provider, str)
                 and provider.lower().startswith("openai")
-                and model == MODEL
+                and category in {"turn", "repair"}
+                and isinstance(depth, int)
+                and depth >= 0
+                and model == expected_model
             )
+            if depth == 0 and category == "turn":
+                saw_initial_root = True
+        valid = valid and saw_initial_root
+        distinct_routes = [] if azdaja_usage is None else azdaja_usage.get("routes", [])
+        simple_routes = []
+        for route in distinct_routes:
+            provider, separator, model = str(route).rpartition("/")
+            if separator:
+                simple_routes.append({"provider": provider, "model": model})
         return {
             "asserted": valid,
-            "routes": parsed_routes,
+            "routes": simple_routes,
+            "category_routes": parsed_routes,
             "expected_provider": "OpenAI subscription OAuth",
             "expected_model": MODEL,
+            "expected_repair_model": effective_repair_model,
             "transport_error_rows": (
                 0 if azdaja_usage is None else azdaja_usage.get("transport_error_rows", 0)
             ),
-            "authority": "structurally valid successful rows in AZDAJA_MODEL_TRACE",
+            "authority": "category-aware structurally valid successful rows in AZDAJA_MODEL_TRACE",
         }
     if name == "jcode-native":
         done = None
@@ -3061,6 +3160,10 @@ def run_suite(args: argparse.Namespace, suite: Suite) -> int:
     skill = validate_skill(args.azdaja_skill) if "jcode-azdaja" in args.arms else Path(
         args.azdaja_skill
     )
+    if "jcode-azdaja" in args.arms:
+        configure_azdaja_repair_model_from_skill(
+            skill, require_explicit=not args.resume
+        )
     executable_identities: dict[str, Any] = {}
     if any(arm.startswith("jcode") for arm in args.arms):
         executable_identities["jcode"] = executable_identity(args.jcode, "jcode")
@@ -3273,6 +3376,10 @@ def main(argv: list[str] | None = None) -> int:
     args.jcode = ensure_executable(args.jcode, "jcode") if any(a.startswith("jcode") for a in args.arms) else args.jcode
     args.prime_agent = ensure_executable(args.prime_agent, "prime-agent") if "prime-agent" in args.arms else args.prime_agent
     skill = validate_skill(args.azdaja_skill) if "jcode-azdaja" in args.arms else Path(args.azdaja_skill)
+    if "jcode-azdaja" in args.arms:
+        configure_azdaja_repair_model_from_skill(
+            skill, require_explicit=not args.resume
+        )
     executable_identities: dict[str, Any] = {}
     if any(a.startswith("jcode") for a in args.arms):
         executable_identities["jcode"] = executable_identity(args.jcode, "jcode")

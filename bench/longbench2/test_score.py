@@ -188,6 +188,7 @@ class ScoreTests(unittest.TestCase):
             "configuration": {
                 "model": SCORE.MODEL,
                 "reasoning": SCORE.REASONING,
+                "repair_model": "gpt-5.4-mini",
                 "arms": list(SCORE.ARMS),
                 "repetitions": 1,
                 "seed": SCORE.DEFAULT_BOOTSTRAP_SEED,
@@ -310,10 +311,18 @@ class ScoreTests(unittest.TestCase):
                 route = {
                     "asserted": True,
                     "routes": [{"provider": "openai", "model": SCORE.MODEL}],
+                    "category_routes": [{
+                        "depth": 0,
+                        "category": "turn",
+                        "provider": "openai",
+                        "model": SCORE.MODEL,
+                        "expected_model": SCORE.MODEL,
+                    }],
                     "expected_provider": "OpenAI subscription OAuth",
                     "expected_model": SCORE.MODEL,
+                    "expected_repair_model": "gpt-5.4-mini",
                     "transport_error_rows": 0,
-                    "authority": "structurally valid successful rows in AZDAJA_MODEL_TRACE",
+                    "authority": "category-aware AZDAJA_MODEL_TRACE",
                 }
                 latency = 2.0
                 usage = {
@@ -412,7 +421,26 @@ class ScoreTests(unittest.TestCase):
             artifact_files = {"stdout": ("stdout.ndjson", stdout.encode()), "stderr": ("stderr.log", b"")}
             if job["arm"] == "jcode-azdaja":
                 artifact_files.update({
-                    "azdaja_model_trace": ("azdaja-model-usage.jsonl", b"{}\n"),
+                    "azdaja_model_trace": (
+                        "azdaja-model-usage.jsonl",
+                        SCORE.canonical_json_file_bytes({
+                            "schema_version": 2,
+                            "event": "model_attempt",
+                            "timestamp_ms": job["ordinal"],
+                            "depth": 0,
+                            "request_id": job["run_id"],
+                            "attempt": 1,
+                            "category": "turn",
+                            "outcome": "succeeded",
+                            "provider": "openai",
+                            "model": SCORE.MODEL,
+                            "input_tokens": usage["input_tokens"],
+                            "output_tokens": usage["output_tokens"],
+                            "cache_read_tokens": usage["cache_read_tokens"],
+                            "cache_write_tokens": usage["cache_write_tokens"],
+                            "total_tokens": usage["total_tokens"],
+                        }),
+                    ),
                     "azdaja_solo_trace": (
                         "azdaja-solo-trace.log",
                         synthetic_root_transcript("synthetic exact root request"),
@@ -623,6 +651,62 @@ class ScoreTests(unittest.TestCase):
         if key in {"azdaja_model_trace", "azdaja_solo_trace"}:
             receipt["source_sha256_before_redaction"] = receipt["sha256"]
             receipt["exact_text_preserved"] = True
+
+    def test_category_route_receipt_allows_mini_only_for_depth_zero_repairs(self):
+        route = {
+            "asserted": True,
+            "routes": [
+                {"provider": "OpenAI", "model": SCORE.MODEL},
+                {"provider": "OpenAI", "model": "gpt-5.4-mini"},
+            ],
+            "category_routes": [
+                {"depth": 0, "category": "turn", "provider": "OpenAI", "model": SCORE.MODEL, "expected_model": SCORE.MODEL},
+                {"depth": 0, "category": "repair", "provider": "OpenAI", "model": "gpt-5.4-mini", "expected_model": "gpt-5.4-mini"},
+                {"depth": 1, "category": "turn", "provider": "OpenAI", "model": SCORE.MODEL, "expected_model": SCORE.MODEL},
+            ],
+            "expected_provider": "OpenAI subscription OAuth",
+            "expected_model": SCORE.MODEL,
+            "expected_repair_model": "gpt-5.4-mini",
+            "transport_error_rows": 0,
+            "authority": "category-aware AZDAJA_MODEL_TRACE",
+        }
+        self.assertTrue(
+            SCORE._validate_route(route, "jcode-azdaja", 1, "gpt-5.4-mini")
+        )
+        retained = b"".join(
+            SCORE.canonical_json_file_bytes({
+                "schema_version": 2,
+                "event": "model_attempt",
+                "timestamp_ms": position,
+                "depth": item["depth"],
+                "request_id": f"request-{position}",
+                "attempt": 1,
+                "category": item["category"],
+                "outcome": "succeeded",
+                "provider": item["provider"],
+                "model": item["model"],
+            })
+            for position, item in enumerate(route["category_routes"], 1)
+        )
+        self.assertEqual(
+            SCORE._category_routes_from_retained_trace(
+                retained, 1, "gpt-5.4-mini"
+            ),
+            route["category_routes"],
+        )
+        route["category_routes"][2]["model"] = "gpt-5.4-mini"
+        with self.assertRaises(SCORE.ScoreError):
+            SCORE._validate_route(route, "jcode-azdaja", 1, "gpt-5.4-mini")
+        with self.assertRaises(SCORE.ScoreError):
+            SCORE._category_routes_from_retained_trace(
+                retained.replace(
+                    b'"category":"repair","depth":0',
+                    b'"category":"turn","depth":1',
+                    1,
+                ),
+                1,
+                "gpt-5.4-mini",
+            )
 
     def test_official_metric_is_pinned_and_strict_metric_rejects_extra_text(self):
         accepted_official = (

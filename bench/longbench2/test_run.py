@@ -180,7 +180,7 @@ class RunnerTests(unittest.TestCase):
         private_json(manifest_path, manifest)
         return manifest_path, public, fixtures
 
-    def fake_schedule(self, suite):
+    def fake_schedule(self, suite, *, repair_model=RUN.MODEL):
         candidate_components = {
             name: {"sha256": str(index) * 64, "bytes": index}
             for index, name in enumerate(RUN.CANDIDATE_ALLOWLIST, 1)
@@ -241,6 +241,7 @@ class RunnerTests(unittest.TestCase):
             controller=controller,
             executables=executables,
             runtime_closure=runtime_closure,
+            repair_model=repair_model,
         )
 
     def resign(self, schedule):
@@ -283,6 +284,32 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(output.exists())
         self.assertFalse(Path(str(output) + ".schedule.json").exists())
         self.assertFalse(Path(str(output) + ".claims").exists())
+
+    def test_legacy_adapter_without_repair_configuration_is_resume_only(self):
+        legacy_adapter = object()
+        candidate = self.root / "legacy-candidate"
+        self.assertEqual(
+            RUN._adapter_candidate_repair_model(
+                legacy_adapter, candidate, require_support=False
+            ),
+            RUN.MODEL,
+        )
+        with self.assertRaisesRegex(RUN.BenchError, "lacks callable"):
+            RUN._adapter_candidate_repair_model(
+                legacy_adapter, candidate, require_support=True
+            )
+        candidate.mkdir()
+        (candidate / "config.toml").write_text(
+            'default_model="gpt-5.6-luna"\n', encoding="utf-8"
+        )
+        current_adapter = mock.Mock()
+        current_adapter.configure_azdaja_repair_model_from_skill = (
+            lambda _candidate: RUN.MODEL
+        )
+        with self.assertRaisesRegex(RUN.BenchError, "explicit"):
+            RUN._adapter_candidate_repair_model(
+                current_adapter, candidate, require_support=True
+            )
 
     def test_azdaja_skill_is_fresh_only_and_optional_on_resume(self):
         parsed = RUN.parser().parse_args(
@@ -378,6 +405,21 @@ class RunnerTests(unittest.TestCase):
             SCORE.validate_schedule(
                 tampered,
                 manifest,
+                suite.fixtures_by_id,
+                manifest_sha256=suite.manifest_sha256,
+            )
+
+    def test_schedule_binds_mini_repair_model_into_live_scorer_contract(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path, _, _ = self.make_public()
+            suite = RUN.capture_public_suite(manifest_path)
+            schedule = self.fake_schedule(suite, repair_model="gpt-5.4-mini")
+            self.assertEqual(
+                schedule["configuration"]["repair_model"], "gpt-5.4-mini"
+            )
+            SCORE.validate_schedule(
+                copy.deepcopy(schedule),
+                suite.manifest_path,
                 suite.fixtures_by_id,
                 manifest_sha256=suite.manifest_sha256,
             )

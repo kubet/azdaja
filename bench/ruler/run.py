@@ -30,6 +30,7 @@ import subprocess
 import sys
 import threading
 import time
+import tomllib
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -1012,6 +1013,27 @@ def snapshot_candidate(source_skill: Path, snapshot_root: Path) -> dict[str, Any
     }
 
 
+def candidate_repair_model(skill: Path) -> str:
+    config_path = skill / "config.toml"
+    try:
+        config = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise BenchError(f"cannot parse frozen candidate config: {exc}") from exc
+    root_model = config.get("default_model")
+    if root_model != MODEL:
+        raise BenchError("frozen candidate root model does not match RULER model")
+    if "jcode_repair_model" not in config:
+        raise BenchError("fresh candidate config lacks explicit jcode_repair_model")
+    repair_model = config["jcode_repair_model"]
+    if (
+        not isinstance(repair_model, str)
+        or not repair_model
+        or repair_model.strip() != repair_model
+    ):
+        raise BenchError("frozen candidate repair model is invalid")
+    return repair_model
+
+
 def validate_candidate_snapshot(candidate: Any) -> Path:
     if not isinstance(candidate, dict) or set(candidate) != {
         "sha256", "snapshot_root", "components"
@@ -1117,6 +1139,7 @@ def build_schedule(
     controller: dict[str, Any],
     controller_source_paths: dict[str, str],
     executables: dict[str, Any],
+    repair_model: str = MODEL,
     workflow: str = FULL_WORKFLOW,
     parallel_width: int = PARALLEL_WIDTH,
     random_names: Iterable[str] | None = None,
@@ -1194,6 +1217,7 @@ def build_schedule(
         "configuration": {
             "model": MODEL,
             "reasoning": REASONING,
+            "repair_model": repair_model,
             "arms": list(ARMS),
             "repetitions": REPETITIONS,
             "seed": seed,
@@ -1239,6 +1263,7 @@ def validate_schedule(
     controller: dict[str, Any],
     controller_source_paths: dict[str, str],
     executables: dict[str, Any],
+    repair_model: str = MODEL,
     workflow: str = FULL_WORKFLOW,
     parallel_width: int = PARALLEL_WIDTH,
 ) -> None:
@@ -1270,6 +1295,7 @@ def validate_schedule(
     expected_configuration = {
         "model": MODEL,
         "reasoning": REASONING,
+        "repair_model": repair_model,
         "arms": list(ARMS),
         "repetitions": 1,
         "seed": seed,
@@ -1445,6 +1471,7 @@ def validate_schedule(
         controller=controller,
         controller_source_paths=controller_source_paths,
         executables=executables,
+        repair_model=repair_model,
         workflow=workflow,
         parallel_width=parallel_width,
         random_names=replay_names,
@@ -3143,6 +3170,9 @@ def run_suite(args: argparse.Namespace, suite: PublicSuite) -> int:
     _create_private_directory(candidate_root, "candidate snapshot", exist_ok=False)
     candidate = snapshot_candidate(skill, candidate_root)
     frozen_skill = validate_candidate_snapshot(candidate)
+    repair_model = candidate_repair_model(frozen_skill)
+    OOLONG.configure_azdaja_repair_model(repair_model)
+    args.azdaja_repair_model = repair_model
     controller, controller_source_paths = snapshot_controller(controller_root)
     executables = snapshot_executables(source_executables, executable_root)
     validate_candidate_executable_binding(candidate, executables)
@@ -3157,6 +3187,7 @@ def run_suite(args: argparse.Namespace, suite: PublicSuite) -> int:
         controller=controller,
         controller_source_paths=controller_source_paths,
         executables=executables,
+        repair_model=repair_model,
         workflow=args.workflow,
         parallel_width=args.parallel_width,
     )
@@ -3170,6 +3201,7 @@ def run_suite(args: argparse.Namespace, suite: PublicSuite) -> int:
         controller=controller,
         controller_source_paths=controller_source_paths,
         executables=executables,
+        repair_model=repair_model,
         workflow=args.workflow,
         parallel_width=args.parallel_width,
     )

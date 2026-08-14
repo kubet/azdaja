@@ -452,3 +452,179 @@ frozen validator. A separate no-gold call through the same frozen scorer's publi
 and `validate_frozen_runs` passed exact 189, then the sole CLI score succeeded. The live
 controller now reattaches the already captured bytes at that boundary; no frozen row,
 claim, artifact, or report was modified.
+
+## LongBench-v2 v43 post-score format and deterministic-failure triage (2026-08-14)
+
+This was read-only, offline diagnosis of the already frozen v43 cohort. It did not invoke
+the scorer again, inference, retry, or resume, and it did not modify any frozen row,
+claim, transcript, artifact, or report. Frozen inputs remain runs SHA-256
+`55271a272b61ba973e6e129a8312b3e0229c68342248ddec33669f1a270f6557` and report SHA-256
+`288643391834c9e41966df08f65a297e7750e3e65e925336334a23c12cb7ae5d`.
+
+A syntax-only lenient extractor protocol was committed before candidate responses or gold
+were read (SHA-256 `d163ffe52b94011b4a363de9d4373679c2339e90484ca006d5b7fdb6d64e5eb3`).
+Across all 48 retained successful responses, the 28 official-recognized rows remained
+unchanged at 7 correct and 21 wrong. Every one of the 20 official misses was exactly one
+bare uppercase A-D label plus LF; all 20 were unambiguous, with 13 correct and 7 wrong.
+The diagnostic format-fixed count is therefore 20/63 (31.746%, +13), above the 16/63
+gate, while the immutable official result remains 7/63. Result SHA-256:
+`da2d070720e40de1305f1ec4164a94c75ca626bdf1c26f239630d33db6b885d5`.
+
+All 14 non-timeout process exits were then bound to exact frozen trace and generated-program
+hashes. The terminal families were six fixed `semantic_manifest` prompt-envelope overflows,
+six fail-closed solver/postcondition cardinality assertions, one Monty `int + bool` TypeError,
+and one unavailable `dict.__getitem__` AttributeError. The extracted forensic bundle SHA-256
+is `3007f7ab0ae4cf7569324187baeddd547d368bd1ecb80d6a14af83a27065bcbe`.
+Seven minimal offline cases cover every family; the frozen v43 binary reproduced them with
+no network, scorer, gold, or benchmark payload access. Two fresh harness invocations produced
+identical result SHA-256 `528051bf4ce94e53aba48ca4c44c1f57599a9a2845f1cb03d5f83daa254ff37e`.
+The exact semantic boundary was 44,410 evidence characters fitting a 45,000-character
+prompt and 44,411 overflowing before any child call.
+
+The generic v45 reliability patch already supplies exact trusted helper-envelope arithmetic,
+actionable complete-boundary repair, typed Program diagnostics, a global three-turn ceiling,
+and no repair after child evidence. The v46 step-2 delta only removes `solo`'s injected LF
+by byte-writing the already verified FINAL value on all three success paths; it does not
+parse, wrap, trim, or otherwise rewrite answers. The exact step-2 patch SHA-256 is
+`fac3c1ec36be9c41f04a5ef6911f497e095aac11af9ef2260762d9e1695970ae`.
+Its offline e2e asserts raw output bytes and imports the actual pinned `official_extract_answer`
+and strict extractor. This remains SPEED-RISK until the full source gate and frozen RULER
+smoke/candidate-90 gates pass.
+
+### LongBench-v2 v43 inner-cell timeout closure
+
+The sole timeout was ordinal 127 on an 8,532,958-byte payload (8,532,613 loaded
+characters). Its exact generated program SHA-256 was `953efd5e835bc7b8746cd82a0dc64c037b23b7ab5c1839e7702baf208c21bdc1`. Before any child
+call it lowercased the full context, ran three full `re.finditer` scans collecting every
+match, then for every match performed eight prefix `rfind` and twelve suffix `find` scans
+and accumulated unbounded snippets. It exhausted one cell at 30.004649 s with zero
+subcalls; this is an algorithmic outlier, not evidence that the global cap is too small.
+
+`solo_runtime.exec_wall_ns - sub_call_wall_ns` gives authoritative local execution wall;
+for one-exec items it is an exact cell duration, while multi-exec rows remain aggregates
+and were not divided or mislabeled. Among 36 successful one-exec rows, local p50/p95/max
+were 0.166/2.908/9.446 s. Among the four successful one-exec rows with payloads at least
+5 MiB, p50/p95/max were 2.907/8.895/9.446 s. The timeout was therefore 10.32x the overall
+successful exact-cell p95 and 3.37x the same-size-band p95. The 30-second cap remains;
+v45's generic policy allows exactly one pristine zero-child Timeout repair with bounded
+passes, while repeated/post-child timeout remains terminal under the global three-turn
+ceiling. Record SHA-256: `05f62db02dc971c10fedc14fc96635ba4ba0449bf1cc87e852c1b62feeb99f33`.
+
+### v45/v46 RULER smoke closure and v46 freeze
+
+The final pre-inference v46 source state was frozen at binary diff SHA-256
+`b3d729aea2c9a0c80b595915eaab2fd37a4c907f5512dfe281864eacb954f3ac`
+(stable patch-id `7eafcbb5561431afbe0ce5323d68a1980f353a2b`) after the complete offline gate
+passed. The release binary SHA-256 is
+`e95f4f64b6edc97d665890fd8cd7cd06c69a9dae0119509eefe7301aab20f6f0`; SKILL and
+config remained the v43 bytes. The authoritative source-mode-correct freeze stamp is v2,
+SHA-256 `d38167798c4890c9f8b5ae1c9e0209b48e6322d3e98e315c093d4cb505e389c3`.
+
+The first v46 controller invocation stopped in preflight because its source bundle used
+snapshot destination modes (0500/0400) rather than the controller-required source modes
+(0700/0600). It created no schedule, claims, output rows, model calls, or score. The
+failure record SHA-256 is
+`df518459a8f0c1e4ec2ca63d64cfaa57bc3e8524e0fee6408da1bf8980075126`; the retained
+byte-identical v2 bundle corrected only source file modes before the one inference smoke.
+
+| frozen smoke | execution | makespan s | mean s | p50 s | p95 s | root turns | repairs | input tokens | output tokens | >=100-char leaks |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| v43 | 20/20 | 119.739380 | 21.746139 | 21.560276 | 29.987673 | 20 | 0 | 52,565 | 31,859 | 0 |
+| v45 | 20/20 | 138.361953 | 24.710454 | 23.167352 | 39.437929 | 22 | 2 | 63,445 | 36,034 | 0 |
+| v46 | 20/20 | 143.415445 | 26.280510 | 24.801299 | 39.744774 | 21 | 1 | 57,400 | 37,551 | 0 |
+
+V45 restored reliability but regressed versus identical v43 by 15.55% makespan, 13.63%
+mean, 31.51% p95, and 13.10% output tokens. V46 likewise regressed by 19.77% makespan,
+20.85% mean, 15.03% p50, 32.54% p95, and 17.87% output tokens. V46's one functional
+delta from v45 is byte-transparent CLI answer emission; because provider generation is
+stochastic, the smoke does not attribute these paired token differences to that emitter.
+The frozen result nevertheless fails the preregistered no-material-speed/token-regression
+gate and remains terminal: no candidate-90 or LongBench inference is authorized.
+
+V46 output SHA-256:
+`fa4ad758720db07c0f1341704e147a14da94dac8afb0865d7b5f6fa219876b6c`.
+Terminal record SHA-256:
+`12dbef41dc30d3db30345091cac036fc0921efa8ba76588307504e2ba1f4366a`.
+All 20 rows, 20 claims, 20 completion receipts, route/lifecycle assertions, candidate
+pre/post identities, ledgers, and zero-leak checks validated without opening gold or
+invoking a scorer.
+
+### v43/v45/v46 smoke provenance and offline speed postmortem
+
+A read-only deterministic audit bound each of the 60 smoke rows to its schedule candidate
+aggregate, component binary, frozen controller, run ID, schedule ID, claim filename,
+completion filename, and exact JSONL row SHA-256 without the line delimiter. Both runs
+of audit script SHA-256
+`24b2c3db1c899b6829be0c26a0c1a49af1a95dccb39705876f70274bced6f645`
+produced result SHA-256
+`e058f3117e4876fbf45d5410fcadeb33dacf69e3c67e6f4b97d42bc015d95362`
+with no errors. The immutable v45 terminal-record v1 had compared aggregate candidate
+identity to component-binary identity and therefore contained a false negative; v2
+supersedes it at SHA-256
+`d146c4621b20a0656a78eae48fdce49c63695b05c785d71660a05146bb3cb61c`.
+V45 remains rejected on its independent speed/token result.
+
+Offline decomposition attributes 98.1%/98.4%/98.5% of v43/v45/v46 summed item latency
+to root inference. After excluding repairs, v45 and v46 initial-root output totals were
+34,299 and 36,438 tokens versus v43's 31,859, while visible initial generated-code
+characters stayed essentially flat at 10,773/10,662 versus 10,668. V45 to v46 changed
+only post-inference byte emission, yet v46 initial inference rose 36.057 s and 2,139
+output tokens; it cannot be caused by the emitter. Provider/sample variation and any
+v43-to-v45 prompt effect cannot be separated from one frozen stochastic pass. Reducing
+the global root-turn cap would not affect 19/20 v46 rows and would trade away recovery,
+so no v47 change or repeated smoke is authorized. Offline postmortem SHA-256:
+`ffd371ab01ede45702072ce17df9208062828719609426923e13e3708b1694ff`.
+
+## V47 preregistration: static-prefix root/repair prompts (offline, no inference)
+
+- Scope/order: speed ladder step 1 only. V47 changes Azdaja's own initial-root and same-session repair message layout so the reusable contract is a byte-identical prefix and all item-specific question/metadata/sample or typed repair diagnostics are strictly last. It does not change Jcode, model, reasoning effort, tools, controller width, session isolation, caps, subcommands, `assets/SKILL.md`, or `assets/config.toml`.
+- Shipped Jcode remains exact v0.75.3 (`fd1ff012c`), installed binary SHA-256 `f01c442265d22e9dead7f227b2ec115ab99164e876ff354a72988a9311bf3c4f`. No patched-harness build is eligible for this lineage. `JCODE_OPENAI_PROMPT_CACHE_KEY` and `JCODE_OPENAI_MAX_OUTPUT_TOKENS` are deliberately unset: v0.75.3 omits both fields for the required ChatGPT OAuth request mode, so code-side forwarding would be a recorded no-op rather than a mechanism.
+- The root reusable prefix is 3,328 UTF-8 bytes under the frozen adapter config. A deterministic unit test constructs two disjoint dynamic items and proves their prefix bytes are identical, their dynamic values do not occur in the prefix, metadata/sample follow the marker, and the question is the final prompt bytes. Repair messages likewise share one fixed prefix and put category, bounded line/diagnostic, and category constraint last while retaining the 1,024-character repair bound.
+- V46 repair root cause is closed fail-closed before freeze: the reusable contract now forbids treating line count or fixed line indices as evidence/question boundaries and requires observed-boundary validation. A regression executes the diagnosed two-line structural-assumption family (large first evidence line, question second; generated code incorrectly treats `lines[1]` as evidence) and proves typed `Assertion`, zero child calls, no finalized state, and no publishable answer.
+- Offline gate: `/private/tmp/azdaja-v47-pre-freeze-offline-gate-v4.log`, SHA-256 `d29b03a476b214cdad4c909de850932f464dd5013660050672df5d8e6d9a2879`; passed diff check, fmt, debug/release checks, strict clippy, debug/release Rust tests, 100 LongBench controller tests under Python 3.12, and 83 RULER controller tests. Superseded immutable v1-v3 logs retain respectively the expected old-string test failures, the repaired-prompt bound failure, and the system-Python/ENOSPC operational failures; none entered inference.
+- Fresh-smoke adjudication is preregistered: 20/20 execution, zero leaks/timeouts/cleanup failures, exact v43-equivalent configuration, and per-turn streamed usage are mandatory. Initial-root `cache_read` must be reported separately from same-session repairs; a repair-only cache hit does not prove cross-item prefix caching. Any material wall/output-token regression rejects V47. If all fresh initial roots remain `cache_read=0`, the cache mechanism is unverified and V47 cannot proceed to candidate-90 even if reliability is 20/20.
+
+## V47 terminal smoke: static prefix did not produce cross-item cache reads
+
+- Frozen candidate: `/private/tmp/azdaja-luna-v47-static-prefix-v2`; binary SHA-256 `d1b6ac5745b83fff41303c83e037694bf2b0dbf5898f443ab46b5766cbf5e208`; pre-inference source SHA-256 `9dfc8a2ca651e59ec93996befb03221b00fe6291b1ad5835c78e12922583eb05`; freeze-stamp SHA-256 `3562ce603621e1d066f32cc6d2eb3d80861083c9dbf1fd947f8f4a988ffbc35d`; unchanged Jcode v0.75.3 SHA-256 `f01c442265d22e9dead7f227b2ec115ab99164e876ff354a72988a9311bf3c4f`.
+- Frozen output: `/private/tmp/azdaja-ruler-width4-smoke-v47-static-prefix-v2.jsonl`, SHA-256 `bf9c200da44b13ad1ad9f0a68ae004bfac8f095b47bb3e63761653ea7c0068a3`. Terminal record: `/private/tmp/azdaja-ruler-v47-smoke-terminal-record-v1.json`, SHA-256 `d7a3e989cd73946829135a556339f41a90e09a05d5fa839990b038940aa4de71`. Twenty claim files and twenty completion receipts bind the exact no-LF row bytes; no score or gold was invoked.
+- Execution/evidence: 20/20; 21 root turns; one repair at ordinal 6; zero subcalls, timeouts, cleanup errors, and >=100-Unicode-character leaks. Root model/route remained `gpt-5.6-luna`, subscription OAuth, reasoning `medium`; global width peaked at four.
+- Cache result: all 20 initial roots reported `cache_read=0`. The only cache read was 1,792 tokens on the same-session repair, which is not cross-item prefix evidence. Initial roots used 55,190 input / 38,266 output tokens and 538.811s provider wall; the repair used 4,917 / 991 tokens, 1,792 cache-read tokens, and 12.909s provider wall. The preregistered cache mechanism therefore failed.
+- Wall/token result: makespan 175.855413s; mean 30.543499s; median 29.168285s; p95 53.157768s; total input/output 60,107/39,257. Versus the identical frozen v43 smoke, makespan +46.87%, mean +40.45%, median +35.29%, p95 +77.27%, input +14.35%, output +23.22%. Late setup/local overhead outliers occurred at ordinals 15/17/18/19/20, but initial-root cache zero plus material output/wall regression independently reject the candidate.
+- The v46 repair root cause did close on its frozen ordinal-19 fixture: V47 used `find`/`rfind` content boundaries, completed in the initial program, and did not repeat the fixed-line assumption. This reliability result does not override the cache/speed gate.
+- Terminal disposition: `SPEED-RISK_AND_CACHE-MECHANISM-UNVERIFIED`. No candidate-90, full RULER, LongBench, score, OOLONG, or RAH run is permitted for V47. The README remains on v43.
+
+## V48 preregistration: configured low reasoning for non-root provider turns (offline, no inference)
+
+- Scope/order: speed ladder step 2 only. The initial root remains `gpt-5.6-luna` at `medium`; semantic child calls and same-session repair calls use `low` through the shipped Jcode v0.75.3 `set_reasoning_effort` Harness request. The per-adapter keys are `jcode_reasoning`, `jcode_sub_reasoning`, and `jcode_repair_reasoning` in `assets/config.toml`; no Jcode source or hidden code-side provider setting is modified.
+- Lineage: V48 starts from the byte-transparent v46 runtime, does not inherit V47's rejected static-prefix reorder, and carries only the separately mandated generic fixed-line-boundary fail-closed contract/test as a reliability prerequisite. Speed attribution is solely the configured non-root reasoning dial.
+- Routing: fresh child sessions are created directly at `low`; a lended root session is reconfigured to the configured child effort immediately before a shared semantic turn; root repair reconfigures the same session to the configured repair effort before consuming an entered provider turn. Reconfiguration errors are typed session-setup failures, do not consume a provider-turn budget, poison the session for bounded cancel/archive, and remain fixed-denominator failures.
+- Deterministic protocol evidence: fresh-batch e2e asserts exact `effort=low`; same-session repair e2e asserts the exact sequence `medium, low, low` across initial setup and two repairs; a Unix-pair unit test validates the exact stable Harness request. The diagnosed two-line fixed-index program remains a typed zero-child Assertion with no FINAL publication.
+- Fresh-smoke gate: 20/20 execution, zero leaks/timeouts/cleanup failures, and no material wall/token regression versus frozen v43 remain mandatory. Per-turn root/repair usage and the exact frozen config must prove whether any `low` repair was exercised; an all-one-turn/no-subcall smoke can establish non-regression but cannot be labeled an empirical low-reasoning latency win. Candidate-90 remains blocked unless the speed mechanism is exercised or separate preregistered generic evidence demonstrates it without benchmark-specific prompting.
+
+## V48 terminal smoke: low non-root reasoning exercised without a speed/token win
+
+- Frozen candidate: `/private/tmp/azdaja-luna-v48-low-nonroot-reasoning-v2`; binary SHA-256 `401885aef1242859c7b89c269ba857da5ab34a2274ff89cafd25c960870b80ef`; config SHA-256 `a2df34e03fc72aabbea961841fc0cd3b7024cb1b02eca2d7cef89b40a1a0a0f7`; pre-inference source SHA-256 `4256ec4458d4958c7f05422bf12e25268e86f9dbbf43fbbcfa29c00d08fd58fd`; freeze-stamp v2 SHA-256 `ce443a7e360188c5669ce5567978ebcb29c7228b9cb5d3991f2e257cba2a55ae`; unmodified Jcode v0.75.3 SHA-256 `f01c442265d22e9dead7f227b2ec115ab99164e876ff354a72988a9311bf3c4f`.
+- Frozen output: `/private/tmp/azdaja-ruler-width4-smoke-v48-low-nonroot-reasoning-v2.jsonl`, SHA-256 `428a49a973f544d465857c7dccda310f1106be79f0f00816e3f23efc94971d09`. Terminal record SHA-256 `4450e5967797638da270eec821acc240c99bef3a2753f6275ef3f54f5a5801bd`. Twenty claim/receipt pairs bind exact row bytes; no score or gold was invoked.
+- Execution: 20/20; 22 root turns; two configured-`low` same-session repairs at ordinals 5 and 10; zero subcalls, leaks, timeouts, or cleanup errors. Initial root stayed `medium`; deterministic protocol tests and the frozen adapter config bind repair/subcall effort `low`.
+- Performance: makespan 137.259492s; mean 26.514156s; median 22.962568s; p95 45.131297s; total input/output 64,809/39,332. Initial medium roots used 54,126/37,542 tokens and 497.359s provider wall. The two low repairs used 10,683/1,790 tokens, zero cache-read tokens, and 24.263s provider wall.
+- Versus frozen v43: makespan +14.63%, mean +21.93%, median +6.50%, p95 +50.50%, input +23.29%, output +23.46%. Non-provider overhead stayed normal at an upper-bound mean 0.433s/item, so there is no controller/setup anomaly to excuse the provider/token regression.
+- The smoke proves no execution-accuracy loss on the slice and exercises the low repair path, but it does not show latency or token benefit; switching effort also eliminated the historical same-session 1,792-token cache reads. V48 is terminally rejected. Candidate-90, full RULER, LongBench, scoring, OOLONG, and RAH were not started.
+
+## V49 preregistration: cheaper same-session root repair model (offline, no benchmark inference)
+
+- Scope/order: speed ladder step 3 only. Initial roots remain `gpt-5.6-luna` at `medium`; only depth-0 same-session root repair provider turns switch to configured `gpt-5.4-mini` at `low`. Fresh and repaired-program semantic child turns remain configured `gpt-5.6-luna` at `low`. Prompts, Monty strategy, fixtures, controls, width, caps, and shipped Jcode v0.75.3 are unchanged from V48.
+- Fail-closed routing: `set_model` is acknowledged and followed by a runtime-info assertion requiring the requested OpenAI subscription-OAuth route before an entered turn is consumed. A lended post-repair session restores the configured semantic-child model before low-reasoning setup and before child provider entry; already-correct Luna sessions are not repinned. Model/reasoning setup failures poison the session for bounded cancel/archive and record physical `attempt=1` for each distinct logical repair request, including `-repair-2`.
+- Configuration/evidence: `jcode_repair_model` is an explicit nonblank adapter key. Schema-v2 traces carry typed `category=turn|repair`; schedules and scorers bind the repair model, accept mini only for depth-0 repair rows, and require Luna for ordinary root and child rows. RULER and LongBench retain legacy default-Luna schedule compatibility; LongBench resume retains legacy frozen-adapter compatibility, while fresh runs require and compare source/frozen repair-model configuration.
+- Regression evidence: the same-session mock proves exact root/repair/child route order `Luna/medium -> mini/low -> configured child/Luna-low`, one archive, and category-aware trace rows. Separate tests cover blank repair configuration, pre-entry setup failure and cleanup, category/config rejection, RULER mini schedule reconstruction, transformed LongBench receipts, typed OOLONG JSONL, and legacy LongBench resume behavior.
+- Live control-plane evidence only: the zero-inference unmodified-Jcode probe at `/private/tmp/azdaja-v49-live-zero-inference-route-probe-v1.json` (SHA-256 `93a365243aadb3f2cefccf48490fc22c29292b813037babeab1d3f6f27b321aa`) proves route availability, exact mini selection, low reasoning request, archive success, and zero provider turns. It does not establish repair latency, reliability, or post-repair conversation compatibility.
+- Fresh-smoke gate remains unchanged: exactly one fresh width-4 20-item RULER smoke after source/binary/controller freeze; require 20/20, zero leaks/timeouts/cleanup failures, at least one exercised mini/low repair, and Luna/low for any repaired-program child. Reject on any execution failure or material wall/token regression versus frozen v43. Candidate-90 and larger suites remain blocked until that gate passes.
+- Prefreeze closure: the seven focused regressions fail on the staged pre-fix controller baseline and pass on V49 (proof SHA-256 `f2d7b501c54a8449b9b0b8b8dae17146f6a0d05a4c6173db109a5288e24a9b0b`). The LongBench config/schedule/score/raw-trace path passes end to end (SHA-256 `b1ee6a5535d4830a566a06cffdb9b2d7a223c4f2afcfee3fb7de2872f91c0104`). Final offline gate v2 passed debug/release Rust tests, strict clippy, 24 OOLONG, 35 RULER-run, 34 RULER-score, 38 LongBench-run, and 48 LongBench-score tests; log SHA-256 `b7ba67e565090ca92dd32464211b05ea69927661c492ae34a8386d5f9788e935`. Independent production and focused controller audits both report P0=0/P1=0.
+
+## V49 terminal smoke: same-session mini route failed closed and latency missed the best-candidate bar
+
+- Frozen candidate: `/private/tmp/azdaja-luna-v49-cheap-repair-model-v2`; binary SHA-256 `f1eb69371777dccfdafa1d50b96d20b6b2673703ce88c6a294901c34bcffb5a1`; config SHA-256 `ce900322eff9da6f3e7fac16a76e1e4acfba6f77ca696c7449dfe6301faad12b`; bundle aggregate `d55339284b10c825740572c2426ee919ef78cab638d429710a47a72eb92c4aa0`; freeze-stamp SHA-256 `ad993eaf79b8facddc3f0422caef4884aeb204e4e9c10cef6b0505dca46c5643`.
+- Frozen output: `/private/tmp/azdaja-ruler-width4-smoke-v49-cheap-repair-model-v2.jsonl`, 20 immutable rows, SHA-256 `85a932d9362926277bf9f13e5b9b561ad6141028a092cf029c508eddf7ca3894`. Terminal record `/private/tmp/azdaja-ruler-v49-smoke-terminal-record-v1.json`, SHA-256 `00298de1f4cd332b7910d252ad359f39dccd626094a76d23f1eddae1cba53760`. All 20 claims and 20 completion receipts bind exact row bytes; no scorer or gold was invoked.
+- Reliability/route result: 18/20 execution. All 20 initial provider turns succeeded on `gpt-5.6-luna`; ordinals 7 and 11 then hit typed Assertion failures and attempted repair. Both `set_model` acknowledgements were followed by runtime-info that failed the required same-session `gpt-5.4-mini` OAuth route assertion, so both repairs failed closed as `SetupRoute` with physical `attempt=1`, zero entered mini turns, and bounded cleanup. This proves the earlier zero-inference fresh-session probe did not establish same-session post-root compatibility. There were zero timeouts, context leaks, semantic children, or cleanup failures.
+- Performance: width-4 makespan 143.443818s; mean 27.012876s; median 26.509694s; p95 38.765729s. Twenty successful Luna initial turns used 54,129 input / 39,719 output / 0 cache-read tokens. Versus frozen v43, makespan +19.80%, mean +24.22%, median +22.96%, p95 +29.27%, input +2.98%, and output +24.67%.
+- Terminal disposition: `REJECTED_RELIABILITY_LATENCY_AND_MECHANISM_GATE`. V49 missed 20/20, exceeded the current-best v43 119.739380s makespan bar, and entered no mini repair provider turn. No retry, resume, candidate-90, full RULER, LongBench, OOLONG, or RAH is permitted for V49. Frozen v43 remains the headline candidate.

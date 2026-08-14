@@ -31,6 +31,7 @@ import stat
 import subprocess
 import sys
 import time
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -2130,6 +2131,46 @@ def _validate_adapter_contract(module: Any) -> None:
         raise BenchError("frozen OOLONG adapter arm contract drifted")
 
 
+def _adapter_candidate_repair_model(
+    module: Any, candidate: Path, *, require_support: bool
+) -> str:
+    configure = getattr(module, "configure_azdaja_repair_model_from_skill", None)
+    if configure is None:
+        if require_support:
+            raise BenchError(
+                "OOLONG adapter lacks callable "
+                "configure_azdaja_repair_model_from_skill"
+            )
+        return MODEL
+    if not callable(configure):
+        raise BenchError(
+            "OOLONG adapter configure_azdaja_repair_model_from_skill is not callable"
+        )
+    explicit_model: str | None = None
+    if require_support:
+        try:
+            config = tomllib.loads(
+                (candidate / "config.toml").read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+            raise BenchError(f"cannot parse candidate repair-model config: {exc}") from exc
+        if "jcode_repair_model" not in config:
+            raise BenchError("fresh candidate config lacks explicit jcode_repair_model")
+        explicit_model = config["jcode_repair_model"]
+        if (
+            not isinstance(explicit_model, str)
+            or not explicit_model
+            or explicit_model.strip() != explicit_model
+        ):
+            raise BenchError("fresh candidate repair model is invalid")
+    model = configure(candidate)
+    if not isinstance(model, str) or not model or model.strip() != model:
+        raise BenchError("OOLONG adapter returned an invalid repair model")
+    if explicit_model is not None and model != explicit_model:
+        raise BenchError("OOLONG adapter repair model differs from explicit config")
+    return model
+
+
 def _argument_string_leaves(value: Any) -> list[str]:
     """Extract only string argument values in deterministic container order."""
     if isinstance(value, str):
@@ -2559,6 +2600,7 @@ def build_schedule(
     controller: dict[str, Any],
     executables: dict[str, Any],
     runtime_closure: dict[str, Any],
+    repair_model: str = MODEL,
 ) -> dict[str, Any]:
     fixture_identities = [
         {
@@ -2599,6 +2641,7 @@ def build_schedule(
         "configuration": {
             "model": MODEL,
             "reasoning": REASONING,
+            "repair_model": repair_model,
             "arms": list(ARMS),
             "repetitions": 1,
             "seed": seed,
@@ -3677,6 +3720,14 @@ def _run_held_ceremony(
     )
     try:
         adapter.validate_skill(str(paths.candidate))
+        expected_repair_model = schedule["configuration"].get("repair_model", MODEL)
+        configured_repair_model = _adapter_candidate_repair_model(
+            adapter,
+            paths.candidate,
+            require_support="repair_model" in schedule["configuration"],
+        )
+        if configured_repair_model != expected_repair_model:
+            raise BenchError("frozen adapter/candidate repair model differs from schedule")
     except Exception as exc:
         raise BenchError(f"frozen candidate validation failed: {exc}") from exc
     args.jcode = str(paths.jcode)
@@ -3829,6 +3880,9 @@ def fresh_source_preflight(
     source_adapter.REASONING = REASONING
     try:
         source_adapter.validate_skill(str(candidate_source))
+        repair_model = _adapter_candidate_repair_model(
+            source_adapter, candidate_source, require_support=True
+        )
     except Exception as exc:
         raise BenchError(f"source candidate preflight failed: {exc}") from exc
     jcode_source = _resolve_executable(args.jcode, "jcode")
@@ -3847,6 +3901,7 @@ def fresh_source_preflight(
         "prime_source": prime_source,
         "node_source": node_source,
         "kernel_environment": kernel_environment,
+        "repair_model": repair_model,
     }
 
 
@@ -3908,6 +3963,7 @@ def run_suite(args: argparse.Namespace) -> int:
         prime_source = fresh_inputs["prime_source"]
         node_source = fresh_inputs["node_source"]
         kernel_environment = fresh_inputs["kernel_environment"]
+        repair_model = fresh_inputs["repair_model"]
         paths, attestation = create_snapshots(
             work,
             suite,
@@ -3923,6 +3979,11 @@ def run_suite(args: argparse.Namespace) -> int:
         )
         try:
             adapter.validate_skill(str(paths.candidate))
+            frozen_repair_model = _adapter_candidate_repair_model(
+                adapter, paths.candidate, require_support=True
+            )
+            if frozen_repair_model != repair_model:
+                raise BenchError("source/frozen repair model identity drifted")
         except Exception as exc:
             raise BenchError(f"frozen candidate validation failed: {exc}") from exc
         schedule = build_schedule(
@@ -3933,6 +3994,7 @@ def run_suite(args: argparse.Namespace) -> int:
             controller=attestation["controller"],
             executables=attestation["executables"],
             runtime_closure=attestation["runtime_closure"],
+            repair_model=repair_model,
         )
         _assert_schedule_matches_attestation(schedule, attestation, paths)
         atomic_create_private_json(schedule_path, schedule)
