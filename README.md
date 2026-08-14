@@ -109,8 +109,8 @@ its median attempt was 2.77x native, so the <=1.5x speed gate did not pass.
 A new exact-v43 refresh completed all 189 scheduled inference rows and all 378
 claim/completion receipts. Execution was 48/63 for Azdaja, 63/63 for native
 jcode, and 57/63 for Prime Agent. The preregistered no-gold terminal validator
-then rejected the first Azdaja trace because it required alphabetically sorted
-JSON keys while the unchanged Rust binary emitted valid duplicate-free compact
+then rejected the first Azdaja model-trace row it inspected because it required
+alphabetically sorted JSON keys while the unchanged Rust binary emitted valid duplicate-free compact
 Serde struct-field order. A retained transient turn timeout followed by a
 successful retry also exposed a second failed-row compatibility omission.
 
