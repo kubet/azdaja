@@ -303,12 +303,25 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(
             suite.manifest_sha256, hashlib.sha256(manifest.read_bytes()).hexdigest()
         )
+        first = suite.fixtures[0]
+        self.assertNotIn("_payload_bytes_captured", suite.fixtures_by_id[first.fixture_id])
+        scorer_fixture = suite.scorer_fixtures_by_id[first.fixture_id]
+        self.assertEqual(scorer_fixture["_payload_bytes_captured"], first.payload_bytes)
+        self.assertEqual(
+            {key: value for key, value in scorer_fixture.items() if not key.startswith("_")},
+            first.entry,
+        )
         options = RUN.parser()._option_string_actions
         self.assertNotIn("--gold", options)
         self.assertNotIn("--gold-path", options)
         # The runner module never calls the scorer's gold-opening API.
         source = (HERE / "run.py").read_text(encoding="utf-8")
         self.assertNotRegex(source, r"SCORE\s*\.\s*load_gold\s*\(")
+        self.assertRegex(
+            source,
+            r"SCORE\.validate_frozen_runs\(\s*suite\.manifest_path,\s*"
+            r"suite\.manifest,\s*suite\.scorer_fixtures_by_id,",
+        )
 
     def test_payload_with_gold_or_answer_field_is_rejected_even_when_rehashed(self):
         for extra in ({"answer": "A"}, {"gold": "A"}):

@@ -367,3 +367,88 @@ output tokens across all turns, and `exec/save/load/subcall` counts.
 | 18 | `0638d6b8` | 34.206 | 1/0 | 33826 | 2654 | 1/1/0/0 | 20.851 | 1/0 | 20493 | 1479 | 1/1/0/0 | -13.355 |
 | 19 | `1ed71e2b` | 54.655 | 3/2 | 54224 | 4165 | 3/1/2/0 | 24.306 | 1/0 | 23937 | 1859 | 1/1/0/0 | -30.349 |
 | 20 | `44cd3a58` | 65.749 | 3/2 | 65300 | 5136 | 3/1/2/0 | 16.517 | 1/0 | 16117 | 1136 | 1/1/0/0 | -49.232 |
+
+## Frozen v43 RULER candidate gate and official score
+
+The immutable v43 candidate (`6588c06`, binary
+`6be5b9ff567eca6d1a5c2315dfb0c12fb5bd847b58daef0b3b8191151e45b509`)
+first passed `candidate-full-90-v1` at **90/90 execution**. The candidate-only output
+SHA-256 is `bf9af3654972253856d18634492603f1c16d5749c24b7d3714b87f0d8a814815`,
+schedule ID `f2086f4b861a03d9b5bf6d570ce309aed6a9bd27b63ad94ccb5afd1fe2d1fb12`.
+Global width/peak were 4/4 and makespan was **562.296805 s**, passing the 720-second
+gate with 157.703195 s headroom. The 90 jobs used 93 root calls (3 repairs), zero
+subcalls, 2,155.362 s provider inference, 249,011 input, 164,731 output, and 5,376
+cache-read tokens. All exact per-item runtime ledgers, claims, done receipts, traces,
+routes, payloads, lifecycle and cleanup assertions passed; exact >=100-character
+root-context leaks were 0/90.
+
+The subsequent official `full-v1` cohort is exact and immutable: 270 canonical rows,
+90/arm, output SHA-256
+`c4f90f7aa9d29a09006fc22c954c62d8874976f886e8ef22c9a420c429e44d85`, schedule
+ID `46e4be08650b1263e9a9bc98ab7a169b75a2595613cd0eb2f6aea5c34c05b276`, width/peak
+4/4, and **1,101.539114 s** makespan. Candidate/native executed 90/90; Prime executed
+87/90, with three retained raw `tool_policy` failures counted as fixed zeros. The one
+authorized score report has SHA-256
+`26ce16464658d57caed466be36f373790b95f44077fe396bc43e4f64bc534c0a`.
+
+| arm | execution | completed strict | fixed strict | official coverage | mean root tokens | p50 wall s | p95 wall s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Azdaja | 90/90 | 85/90 | 85/90 | 96.89% | 2,834.67 | 22.520 | 37.645 |
+| native | 90/90 | 86/90 | 86/90 | 98.89% | 16,372.55 | 8.125 | 16.808 |
+| Prime | 87/90 | 81/87 | 81/90 | 96.67% | 6,925.36 | 10.867 | 18.992 |
+
+Native-minus-Azdaja fixed strict was +1.11 pp, paired 95% bootstrap CI
+[-5.56,+7.78]; no superiority or equivalence claim is supported. Candidate median
+latency was 2.77x native, so the <=1.5x target remains missed. Root-token authority
+differs by arm: candidate-emitted depth-0 usage versus control terminal-result
+character proxies. Score audit found no P0 and one no-score-impact P1: the frozen report
+overstated route/usage replay scope for three failed Prime rows. Future reports now distinguish independent successful-row replay from all-attempt
+aggregation of controller-recorded assertions and normalized usage, whose failed-row entries
+are not replay-validated. Terminal score record:
+`/private/tmp/azdaja-ruler-v43-terminal-score-record.json`, SHA-256
+`fe7c8e15a9b513ad532edd07de265f084c26afb7604a771e1ff9db6135738198`.
+
+## Frozen v43 derived LongBench-v2 terminal score
+
+The exact fresh 63-fixture x 3-arm cohort ran serially without intervention, retry, or
+resume. Output SHA-256 is
+`55271a272b61ba973e6e129a8312b3e0229c68342248ddec33669f1a270f6557`, schedule ID
+`5bd46a135f01dc0d44e34a8680f82f25ad55dce9ea87354dca49fa62b298f952`, and the
+single authorized score report SHA-256 is
+`288643391834c9e41966df08f65a297e7750e3e65e925336334a23c12cb7ae5d`.
+The serial cohort wall span was **9,662.687354 s** (161.045 minutes). All 189 claims and
+completions, 189 artifact directories, 504 retained files, exact payloads, component and
+runtime identities, routes, usage receipts and cleanup checks passed. All 63 candidate
+solo transcripts were retained and rescanned; exact >=100-character root-context leaks
+were 0/63.
+
+| arm | execution | completed official | fixed-63 official | mean root tokens | p50 wall s | p95 wall s | summed wall s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Azdaja | 48/63 | 7/48 (14.58%) | 7/63 (11.11%) | 6,155.63 | 51.429 | 82.100 | 3,430.295 |
+| native | 63/63 | 35/63 (55.56%) | 35/63 (55.56%) | 63,223.06 | 19.847 | 50.346 | 1,581.257 |
+| Prime | 56/63 | 12/56 (21.43%) | 12/63 (19.05%) | 9,826.73 | 39.369 | 56.072 | 2,537.867 |
+
+The candidate used 239 valid model calls: 63 initial roots, 41 depth-0 repairs across 25
+runs, and 135 depth-1 subcalls. Exact totals were 1,476,063 input, 261,322 output,
+99,328 cache-read and 1,737,385 total tokens; provider call-latency sum was 3,623.982 s.
+Initial roots used 155,161 input / 143,660 output tokens and 1,849.870 s; repairs used
+232,644 / 63,500 and 819.447 s; subcalls used 1,088,258 / 54,162 and 954.665 s.
+The report's 387,805 root-token total is all depth-0 input, including repairs.
+
+Candidate failures were 15 raw `process_exit` rows: six semantic prompt-envelope
+assertions, six solver assertions, two Monty subset-like TypeError/AttributeError rows,
+and one inner 30-second cell timeout. Under the campaign reliability taxonomy this is
+14 `monty_subset_error` and one `cell_timeout`; the frozen scorer conservatively reports
+15 `other_execution`. Prime had seven retained `tool_policy` failures; native had none.
+Among the 48 completed candidate rows, 20 failed official extraction, 21 were wrong and
+seven were correct. The strict full-string diagnostic was 0/63 because accepted canonical
+responses retained a trailing LF.
+
+This misses the preregistered candidate gate of 16/63 fixed official accuracy (execution
+48/63 clears the separate 32/63 floor), so OOLONG and RAH are blocked for v43. Candidate
+median latency was 2.59x native. The nominal runner also hit a fail-closed terminal
+caller bug after row 189: it passed clean fixtures without captured payload bytes to the
+frozen validator. A separate no-gold call through the same frozen scorer's public loader
+and `validate_frozen_runs` passed exact 189, then the sole CLI score succeeded. The live
+controller now reattaches the already captured bytes at that boundary; no frozen row,
+claim, artifact, or report was modified.

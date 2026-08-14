@@ -134,6 +134,17 @@ class CapturedSuite:
     def fixtures_by_id(self) -> dict[str, dict[str, Any]]:
         return {item.fixture_id: item.entry for item in self.fixtures}
 
+    @property
+    def scorer_fixtures_by_id(self) -> dict[str, dict[str, Any]]:
+        """Return scorer inputs with the exact bytes captured before inference."""
+        return {
+            item.fixture_id: {
+                **item.entry,
+                "_payload_bytes_captured": item.payload_bytes,
+            }
+            for item in self.fixtures
+        }
+
 
 @dataclass(frozen=True)
 class AdapterPublicFixture:
@@ -3621,7 +3632,7 @@ def _finish_terminal_no_gold(
         SCORE.validate_frozen_runs(
             suite.manifest_path,
             suite.manifest,
-            suite.fixtures_by_id,
+            suite.scorer_fixtures_by_id,
             output,
             schedule_path,
             claims_root,

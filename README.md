@@ -76,19 +76,58 @@ start  load  exec  final  list  kill  solo  doctor  install  uninstall
 
 ## Current benchmark
 
-One immutable current Azdaja candidate is evaluated against the controls. Historical development versions are intentionally omitted from this headline. This is a private derived-RULER diagnostic, not an official leaderboard result or a superiority claim.
+One immutable current Azdaja candidate is shown against both controls. Historical
+candidate versions are intentionally omitted from these headline tables. The
+candidate is private commit `6588c06`, binary SHA-256
+`6be5b9ff567eca6d1a5c2315dfb0c12fb5bd847b58daef0b3b8191151e45b509`.
+These are single-run private diagnostics, not official leaderboard results or a
+superiority claim.
 
-| Arm | Execution | Completed exact | End-to-end exact | Mean root tokens | Mean time / item | Total time |
-|---|---:|---:|---:|---:|---:|---:|
-| **Azdaja** | 52/90 (57.78%) | 38/52 (73.08%) | 38/90 (42.22%) | **2,747** | 31.0s | 46.5m |
-| Native jcode | 90/90 (100%) | 84/90 (93.33%) | 84/90 (93.33%) | 16,318 | **10.5s** | **15.7m** |
-| Prime Agent | 90/90 (100%) | 85/90 (94.44%) | 85/90 (94.44%) | 7,064 | 12.8s | 19.3m |
+### Derived RULER, 90 fixtures
 
-Azdaja used 83.2% less root context than native jcode and 61.1% less than Prime Agent. That efficiency did **not** translate into a better overall result: 38 Monty/runtime process exits reduced fixed-denominator accuracy to 42.22%, while both controls exceeded 93%. Among completed Azdaja executions, accuracy was 73.08%. The clear current engineering target is execution reliability, not further context reduction.
+| Arm | Execution | Completed strict exact | Fixed-90 strict exact | Mean root tokens | Median time / item |
+|---|---:|---:|---:|---:|---:|
+| **Azdaja** | **90/90 (100%)** | 85/90 (94.44%) | 85/90 (94.44%) | **2,835** | 22.5s |
+| Native jcode | **90/90 (100%)** | **86/90 (95.56%)** | **86/90 (95.56%)** | 16,373 | **8.1s** |
+| Prime Agent | 87/90 (96.67%) | 81/87 (93.10%) | 81/90 (90.00%) | 6,925 | 10.9s |
 
-Root-token evidence covers 90/90 attempts for every arm and measures context entering each arm’s root, not total provider compute. Full provider-token totals are available for both controls (native 5.18M; Prime 4.59M), but Azdaja provider usage covers only its 52 successful executions, so no misleading all-attempt Azdaja provider-total comparison is shown. All 90 Azdaja root transcripts, including failures, passed the exact pre-gold leak gate: no loaded-context substring of 100 or more Unicode characters appeared at the root.
+Azdaja cleared its 90/90 reliability gate and the separate candidate-only
+90-item run completed at global width 4 in 562.3 seconds. The official
+three-arm run completed 270 rows in 1,101.5 seconds. Azdaja's strict point
+estimate was one item below native; the paired native-minus-Azdaja difference
+was +1.11 percentage points with a 95% bootstrap interval of [-5.56, +7.78].
+This supports neither superiority nor equivalence. Azdaja remained slower:
+its median attempt was 2.77x native, so the <=1.5x speed gate did not pass.
 
-The candidate was built from private commit `48b8a16`; binary SHA-256 is `f53d43ecde4fd800789d0b7469fa6ad81bb2dd46e41a0c643f90dc8e77a2228d`. A LongBench-v2 run with the same bytes was stopped after 12/189 rows before scoring. Reliability-only candidates `8d70ac9`/`1ae2a231` and `535fd68`/`19a39d0c` were stopped unscored when three candidate failures made their 90/90 gates impossible; the latter reached 12/15 Azdaja execution while both controls were 15/15. Its exhausted repairs guessed absent text templates before raising typed failures, so corrective prompts now explicitly require parsing exact observed text rather than guessed alternate phrasing. A subsequent candidate (`061297e`/`be3089de`) reached 10/11 before an empty `FINAL` made 90/90 impossible; empty finals are now typed repair failures rather than successful blank answers. Candidate `0462ffa`/`895072b2` then stopped on its first Azdaja arm because ordinary `IndexError` was outside the typed correction allowlist; ordinary deterministic program exceptions are now separated from unrepairable runtime/resource/host classes. Candidate `a3d47fa`/`a3fa3f22` reached 14/16 before two exhausted corrections; its traces showed that the per-character JSON sample led the model to mistake raw `ctx` for encoded JSON, so the root contract now states explicitly that `ctx` is the original raw input rather than the escaped sample encoding. No benchmark inference is currently active. “Completed exact” excludes execution failures; “end-to-end exact” keeps the fixed 90-item denominator and counts failures as incorrect.
+### Derived LongBench-v2 hard/long subset, 63 fixtures
+
+The pinned official LongBench-v2 answer extractor is the primary metric here.
+Every scheduled failure remains a fixed-denominator zero.
+
+| Arm | Execution | Completed official accuracy | Fixed-63 official accuracy | Mean root tokens | Median time / item |
+|---|---:|---:|---:|---:|---:|
+| **Azdaja** | 48/63 (76.19%) | 7/48 (14.58%) | 7/63 (11.11%) | **6,156** | 51.4s |
+| Native jcode | **63/63 (100%)** | **35/63 (55.56%)** | **35/63 (55.56%)** | 63,223 | **19.8s** |
+| Prime Agent | 56/63 (88.89%) | 12/56 (21.43%) | 12/63 (19.05%) | 9,827 | 39.4s |
+
+Azdaja failed the preregistered 16/63 fixed-denominator gate, so the same-candidate
+OOLONG run and the 199-item RAH protocol are blocked. Its 15 execution failures
+were 14 deterministic Monty/program, assertion, or semantic-envelope failures and
+one inner 30-second cell timeout; the frozen report conservatively normalizes all
+15 raw `process_exit` rows as `other_execution`. Prime's seven `tool_policy` rows
+are also fixed zeros. Among completed Azdaja rows, 20 outputs were not recognized
+by the official extractor, 21 were wrong, and seven were correct; the stricter
+full-string diagnostic was 0/63 because even the seven accepted canonical answers
+retained a trailing newline.
+
+Root-token authorities are explicit per arm and are not identical provider-signed
+receipts. The lower Azdaja root input did not offset its much lower LongBench
+accuracy or 2.59x native median latency. Across both suites, all mandatory Azdaja
+root transcripts were retained and independently scanned with zero exact loaded-
+context overlaps of 100 or more Unicode characters. The diagnostics use
+owner-only local evidence and post-hoc policy checks, not authenticated history or
+OS-level containment. LongBench is a derived public-answer-joinable subset, and
+historical development-family gold exposure prevents a blind-validation claim.
 
 ## Guarantees
 

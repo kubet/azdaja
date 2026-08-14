@@ -1097,6 +1097,18 @@ class ScoreTests(unittest.TestCase):
                 {arm: 90 for arm in SCORE.ARMS},
             )
             self.assertTrue(report["integrity"]["exact_90_per_arm_asserted"])
+            self.assertTrue(
+                report["integrity"][
+                    "route_and_usage_internally_recomputed_from_retained_artifacts"
+                ]
+            )
+            self.assertEqual(
+                report["integrity"]["route_and_usage_replay_scope"],
+                {
+                    "successful_rows_replayed_n": 270,
+                    "failed_rows_hash_bound_but_not_route_or_usage_replayed_n": 0,
+                },
+            )
             stamp = report["candidate_version_stamp"]
             self.assertEqual(set(stamp["components"]), {"azdaja", "config.toml", "SKILL.md"})
             self.assertTrue(stamp["candidate_binary_equals_executed_azdaja"])
@@ -1148,6 +1160,18 @@ class ScoreTests(unittest.TestCase):
             self.assertEqual(native["telemetry_all_attempts"]["usage"]["valid_n"], 89)
             self.assertIsNone(
                 native["telemetry_all_attempts"]["usage"]["unconditional_totals"]
+            )
+            self.assertFalse(
+                report["integrity"][
+                    "route_and_usage_internally_recomputed_from_retained_artifacts"
+                ]
+            )
+            self.assertEqual(
+                report["integrity"]["route_and_usage_replay_scope"],
+                {
+                    "successful_rows_replayed_n": 269,
+                    "failed_rows_hash_bound_but_not_route_or_usage_replayed_n": 1,
+                },
             )
 
     def test_scorer_rejects_candidate_binary_executable_mismatch_before_gold(self):

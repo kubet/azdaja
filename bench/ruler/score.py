@@ -3700,9 +3700,23 @@ def build_report(
                 "history against malicious same-owner deletion/retry; external signing or "
                 "transparency is future work"
             ),
-            "route_and_usage_internally_recomputed_from_retained_artifacts": True,
+            "route_and_usage_internally_recomputed_from_retained_artifacts": all(
+                row.get("execution_success") is True for row in rows
+            ),
+            "route_and_usage_replay_scope": {
+                "successful_rows_replayed_n": sum(
+                    row.get("execution_success") is True for row in rows
+                ),
+                "failed_rows_hash_bound_but_not_route_or_usage_replayed_n": sum(
+                    row.get("execution_success") is not True for row in rows
+                ),
+            },
             "telemetry_limitation": (
-                "route and usage are recomputed from securely rehashed retained streams, but "
+                "route and usage are independently recomputed from securely rehashed retained "
+                "streams only for execution-success rows. Failed-row artifacts remain hash-bound "
+                "but their route and usage are not independently replayed. The all-attempt "
+                "telemetry aggregates recorded controller assertions and normalized usage across "
+                "scheduled rows, so failed-row entries in that aggregate are not replay-validated. "
                 "Azdaja model traces are emitted by the candidate rather than provider-signed "
                 "receipts; replay proves internal consistency, not provider authenticity. "
                 "Lifecycle values remain local controller assertions, not signed attestations."
