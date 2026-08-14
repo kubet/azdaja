@@ -21,7 +21,13 @@ artifacts immutable. Every summary and raw row below is bound to:
 
 - candidate `azdaja 0.1.0 (monty 0.0.21)`, commit `d21ffe70364ffecb74b32996d9addb02c1c7c8`, binary SHA-256 `13fb5030ac1a516519e03c1108fa0e7a577243e356a0c448b759588ca62a5b83`, config `91a35c191f56856d05fb7c9599bd376e01bbd5d4589d128cc81b733b7056d396`, skill `923d8fc81bb19b5c7bb783b8aa9b6dbfbcc9906fe79fa7ed53272fea202fadc3`, frozen directory `01e379c0ecee2784e44896a34319e13c7deac114edee263d2ce9d39672ae6519`;
 - controller SHA-256 `d366d5e8ffa21022f9c44f2ae60740624b7a6e3a7281c522d6d304b0ac9c8e07`; schedule ID `5c91d48ba378fbab82092d7ad6e274bde396c699e8a611d42c7cc784cdbe635d`, seed `20260813`, schedule SHA-256 `e899a537f996be9a444be96362759805c03f8eeaed751dfbf11ee84879c2be86`;
-- results SHA-256 `7340cf4f2973f1aeb7c79282cc668cba8c5f824f95f055f64af9f88e99ce436f` and terminal-record SHA-256 `f22bd13ca6e4512e753e3ab7d78c282decfea2b4a43b31e4d1a9285d02dddb4a`.
+- results SHA-256 `7340cf4f2973f1aeb7c79282cc668cba8c5f824f95f055f64af9f88e99ce436f` and superseding terminal-record v2 SHA-256 `b0e70521bd7f7c17ca6acf9cc619f1b7cde9c159992cabd8692b2a9bb4f11501`.
+
+This is an observability/provenance metadata correction, not a measurement change:
+terminal-record v2 (`record_revision=2`) supersedes immutable v1 SHA-256
+`f22bd13ca6e4512e753e3ab7d78c282decfea2b4a43b31e4d1a9285d02dddb4a`
+because v1 truncated `candidate.commit` to 38 characters. The results file and
+all recorded measurements are unchanged.
 
 The controller ran serially (`concurrency=1`): its 270 retained start/wall
 intervals do not overlap. Full-schedule makespan was `5465.997s`
