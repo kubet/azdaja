@@ -1011,6 +1011,78 @@ class ScoreTests(unittest.TestCase):
             with self.assertRaisesRegex(SCORE.ScoreError, "not canonical"):
                 SCORE.load_run_rows(artifacts["runs_path"])
 
+    def test_actual_v43_trace_samples_accept_key_order_and_failed_retry(self):
+        success_path = HERE / "fixtures" / "v43-rust-serde-success.jsonl"
+        retry_path = HERE / "fixtures" / "v43-rust-serde-transient-retry.jsonl"
+        succeeded = success_path.read_bytes()
+        retried = retry_path.read_bytes()
+        self.assertEqual(
+            SCORE.sha256_bytes(succeeded),
+            "41e4456b4a6601424ae03b3b3d0821a4866666a8e117cd5f6d6e5d51a17f754f",
+        )
+        self.assertEqual(
+            SCORE.sha256_bytes(retried),
+            "9294429a6354f9e42690adbf1b6ac453fd3d0657d035b357adbf9a9dcc3b8f5c",
+        )
+        parsed = SCORE._decode_json(succeeded.decode(), "retained v43 trace")
+        self.assertNotEqual(
+            succeeded, SCORE.canonical_json_file_bytes(parsed)
+        )
+        expected_route = [{
+            "depth": 0,
+            "category": "turn",
+            "provider": "OpenAI OAuth",
+            "model": SCORE.MODEL,
+            "expected_model": SCORE.MODEL,
+        }]
+        self.assertEqual(
+            SCORE._category_routes_from_retained_trace(
+                succeeded, 1, SCORE.MODEL
+            ),
+            expected_route,
+        )
+        self.assertEqual(
+            SCORE._category_routes_from_retained_trace(
+                succeeded + retried, 1, SCORE.MODEL
+            ),
+            [],
+        )
+
+        # JSON object order is irrelevant: any duplicate-free permutation of
+        # the exact known fields remains valid when compactly encoded.
+        reordered = {"event": parsed["event"]}
+        reordered.update({key: value for key, value in parsed.items() if key != "event"})
+        reordered_bytes = (
+            json.dumps(reordered, ensure_ascii=False, separators=(",", ":"))
+            + "\n"
+        ).encode()
+        self.assertEqual(
+            SCORE._category_routes_from_retained_trace(
+                reordered_bytes, 1, SCORE.MODEL
+            ),
+            expected_route,
+        )
+
+        unknown = dict(parsed)
+        unknown["unknown_field"] = True
+        unknown_bytes = (
+            json.dumps(unknown, ensure_ascii=False, separators=(",", ":"))
+            + "\n"
+        ).encode()
+        with self.assertRaisesRegex(SCORE.ScoreError, "supported serialization"):
+            SCORE._category_routes_from_retained_trace(
+                unknown_bytes, 1, SCORE.MODEL
+            )
+        duplicate = succeeded.replace(
+            b'{"schema_version":2,',
+            b'{"schema_version":2,"schema_version":2,',
+            1,
+        )
+        with self.assertRaisesRegex(SCORE.ScoreError, "duplicate JSON object key"):
+            SCORE._category_routes_from_retained_trace(
+                duplicate, 1, SCORE.MODEL
+            )
+
     def test_claim_set_rejects_missing_extra_and_tampered_receipts(self):
         cases = ("missing", "extra", "claim_tamper", "done_tamper")
         for case in cases:

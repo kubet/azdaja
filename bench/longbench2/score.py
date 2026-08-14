@@ -122,6 +122,14 @@ FAILURE_TAXONOMY_PRECEDENCE = (
     "root_context_leak", "timeout", "transport", "adapter_parser", "depth",
     "monty_subset_tax", "other_execution",
 )
+MODEL_TRACE_FIELDS = (
+    "schema_version", "event", "timestamp_ms", "depth", "request_id", "attempt",
+    "entered_turn", "session_id", "category", "outcome", "error",
+    "error_category", "stage", "setup_substage", "provider", "model",
+    "input_tokens", "output_tokens", "cache_read_tokens", "latency_ms",
+    "degraded_transport", "failed_attempts_before_success", "response",
+)
+
 ROOT_TOKEN_ECONOMY_AUTHORITIES = frozenset({
     "provider_usage_api_root_input_tokens",
     "validated_AZDAJA_MODEL_TRACE_depth_0_input_tokens",
@@ -1294,10 +1302,27 @@ def load_run_rows(path: Path) -> list[dict[str, Any]]:
     return _load_run_rows_captured(captured_runs)
 
 
+def _compact_model_trace_file_bytes(value: dict[str, Any]) -> bytes | None:
+    """Re-encode one duplicate-free, known-field trace object in its given order.
+
+    JSON object key order is semantically irrelevant.  The duplicate-rejecting
+    decoder preserves the observed order, and this exact compact re-encoding
+    rejects whitespace/escape drift while accepting both sorted controller JSON
+    and Rust ``serde_json`` struct order (or any other key permutation).
+    """
+    if not set(value).issubset(MODEL_TRACE_FIELDS):
+        return None
+    return (
+        json.dumps(value, sort_keys=False, ensure_ascii=False, separators=(",", ":"))
+        + "\n"
+    ).encode("utf-8")
+
+
 def _category_routes_from_retained_trace(
     data: bytes, index: int, repair_model: str
 ) -> list[dict[str, Any]]:
     routes: list[dict[str, Any]] = []
+    saw_failed_attempt = False
     for line_number, line in enumerate(data.splitlines(keepends=True), 1):
         if not line.endswith(b"\n") or not line[:-1].strip():
             raise ScoreError(
@@ -1312,9 +1337,13 @@ def _category_routes_from_retained_trace(
         value = _decode_json(
             text, f"trajectory {index} model trace row {line_number}"
         )
-        if not isinstance(value, dict) or line != canonical_json_file_bytes(value):
+        if not isinstance(value, dict) or line not in {
+            canonical_json_file_bytes(value),
+            _compact_model_trace_file_bytes(value),
+        }:
             raise ScoreError(
-                f"trajectory {index} model trace row {line_number} is not canonical"
+                f"trajectory {index} model trace row {line_number} is not an exact "
+                "supported serialization"
             )
         if value.get("schema_version") != 2 or value.get("event") != "model_attempt":
             raise ScoreError(
@@ -1338,15 +1367,24 @@ def _category_routes_from_retained_trace(
                 f"trajectory {index} model trace row {line_number} identity is invalid"
             )
         outcome = value.get("outcome")
-        if outcome == "failed" and value.get("stage") == "session_setup":
+        if outcome == "failed":
+            stage = value.get("stage")
+            error = value.get("error")
+            error_category = value.get("error_category")
             if (
-                category != "session_setup"
-                or not isinstance(value.get("error"), str)
-                or not value["error"]
+                category not in {"session_setup", "turn", "repair"}
+                or not isinstance(stage, str)
+                or not stage
+                or (category == "session_setup") != (stage == "session_setup")
+                or not isinstance(error, str)
+                or not error
+                or not isinstance(error_category, str)
+                or not error_category
             ):
                 raise ScoreError(
-                    f"trajectory {index} model trace row {line_number} setup failure is invalid"
+                    f"trajectory {index} model trace row {line_number} failed attempt is invalid"
                 )
+            saw_failed_attempt = True
             continue
         if outcome != "succeeded" or category not in {"turn", "repair"}:
             raise ScoreError(
@@ -1372,6 +1410,11 @@ def _category_routes_from_retained_trace(
             "model": model,
             "expected_model": expected_model,
         })
+    if saw_failed_attempt:
+        # The adapter deliberately refuses to assert any route from a trace that
+        # contains a physical provider failure, even if a later retry succeeds.
+        # We still validate every successful provider/model row above.
+        return []
     if not routes or not any(
         item["depth"] == 0 and item["category"] == "turn" for item in routes
     ):
