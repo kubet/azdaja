@@ -1323,6 +1323,8 @@ def _category_routes_from_retained_trace(
 ) -> list[dict[str, Any]]:
     routes: list[dict[str, Any]] = []
     saw_failed_attempt = False
+    attempts_by_request: dict[str, set[int]] = {}
+    successful_requests: set[str] = set()
     for line_number, line in enumerate(data.splitlines(keepends=True), 1):
         if not line.endswith(b"\n") or not line[:-1].strip():
             raise ScoreError(
@@ -1337,10 +1339,11 @@ def _category_routes_from_retained_trace(
         value = _decode_json(
             text, f"trajectory {index} model trace row {line_number}"
         )
-        if not isinstance(value, dict) or line not in {
-            canonical_json_file_bytes(value),
-            _compact_model_trace_file_bytes(value),
-        }:
+        if (
+            not isinstance(value, dict)
+            or not set(value).issubset(MODEL_TRACE_FIELDS)
+            or line != _compact_model_trace_file_bytes(value)
+        ):
             raise ScoreError(
                 f"trajectory {index} model trace row {line_number} is not an exact "
                 "supported serialization"
@@ -1353,6 +1356,7 @@ def _category_routes_from_retained_trace(
         category = value.get("category")
         request_id = value.get("request_id")
         attempt = value.get("attempt")
+        session_id = value.get("session_id")
         if (
             type(value.get("timestamp_ms")) is not int
             or value["timestamp_ms"] < 0
@@ -1362,40 +1366,110 @@ def _category_routes_from_retained_trace(
             or not request_id
             or type(attempt) is not int
             or attempt < 1
+            or not (session_id is None or isinstance(session_id, str) and session_id)
         ):
             raise ScoreError(
                 f"trajectory {index} model trace row {line_number} identity is invalid"
             )
+        request_attempts = attempts_by_request.setdefault(request_id, set())
+        if attempt in request_attempts:
+            raise ScoreError(
+                f"trajectory {index} model trace row {line_number} repeats a physical attempt"
+            )
+        request_attempts.add(attempt)
         outcome = value.get("outcome")
+        base_fields = {
+            "schema_version", "event", "timestamp_ms", "depth", "request_id",
+            "attempt", "session_id", "category", "outcome",
+        }
+        latency = value.get("latency_ms")
+        if "latency_ms" in value and (type(latency) is not int or latency < 0):
+            raise ScoreError(
+                f"trajectory {index} model trace row {line_number} latency is invalid"
+            )
         if outcome == "failed":
-            stage = value.get("stage")
-            error = value.get("error")
-            error_category = value.get("error_category")
+            expected_fields = base_fields | {
+                "error", "error_category", "stage",
+            }
+            if "latency_ms" in value:
+                expected_fields.add("latency_ms")
+            if category == "session_setup":
+                expected_fields.add("setup_substage")
+            elif category in {"turn", "repair"}:
+                expected_fields.add("entered_turn")
+            entered_turn = value.get("entered_turn")
+            setup_substage = value.get("setup_substage")
             if (
-                category not in {"session_setup", "turn", "repair"}
-                or not isinstance(stage, str)
-                or not stage
-                or (category == "session_setup") != (stage == "session_setup")
-                or not isinstance(error, str)
-                or not error
-                or not isinstance(error_category, str)
-                or not error_category
+                set(value) != expected_fields
+                or category not in {"session_setup", "turn", "repair"}
+                or value.get("stage") != category
+                or value.get("error") != "provider_call_failed"
+                or value.get("error_category") not in {
+                    "bridge_io", "bridge_protocol", "provider", "timeout",
+                    "setup_route", "unknown",
+                }
+                or (
+                    category == "session_setup"
+                    and setup_substage not in {
+                        "connect", "hello", "attach", "runtime_info",
+                        "set_model", "reasoning",
+                    }
+                )
+                or (
+                    category in {"turn", "repair"}
+                    and (type(entered_turn) is not int or entered_turn < 1)
+                )
+                or (category == "repair" and (depth != 0 or attempt != 1))
             ):
                 raise ScoreError(
                     f"trajectory {index} model trace row {line_number} failed attempt is invalid"
                 )
             saw_failed_attempt = True
             continue
-        if outcome != "succeeded" or category not in {"turn", "repair"}:
-            raise ScoreError(
-                f"trajectory {index} model trace row {line_number} outcome is invalid"
-            )
+        expected_fields = base_fields | {
+            "entered_turn", "provider", "model", "input_tokens",
+            "output_tokens", "cache_read_tokens", "latency_ms",
+            "degraded_transport", "failed_attempts_before_success",
+        }
+        if category == "repair":
+            expected_fields.add("stage")
+        if "response" in value:
+            expected_fields.add("response")
+        entered_turn = value.get("entered_turn")
         provider = value.get("provider")
         model = value.get("model")
-        if not isinstance(provider, str) or not provider.lower().startswith("openai"):
-            raise ScoreError(
-                f"trajectory {index} model trace row {line_number} provider is invalid"
+        degraded = value.get("degraded_transport")
+        failed_before = value.get("failed_attempts_before_success")
+        response = value.get("response")
+        if (
+            outcome != "succeeded"
+            or category not in {"turn", "repair"}
+            or set(value) != expected_fields
+            or (category == "repair" and (depth != 0 or attempt != 1 or value.get("stage") != "repair"))
+            or type(entered_turn) is not int
+            or entered_turn < 1
+            or not isinstance(provider, str)
+            or not provider.lower().startswith("openai")
+            or any(
+                type(value.get(field)) is not int or value[field] < 0
+                for field in ("input_tokens", "output_tokens", "cache_read_tokens")
             )
+            or type(latency) is not int
+            or latency < 0
+            or type(degraded) is not bool
+            or type(failed_before) is not int
+            or failed_before < 0
+            or failed_before != attempt - 1
+            or degraded != (attempt > 1)
+            or ("response" in value and not isinstance(response, str))
+            or request_id in successful_requests
+        ):
+            raise ScoreError(
+                f"trajectory {index} model trace row {line_number} successful attempt is invalid"
+            )
+        successful_requests.add(request_id)
+        if attempt > 1 or failed_before > 0 or degraded:
+            saw_failed_attempt = True
         expected_model = (
             repair_model if depth == 0 and category == "repair" else MODEL
         )

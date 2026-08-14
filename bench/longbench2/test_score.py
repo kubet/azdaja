@@ -431,6 +431,8 @@ class ScoreTests(unittest.TestCase):
                             "depth": 0,
                             "request_id": job["run_id"],
                             "attempt": 1,
+                            "entered_turn": 1,
+                            "session_id": f"session-{job['ordinal']}",
                             "category": "turn",
                             "outcome": "succeeded",
                             "provider": "openai",
@@ -438,8 +440,9 @@ class ScoreTests(unittest.TestCase):
                             "input_tokens": usage["input_tokens"],
                             "output_tokens": usage["output_tokens"],
                             "cache_read_tokens": usage["cache_read_tokens"],
-                            "cache_write_tokens": usage["cache_write_tokens"],
-                            "total_tokens": usage["total_tokens"],
+                            "latency_ms": 1,
+                            "degraded_transport": False,
+                            "failed_attempts_before_success": 0,
                         }),
                     ),
                     "azdaja_solo_trace": (
@@ -755,10 +758,19 @@ class ScoreTests(unittest.TestCase):
                 "depth": item["depth"],
                 "request_id": f"request-{position}",
                 "attempt": 1,
+                "entered_turn": 1,
+                "session_id": f"session-{position}",
                 "category": item["category"],
                 "outcome": "succeeded",
+                **({"stage": "repair"} if item["category"] == "repair" else {}),
                 "provider": item["provider"],
                 "model": item["model"],
+                "input_tokens": 1,
+                "output_tokens": 1,
+                "cache_read_tokens": 0,
+                "latency_ms": 1,
+                "degraded_transport": False,
+                "failed_attempts_before_success": 0,
             })
             for position, item in enumerate(route["category_routes"], 1)
         )
@@ -774,8 +786,8 @@ class ScoreTests(unittest.TestCase):
         with self.assertRaises(SCORE.ScoreError):
             SCORE._category_routes_from_retained_trace(
                 retained.replace(
-                    b'"category":"repair","depth":0',
-                    b'"category":"turn","depth":1',
+                    b'"category":"repair","degraded_transport":false,"depth":0',
+                    b'"category":"turn","degraded_transport":false,"depth":1',
                     1,
                 ),
                 1,
@@ -1073,6 +1085,85 @@ class ScoreTests(unittest.TestCase):
             SCORE._category_routes_from_retained_trace(
                 unknown_bytes, 1, SCORE.MODEL
             )
+        sorted_unknown = SCORE.canonical_json_file_bytes(unknown)
+        with self.assertRaisesRegex(SCORE.ScoreError, "supported serialization"):
+            SCORE._category_routes_from_retained_trace(
+                sorted_unknown, 1, SCORE.MODEL
+            )
+
+        retry_lines = retried.splitlines(keepends=True)
+        # A successful attempt=2 attests the missing failed write on its own and
+        # must remain conservative even when the best-effort failure row is absent.
+        self.assertEqual(
+            SCORE._category_routes_from_retained_trace(
+                retry_lines[1], 1, SCORE.MODEL
+            ),
+            [],
+        )
+        failed_turn = SCORE._decode_json(
+            retry_lines[0].decode(), "retained failed turn"
+        )
+
+        def compact_line(value):
+            return (
+                json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+                + "\n"
+            ).encode()
+
+        for key, value in (
+            ("stage", "garbage"),
+            ("error", "untyped"),
+            ("error_category", "nonsense"),
+        ):
+            malformed = dict(failed_turn)
+            malformed[key] = value
+            with self.subTest(malformed_failure=key):
+                with self.assertRaisesRegex(SCORE.ScoreError, "failed attempt"):
+                    SCORE._category_routes_from_retained_trace(
+                        compact_line(malformed), 1, SCORE.MODEL
+                    )
+        malformed = dict(failed_turn)
+        malformed["provider"] = "OpenAI OAuth"
+        with self.assertRaisesRegex(SCORE.ScoreError, "failed attempt"):
+            SCORE._category_routes_from_retained_trace(
+                compact_line(malformed), 1, SCORE.MODEL
+            )
+
+        valid_setup = dict(failed_turn)
+        valid_setup.update({
+            "category": "session_setup",
+            "stage": "session_setup",
+            "setup_substage": "connect",
+            "session_id": None,
+        })
+        del valid_setup["entered_turn"]
+        self.assertEqual(
+            SCORE._category_routes_from_retained_trace(
+                compact_line(valid_setup), 1, SCORE.MODEL
+            ),
+            [],
+        )
+        invalid_setup = dict(valid_setup)
+        invalid_setup["entered_turn"] = 1
+        with self.assertRaisesRegex(SCORE.ScoreError, "failed attempt"):
+            SCORE._category_routes_from_retained_trace(
+                compact_line(invalid_setup), 1, SCORE.MODEL
+            )
+        valid_repair = dict(failed_turn)
+        valid_repair.update({"category": "repair", "stage": "repair", "depth": 0})
+        self.assertEqual(
+            SCORE._category_routes_from_retained_trace(
+                compact_line(valid_repair), 1, SCORE.MODEL
+            ),
+            [],
+        )
+        invalid_repair = dict(valid_repair)
+        invalid_repair["attempt"] = 2
+        with self.assertRaisesRegex(SCORE.ScoreError, "failed attempt"):
+            SCORE._category_routes_from_retained_trace(
+                compact_line(invalid_repair), 1, SCORE.MODEL
+            )
+
         duplicate = succeeded.replace(
             b'{"schema_version":2,',
             b'{"schema_version":2,"schema_version":2,',
