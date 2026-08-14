@@ -77,8 +77,11 @@ start  load  exec  final  list  kill  solo  doctor  install  uninstall
 ## Current benchmark
 
 One immutable current Azdaja candidate is shown against both controls. Historical
-candidate versions are intentionally omitted from these headline tables. The
-candidate is private commit `6588c06`, binary SHA-256
+candidate versions are intentionally omitted from these headline tables. When a
+newer candidate is terminally validated and improves the preregistered gate set
+without regression, its identity and every suite table are replaced together;
+unscored, rejected, or diagnostic-only candidates never displace the current one.
+The candidate is private commit `6588c06`, binary SHA-256
 `6be5b9ff567eca6d1a5c2315dfb0c12fb5bd847b58daef0b3b8191151e45b509`.
 These are single-run private diagnostics, not official leaderboard results or a
 superiority claim.
