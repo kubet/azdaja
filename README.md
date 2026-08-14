@@ -86,6 +86,16 @@ The candidate is private commit `6588c06`, binary SHA-256
 These are single-run private diagnostics, not official leaderboard results or a
 superiority claim.
 
+> **Latest campaign status:** the completed exact-v43 LongBench refresh is
+> terminal-invalid and unscored. It produced no new authoritative accuracy,
+> token, or latency result. The visible RULER table remains the current valid
+> baseline; the older valid LongBench score is collapsed below for provenance.
+>
+> Candidate labels are experiment serials, not releases or monotonic upgrades.
+> V45-V48 were slower than v43, V49 completed only 18/20 smoke executions,
+> and V50 was an offline feasibility NO-GO with no candidate binary or inference.
+> A higher experiment number does not replace the last promoted candidate.
+
 ### Derived RULER, 90 fixtures
 
 | Arm | Execution | Completed strict exact | Fixed-90 strict exact | Mean root tokens | Median time / item |
@@ -131,11 +141,13 @@ receipt, terminal-validation, and scoring path end to end. The current rehearsal
 implementation remains audit-only and cannot authorize inference. None of this
 work salvages the invalid run or creates a benchmark result.
 
-#### Last valid frozen diagnostic
+<details>
+<summary><strong>Last valid frozen LongBench score (expand for historical evidence)</strong></summary>
 
 The table below remains the most recent valid scored comparison for this same
-immutable candidate. The pinned official LongBench-v2 answer extractor is the
-primary metric, and every scheduled failure is a fixed-denominator zero.
+immutable candidate, but it is not the latest refresh. The pinned official
+LongBench-v2 answer extractor is the primary metric, and every scheduled failure
+is a fixed-denominator zero.
 
 | Arm | Execution | Completed official accuracy | Fixed-63 official accuracy | Mean root tokens | Median time / item |
 |---|---:|---:|---:|---:|---:|
@@ -162,6 +174,8 @@ context overlaps of 100 or more Unicode characters. The diagnostics use
 owner-only local evidence and post-hoc policy checks, not authenticated history or
 OS-level containment. LongBench is a derived public-answer-joinable subset, and
 historical development-family gold exposure prevents a blind-validation claim.
+
+</details>
 
 ## Guarantees
 
