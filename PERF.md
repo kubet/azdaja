@@ -175,3 +175,89 @@ Raw normalized per-item ledger:
 ```json
 {"complete":true,"exec_invocation_count":1,"exec_wall_ms":0.199333,"repair_cost":{"cache_read_tokens":0,"inference_ms":0,"input_tokens":0,"output_tokens":0,"token_accounting_complete":true},"repair_count":0,"root_inference_ms":30,"root_turn_count":1,"schema_version":1,"snapshot_load_count":0,"snapshot_load_ms":0.0,"snapshot_save_count":1,"snapshot_save_ms":0.633083,"sub_call_count":0,"sub_call_turn_count":0,"sub_call_wall_ms":0.0}
 ```
+
+## Frozen RULER width-4 smoke: baseline to v42
+
+This is the preregistered `candidate-smoke-20-v1` diagnostic slice, executed at one
+**global** controller width of 4 with subscription OAuth, `gpt-5.6-luna`, and root
+reasoning `medium`. It is deliberately unscored: no gold or scorer was opened.
+Both runs used the exact ordered fixture/payload commitment
+`db40308e93a8dcbd520cc10f47d2eb5569369f5402d60ddd9bd57a04fe945bd6`
+and frozen controller `bench/ruler/run.py`
+`fc15b4dafd5bb07c09169576565eb17e9425b3cf301e6366ebc81676d391ac81`.
+
+Immutable before:
+
+- candidate binary `3948710fd24cd067372c58f2680dc7c2579af458bfa0b7ef33203995195f26bc`
+- output `b2ef1bc041210d6e71bd885902f0196f440d90eb0a486eced21d29f0bc3cd2dd`
+- schedule `cfe9f38ae2edea35e796e297337483cbe6cd7ab7e8712c78ecc67c32b00aac51`
+- result 19/20 execution, one process exit, 178.713122 s makespan
+
+Immutable after (v42):
+
+- candidate binary `5fa5e399801d152915a698a82498ac379ac8ae0335d4626c290c782b3989cd0a`
+- source stamp `546bc62b8832f6b4632ea160230b18ca55b6c653e747a3fc66052fe0507c01bc`
+- output `99dad202607fafb1a9f1102414b596f4d5648d5d498ba0aef9ad9981f36ba38b`
+- schedule `3f7589e4a497364056be8a96daab8e44cf61fbaa200c3b0dbfd7e4ffecd90512`
+- result **20/20 execution**, zero process exits/timeouts, 175.236998 s makespan
+- all 20 product lifecycles, payload checks, exact trace captures, performance ledgers,
+  OAuth routes, credential cleanups, and >=100-character leak scans asserted; leaks 0/20
+
+Aggregate before -> after:
+
+| measure | before | v42 | delta |
+|---|---:|---:|---:|
+| execution | 19/20 | 20/20 | +1 item |
+| makespan s | 178.713122 | 175.236998 | -3.476124 (-1.95%) |
+| item mean s | 31.992169 | 29.284071 | -2.708099 (-8.46%) |
+| item median s | 28.621568 | 19.969727 | -8.651841 (-30.23%) |
+| item p95 s | 51.018710 | 59.591941 | +8.573230 |
+| root turns / repairs | 25 / 5 | 29 / 9 | +4 / +4 |
+| provider inference s | 631.329 | 577.511 | -53.818 |
+| provider output tokens | 49,039 | 44,240 | -4,799 |
+| provider input tokens | 69,508 | 96,791 | +27,283 |
+| exec count / wall ms | 25 / 212.841 | 29 / 251.655 | +4 / +38.815 |
+| snapshot saves / wall ms | 20 / 3.194 | 20 / 4.904 | 0 / +1.710 |
+| snapshot loads / wall ms | 5 / 0.583 | 9 / 1.888 | +4 / +1.305 |
+| logical subcalls / wall ms | 0 / 0.000 | 0 / 0.000 | 0 / 0.000 |
+
+The one-turn subset changed from 17 items at 27.877 s mean / 2,134 root output
+tokens mean to 13 items at 18.047 s / 1,312 tokens. This is descriptive rather than a
+paired accuracy claim; repairs increased from 5 to 9 and remain the dominant avoidable
+tail. The v42 mean is 3.371x the historical v38 native mean of 8.685748 s, so the
+<=1.5x acceptance target is still **not met**. The smoke proves the <=5-minute and
+20/20 gates only, not the frozen-90 or comparative accuracy gates.
+
+Per-item columns are `turns/repairs`, provider inference milliseconds, provider output
+tokens across all turns, and `exec/save/load/subcall` counts. The failed before row
+retains its measured runtime but its incomplete ledger remains a fixed-denominator zero.
+
+| # | fixture | B status | B wall s | B t/r | B provider ms | B out | B e/s/l/c | A status | A wall s | A t/r | A provider ms | A out | A e/s/l/c | wall delta s |
+|---:|---|---|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|
+| 1 | `0842be47` | ok | 17.785 | 1/0 | 17336 | 1283 | 1/1/0/0 | ok | 16.691 | 1/0 | 16187 | 1208 | 1/1/0/0 | -1.094 |
+| 2 | `6670e3c8` | ok | 25.699 | 1/0 | 25245 | 1951 | 1/1/0/0 | ok | 10.022 | 1/0 | 9524 | 636 | 1/1/0/0 | -15.678 |
+| 3 | `6a55c9a3` | ok | 40.161 | 1/0 | 39663 | 3110 | 1/1/0/0 | ok | 17.814 | 1/0 | 17311 | 1203 | 1/1/0/0 | -22.348 |
+| 4 | `05b3f054` | ok | 27.692 | 1/0 | 27225 | 2098 | 1/1/0/0 | ok | 20.082 | 1/0 | 19573 | 1417 | 1/1/0/0 | -7.610 |
+| 5 | `324ca4d7` | ok | 35.252 | 1/0 | 34895 | 2760 | 1/1/0/0 | ok | 16.709 | 1/0 | 16328 | 1238 | 1/1/0/0 | -18.543 |
+| 6 | `20717f3b` | ok | 27.611 | 1/0 | 27255 | 2155 | 1/1/0/0 | ok | 44.029 | 2/1 | 43629 | 3440 | 2/1/1/0 | +16.418 |
+| 7 | `2a38707a` | ok | 18.440 | 1/0 | 18102 | 1389 | 1/1/0/0 | ok | 43.109 | 2/1 | 42724 | 3321 | 2/1/1/0 | +24.668 |
+| 8 | `0d5ef27c` | ok | 16.793 | 1/0 | 16295 | 1217 | 1/1/0/0 | ok | 23.006 | 1/0 | 22659 | 1768 | 1/1/0/0 | +6.213 |
+| 9 | `2285810b` | ok | 23.932 | 1/0 | 23579 | 1815 | 1/1/0/0 | ok | 16.738 | 1/0 | 16380 | 1215 | 1/1/0/0 | -7.194 |
+| 10 | `1d930dbb` | ok | 29.551 | 1/0 | 29189 | 2187 | 1/1/0/0 | ok | 18.901 | 1/0 | 18549 | 1417 | 1/1/0/0 | -10.650 |
+| 11 | `4373136e` | ok | 73.824 | 3/2 | 73204 | 5778 | 3/1/2/0 | ok | 19.857 | 1/0 | 19522 | 1496 | 1/1/0/0 | -53.967 |
+| 12 | `513316fa` | ok | 49.818 | 3/2 | 49292 | 3709 | 3/1/2/0 | ok | 47.260 | 2/1 | 46887 | 3621 | 2/1/1/0 | -2.559 |
+| 13 | `11dc65da` | ok | 22.362 | 1/0 | 22011 | 1707 | 1/1/0/0 | ok | 59.268 | 2/1 | 58888 | 4674 | 2/1/1/0 | +36.906 |
+| 14 | `9361854e` | ok | 24.319 | 1/0 | 23925 | 1864 | 1/1/0/0 | ok | 37.005 | 2/1 | 36648 | 2827 | 2/1/1/0 | +12.686 |
+| 15 | `2ac3ee8a` | ok | 18.599 | 1/0 | 18250 | 1391 | 1/1/0/0 | ok | 19.410 | 1/0 | 18934 | 1405 | 1/1/0/0 | +0.811 |
+| 16 | `4423687d` | ok | 34.423 | 1/0 | 34007 | 2638 | 1/1/0/0 | ok | 9.755 | 1/0 | 9379 | 604 | 1/1/0/0 | -24.669 |
+| 17 | `00cc544f` | ok | 42.296 | 2/1 | 41768 | 3276 | 2/1/1/0 | ok | 11.419 | 1/0 | 11039 | 795 | 1/1/0/0 | -30.877 |
+| 18 | `0638d6b8` | ok | 42.816 | 1/0 | 42439 | 3413 | 1/1/0/0 | ok | 34.206 | 1/0 | 33826 | 2654 | 1/1/0/0 | -8.611 |
+| 19 | `1ed71e2b` | ok | 32.721 | 1/0 | 32245 | 2531 | 1/1/0/0 | ok | 54.655 | 3/2 | 54224 | 4165 | 3/1/2/0 | +21.935 |
+| 20 | `44cd3a58` | FAIL | 35.748 | 1/0 | 35404 | 2767 | 1/1/0/0 | ok | 65.749 | 3/2 | 65300 | 5136 | 3/1/2/0 | +30.001 |
+
+Discarded immutable intermediates were not retried: v39 19/20 at 202.734077 s, v40
+19/20 at 205.010624 s, and v41 19/20 at 149.102636 s. V41 had 20 nonempty product
+results but one trace-retention failure; its sampler was superseded after an exact
+206-character adversarial self-embedding was reproduced. V42 adds a streaming,
+fail-closed 100-codepoint overlap guard with bounded sample hashes and no
+source-sized hash materialization.

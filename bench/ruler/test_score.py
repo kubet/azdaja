@@ -553,6 +553,12 @@ class ScoreTests(unittest.TestCase):
                 "repetitions": 1,
                 "seed": 20260813,
                 "timeout_seconds": 1800,
+                "workflow": SCORE.FULL_WORKFLOW,
+                "workflow_fixture_ids": None,
+                "workflow_fixture_ids_sha256": None,
+                "parallel_width": SCORE.PARALLEL_WIDTH,
+                "configured_global_width": SCORE.PARALLEL_WIDTH,
+                "parallel_width_scope": SCORE.PARALLEL_WIDTH_SCOPE,
                 "wrapper_template_sha256": SCORE.WRAPPER_TEMPLATE_SHA256,
                 "candidate": candidate,
                 "candidate_source_path": str(source_candidate),
@@ -592,6 +598,11 @@ class ScoreTests(unittest.TestCase):
         rng = __import__("random").Random(schedule["configuration"]["seed"])
         fixture_order = list(fixtures)
         rng.shuffle(fixture_order)
+        workflow_fixture_ids = [fixture["id"] for fixture in fixture_order]
+        schedule["configuration"]["workflow_fixture_ids"] = workflow_fixture_ids
+        schedule["configuration"]["workflow_fixture_ids_sha256"] = SCORE.sha256_bytes(
+            SCORE.canonical_json_bytes(workflow_fixture_ids)
+        )
         permutations = list(itertools.permutations(SCORE.ARMS)) * 15
         rng.shuffle(permutations)
         job_ordinal = 0
@@ -718,6 +729,9 @@ class ScoreTests(unittest.TestCase):
                     "snapshot_load_count": 0, "snapshot_load_ms": 0.0,
                     "sub_call_count": 0, "sub_call_turn_count": 0,
                     "sub_call_wall_ms": 0.0, "repair_count": 0,
+                    "configured_global_width": SCORE.PARALLEL_WIDTH,
+                    "parallel_width_scope": SCORE.PARALLEL_WIDTH_SCOPE,
+                    "observed_active_at_start": min(job["ordinal"], SCORE.PARALLEL_WIDTH),
                     "repair_cost": {
                         "inference_ms": 0, "input_tokens": 0,
                         "output_tokens": 0, "cache_read_tokens": 0,
@@ -758,6 +772,13 @@ class ScoreTests(unittest.TestCase):
                 "model": SCORE.MODEL,
                 "reasoning": "medium",
                 "schedule_seed": schedule["configuration"]["seed"],
+                "workflow": schedule["configuration"]["workflow"],
+                "workflow_fixture_ids_sha256": schedule["configuration"][
+                    "workflow_fixture_ids_sha256"
+                ],
+                "parallel_width": SCORE.PARALLEL_WIDTH,
+                "configured_global_width": SCORE.PARALLEL_WIDTH,
+                "parallel_width_scope": SCORE.PARALLEL_WIDTH_SCOPE,
                 "candidate_sha256": candidate["sha256"],
                 "controller_sha256": controller["sha256"],
                 "timeout_seconds": 1800,
@@ -794,6 +815,21 @@ class ScoreTests(unittest.TestCase):
                     "wrapper_sha256": SCORE.WRAPPER_TEMPLATE_SHA256,
                     "performance_ledger": performance_ledger,
                     "performance_ledger_assertion": performance_assertion,
+                    "runner_parallelism": {
+                        "schema_version": 1,
+                        "configured_global_width": SCORE.PARALLEL_WIDTH,
+                        "scope": SCORE.PARALLEL_WIDTH_SCOPE,
+                        "observed_active_at_start": min(
+                            job["ordinal"], SCORE.PARALLEL_WIDTH
+                        ),
+                        "observed_peak_concurrency": SCORE.PARALLEL_WIDTH,
+                        "batch_started_at_unix_s": 1.0,
+                        "monotonic_arm_start_offset_ms": float(job["ordinal"] - 1),
+                        "monotonic_arm_end_offset_ms": float(job["ordinal"] + 3),
+                        "controller_arm_wall_ms": 4.0,
+                        "overall_makespan_ms": float(len(schedule["jobs"]) + 3),
+                        "authority": SCORE.RUNNER_PARALLELISM_AUTHORITY,
+                    },
                     "trajectory_artifacts": {
                         "stdout": artifact_record(stdout_path),
                         "stderr": artifact_record(stderr_path),

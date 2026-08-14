@@ -9,7 +9,10 @@ import subprocess
 import shutil
 import sys
 import tempfile
+import threading
+import time
 import unittest
+from collections import Counter
 from unittest import mock
 from pathlib import Path
 
@@ -196,6 +199,26 @@ class RulerRunnerTests(unittest.TestCase):
                 "bytes": identity_path.stat().st_size,
             }
         }
+
+    @staticmethod
+    def fake_smoke_commitments(suite):
+        selected = []
+        for (task, target_length), quota in RUN.SMOKE_CELL_QUOTAS.items():
+            cell = sorted(
+                (
+                    fixture for fixture in suite.fixtures
+                    if fixture.task == task and fixture.target_length == target_length
+                ),
+                key=lambda fixture: fixture.fixture_id,
+            )
+            selected.extend(cell[:quota])
+        return tuple(
+            (
+                fixture.fixture_id, fixture.payload_sha256,
+                fixture.task, fixture.target_length,
+            )
+            for fixture in selected
+        )
 
     def test_exact_unicode_root_context_scan_uses_exact_code_points(self):
         payload = "prefix" + ("🦀e\u0301" * 40) + "suffix"
@@ -666,6 +689,18 @@ class RulerRunnerTests(unittest.TestCase):
             self.assertEqual(schedule["configuration"]["reasoning"], "medium")
             self.assertEqual(schedule["configuration"]["arms"], list(RUN.ARMS))
             self.assertEqual(schedule["configuration"]["repetitions"], 1)
+            self.assertEqual(schedule["configuration"]["workflow"], RUN.FULL_WORKFLOW)
+            self.assertEqual(schedule["configuration"]["parallel_width"], 4)
+            self.assertEqual(schedule["configuration"]["configured_global_width"], 4)
+            self.assertEqual(
+                schedule["configuration"]["parallel_width_scope"], "global"
+            )
+            workflow_ids = schedule["configuration"]["workflow_fixture_ids"]
+            self.assertEqual(len(workflow_ids), 90)
+            self.assertEqual(
+                schedule["configuration"]["workflow_fixture_ids_sha256"],
+                RUN.sha256_bytes(RUN.canonical_json_bytes(workflow_ids)),
+            )
             groups = [schedule["jobs"][index:index + 3] for index in range(0, 270, 3)]
             counts = {permutation: 0 for permutation in itertools.permutations(RUN.ARMS)}
             for group in groups:
@@ -710,6 +745,162 @@ class RulerRunnerTests(unittest.TestCase):
                     "oolong_execution_module": controller["components"]["oolong_execution_module"]["path"],
                 }, executables=executables,
                 )
+
+    def test_candidate_full_and_frozen_smoke_workflows_reconstruct_exactly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            suite = fake_suite(Path(directory))
+            candidate, controller, executables = self.identities()
+            common = dict(
+                seed=17, timeout=1800, candidate=candidate,
+                candidate_source_path="/test/candidate-source",
+                controller=controller,
+                controller_source_paths={
+                    "ruler_runner": controller["components"]["ruler_runner"]["path"],
+                    "oolong_execution_module": controller["components"]["oolong_execution_module"]["path"],
+                },
+                executables=executables,
+                random_names=[f"{index:032x}.txt" for index in range(90)],
+            )
+            candidate_schedule = RUN.build_schedule(
+                suite, workflow=RUN.CANDIDATE_FULL_WORKFLOW, **common
+            )
+            RUN.validate_schedule(
+                candidate_schedule, suite,
+                workflow=RUN.CANDIDATE_FULL_WORKFLOW,
+                **{key: value for key, value in common.items() if key != "random_names"},
+            )
+            self.assertEqual(len(candidate_schedule["jobs"]), 90)
+            self.assertEqual(
+                {job["arm"] for job in candidate_schedule["jobs"]},
+                {"jcode-azdaja"},
+            )
+            self.assertEqual(
+                [job["fixture_id"] for job in candidate_schedule["jobs"]],
+                candidate_schedule["configuration"]["workflow_fixture_ids"],
+            )
+
+            commitments = self.fake_smoke_commitments(suite)
+            with mock.patch.object(RUN, "SMOKE_FIXTURE_COMMITMENTS", commitments):
+                smoke = RUN.build_schedule(
+                    suite, workflow=RUN.SMOKE_WORKFLOW, **common
+                )
+                RUN.validate_schedule(
+                    smoke, suite, workflow=RUN.SMOKE_WORKFLOW,
+                    **{key: value for key, value in common.items() if key != "random_names"},
+                )
+                other_seed = dict(common, seed=99)
+                other = RUN.build_schedule(
+                    suite, workflow=RUN.SMOKE_WORKFLOW, **other_seed
+                )
+            expected_ids = [item[0] for item in commitments]
+            self.assertEqual(len(smoke["jobs"]), 20)
+            self.assertEqual(
+                [job["fixture_id"] for job in smoke["jobs"]], expected_ids
+            )
+            self.assertEqual(
+                smoke["configuration"]["workflow_fixture_ids"], expected_ids
+            )
+            self.assertEqual(
+                [job["fixture_id"] for job in other["jobs"]], expected_ids
+            )
+            counts = Counter(
+                (job["task"], job["target_length"]) for job in smoke["jobs"]
+            )
+            self.assertEqual(counts, Counter(RUN.SMOKE_CELL_QUOTAS))
+            with self.assertRaisesRegex(RUN.BenchError, "parallel width"):
+                RUN.build_schedule(
+                    suite, workflow=RUN.CANDIDATE_FULL_WORKFLOW,
+                    parallel_width=3, **common
+                )
+
+    def test_global_width_queue_commits_only_in_order_after_batch_freeze(self):
+        jobs = [{"ordinal": value} for value in range(1, 13)]
+        lock = threading.Lock()
+        active = 0
+        peak = 0
+        finished = []
+        committed = []
+
+        def worker(job):
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            time.sleep(0.002 * (4 - (job["ordinal"] % 4)))
+            with lock:
+                active -= 1
+                finished.append(job["ordinal"])
+            return {"ordinal": job["ordinal"]}
+
+        def finalize(rows):
+            self.assertEqual(len(rows), 12)
+            self.assertNotEqual(finished, list(range(1, 13)))
+
+        RUN.execute_fixed_width_ordered(
+            jobs,
+            worker=worker,
+            finalize=finalize,
+            commit=lambda job, row: committed.append((job["ordinal"], row["ordinal"])),
+            width=4,
+        )
+        self.assertEqual(peak, 4)
+        self.assertEqual(committed, [(value, value) for value in range(1, 13)])
+
+    def test_global_width_queue_worker_or_finalize_failure_appends_nothing_and_never_retries(self):
+        jobs = [{"ordinal": value} for value in range(1, 9)]
+        calls = Counter()
+        committed = []
+
+        def worker(job):
+            calls[job["ordinal"]] += 1
+            if job["ordinal"] == 2:
+                raise RuntimeError("claimed worker crash")
+            time.sleep(0.002)
+            return job
+
+        with self.assertRaisesRegex(RuntimeError, "claimed worker crash"):
+            RUN.execute_fixed_width_ordered(
+                jobs, worker=worker, finalize=lambda rows: None,
+                commit=lambda job, row: committed.append(job["ordinal"]), width=4,
+            )
+        self.assertEqual(committed, [])
+        self.assertTrue(all(count == 1 for count in calls.values()))
+
+        calls.clear()
+        with self.assertRaisesRegex(RuntimeError, "freeze failed"):
+            RUN.execute_fixed_width_ordered(
+                jobs,
+                worker=lambda job: calls.update([job["ordinal"]]) or job,
+                finalize=lambda rows: (_ for _ in ()).throw(RuntimeError("freeze failed")),
+                commit=lambda job, row: committed.append(job["ordinal"]),
+                width=4,
+            )
+        self.assertEqual(committed, [])
+        self.assertEqual(calls, Counter(range(1, 9)))
+
+    def test_parallel_batch_half_open_intervals_recompute_peak_and_makespan(self):
+        rows = []
+        intervals = [(0.0, 3.0, 1), (1.0, 2.0, 2), (2.0, 4.0, 2)]
+        for start, end, active in intervals:
+            rows.append({"arm_evidence": {"runner_parallelism": {
+                "schema_version": 1,
+                "configured_global_width": 4,
+                "scope": "global",
+                "observed_active_at_start": active,
+                "observed_peak_concurrency": None,
+                "batch_started_at_unix_s": 10.0,
+                "monotonic_arm_start_offset_ms": start,
+                "monotonic_arm_end_offset_ms": end,
+                "controller_arm_wall_ms": end - start,
+                "overall_makespan_ms": None,
+                "authority": RUN.RUNNER_PARALLELISM_AUTHORITY,
+            }}})
+        summary = RUN.finalize_parallel_batch_rows(rows, expected_width=4)
+        self.assertEqual(summary["observed_peak_concurrency"], 2)
+        self.assertEqual(summary["overall_makespan_ms"], 4.0)
+        rows[0]["arm_evidence"]["runner_parallelism"]["overall_makespan_ms"] = 3.0
+        with self.assertRaises(RUN.BenchError):
+            RUN.validate_terminal_parallel_batch(rows, expected_width=4)
 
     def test_identical_read_only_staging_and_post_run_integrity(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -891,6 +1082,9 @@ class RulerRunnerTests(unittest.TestCase):
                             "snapshot_load_count": 0, "snapshot_load_ms": 0.0,
                             "sub_call_count": 0, "sub_call_turn_count": 0,
                             "sub_call_wall_ms": 0.0, "repair_count": 0,
+                            "configured_global_width": RUN.PARALLEL_WIDTH,
+                            "parallel_width_scope": RUN.PARALLEL_WIDTH_SCOPE,
+                            "observed_active_at_start": 1,
                             "repair_cost": {
                                 "inference_ms": 0, "input_tokens": 0,
                                 "output_tokens": 0, "cache_read_tokens": 0,
@@ -909,6 +1103,19 @@ class RulerRunnerTests(unittest.TestCase):
                         ),
                         "raw_runtime": None,
                         "reasons": [],
+                    },
+                    "runner_parallelism": {
+                        "schema_version": 1,
+                        "configured_global_width": RUN.PARALLEL_WIDTH,
+                        "scope": RUN.PARALLEL_WIDTH_SCOPE,
+                        "observed_active_at_start": 1,
+                        "observed_peak_concurrency": 1,
+                        "batch_started_at_unix_s": 1.0,
+                        "monotonic_arm_start_offset_ms": 0.0,
+                        "monotonic_arm_end_offset_ms": 1.0,
+                        "controller_arm_wall_ms": 1.0,
+                        "overall_makespan_ms": 1.0,
+                        "authority": RUN.RUNNER_PARALLELISM_AUTHORITY,
                     },
                 },
             }

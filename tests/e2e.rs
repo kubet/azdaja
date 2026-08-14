@@ -1153,7 +1153,18 @@ if os.getenv('RLM_DEPTH') == '0':
                 'never infer semantic labels by searching evidence for label words',
                 'do not call llm, llm_batch, or llm_batch_fresh directly',
                 'os, re, json, math, collections, datetime',
-                'globals/locals/callable', 'dict.get', 'below 50 nonblank lines')
+                'globals/locals/callable', 'dict.get', 'below 50 nonblank lines',
+                'fail closed: assert a nonempty verified answer',
+                'exactly one unconditional top-level final(answer)',
+                'never guard final',
+                'agent tools', 'provider-native tools', 'shell commands', 'filesystem actions',
+                'solve only through preloaded ctx',
+                're helper calls do not accept flags arguments',
+                'never use credential-shaped local names',
+                'token, secret, password, credential, access, refresh, authorization, or bearer',
+                'begin the fenced program immediately',
+                'shortest correct straight-line program',
+                'do not narrate or deliberate beyond what is needed')
     sample_ok = ('schema-canary' in sample and 'TAIL_NOT_IN_SAMPLE' in sample
                  and '[HEAD chars 0..' in sample and '[TAIL chars ' in sample
                  and len(sample.encode('utf-8')) <= 4096)
@@ -1368,6 +1379,8 @@ elif kind == "assertion":
     print('```python\nctx = "poison"\nassert False\n```')
 elif kind == "value":
     print('```python\nraise ValueError("sentinel-secret")\n```')
+elif kind == "exception":
+    print('```python\nraise Exception("unable to verify generic context")\n```')
 elif kind == "regex":
     print('```python\nre.compile("[z-a]")\nFINAL("bad")\n```')
 elif kind == "line":
@@ -1386,6 +1399,7 @@ else:
     for kind in [
         "assertion",
         "value",
+        "exception",
         "regex",
         "line",
         "key",
@@ -1427,6 +1441,9 @@ else:
             retained.contains("category=repair outcome=succeeded"),
             "{kind}: {retained}"
         );
+        if kind == "exception" {
+            assert!(retained.contains("trigger=Program"), "{retained}");
+        }
         let repair_request = retained
             .split("=== repair request begin")
             .nth(1)
@@ -2196,13 +2213,15 @@ fn command_transport_trace_keeps_unknown_route_and_usage_null() {
 #[test]
 fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
     use std::io::{BufRead, BufReader, Write as _};
-    use std::os::unix::net::UnixListener;
+    use std::os::unix::{fs::MetadataExt, net::UnixListener};
     use std::thread;
     let t = temp("jcode-api");
+    let task_cwd = std::env::current_dir().unwrap();
     let socket = t.join("api.sock");
     let listener = UnixListener::bind(&socket).unwrap();
     let server = thread::spawn(move || {
         let mut turns_per_session = Vec::new();
+        let mut workspaces = Vec::new();
         for session_number in 1..=2 {
             // JcodeSession::open first probes bridge liveness, then opens the protocol stream.
             let (probe, _) = listener.accept().unwrap();
@@ -2225,6 +2244,23 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
                 let f: serde_json::Value = serde_json::from_str(&line).unwrap();
                 let id = f["id"].as_u64().unwrap();
                 let req = f["req"].as_str().unwrap();
+                if req == "create_session" {
+                    let workspace = PathBuf::from(f["working_dir"].as_str().unwrap());
+                    assert!(workspace.is_absolute());
+                    let canonical_workspace = fs::canonicalize(&workspace).unwrap();
+                    let canonical_task_cwd = fs::canonicalize(&task_cwd).unwrap();
+                    assert!(!canonical_workspace.starts_with(canonical_task_cwd));
+                    let meta = fs::symlink_metadata(&workspace).unwrap();
+                    assert!(meta.file_type().is_dir());
+                    assert!(!meta.file_type().is_symlink());
+                    assert_eq!(meta.uid(), unsafe { libc::geteuid() });
+                    assert_eq!(meta.mode() & 0o777, 0o700);
+                    assert!(fs::read_dir(&workspace).unwrap().next().is_none());
+                    if session_number == 1 {
+                        fs::write(workspace.join("provider-side-effect"), b"retained").unwrap();
+                    }
+                    workspaces.push(workspace);
+                }
                 let frames: Vec<serde_json::Value> = match req {
                     "hello" => vec![serde_json::json!({
                         "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
@@ -2322,7 +2358,7 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
             }
             turns_per_session.push(turn_count);
         }
-        turns_per_session
+        (turns_per_session, workspaces)
     });
     let cfg = config(&t, "jcode-api", 1024, 1, 3, 4);
     let id = sid(&t, &cfg);
@@ -2404,7 +2440,17 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
         assert!(usage["latency_ms"].as_u64().is_some());
         assert!(usage.get("error").is_none());
     }
-    assert_eq!(server.join().unwrap(), [1, 1]);
+    let (turns, workspaces) = server.join().unwrap();
+    assert_eq!(turns, [1, 1]);
+    assert_eq!(workspaces.len(), 2);
+    assert_ne!(workspaces[0], workspaces[1]);
+    assert_eq!(
+        fs::read(workspaces[0].join("provider-side-effect")).unwrap(),
+        b"retained"
+    );
+    assert!(!workspaces[1].exists());
+    fs::remove_file(workspaces[0].join("provider-side-effect")).unwrap();
+    fs::remove_dir(&workspaces[0]).unwrap();
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -2420,6 +2466,7 @@ fn jcode_fresh_batch_retries_setup_without_repeating_model_turn() {
     let listener = UnixListener::bind(&socket).unwrap();
     let server = thread::spawn(move || {
         let mut messages = Vec::new();
+        let mut workspaces = Vec::new();
         for session_number in 1..=3 {
             let (probe, _) = listener.accept().unwrap();
             drop(probe);
@@ -2434,6 +2481,9 @@ fn jcode_fresh_batch_retries_setup_without_repeating_model_turn() {
                 let request: serde_json::Value = serde_json::from_str(&line).unwrap();
                 let id = request["id"].as_u64().unwrap();
                 let req = request["req"].as_str().unwrap();
+                if req == "create_session" {
+                    workspaces.push(PathBuf::from(request["working_dir"].as_str().unwrap()));
+                }
                 let frames = match req {
                     "hello" => vec![serde_json::json!({
                         "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
@@ -2489,7 +2539,7 @@ fn jcode_fresh_batch_retries_setup_without_repeating_model_turn() {
                 }
             }
         }
-        messages
+        (messages, workspaces)
     });
 
     let cfg = config(&t, "jcode-api", 1024, 1, 3, 4);
@@ -2516,7 +2566,15 @@ fn jcode_fresh_batch_retries_setup_without_repeating_model_turn() {
     let output = child.wait_with_output().unwrap();
     let out = ok(output);
     assert!(out.contains("ONLY_OK"), "{out}");
-    assert_eq!(server.join().unwrap().len(), 1);
+    let (messages, workspaces) = server.join().unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(workspaces.len(), 3);
+    for workspace in workspaces {
+        if workspace.exists() {
+            assert!(fs::read_dir(&workspace).unwrap().next().is_none());
+            fs::remove_dir(workspace).unwrap();
+        }
+    }
 
     let rows: Vec<serde_json::Value> = fs::read_to_string(trace)
         .unwrap()
@@ -2732,6 +2790,8 @@ fn solo_root_does_not_retry_typed_permanent_invalid_request() {
         let (mut stream, _) = listener.accept().unwrap();
         let mut reader = BufReader::new(stream.try_clone().unwrap());
         let mut entered_turns = 0;
+        let mut archive_requests = 0;
+        let mut workspace = None;
         loop {
             let mut line = String::new();
             if reader.read_line(&mut line).unwrap() == 0 {
@@ -2739,6 +2799,9 @@ fn solo_root_does_not_retry_typed_permanent_invalid_request() {
             }
             let request: serde_json::Value = serde_json::from_str(&line).unwrap();
             let id = request["id"].as_u64().unwrap();
+            if request["req"] == "create_session" {
+                workspace = Some(PathBuf::from(request["working_dir"].as_str().unwrap()));
+            }
             let frames = match request["req"].as_str().unwrap() {
                 "hello" => vec![serde_json::json!({
                     "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
@@ -2763,9 +2826,13 @@ fn solo_root_does_not_retry_typed_permanent_invalid_request() {
                         "code":"invalid_request","message":"permanent invalid request"
                     })]
                 }
-                "cancel" | "archive_session" => vec![serde_json::json!({
+                "cancel" => vec![serde_json::json!({
                     "v":1,"reply_to":id,"ev":"ok"
                 })],
+                "archive_session" => {
+                    archive_requests += 1;
+                    Vec::new()
+                }
                 other => panic!("unexpected request {other}"),
             };
             for frame in frames {
@@ -2774,7 +2841,7 @@ fn solo_root_does_not_retry_typed_permanent_invalid_request() {
                 stream.flush().unwrap();
             }
         }
-        entered_turns
+        (entered_turns, archive_requests, workspace.unwrap())
     });
 
     let cfg = config(&t, "jcode-api", 4096, 1, 3, 4);
@@ -2798,7 +2865,17 @@ fn solo_root_does_not_retry_typed_permanent_invalid_request() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert_eq!(server.join().unwrap(), 1, "permanent error must not retry");
+    let (entered_turns, archive_requests, workspace) = server.join().unwrap();
+    assert_eq!(entered_turns, 1, "permanent error must not retry");
+    assert_eq!(archive_requests, 1);
+    assert!(workspace.is_dir());
+    assert!(fs::read_dir(&workspace).unwrap().next().is_none());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        stderr.matches("reason=archive_unconfirmed").count(),
+        1,
+        "{stderr}"
+    );
     let rows: Vec<serde_json::Value> = fs::read_to_string(trace)
         .unwrap()
         .lines()
@@ -2808,6 +2885,7 @@ fn solo_root_does_not_retry_typed_permanent_invalid_request() {
     assert_eq!(rows[0]["category"], "turn");
     assert_eq!(rows[0]["entered_turn"], 1);
     assert_eq!(rows[0]["error_category"], "provider");
+    fs::remove_dir(workspace).unwrap();
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -2823,6 +2901,7 @@ fn solo_root_retries_explicit_typed_transient_errors_with_separate_budgets() {
     let listener = UnixListener::bind(&socket).unwrap();
     let server = thread::spawn(move || {
         let mut entered_turns = Vec::new();
+        let mut workspaces = Vec::new();
         for session_number in 1..=3 {
             // Each open probes bridge liveness before creating its protocol connection.
             let (probe, _) = listener.accept().unwrap();
@@ -2838,6 +2917,9 @@ fn solo_root_retries_explicit_typed_transient_errors_with_separate_budgets() {
                 let request: serde_json::Value = serde_json::from_str(&line).unwrap();
                 let id = request["id"].as_u64().unwrap();
                 let req = request["req"].as_str().unwrap();
+                if req == "create_session" {
+                    workspaces.push(PathBuf::from(request["working_dir"].as_str().unwrap()));
+                }
                 let frames = match req {
                     "hello" => vec![serde_json::json!({
                         "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
@@ -2895,7 +2977,7 @@ fn solo_root_retries_explicit_typed_transient_errors_with_separate_budgets() {
                 }
             }
         }
-        entered_turns
+        (entered_turns, workspaces)
     });
 
     let cfg = config(&t, "jcode-api", 4096, 1, 3, 4);
@@ -2924,7 +3006,15 @@ fn solo_root_retries_explicit_typed_transient_errors_with_separate_budgets() {
     let output = command.output().unwrap();
     let out = ok(output);
     assert_eq!(out.trim(), "ROUTE_OK");
-    assert_eq!(server.join().unwrap(), ["s2", "s3"]);
+    let (entered_turns, workspaces) = server.join().unwrap();
+    assert_eq!(entered_turns, ["s2", "s3"]);
+    assert_eq!(workspaces.len(), 3);
+    for workspace in workspaces {
+        if workspace.exists() {
+            assert!(fs::read_dir(&workspace).unwrap().next().is_none());
+            fs::remove_dir(workspace).unwrap();
+        }
+    }
 
     let rows: Vec<serde_json::Value> = fs::read_to_string(&model_trace)
         .unwrap()
@@ -3035,6 +3125,7 @@ fn solo_root_stops_after_four_setup_attempts_without_entering_turn() {
     let socket = t.join("a");
     let listener = UnixListener::bind(&socket).unwrap();
     let server = thread::spawn(move || {
+        let mut workspaces = Vec::new();
         for _ in 0..4 {
             let (probe, _) = listener.accept().unwrap();
             drop(probe);
@@ -3047,6 +3138,12 @@ fn solo_root_stops_after_four_setup_attempts_without_entering_turn() {
                 }
                 let request: serde_json::Value = serde_json::from_str(&line).unwrap();
                 let id = request["id"].as_u64().unwrap();
+                if request["req"] == "create_session" {
+                    let workspace = PathBuf::from(request["working_dir"].as_str().unwrap());
+                    assert!(workspace.is_dir());
+                    assert!(fs::read_dir(&workspace).unwrap().next().is_none());
+                    workspaces.push(workspace);
+                }
                 let frame = match request["req"].as_str().unwrap() {
                     "hello" => serde_json::json!({
                         "v":1,"reply_to":id,"ev":"hello_ok","version":1,"server":"fake"
@@ -3061,6 +3158,7 @@ fn solo_root_stops_after_four_setup_attempts_without_entering_turn() {
                 stream.flush().unwrap();
             }
         }
+        workspaces
     });
 
     let cfg = config(&t, "jcode-api", 4096, 1, 3, 4);
@@ -3084,7 +3182,18 @@ fn solo_root_stops_after_four_setup_attempts_without_entering_turn() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    server.join().unwrap();
+    let workspaces = server.join().unwrap();
+    assert_eq!(workspaces.len(), 4);
+    for workspace in &workspaces {
+        assert!(workspace.is_dir(), "{}", workspace.display());
+        assert!(fs::read_dir(workspace).unwrap().next().is_none());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        stderr.matches("reason=archive_unconfirmed").count(),
+        4,
+        "{stderr}"
+    );
     let rows: Vec<serde_json::Value> = fs::read_to_string(trace)
         .unwrap()
         .lines()
@@ -3099,6 +3208,9 @@ fn solo_root_stops_after_four_setup_attempts_without_entering_turn() {
     );
     assert!(rows.iter().all(|row| row["category"] == "session_setup"));
     assert!(rows.iter().all(|row| row.get("entered_turn").is_none()));
+    for workspace in workspaces {
+        fs::remove_dir(workspace).unwrap();
+    }
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -3138,7 +3250,14 @@ fn solo_jcode_runtime_repair_reuses_one_session_and_archives_once() {
                 ],
                 "set_reasoning_effort" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
                 "send_message" => {
-                    messages.push(request["content"].as_str().unwrap().to_owned());
+                    let content = request["content"].as_str().unwrap();
+                    if messages.is_empty() {
+                        assert!(content.contains("agent tools"));
+                        assert!(content.contains("provider-native tools"));
+                        assert!(content.contains("filesystem actions"));
+                        assert!(content.contains("solve only through preloaded ctx"));
+                    }
+                    messages.push(content.to_owned());
                     let text = match messages.len() {
                         1 => "```python\nctx = \"poison\"\nassert False\n```".to_owned(),
                         2 => format!("```python\n{}\n```", "x = 1\n".repeat(51)),

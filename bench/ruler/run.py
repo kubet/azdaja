@@ -13,6 +13,7 @@ they are advisory controls, not an OS information-flow or network sandbox.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import copy
 import hashlib
 import importlib.util
@@ -27,6 +28,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import threading
 import time
 from collections import Counter
 from dataclasses import dataclass
@@ -44,6 +46,50 @@ TASKS = ("niah_multikey_3", "vt", "fwe")
 TARGET_LENGTHS = (8192, 32768, 131072)
 EXPECTED_PER_CELL = 10
 EXPECTED_FIXTURES = 90
+FULL_WORKFLOW = "full-v1"
+CANDIDATE_FULL_WORKFLOW = "candidate-full-90-v1"
+SMOKE_WORKFLOW = "candidate-smoke-20-v1"
+WORKFLOWS = (FULL_WORKFLOW, CANDIDATE_FULL_WORKFLOW, SMOKE_WORKFLOW)
+PARALLEL_WIDTH = 4
+PARALLEL_WIDTH_SCOPE = "global"
+SMOKE_EXPECTED_FIXTURES = 20
+# Two fixtures from every task/length cell plus two fixed diagonal extras.
+SMOKE_CELL_QUOTAS = {
+    ("niah_multikey_3", 8192): 3,
+    ("vt", 8192): 2,
+    ("fwe", 8192): 2,
+    ("niah_multikey_3", 32768): 2,
+    ("vt", 32768): 3,
+    ("fwe", 32768): 2,
+    ("niah_multikey_3", 131072): 2,
+    ("vt", 131072): 2,
+    ("fwe", 131072): 2,
+}
+# Immutable identities selected once by ascending fixture ID within each cell
+# from the released ruler-exact-mini-v1 public manifest.  Payload commitments
+# prevent a different manifest from reusing an ID with different bytes.
+SMOKE_FIXTURE_COMMITMENTS = (
+    ("rxm-0842be47abaf03e7f7608f4e080b7b49", "37d6a1d80bc8dd11756b1d7047f6899bfef75f5f70bb49470ebe2376dc289c24", "niah_multikey_3", 8192),
+    ("rxm-6670e3c89f0a5890a7e589245915d2c9", "ef82da6a46a76668934c04bf26439a4d1ef5fd7c677557a24c22425fa0ad0ad0", "niah_multikey_3", 8192),
+    ("rxm-6a55c9a3cbd7eeb6afa3c9a66cb03ac7", "ce98538c39226cd9098f7239254a8c5a280f8e00883df6cd59505dbb26880705", "niah_multikey_3", 8192),
+    ("rxm-05b3f054f9022a57c4982c211373027b", "7ccf3ca92a1fdb2a1fb71c74bf3fc177d0d4343c9ebaa53e78fac1e3fd3c59a5", "vt", 8192),
+    ("rxm-324ca4d778d06fbfa4bb504d8147116a", "932bbaa10a3795b05813d657523956e99a4cbc2bfa28734b96d149bee03d1429", "vt", 8192),
+    ("rxm-20717f3b83d7a80648f95e49e6452346", "a20028b2e3489cdebd66dc3af3c2db4f0da3b86e37f15ea697c1d7f8a9b644b5", "fwe", 8192),
+    ("rxm-2a38707acfc3c0c0e7899f893226ce48", "48cdffd4e526dfd26c94627309505d0d98e940f3477e3c9e6260178c620ede3e", "fwe", 8192),
+    ("rxm-0d5ef27c4cec939ae76718dcfec439f2", "f385690533d93f9c5d84ae01e537dce46a2658202f00774f5ea4a51efe973ee4", "niah_multikey_3", 32768),
+    ("rxm-2285810b89e4909ccf15581027b173cc", "6bd8884baa5b5329fad1651bf041654abacaec140f3288687762a670af107fd2", "niah_multikey_3", 32768),
+    ("rxm-1d930dbb1e9ea475815822e3ac16a999", "abfdd08a7484cd41e6b7480f1f34662146b2ebcc0f841f6902ea3e332a9d3226", "vt", 32768),
+    ("rxm-4373136e673616983d16863a929238be", "d54054d22b7e89de8561d7b71083c89cc72123a8d66915359314c1c368a27bdf", "vt", 32768),
+    ("rxm-513316fa756fbec5bc68b46dabcca508", "1e76d4bed439a31120a9cddd56ec4dba60608514f01d80a4a78555c854ec1aa2", "vt", 32768),
+    ("rxm-11dc65da42de7eb3f228e18a2a8eff65", "2984d9aabb37f157b1b6606eba174ad9d591cf80932a40fc12fec86f7d69f193", "fwe", 32768),
+    ("rxm-9361854e5de1e01d72c8c549b4006f9e", "a0e7da19b7a6fbd14941e686d363f93ebd3a6e17d77681fb7dc6966571cce2e9", "fwe", 32768),
+    ("rxm-2ac3ee8a8d478d822a685de2dc0b16a3", "861ecb9f2fddfa1babeaf315781c1a42378c2b7f6d665c3a6c11b077f82cf797", "niah_multikey_3", 131072),
+    ("rxm-4423687db17d9a31b3a9857c8cd69f30", "f0a1a7678ced8a95578776962773942a09a8441f6e3e13d4951cfa956a211d44", "niah_multikey_3", 131072),
+    ("rxm-00cc544fcda467237ed86a3e160f886a", "1710948857ee97ee2188879557bec020a402c7d3df9850ff509a6bbf7ddd7828", "vt", 131072),
+    ("rxm-0638d6b89286a8334b8af333258cf275", "eea48495d80bc60012dc9fa2d329aa843ac45990283da3f5826cc17d7f3e30fa", "vt", 131072),
+    ("rxm-1ed71e2bbcc6731fc8c7b90b288180f7", "26ac9857508a8666d9f9f4c2fd16c148d721c70758817fa69db1df7d83ae4e0d", "fwe", 131072),
+    ("rxm-44cd3a588f0db7c23e48b584dbfcba22", "a86d35874a265d96c3191490f1305540a00ba322a6ba7eab5cc7c8137f0543fa", "fwe", 131072),
+)
 RUN_ID_DOMAIN = b"ruler-run-v1\0"
 DEFAULT_SEED = 20260813
 RULER_URL = "https://github.com/NVIDIA/RULER.git"
@@ -1020,6 +1066,47 @@ def validate_candidate_executable_binding(
         )
 
 
+def frozen_smoke_slice(
+    fixtures: Sequence[PublicFixture],
+) -> tuple[PublicFixture, ...]:
+    """Bind the released manifest's exact 20 public, no-gold smoke fixtures."""
+    by_id = {fixture.fixture_id: fixture for fixture in fixtures}
+    if len(by_id) != len(fixtures):
+        raise BenchError("public fixture IDs are not unique")
+    if len(SMOKE_FIXTURE_COMMITMENTS) != SMOKE_EXPECTED_FIXTURES or len({
+        item[0] for item in SMOKE_FIXTURE_COMMITMENTS
+    }) != SMOKE_EXPECTED_FIXTURES:
+        raise BenchError("code-frozen smoke fixture commitments are invalid")
+    selected: list[PublicFixture] = []
+    counts: Counter[tuple[str, int]] = Counter()
+    for fixture_id, payload_sha256, task, target_length in SMOKE_FIXTURE_COMMITMENTS:
+        fixture = by_id.get(fixture_id)
+        if fixture is None:
+            raise BenchError(f"public manifest lacks frozen smoke fixture {fixture_id}")
+        if (
+            fixture.payload_sha256 != payload_sha256
+            or fixture.task != task
+            or fixture.target_length != target_length
+        ):
+            raise BenchError(f"frozen smoke fixture identity drifted: {fixture_id}")
+        selected.append(fixture)
+        counts[(task, target_length)] += 1
+    if counts != Counter(SMOKE_CELL_QUOTAS):
+        raise BenchError("code-frozen smoke fixtures violate declared stratification")
+    return tuple(selected)
+
+def workflow_fixture_ids(
+    suite: PublicSuite, *, seed: int, workflow: str
+) -> tuple[str, ...]:
+    if workflow == SMOKE_WORKFLOW:
+        return tuple(fixture.fixture_id for fixture in frozen_smoke_slice(suite.fixtures))
+    if workflow not in {FULL_WORKFLOW, CANDIDATE_FULL_WORKFLOW}:
+        raise BenchError(f"unknown frozen RULER workflow: {workflow!r}")
+    ordered = list(suite.fixtures)
+    random.Random(seed).shuffle(ordered)
+    return tuple(fixture.fixture_id for fixture in ordered)
+
+
 def build_schedule(
     suite: PublicSuite,
     *,
@@ -1030,9 +1117,15 @@ def build_schedule(
     controller: dict[str, Any],
     controller_source_paths: dict[str, str],
     executables: dict[str, Any],
+    workflow: str = FULL_WORKFLOW,
+    parallel_width: int = PARALLEL_WIDTH,
     random_names: Iterable[str] | None = None,
 ) -> dict[str, Any]:
-    """Build one balanced randomized block schedule (six permutations x 15)."""
+    """Build a full balanced schedule or the frozen candidate smoke slice."""
+    if workflow not in WORKFLOWS:
+        raise BenchError(f"unknown frozen RULER workflow: {workflow!r}")
+    if parallel_width != PARALLEL_WIDTH:
+        raise BenchError(f"parallel width is frozen at exactly {PARALLEL_WIDTH} globally")
     rng = random.Random(seed)
     fixture_order = list(suite.fixtures)
     rng.shuffle(fixture_order)
@@ -1054,20 +1147,33 @@ def build_schedule(
             raise BenchError("too many staged payload names were supplied")
 
     jobs: list[dict[str, Any]] = []
-    ordinal = 0
-    for fixture, order in zip(fixture_order, permutations):
-        for arm in order:
-            ordinal += 1
-            jobs.append({
-                "ordinal": ordinal,
-                "fixture_id": fixture.fixture_id,
-                "payload_sha256": fixture.payload_sha256,
-                "task": fixture.task,
-                "target_length": fixture.target_length,
-                "staged_filename": fixture_names[fixture.fixture_id],
-                "repetition": 1,
-                "arm": arm,
-            })
+    if workflow == FULL_WORKFLOW:
+        planned = (
+            (fixture, arm)
+            for fixture, order in zip(fixture_order, permutations)
+            for arm in order
+        )
+    elif workflow == CANDIDATE_FULL_WORKFLOW:
+        planned = ((fixture, "jcode-azdaja") for fixture in fixture_order)
+    else:
+        planned = (
+            (fixture, "jcode-azdaja")
+            for fixture in frozen_smoke_slice(suite.fixtures)
+        )
+    for ordinal, (fixture, arm) in enumerate(planned, 1):
+        jobs.append({
+            "ordinal": ordinal,
+            "fixture_id": fixture.fixture_id,
+            "payload_sha256": fixture.payload_sha256,
+            "task": fixture.task,
+            "target_length": fixture.target_length,
+            "staged_filename": fixture_names[fixture.fixture_id],
+            "repetition": 1,
+            "arm": arm,
+        })
+    frozen_workflow_fixture_ids = list(
+        workflow_fixture_ids(suite, seed=seed, workflow=workflow)
+    )
     identity: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "record_type": "ruler_frozen_schedule",
@@ -1092,6 +1198,14 @@ def build_schedule(
             "repetitions": REPETITIONS,
             "seed": seed,
             "timeout_seconds": timeout,
+            "workflow": workflow,
+            "workflow_fixture_ids": frozen_workflow_fixture_ids,
+            "workflow_fixture_ids_sha256": sha256_bytes(
+                canonical_json_bytes(frozen_workflow_fixture_ids)
+            ),
+            "parallel_width": parallel_width,
+            "configured_global_width": parallel_width,
+            "parallel_width_scope": PARALLEL_WIDTH_SCOPE,
             "wrapper_template_sha256": sha256_bytes(WRAPPER_TEMPLATE.encode("utf-8")),
             "candidate": candidate,
             "candidate_source_path": candidate_source_path,
@@ -1114,7 +1228,6 @@ def build_schedule(
     identity["schedule_id"] = schedule_id
     return identity
 
-
 def validate_schedule(
     schedule: dict[str, Any],
     suite: PublicSuite,
@@ -1126,8 +1239,14 @@ def validate_schedule(
     controller: dict[str, Any],
     controller_source_paths: dict[str, str],
     executables: dict[str, Any],
+    workflow: str = FULL_WORKFLOW,
+    parallel_width: int = PARALLEL_WIDTH,
 ) -> None:
-    """Validate a frozen schedule and every resume-relevant identity exactly."""
+    """Validate a frozen schedule and every execution identity exactly."""
+    if workflow not in WORKFLOWS:
+        raise BenchError(f"unknown frozen RULER workflow: {workflow!r}")
+    if parallel_width != PARALLEL_WIDTH:
+        raise BenchError(f"parallel width is frozen at exactly {PARALLEL_WIDTH} globally")
     if schedule.get("schema_version") != 1 or schedule.get("record_type") != "ruler_frozen_schedule":
         raise BenchError("frozen schedule type/version is invalid")
     schedule_id = schedule.get("schedule_id")
@@ -1145,6 +1264,9 @@ def validate_schedule(
     if sha256_bytes(canonical_json_bytes(identity)) != schedule_id:
         raise BenchError("frozen schedule identity does not recompute exactly")
 
+    workflow_ids = list(
+        workflow_fixture_ids(suite, seed=seed, workflow=workflow)
+    )
     expected_configuration = {
         "model": MODEL,
         "reasoning": REASONING,
@@ -1152,6 +1274,14 @@ def validate_schedule(
         "repetitions": 1,
         "seed": seed,
         "timeout_seconds": timeout,
+        "workflow": workflow,
+        "workflow_fixture_ids": workflow_ids,
+        "workflow_fixture_ids_sha256": sha256_bytes(
+            canonical_json_bytes(workflow_ids)
+        ),
+        "parallel_width": parallel_width,
+        "configured_global_width": parallel_width,
+        "parallel_width_scope": PARALLEL_WIDTH_SCOPE,
         "wrapper_template_sha256": sha256_bytes(WRAPPER_TEMPLATE.encode("utf-8")),
         "candidate": candidate,
         "candidate_source_path": candidate_source_path,
@@ -1228,12 +1358,30 @@ def validate_schedule(
         raise BenchError("frozen schedule fixture ids differ from the public manifest")
 
     jobs = schedule.get("jobs")
-    if not isinstance(jobs, list) or len(jobs) != EXPECTED_FIXTURES * len(ARMS):
-        raise BenchError("frozen schedule must contain exactly 270 jobs")
-    expected_grid = {(fixture_id, arm, 1) for fixture_id in public_by_id for arm in ARMS}
+    seeded_fixture_order = list(suite.fixtures)
+    random.Random(seed).shuffle(seeded_fixture_order)
+    if workflow == FULL_WORKFLOW:
+        expected_grid = {
+            (fixture_id, arm, 1) for fixture_id in public_by_id for arm in ARMS
+        }
+        expected_job_count = EXPECTED_FIXTURES * len(ARMS)
+    elif workflow == CANDIDATE_FULL_WORKFLOW:
+        expected_grid = {
+            (fixture_id, "jcode-azdaja", 1) for fixture_id in public_by_id
+        }
+        expected_job_count = EXPECTED_FIXTURES
+    else:
+        smoke_fixtures = frozen_smoke_slice(suite.fixtures)
+        expected_grid = {
+            (fixture.fixture_id, "jcode-azdaja", 1) for fixture in smoke_fixtures
+        }
+        expected_job_count = SMOKE_EXPECTED_FIXTURES
+    if not isinstance(jobs, list) or len(jobs) != expected_job_count:
+        raise BenchError(
+            f"frozen {workflow} schedule must contain exactly {expected_job_count} jobs"
+        )
     observed: set[tuple[str, str, int]] = set()
     run_ids: set[str] = set()
-    permutation_counts: Counter[tuple[str, ...]] = Counter()
     for index, job in enumerate(jobs, 1):
         if not isinstance(job, dict) or set(job) != {
             "ordinal", "fixture_id", "payload_sha256", "task", "target_length",
@@ -1264,19 +1412,23 @@ def validate_schedule(
         observed.add(cell)
         run_ids.add(run_id)
     if observed != expected_grid:
-        raise BenchError("frozen schedule is not the complete fixture/arm grid")
-    for start in range(0, len(jobs), 3):
-        group = jobs[start:start + 3]
-        if len({job["fixture_id"] for job in group}) != 1:
-            raise BenchError("frozen schedule does not keep fixture arms consecutive")
-        order = tuple(job["arm"] for job in group)
-        if set(order) != set(ARMS):
-            raise BenchError("frozen schedule fixture group is incomplete")
-        permutation_counts[order] += 1
-    if set(permutation_counts) != set(itertools.permutations(ARMS)) or any(
-        count != 15 for count in permutation_counts.values()
-    ):
-        raise BenchError("frozen schedule must balance all six arm permutations exactly 15 times")
+        raise BenchError("frozen schedule is not the exact workflow grid")
+    if workflow == FULL_WORKFLOW:
+        permutation_counts: Counter[tuple[str, ...]] = Counter()
+        for start in range(0, len(jobs), 3):
+            group = jobs[start:start + 3]
+            if len({job["fixture_id"] for job in group}) != 1:
+                raise BenchError("frozen schedule does not keep fixture arms consecutive")
+            order = tuple(job["arm"] for job in group)
+            if set(order) != set(ARMS):
+                raise BenchError("frozen schedule fixture group is incomplete")
+            permutation_counts[order] += 1
+        if set(permutation_counts) != set(itertools.permutations(ARMS)) or any(
+            count != 15 for count in permutation_counts.values()
+        ):
+            raise BenchError(
+                "frozen schedule must balance all six arm permutations exactly 15 times"
+            )
 
     # Identity validity is not enough: reconstruct fixture order and all six-way
     # arm blocks from the frozen seed. Random basenames are persisted identities,
@@ -1293,6 +1445,8 @@ def validate_schedule(
         controller=controller,
         controller_source_paths=controller_source_paths,
         executables=executables,
+        workflow=workflow,
+        parallel_width=parallel_width,
         random_names=replay_names,
     )
     if reconstructed != schedule:
@@ -1442,6 +1596,15 @@ def _expected_envelope(schedule: dict[str, Any], job: dict[str, Any]) -> dict[st
         "reasoning": REASONING,
         "schedule_seed": schedule["configuration"]["seed"],
         "timeout_seconds": schedule["configuration"]["timeout_seconds"],
+        "workflow": schedule["configuration"]["workflow"],
+        "workflow_fixture_ids_sha256": schedule["configuration"][
+            "workflow_fixture_ids_sha256"
+        ],
+        "parallel_width": schedule["configuration"]["parallel_width"],
+        "configured_global_width": schedule["configuration"][
+            "configured_global_width"
+        ],
+        "parallel_width_scope": schedule["configuration"]["parallel_width_scope"],
         "candidate_sha256": candidate["sha256"],
         "controller_sha256": schedule["configuration"]["controller"]["sha256"],
         "success": None,
@@ -1458,8 +1621,194 @@ def _valid_nonnegative_number(value: Any) -> bool:
     )
 
 
+RUNNER_PARALLELISM_AUTHORITY = (
+    "controller time.perf_counter_ns half-open arm intervals from one pre-launch "
+    "batch origin; active-at-start counted under the controller lock"
+)
+RUNNER_PARALLELISM_KEYS = {
+    "schema_version", "configured_global_width", "scope",
+    "observed_active_at_start", "observed_peak_concurrency",
+    "batch_started_at_unix_s", "monotonic_arm_start_offset_ms",
+    "monotonic_arm_end_offset_ms", "controller_arm_wall_ms",
+    "overall_makespan_ms", "authority",
+}
+
+
+class ParallelBatchClock:
+    """Thread-safe controller authority for one fixed-width inference batch."""
+
+    def __init__(self, configured_width: int) -> None:
+        if configured_width != PARALLEL_WIDTH:
+            raise BenchError(
+                f"parallel width is frozen at exactly {PARALLEL_WIDTH} globally"
+            )
+        self.configured_width = configured_width
+        self.started_perf_ns = time.perf_counter_ns()
+        self.started_unix = time.time()
+        self.active = 0
+        self.lock = threading.Lock()
+
+    def begin(self) -> tuple[int, int]:
+        with self.lock:
+            self.active += 1
+            if self.active > self.configured_width:
+                self.active -= 1
+                raise BenchError("global parallel width exceeded its frozen limit")
+            return self.active, time.perf_counter_ns() - self.started_perf_ns
+
+    def finish(self, active_at_start: int, started_offset_ns: int) -> dict[str, Any]:
+        with self.lock:
+            finished_offset_ns = time.perf_counter_ns() - self.started_perf_ns
+            self.active -= 1
+            if self.active < 0:
+                raise BenchError("parallel activity counter underflowed")
+        start_ms = started_offset_ns / 1_000_000.0
+        end_ms = finished_offset_ns / 1_000_000.0
+        return {
+            "schema_version": 1,
+            "configured_global_width": self.configured_width,
+            "scope": PARALLEL_WIDTH_SCOPE,
+            "observed_active_at_start": active_at_start,
+            "observed_peak_concurrency": None,
+            "batch_started_at_unix_s": self.started_unix,
+            "monotonic_arm_start_offset_ms": start_ms,
+            "monotonic_arm_end_offset_ms": end_ms,
+            "controller_arm_wall_ms": end_ms - start_ms,
+            "overall_makespan_ms": None,
+            "authority": RUNNER_PARALLELISM_AUTHORITY,
+        }
+
+
+def validate_parallel_observation(value: Any, *, expected_width: int) -> None:
+    if (
+        not isinstance(value, dict)
+        or set(value) != RUNNER_PARALLELISM_KEYS
+        or value.get("schema_version") != 1
+        or value.get("configured_global_width") != expected_width
+        or value.get("scope") != PARALLEL_WIDTH_SCOPE
+        or value.get("authority") != RUNNER_PARALLELISM_AUTHORITY
+        or type(value.get("observed_active_at_start")) is not int
+        or not 1 <= value["observed_active_at_start"] <= expected_width
+        or type(value.get("observed_peak_concurrency")) is not int
+        or not value["observed_active_at_start"] <= value["observed_peak_concurrency"] <= expected_width
+        or not _valid_nonnegative_number(value.get("batch_started_at_unix_s"))
+        or not _valid_nonnegative_number(value.get("monotonic_arm_start_offset_ms"))
+        or not _valid_nonnegative_number(value.get("monotonic_arm_end_offset_ms"))
+        or not _valid_nonnegative_number(value.get("controller_arm_wall_ms"))
+        or not _valid_nonnegative_number(value.get("overall_makespan_ms"))
+        or value["monotonic_arm_end_offset_ms"]
+        < value["monotonic_arm_start_offset_ms"]
+        or value["overall_makespan_ms"] < value["monotonic_arm_end_offset_ms"]
+        or not math.isclose(
+            value["controller_arm_wall_ms"],
+            value["monotonic_arm_end_offset_ms"]
+            - value["monotonic_arm_start_offset_ms"],
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        )
+    ):
+        raise BenchError("runner parallelism observation is invalid")
+
+
+def finalize_parallel_batch_rows(
+    rows: Sequence[dict[str, Any]], *, expected_width: int
+) -> dict[str, Any]:
+    """Set immutable batch totals before the first append, then self-validate."""
+    if not rows:
+        raise BenchError("parallel batch has no returned rows")
+    observations: list[dict[str, Any]] = []
+    for row in rows:
+        evidence = row.get("arm_evidence")
+        observation = evidence.get("runner_parallelism") if isinstance(evidence, dict) else None
+        if not isinstance(observation, dict) or set(observation) != RUNNER_PARALLELISM_KEYS:
+            raise BenchError("parallel worker omitted its controller interval")
+        observations.append(observation)
+    starts = [item["monotonic_arm_start_offset_ms"] for item in observations]
+    origins = {item["batch_started_at_unix_s"] for item in observations}
+    if len(origins) != 1 or len(set(starts)) != len(starts):
+        raise BenchError("parallel batch origin or arm start offsets are ambiguous")
+    ordered = sorted(observations, key=lambda item: item["monotonic_arm_start_offset_ms"])
+    prior: list[dict[str, Any]] = []
+    observed_peak = 0
+    for item in ordered:
+        active = 1 + sum(
+            previous["monotonic_arm_end_offset_ms"]
+            > item["monotonic_arm_start_offset_ms"]
+            for previous in prior
+        )
+        if active != item["observed_active_at_start"] or active > expected_width:
+            raise BenchError(
+                "observed item concurrency disagrees with half-open controller intervals"
+            )
+        observed_peak = max(observed_peak, active)
+        prior.append(item)
+    overall_makespan_ms = max(
+        item["monotonic_arm_end_offset_ms"] for item in observations
+    )
+    for item in observations:
+        item["observed_peak_concurrency"] = observed_peak
+        item["overall_makespan_ms"] = overall_makespan_ms
+    return validate_terminal_parallel_batch(rows, expected_width=expected_width)
+
+
+def validate_terminal_parallel_batch(
+    rows: Sequence[dict[str, Any]], *, expected_width: int
+) -> dict[str, Any]:
+    """Independently recompute peak concurrency and global batch makespan."""
+    observations: list[dict[str, Any]] = []
+    for row in rows:
+        evidence = row.get("arm_evidence")
+        observation = evidence.get("runner_parallelism") if isinstance(evidence, dict) else None
+        validate_parallel_observation(observation, expected_width=expected_width)
+        observations.append(observation)
+    if not observations:
+        raise BenchError("terminal parallel batch has no observations")
+    origins = {item["batch_started_at_unix_s"] for item in observations}
+    starts = [item["monotonic_arm_start_offset_ms"] for item in observations]
+    peaks = {item["observed_peak_concurrency"] for item in observations}
+    makespans = {item["overall_makespan_ms"] for item in observations}
+    if (
+        len(origins) != 1 or len(set(starts)) != len(starts)
+        or len(peaks) != 1 or len(makespans) != 1
+    ):
+        raise BenchError("parallel batch totals or interval identities are ambiguous")
+    ordered = sorted(observations, key=lambda item: item["monotonic_arm_start_offset_ms"])
+    prior: list[dict[str, Any]] = []
+    observed_peak = 0
+    for item in ordered:
+        active = 1 + sum(
+            previous["monotonic_arm_end_offset_ms"]
+            > item["monotonic_arm_start_offset_ms"]
+            for previous in prior
+        )
+        if active != item["observed_active_at_start"] or active > expected_width:
+            raise BenchError(
+                "observed item concurrency disagrees with half-open controller intervals"
+            )
+        observed_peak = max(observed_peak, active)
+        prior.append(item)
+    overall_makespan_ms = max(
+        item["monotonic_arm_end_offset_ms"] for item in observations
+    )
+    if peaks != {observed_peak} or makespans != {overall_makespan_ms}:
+        raise BenchError("recorded peak concurrency or makespan does not recompute exactly")
+    return {
+        "configured_global_width": expected_width,
+        "scope": PARALLEL_WIDTH_SCOPE,
+        "observed_peak_concurrency": observed_peak,
+        "overall_makespan_ms": overall_makespan_ms,
+        "authority": RUNNER_PARALLELISM_AUTHORITY,
+    }
+
+
 def validate_performance_ledger(
-    ledger: Any, evidence: Any, *, candidate: bool, successful: bool
+    ledger: Any,
+    evidence: Any,
+    *,
+    candidate: bool,
+    successful: bool,
+    expected_parallel_width: int = PARALLEL_WIDTH,
+    expected_active_at_start: int | None = None,
 ) -> None:
     evidence_keys = {"applicable", "asserted", "authority", "raw_runtime", "reasons"}
     if (
@@ -1494,7 +1843,8 @@ def validate_performance_ledger(
         "exec_invocation_count", "exec_wall_ms", "snapshot_save_count",
         "snapshot_save_ms", "snapshot_load_count", "snapshot_load_ms",
         "sub_call_count", "sub_call_turn_count", "sub_call_wall_ms",
-        "repair_count", "repair_cost",
+        "repair_count", "repair_cost", "configured_global_width",
+        "parallel_width_scope", "observed_active_at_start",
     }
     count_keys = {
         "root_turn_count", "root_inference_ms", "exec_invocation_count",
@@ -1506,6 +1856,14 @@ def validate_performance_ledger(
         or set(ledger) != keys
         or ledger.get("schema_version") != 1
         or type(ledger.get("complete")) is not bool
+        or ledger.get("configured_global_width") != expected_parallel_width
+        or ledger.get("parallel_width_scope") != PARALLEL_WIDTH_SCOPE
+        or type(ledger.get("observed_active_at_start")) is not int
+        or not 1 <= ledger["observed_active_at_start"] <= expected_parallel_width
+        or (
+            expected_active_at_start is not None
+            and ledger["observed_active_at_start"] != expected_active_at_start
+        )
         or any(_uint(ledger.get(key)) is None for key in count_keys)
         or any(not _valid_nonnegative_number(ledger.get(key)) for key in (
             "exec_wall_ms", "snapshot_save_ms", "snapshot_load_ms",
@@ -1595,11 +1953,18 @@ def validate_result_prefix(
         if not isinstance(arm_evidence, dict):
             raise BenchError(f"inference row {line_number} arm evidence is invalid")
         try:
+            parallel_observation = arm_evidence.get("runner_parallelism")
+            validate_parallel_observation(
+                parallel_observation,
+                expected_width=schedule["configuration"]["parallel_width"],
+            )
             validate_performance_ledger(
                 arm_evidence.get("performance_ledger"),
                 arm_evidence.get("performance_ledger_assertion"),
                 candidate=row["arm"] == "jcode-azdaja",
                 successful=row["execution_success"],
+                expected_parallel_width=schedule["configuration"]["parallel_width"],
+                expected_active_at_start=parallel_observation["observed_active_at_start"],
             )
         except BenchError as exc:
             raise BenchError(
@@ -1673,6 +2038,10 @@ def validate_result_prefix(
                 "resume claims are not the exact completed-prefix 2N set "
                 f"(missing={missing[:3]}, extra={extra[:3]})"
             )
+    if len(rows) == len(schedule["jobs"]):
+        validate_terminal_parallel_batch(
+            rows, expected_width=schedule["configuration"]["parallel_width"]
+        )
     return rows, output_state
 
 
@@ -1781,7 +2150,11 @@ def _uint(value: Any, *, positive: bool = False) -> int | None:
 
 
 def parse_performance_ledger(
-    model_trace_path: Path | None, solo_trace_path: Path | None
+    model_trace_path: Path | None,
+    solo_trace_path: Path | None,
+    *,
+    parallel_width: int = PARALLEL_WIDTH,
+    parallel_active_at_start: int = 1,
 ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     """Build one strict per-item ledger from the two existing product traces.
 
@@ -1789,6 +2162,11 @@ def parse_performance_ledger(
     final solo-runtime record contributes only monotonic internal spans which the
     provider trace cannot observe. Any ambiguity returns no normalized ledger.
     """
+    if parallel_width != PARALLEL_WIDTH or not (
+        type(parallel_active_at_start) is int
+        and 1 <= parallel_active_at_start <= parallel_width
+    ):
+        raise BenchError("performance ledger parallel observation is invalid")
     evidence: dict[str, Any] = {
         "asserted": False,
         "authority": (
@@ -1977,6 +2355,9 @@ def parse_performance_ledger(
         "sub_call_wall_ms": runtime["sub_call_wall_ns"] / 1_000_000.0,
         "repair_count": len(repair_rows),
         "repair_cost": repair_cost,
+        "configured_global_width": parallel_width,
+        "parallel_width_scope": PARALLEL_WIDTH_SCOPE,
+        "observed_active_at_start": parallel_active_at_start,
     }
     evidence["asserted"] = complete
     return ledger, evidence
@@ -2136,6 +2517,8 @@ def execute_product_arm(
     auth_jcode: dict[str, Any],
     auth_prime: dict[str, Any],
     work_root: Path,
+    parallel_width: int = PARALLEL_WIDTH,
+    parallel_active_at_start: int = 1,
 ) -> dict[str, Any]:
     """Execute one product arm through the bound dataset-neutral OOLONG adapters."""
     run_dir = work_root / f"{job['ordinal']:03d}-{job['run_id'][:16]}-{job['arm']}"
@@ -2292,6 +2675,8 @@ def execute_product_arm(
             model_trace_path if "azdaja_model_trace" in trace_captured else None,
             trace_paths.get("azdaja_solo_trace")
             if "azdaja_solo_trace" in trace_captured else None,
+            parallel_width=parallel_width,
+            parallel_active_at_start=parallel_active_at_start,
         )
         performance_evidence["applicable"] = True
     else:
@@ -2493,145 +2878,109 @@ def _create_private_directory(path: Path, label: str, *, exist_ok: bool) -> None
     require_private_directory(path, label)
 
 
-def run_suite(args: argparse.Namespace, suite: PublicSuite) -> int:
-    if not args.yes_run_inference:
-        raise BenchError("refusing to run inference without --yes-run-inference")
-    if args.timeout != 1800:
-        raise BenchError("--timeout is frozen at exactly 1800 seconds")
-    output = Path(args.output).expanduser().resolve()
-    schedule_path = Path(str(output) + ".schedule.json")
-    claims_root = Path(str(output) + ".claims")
-    work_base = (
-        Path(args.work_dir).expanduser().resolve()
-        if args.work_dir else Path(str(output) + ".artifacts")
-    )
-    if output in {suite.path, *(fixture.payload_path for fixture in suite.fixtures)}:
-        raise BenchError("--output must not overwrite any sealed public artifact")
-
-    home_raw = os.environ.get("HOME")
-    if not home_raw:
-        raise BenchError("HOME must identify the login home containing subscription OAuth")
-    source_home = Path(home_raw).expanduser().resolve(strict=True)
-    if not source_home.is_dir():
-        raise BenchError("HOME must identify a directory")
-    args.jcode = OOLONG.ensure_executable(args.jcode, "jcode")
-    args.prime_agent = OOLONG.ensure_executable(args.prime_agent, "prime-agent")
-    source_jcode = args.jcode
-    source_prime_agent = args.prime_agent
-    skill = OOLONG.validate_skill(args.azdaja_skill)
-    source_executables = {
-        "jcode": OOLONG.executable_identity(args.jcode, "jcode"),
-        "prime-agent": OOLONG.executable_identity(args.prime_agent, "prime-agent"),
-        "azdaja": OOLONG.executable_identity(str(skill / "azdaja"), "azdaja"),
+def _controller_failure_execution(
+    job: dict[str, Any], work_root: Path, message: str
+) -> dict[str, Any]:
+    emergency = work_root / f"{job['ordinal']:03d}-{job['run_id'][:16]}-{job['arm']}"
+    emergency.mkdir(mode=0o700, exist_ok=True)
+    if os.name == "posix":
+        os.chmod(emergency, 0o700)
+    stdout_path = emergency / "stdout.ndjson"
+    stderr_path = emergency / "stderr.log"
+    emergency_artifacts = {
+        "stdout": (
+            capture_trace_artifact_secure(stdout_path, "stdout")
+            if stdout_path.exists()
+            else OOLONG.write_private_artifact(stdout_path, "")
+        ),
+        "stderr": (
+            capture_trace_artifact_secure(stderr_path, "stderr")
+            if stderr_path.exists()
+            else OOLONG.write_private_artifact(stderr_path, message)
+        ),
     }
-    args.executable_identities = source_executables
-    candidate_source_path = str(skill)
-    source_controller = controller_identity()
+    return {
+        "execution_success": False,
+        "timed_out": False,
+        "exit_code": None,
+        "latency_seconds": 0.0,
+        "response": "",
+        "route_assertion": {
+            "asserted": False,
+            "subscription": False,
+            "provider": (
+                "OpenAI OAuth" if job["arm"].startswith("jcode") else "openai-codex"
+            ),
+            "model": MODEL,
+        },
+        "usage": None,
+        "lifecycle_assertion": {
+            "asserted": False,
+            "isolated_home": False,
+            "fresh_session": False,
+            "cleanup_complete": False,
+        },
+        "failure": {"kind": "controller", "message": message},
+        "arm_evidence": {
+            "controller_exception": message,
+            "trajectory_artifacts": emergency_artifacts,
+            "performance_ledger": None,
+            "performance_ledger_assertion": {
+                "applicable": job["arm"] == "jcode-azdaja",
+                "asserted": job["arm"] != "jcode-azdaja",
+                "authority": (
+                    "controller exception occurred before ledger collection"
+                    if job["arm"] == "jcode-azdaja"
+                    else "not applicable to control arm"
+                ),
+                "raw_runtime": None,
+                "reasons": (
+                    ["controller exception occurred before ledger collection"]
+                    if job["arm"] == "jcode-azdaja" else []
+                ),
+            },
+            "telemetry_authority": {
+                "route_and_usage": (
+                    "mandatory empty stdout artifact after controller failure"
+                ),
+                "process": "controller assertion",
+                "controller_fields_are_assertions": True,
+            },
+            "staged_filename": job["staged_filename"],
+        },
+        "containment": {
+            "os_level_asserted": False,
+            "disclaimer": "controller failure; no OS-level containment is asserted",
+            "claim_ledger": (
+                "local append-only creation protocol is not authenticated against malicious "
+                "same-owner deletion/retry; external signing or transparency is future work"
+            ),
+        },
+    }
 
-    if args.resume:
-        if not schedule_path.exists():
-            raise BenchError("--resume requires the frozen schedule sidecar")
-        schedule = load_private_json(schedule_path, "frozen RULER schedule")
-        frozen_configuration = schedule.get("configuration")
-        if not isinstance(frozen_configuration, dict):
-            raise BenchError("frozen schedule configuration is invalid")
-        candidate = frozen_configuration.get("candidate")
-        frozen_candidate_source_path = frozen_configuration.get("candidate_source_path")
-        controller = frozen_configuration.get("controller")
-        controller_source_paths = frozen_configuration.get("controller_source_paths")
-        executables = frozen_configuration.get("executables")
-        if frozen_candidate_source_path != candidate_source_path:
-            raise BenchError("active candidate source path differs from frozen metadata")
-        frozen_skill = validate_candidate_snapshot(candidate)
-        for name, component in candidate["components"].items():
-            source_data = read_owner_file_once(
-                skill / name, f"active candidate {name}",
-                exact_mode=(0o700 if name == "azdaja" else 0o600),
-                require_single_link=True,
-            )
-            if sha256_bytes(source_data) != component["sha256"] or len(source_data) != component["bytes"]:
-                raise BenchError(f"active candidate source drifted: {name}")
-        if not isinstance(controller, dict) or not isinstance(controller_source_paths, dict) or not isinstance(executables, dict):
-            raise BenchError("frozen immutable identities are invalid")
-        # Resuming further inference requires the active source/controller and
-        # product executables to remain byte-identical to those initially frozen.
-        if source_controller.get("sha256") != controller.get("sha256"):
-            raise BenchError("active controller source drifted after schedule freeze")
-        for name, identity in source_executables.items():
-            if name not in executables or any(
-                identity.get(key) != executables[name].get(key)
-                for key in ("sha256", "bytes", "version")
-            ):
-                raise BenchError(f"active {name} executable drifted after schedule freeze")
-        validate_candidate_executable_binding(candidate, executables)
-        validate_schedule(
-            schedule, suite, seed=args.seed, timeout=args.timeout,
-            candidate=candidate, candidate_source_path=candidate_source_path,
-            controller=controller, controller_source_paths=controller_source_paths,
-            executables=executables,
-        )
-    else:
-        for path, label in (
-            (output, "inference output"), (schedule_path, "schedule"),
-            (claims_root, "claims root"), (work_base, "artifact root"),
-        ):
-            if path.exists() or path.is_symlink():
-                raise BenchError(f"fresh {label} path must not exist: {path}")
-        _create_private_directory(work_base, "artifact root", exist_ok=False)
-        identity_root = work_base / "identity"
-        _create_private_directory(identity_root, "immutable identity root", exist_ok=False)
-        controller_root = identity_root / "controller"
-        executable_root = identity_root / "executables"
-        candidate_root = identity_root / "candidate"
-        _create_private_directory(controller_root, "controller snapshots", exist_ok=False)
-        _create_private_directory(executable_root, "executable snapshots", exist_ok=False)
-        _create_private_directory(candidate_root, "candidate snapshot", exist_ok=False)
-        candidate = snapshot_candidate(skill, candidate_root)
-        frozen_skill = validate_candidate_snapshot(candidate)
-        controller, controller_source_paths = snapshot_controller(controller_root)
-        executables = snapshot_executables(source_executables, executable_root)
-        validate_candidate_executable_binding(candidate, executables)
-        if controller["sha256"] != source_controller["sha256"]:
-            raise BenchError("immutable controller snapshot differs from active source")
-        schedule = build_schedule(
-            suite, seed=args.seed, timeout=args.timeout, candidate=candidate,
-            candidate_source_path=candidate_source_path,
-            controller=controller, controller_source_paths=controller_source_paths,
-            executables=executables,
-        )
-        atomic_create_private_json(schedule_path, schedule)
 
-    if OOLONG.validate_skill(str(frozen_skill)) != frozen_skill:
-        raise BenchError("frozen candidate validation returned an unexpected path")
-    skill = frozen_skill
-    args.frozen_executables = executables
-    args.executable_identities = executables
-    _create_private_directory(claims_root, "claims root", exist_ok=args.resume)
-    claims = claims_root / schedule["schedule_id"]
-    _create_private_directory(claims, "schedule claims directory", exist_ok=args.resume)
-    completed, output_state = validate_result_prefix(output, schedule, claims)
-    if len(completed) == len(schedule["jobs"]):
-        return 0 if all(row["execution_success"] for row in completed) else 1
-
-    auth_jcode = OOLONG.preflight_jcode(source_home, source_jcode)
-    auth_prime = OOLONG.preflight_prime(source_home)
-    # Product turns invoke only byte-frozen executable snapshots. OAuth preflight
-    # deliberately used the active source CLI immediately before this handoff.
-    args.jcode = str(executables["jcode"]["path"])
-    args.prime_agent = str(executables["prime-agent"]["path"])
-    kernel_python = source_home / ".prime" / "agent" / "kernel-venv" / "bin" / "python"
-    if not kernel_python.is_file() or not os.access(kernel_python, os.X_OK):
-        raise BenchError(f"Prime Agent kernel venv is not ready: {kernel_python}")
-    _create_private_directory(work_base, "artifact root", exist_ok=True)
-    schedule_root = work_base / f"schedule-{schedule['schedule_id']}"
-    _create_private_directory(schedule_root, "schedule artifact directory", exist_ok=args.resume)
-    work_root = schedule_root / "runs"
-    _create_private_directory(work_root, "run artifact directory", exist_ok=args.resume)
-    by_id = {fixture.fixture_id: fixture for fixture in suite.fixtures}
-
-    for job in schedule["jobs"][len(completed):]:
-        # Revalidate all file identities and the public payload immediately before
-        # claiming a turn. OAuth is refreshed/preflighted for the relevant arm.
+def execute_claimed_job(
+    *,
+    job: dict[str, Any],
+    fixture: PublicFixture,
+    schedule: dict[str, Any],
+    args: argparse.Namespace,
+    source_home: Path,
+    skill: Path,
+    auth_jcode: dict[str, Any],
+    auth_prime: dict[str, Any],
+    work_root: Path,
+    claims: Path,
+    candidate: dict[str, Any],
+    controller: dict[str, Any],
+    executables: dict[str, Any],
+    batch_clock: ParallelBatchClock,
+) -> dict[str, Any]:
+    """Claim and execute exactly one turn; never append, retry, or resubmit it."""
+    active_at_start, started_offset = batch_clock.begin()
+    try:
+        # Shared inputs are read-only snapshots; each worker independently checks
+        # them before its exclusive claim and owns every mutable run path it uses.
         if controller_identity().get("sha256") != controller.get("sha256"):
             raise BenchError("controller identity drifted after schedule freeze")
         validate_candidate_snapshot(candidate)
@@ -2640,27 +2989,29 @@ def run_suite(args: argparse.Namespace, suite: PublicSuite) -> int:
             frozen_data = read_owner_file_once(
                 path, f"immutable {label} executable snapshot", exact_mode=0o500
             )
-            if len(frozen_data) != frozen["bytes"] or sha256_bytes(frozen_data) != frozen["sha256"]:
-                raise BenchError(f"{label} immutable executable snapshot drifted after schedule freeze")
+            if (
+                len(frozen_data) != frozen["bytes"]
+                or sha256_bytes(frozen_data) != frozen["sha256"]
+            ):
+                raise BenchError(
+                    f"{label} immutable executable snapshot drifted after schedule freeze"
+                )
             if label == "prime-agent":
                 validate_prime_bundle_identity(frozen.get("bundle"), path)
-        fixture = by_id[job["fixture_id"]]
-        # The validated manifest identity and payload bytes were captured before
-        # freeze; turns never reopen mutable sealed inputs.
         if (
             sha256_bytes(fixture.payload_data) != fixture.payload_sha256
             or len(fixture.payload_data) != fixture.payload_bytes
         ):
             raise BenchError("captured scheduled payload identity drifted")
-        if job["arm"].startswith("jcode"):
-            auth_jcode = OOLONG.preflight_jcode(source_home, source_jcode)
-        else:
-            auth_prime = OOLONG.preflight_prime(source_home)
         claim_path = claims / f"{job['run_id']}.json"
         done_path = claims / f"{job['run_id']}.done.json"
-        if claim_path.exists() or done_path.exists():
+        if (
+            claim_path.exists() or claim_path.is_symlink()
+            or done_path.exists() or done_path.is_symlink()
+        ):
             raise BenchError(
-                f"orphan claim/completion makes resume indeterminate; refusing duplicate inference: {job['run_id']}"
+                "orphan claim/completion makes execution indeterminate; refusing "
+                f"duplicate inference: {job['run_id']}"
             )
         atomic_create_private_json(claim_path, {
             "schedule_id": schedule["schedule_id"],
@@ -2670,96 +3021,265 @@ def run_suite(args: argparse.Namespace, suite: PublicSuite) -> int:
         })
         try:
             execution = execute_product_arm(
-                job=job, fixture=fixture, args=args, source_home=source_home,
-                skill=skill, auth_jcode=auth_jcode, auth_prime=auth_prime,
+                job=job,
+                fixture=fixture,
+                args=args,
+                source_home=source_home,
+                skill=skill,
+                auth_jcode=auth_jcode,
+                auth_prime=auth_prime,
                 work_root=work_root,
+                parallel_width=schedule["configuration"]["parallel_width"],
+                parallel_active_at_start=active_at_start,
             )
         except Exception as exc:
-            message = f"{type(exc).__name__}: {exc}"
-            emergency = work_root / f"{job['ordinal']:03d}-{job['run_id'][:16]}-{job['arm']}"
-            emergency.mkdir(mode=0o700, exist_ok=True)
-            if os.name == "posix":
-                os.chmod(emergency, 0o700)
-            stdout_path = emergency / "stdout.ndjson"
-            stderr_path = emergency / "stderr.log"
-            emergency_artifacts = {
-                "stdout": (
-                    capture_trace_artifact_secure(stdout_path, "stdout")
-                    if stdout_path.exists()
-                    else OOLONG.write_private_artifact(stdout_path, "")
-                ),
-                "stderr": (
-                    capture_trace_artifact_secure(stderr_path, "stderr")
-                    if stderr_path.exists()
-                    else OOLONG.write_private_artifact(stderr_path, message)
-                ),
-            }
-            execution = {
-                "execution_success": False,
-                "timed_out": False,
-                "exit_code": None,
-                "latency_seconds": 0.0,
-                "response": "",
-                "route_assertion": {
-                    "asserted": False,
-                    "subscription": False,
-                    "provider": "OpenAI OAuth" if job["arm"].startswith("jcode") else "openai-codex",
-                    "model": MODEL,
-                },
-                "usage": None,
-                "lifecycle_assertion": {
-                    "asserted": False, "isolated_home": False,
-                    "fresh_session": False, "cleanup_complete": False,
-                },
-                "failure": {"kind": "controller", "message": message},
-                "arm_evidence": {
-                    "controller_exception": message,
-                    "trajectory_artifacts": emergency_artifacts,
-                    "performance_ledger": None,
-                    "performance_ledger_assertion": {
-                        "applicable": job["arm"] == "jcode-azdaja",
-                        "asserted": job["arm"] != "jcode-azdaja",
-                        "authority": (
-                            "controller exception occurred before ledger collection"
-                            if job["arm"] == "jcode-azdaja"
-                            else "not applicable to control arm"
-                        ),
-                        "raw_runtime": None,
-                        "reasons": (
-                            ["controller exception occurred before ledger collection"]
-                            if job["arm"] == "jcode-azdaja" else []
-                        ),
-                    },
-                    "telemetry_authority": {
-                        "route_and_usage": "mandatory empty stdout artifact after controller failure",
-                        "process": "controller assertion",
-                        "controller_fields_are_assertions": True,
-                    },
-                    "staged_filename": job["staged_filename"],
-                },
-                "containment": {
-                    "os_level_asserted": False,
-                    "disclaimer": "controller failure; no OS-level containment is asserted",
-                    "claim_ledger": "local append-only creation protocol is not authenticated against malicious same-owner deletion/retry; external signing or transparency is future work",
-                },
-            }
+            execution = _controller_failure_execution(
+                job, work_root, f"{type(exc).__name__}: {exc}"
+            )
         row = {**_expected_envelope(schedule, job), **execution}
-        output_state = append_private_jsonl(output, row, expected_token=output_state)
+    finally:
+        observation = batch_clock.finish(active_at_start, started_offset)
+    # If setup/claim failed, the exception propagates after the activity counter
+    # is closed and no row is fabricated.  If a claimed turn returned, attach the
+    # controller interval before handing the row to the sole append coordinator.
+    row["arm_evidence"]["runner_parallelism"] = observation
+    return row
+
+
+def execute_fixed_width_ordered(
+    jobs: Sequence[dict[str, Any]],
+    *,
+    worker: Any,
+    finalize: Any,
+    commit: Any,
+    width: int,
+) -> None:
+    """Run one predeclared global queue and commit only after batch totals freeze."""
+    if width != PARALLEL_WIDTH:
+        raise BenchError(f"parallel width is frozen at exactly {PARALLEL_WIDTH} globally")
+    if [job.get("ordinal") for job in jobs] != list(range(1, len(jobs) + 1)):
+        raise BenchError("parallel queue is not the exact ordinal schedule")
+    executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=width, thread_name_prefix="ruler-item"
+    )
+    futures: list[concurrent.futures.Future[Any]] = []
+    failed = False
+    try:
+        futures = [executor.submit(worker, job) for job in jobs]
+        rows = [future.result() for future in futures]
+        finalize(rows)
+        for job, row in zip(jobs, rows):
+            commit(job, row)
+    except BaseException:
+        failed = True
+        for future in futures:
+            future.cancel()
+        raise
+    finally:
+        executor.shutdown(wait=True, cancel_futures=failed)
+
+
+def run_suite(args: argparse.Namespace, suite: PublicSuite) -> int:
+    if not args.yes_run_inference:
+        raise BenchError("refusing to run inference without --yes-run-inference")
+    if args.timeout != 1800:
+        raise BenchError("--timeout is frozen at exactly 1800 seconds")
+    if args.workflow not in WORKFLOWS:
+        raise BenchError(f"unknown frozen RULER workflow: {args.workflow!r}")
+    if args.resume:
+        raise BenchError(
+            "fixed-width workflows are fresh-only; --resume is forbidden because "
+            "an orphan parallel claim may already have performed inference"
+        )
+    args.parallel_width = PARALLEL_WIDTH
+    output = Path(args.output).expanduser().resolve()
+    schedule_path = Path(str(output) + ".schedule.json")
+    claims_root = Path(str(output) + ".claims")
+    work_base = (
+        Path(args.work_dir).expanduser().resolve()
+        if args.work_dir else Path(str(output) + ".artifacts")
+    )
+    if output in {suite.path, *(fixture.payload_path for fixture in suite.fixtures)}:
+        raise BenchError("--output must not overwrite any sealed public artifact")
+    for path, label in (
+        (output, "inference output"),
+        (schedule_path, "schedule"),
+        (claims_root, "claims root"),
+        (work_base, "artifact root"),
+    ):
+        if path.exists() or path.is_symlink():
+            raise BenchError(f"fresh {label} path must not exist: {path}")
+
+    home_raw = os.environ.get("HOME")
+    if not home_raw:
+        raise BenchError("HOME must identify the login home containing subscription OAuth")
+    source_home = Path(home_raw).expanduser().resolve(strict=True)
+    if not source_home.is_dir():
+        raise BenchError("HOME must identify a directory")
+    args.jcode = OOLONG.ensure_executable(args.jcode, "jcode")
+    source_jcode = args.jcode
+    skill = OOLONG.validate_skill(args.azdaja_skill)
+    source_executables = {
+        "jcode": OOLONG.executable_identity(args.jcode, "jcode"),
+        "azdaja": OOLONG.executable_identity(str(skill / "azdaja"), "azdaja"),
+    }
+    if args.workflow == FULL_WORKFLOW:
+        args.prime_agent = OOLONG.ensure_executable(args.prime_agent, "prime-agent")
+        source_executables["prime-agent"] = OOLONG.executable_identity(
+            args.prime_agent, "prime-agent"
+        )
+    args.executable_identities = source_executables
+    candidate_source_path = str(skill)
+    source_controller = controller_identity()
+
+    _create_private_directory(work_base, "artifact root", exist_ok=False)
+    identity_root = work_base / "identity"
+    _create_private_directory(identity_root, "immutable identity root", exist_ok=False)
+    controller_root = identity_root / "controller"
+    executable_root = identity_root / "executables"
+    candidate_root = identity_root / "candidate"
+    _create_private_directory(controller_root, "controller snapshots", exist_ok=False)
+    _create_private_directory(executable_root, "executable snapshots", exist_ok=False)
+    _create_private_directory(candidate_root, "candidate snapshot", exist_ok=False)
+    candidate = snapshot_candidate(skill, candidate_root)
+    frozen_skill = validate_candidate_snapshot(candidate)
+    controller, controller_source_paths = snapshot_controller(controller_root)
+    executables = snapshot_executables(source_executables, executable_root)
+    validate_candidate_executable_binding(candidate, executables)
+    if controller["sha256"] != source_controller["sha256"]:
+        raise BenchError("immutable controller snapshot differs from active source")
+    schedule = build_schedule(
+        suite,
+        seed=args.seed,
+        timeout=args.timeout,
+        candidate=candidate,
+        candidate_source_path=candidate_source_path,
+        controller=controller,
+        controller_source_paths=controller_source_paths,
+        executables=executables,
+        workflow=args.workflow,
+        parallel_width=args.parallel_width,
+    )
+    validate_schedule(
+        schedule,
+        suite,
+        seed=args.seed,
+        timeout=args.timeout,
+        candidate=candidate,
+        candidate_source_path=candidate_source_path,
+        controller=controller,
+        controller_source_paths=controller_source_paths,
+        executables=executables,
+        workflow=args.workflow,
+        parallel_width=args.parallel_width,
+    )
+    atomic_create_private_json(schedule_path, schedule)
+
+    if OOLONG.validate_skill(str(frozen_skill)) != frozen_skill:
+        raise BenchError("frozen candidate validation returned an unexpected path")
+    skill = frozen_skill
+    args.frozen_executables = executables
+    args.executable_identities = executables
+    args.jcode = str(executables["jcode"]["path"])
+    if "prime-agent" in executables:
+        args.prime_agent = str(executables["prime-agent"]["path"])
+
+    _create_private_directory(claims_root, "claims root", exist_ok=False)
+    claims = claims_root / schedule["schedule_id"]
+    _create_private_directory(claims, "schedule claims directory", exist_ok=False)
+    completed, output_state = validate_result_prefix(output, schedule, claims)
+    if completed or output_state is not None:
+        raise BenchError("fresh fixed-width workflow unexpectedly has a result prefix")
+
+    # Subscription checks are serialized and occur once before worker launch.
+    # Workers copy the resulting source credentials into distinct isolated homes;
+    # no refresh, relogin, or shared preflight subprocess races with inference.
+    auth_jcode = OOLONG.preflight_jcode(source_home, source_jcode)
+    scheduled_arms = {job["arm"] for job in schedule["jobs"]}
+    if "prime-agent" in scheduled_arms:
+        auth_prime = OOLONG.preflight_prime(source_home)
+        kernel_python = (
+            source_home / ".prime" / "agent" / "kernel-venv" / "bin" / "python"
+        )
+        if not kernel_python.is_file() or not os.access(kernel_python, os.X_OK):
+            raise BenchError(f"Prime Agent kernel venv is not ready: {kernel_python}")
+    else:
+        auth_prime = {"asserted": False, "method": "not-scheduled"}
+
+    schedule_root = work_base / f"schedule-{schedule['schedule_id']}"
+    _create_private_directory(
+        schedule_root, "schedule artifact directory", exist_ok=False
+    )
+    work_root = schedule_root / "runs"
+    _create_private_directory(work_root, "run artifact directory", exist_ok=False)
+    by_id = {fixture.fixture_id: fixture for fixture in suite.fixtures}
+    batch_clock = ParallelBatchClock(args.parallel_width)
+
+    def worker(job: dict[str, Any]) -> dict[str, Any]:
+        return execute_claimed_job(
+            job=job,
+            fixture=by_id[job["fixture_id"]],
+            schedule=schedule,
+            args=args,
+            source_home=source_home,
+            skill=skill,
+            auth_jcode=auth_jcode,
+            auth_prime=auth_prime,
+            work_root=work_root,
+            claims=claims,
+            candidate=candidate,
+            controller=controller,
+            executables=executables,
+            batch_clock=batch_clock,
+        )
+
+    def commit(job: dict[str, Any], row: dict[str, Any]) -> None:
+        nonlocal output_state
+        if row.get("run_id") != job["run_id"] or row.get("execution_ordinal") != job["ordinal"]:
+            raise BenchError("parallel worker returned a row for the wrong frozen job")
+        output_state = append_private_jsonl(
+            output, row, expected_token=output_state
+        )
+        done_path = claims / f"{job['run_id']}.done.json"
         atomic_create_private_json(done_path, {
             "schedule_id": schedule["schedule_id"],
             "run_id": job["run_id"],
             "row_sha256": sha256_bytes(canonical_json_bytes(row)),
         })
         print(json.dumps({
-            "ordinal": job["ordinal"], "fixture_id": job["fixture_id"],
-            "arm": job["arm"], "execution_success": row["execution_success"],
-            "scoring_status": "deferred", "latency_seconds": row["latency_seconds"],
+            "ordinal": job["ordinal"],
+            "fixture_id": job["fixture_id"],
+            "arm": job["arm"],
+            "execution_success": row["execution_success"],
+            "scoring_status": "deferred",
+            "latency_seconds": row["latency_seconds"],
+            "observed_active_at_start": row["arm_evidence"]["runner_parallelism"][
+                "observed_active_at_start"
+            ],
         }, sort_keys=True), flush=True)
+
+    execute_fixed_width_ordered(
+        schedule["jobs"],
+        worker=worker,
+        finalize=lambda returned_rows: finalize_parallel_batch_rows(
+            returned_rows, expected_width=args.parallel_width
+        ),
+        commit=commit,
+        width=args.parallel_width,
+    )
     rows, final_output_state = validate_result_prefix(output, schedule, claims)
     if final_output_state != output_state:
         raise BenchError("inference output state changed after final append")
+    batch_performance = validate_terminal_parallel_batch(
+        rows, expected_width=args.parallel_width
+    )
+    print(json.dumps({
+        "record_type": "ruler_batch_performance",
+        "schedule_id": schedule["schedule_id"],
+        "workflow": args.workflow,
+        **batch_performance,
+    }, sort_keys=True), flush=True)
     return 0 if all(row["execution_success"] for row in rows) else 1
-
 
 def parser() -> argparse.ArgumentParser:
     here = Path(__file__).resolve().parent
@@ -2770,8 +3290,18 @@ def parser() -> argparse.ArgumentParser:
         )
     )
     value.add_argument("--manifest", required=True, help="sealed public manifest.json (never gold.json)")
-    value.add_argument("--output", required=True, help="fresh or exactly resumable append-only JSONL")
-    value.add_argument("--resume", action="store_true", help="resume the exact frozen prefix")
+    value.add_argument("--output", required=True, help="fresh append-only JSONL")
+    value.add_argument(
+        "--workflow", choices=WORKFLOWS, default=FULL_WORKFLOW,
+        help=(
+            "frozen pre-inference workflow: official 90x3 cohort, candidate-only "
+            "90-item performance run, or immutable 20-item candidate smoke slice"
+        ),
+    )
+    value.add_argument(
+        "--resume", action="store_true",
+        help="legacy spelling retained only to fail closed; fixed-width runs are fresh-only",
+    )
     value.add_argument("--seed", type=int, default=DEFAULT_SEED, help="balanced block randomization seed")
     value.add_argument("--timeout", type=int, choices=(1800,), default=1800, help="frozen per-arm timeout (1800 seconds)")
     value.add_argument("--jcode", default="jcode", help="jcode executable")
@@ -2784,7 +3314,7 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--work-dir", help="fresh owner-only artifact directory")
     value.add_argument(
         "--yes-run-inference", action="store_true",
-        help="required explicit acknowledgement that 270 subscription model turns will run",
+        help="required explicit acknowledgement that the frozen workflow will run model turns",
     )
     return value
 

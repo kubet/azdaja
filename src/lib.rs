@@ -9,7 +9,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     env,
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, Read, Write},
@@ -24,7 +24,11 @@ use std::{
 };
 
 #[cfg(unix)]
-use std::os::unix::{fs::OpenOptionsExt, net::UnixStream};
+use std::os::unix::{
+    fs::OpenOptionsExt,
+    io::{AsRawFd, FromRawFd},
+    net::UnixStream,
+};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const MONTY_VERSION: &str = "0.0.21";
@@ -426,7 +430,8 @@ fn exec_failure_kind(exception: Option<ExcType>) -> ExecFailureKind {
         Some(ExcType::MemoryError) => ExecFailureKind::Memory,
         Some(ExcType::RecursionError) => ExecFailureKind::Recursion,
         Some(
-            ExcType::ArithmeticError
+            ExcType::Exception
+            | ExcType::ArithmeticError
             | ExcType::OverflowError
             | ExcType::ZeroDivisionError
             | ExcType::LookupError
@@ -912,7 +917,11 @@ fn append_sample_region(
     end: usize,
     total: usize,
 ) -> Result<()> {
-    let (first_anchor, last_anchor) = sample_region_anchors(text, start, end);
+    let (first_anchor, last_anchor) = if label == "DISTINCT" {
+        (None, None)
+    } else {
+        sample_region_anchors(text, start, end)
+    };
     let mut chunk = String::from("[");
     let mut chunk_start = start;
     let mut chunk_chars = 0usize;
@@ -983,9 +992,72 @@ fn append_sample_region(
     Ok(())
 }
 
-/// A deterministic structural view over disjoint head, interior, and tail regions. Every sampled
-/// source character is a separate JSON string element, while short schema anchors remain below the
-/// leak threshold. The release-time byte check remains authoritative for the complete encoding.
+const SOLO_SAMPLE_DISTINCT_REGIONS: usize = 4;
+const SOLO_SAMPLE_DISTINCT_CHARS: usize = 60;
+const SOLO_SAMPLE_LINE_BUCKETS: usize = 4_096;
+
+fn structural_line_bucket(line: &str) -> usize {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in line.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    (hash % SOLO_SAMPLE_LINE_BUCKETS as u64) as usize
+}
+
+const SOLO_SAMPLE_EXACT_OVERLAP_CHARS: usize = 100;
+const SOLO_SAMPLE_ROLLING_BASE: u64 = 1_000_003;
+
+fn visit_rolling_window_hashes(
+    text: &str,
+    window: usize,
+    mut visitor: impl FnMut(u64) -> bool,
+) -> bool {
+    if window == 0 {
+        return false;
+    }
+    let mut power = 1u64;
+    for _ in 1..window {
+        power = power.wrapping_mul(SOLO_SAMPLE_ROLLING_BASE);
+    }
+    let mut queue: VecDeque<u64> = VecDeque::with_capacity(window);
+    let mut hash = 0u64;
+    for character in text.chars() {
+        let value = u64::from(u32::from(character)) + 1;
+        if queue.len() == window {
+            let oldest = queue.pop_front().expect("full rolling window");
+            hash = hash.wrapping_sub(oldest.wrapping_mul(power));
+        }
+        hash = hash
+            .wrapping_mul(SOLO_SAMPLE_ROLLING_BASE)
+            .wrapping_add(value);
+        queue.push_back(value);
+        if queue.len() == window && visitor(hash) {
+            return true;
+        }
+    }
+    false
+}
+
+fn structural_sample_has_potential_exact_overlap(text: &str, sample: &str) -> bool {
+    let mut sample_hashes = HashSet::new();
+    visit_rolling_window_hashes(sample, SOLO_SAMPLE_EXACT_OVERLAP_CHARS, |hash| {
+        sample_hashes.insert(hash);
+        false
+    });
+    if sample_hashes.is_empty() {
+        return false;
+    }
+    visit_rolling_window_hashes(text, SOLO_SAMPLE_EXACT_OVERLAP_CHARS, |hash| {
+        sample_hashes.contains(&hash)
+    })
+}
+
+/// A deterministic structural view over disjoint head, interior, tail, and bounded low-frequency
+/// line regions. Every sampled source character is a separate JSON string element, while short
+/// schema anchors remain below the leak threshold. The fixed bucket table keeps host preprocessing
+/// bounded; collisions only omit an advisory exemplar. The release-time byte check remains
+/// authoritative for the complete encoding.
 fn structural_sample(text: &str, total: usize) -> Result<String> {
     let head_end = total.min(SOLO_SAMPLE_REGION_CHARS);
     let tail_start = total.saturating_sub(SOLO_SAMPLE_REGION_CHARS).max(head_end);
@@ -1005,28 +1077,97 @@ fn structural_sample(text: &str, total: usize) -> Result<String> {
         regions.push(("TAIL", tail_start, total));
     }
 
-    let mut sample = String::new();
-    let mut cursor = 0usize;
-    for (label, start, end) in regions {
-        if cursor < start {
-            if !sample.is_empty() {
-                sample.push('\n');
-            }
-            sample.push_str(&format!(
-                "[... {} source chars omitted at offsets {cursor}..{start} ...]",
-                start - cursor
+    let base_region_count = regions.len();
+    let mut line_bucket_counts = [0u16; SOLO_SAMPLE_LINE_BUCKETS];
+    for raw_line in text.split_inclusive('\n') {
+        let without_newline = raw_line.strip_suffix('\n').unwrap_or(raw_line);
+        let line = without_newline
+            .strip_suffix('\r')
+            .unwrap_or(without_newline);
+        if !line.is_empty() {
+            let count = &mut line_bucket_counts[structural_line_bucket(line)];
+            *count = count.saturating_add(1);
+        }
+    }
+    let mut rare_lines = Vec::new();
+    let mut char_offset = 0usize;
+    for raw_line in text.split_inclusive('\n') {
+        let without_newline = raw_line.strip_suffix('\n').unwrap_or(raw_line);
+        let line = without_newline
+            .strip_suffix('\r')
+            .unwrap_or(without_newline);
+        let line_chars = line.chars().count();
+        if !line.is_empty() && line_bucket_counts[structural_line_bucket(line)] == 1 {
+            rare_lines.push((
+                char_offset,
+                char_offset + line_chars.min(SOLO_SAMPLE_DISTINCT_CHARS),
             ));
         }
-        append_sample_region(&mut sample, text, label, start, end, total)?;
-        cursor = end;
+        char_offset += raw_line.chars().count();
     }
-    if sample.len() > SOLO_STRUCTURAL_SAMPLE_BYTES {
-        bail!(
-            "solo structural sample exceeds {} serialized UTF-8 bytes",
-            SOLO_STRUCTURAL_SAMPLE_BYTES
-        )
+    rare_lines.retain(|(start, end)| {
+        regions
+            .iter()
+            .all(|(_, region_start, region_end)| *end <= *region_start || *start >= *region_end)
+    });
+    let exemplar_count = rare_lines.len().min(SOLO_SAMPLE_DISTINCT_REGIONS);
+    if exemplar_count == 1 {
+        let (start, end) = rare_lines[0];
+        regions.push(("DISTINCT", start, end));
+    } else if exemplar_count > 1 {
+        for index in 0..exemplar_count {
+            let rare_index = index * (rare_lines.len() - 1) / (exemplar_count - 1);
+            let (start, end) = rare_lines[rare_index];
+            regions.push(("DISTINCT", start, end));
+        }
     }
-    Ok(sample)
+    loop {
+        let mut ordered_regions = regions.clone();
+        ordered_regions.sort_by_key(|(_, start, _)| *start);
+        let mut disjoint_regions = Vec::new();
+        for region in ordered_regions {
+            if disjoint_regions
+                .last()
+                .is_none_or(|(_, _, previous_end)| region.1 >= *previous_end)
+            {
+                disjoint_regions.push(region);
+            }
+        }
+
+        let mut sample = String::new();
+        let mut cursor = 0usize;
+        for (label, start, end) in disjoint_regions {
+            if cursor < start {
+                if !sample.is_empty() {
+                    sample.push('\n');
+                }
+                sample.push_str(&format!(
+                    "[... {} source chars omitted at offsets {cursor}..{start} ...]",
+                    start - cursor
+                ));
+            }
+            append_sample_region(&mut sample, text, label, start, end, total)?;
+            cursor = end;
+        }
+        let fits_byte_cap = sample.len() <= SOLO_STRUCTURAL_SAMPLE_BYTES;
+        let overlap_safe = !structural_sample_has_potential_exact_overlap(text, &sample);
+        if fits_byte_cap && overlap_safe {
+            return Ok(sample);
+        }
+        if regions.len() == base_region_count {
+            if !fits_byte_cap {
+                bail!(
+                    "solo structural sample exceeds {} serialized UTF-8 bytes",
+                    SOLO_STRUCTURAL_SAMPLE_BYTES
+                )
+            }
+            bail!(
+                "solo structural sample may contain an exact source overlap of {} characters",
+                SOLO_SAMPLE_EXACT_OVERLAP_CHARS
+            )
+        }
+        regions.pop();
+    }
 }
 
 pub struct SoloSession {
@@ -1875,6 +2016,420 @@ fn secure_owned_runtime_dir(path: &Path) -> Result<()> {
     chmod(path, 0o700)
 }
 #[cfg(unix)]
+const MAX_JCODE_WORKSPACE_ENTRIES: usize = 1024;
+
+#[cfg(unix)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct DirectoryIdentity {
+    dev: u64,
+    ino: u64,
+}
+
+#[cfg(unix)]
+fn directory_identity(meta: &fs::Metadata) -> DirectoryIdentity {
+    use std::os::unix::fs::MetadataExt;
+    DirectoryIdentity {
+        dev: meta.dev(),
+        ino: meta.ino(),
+    }
+}
+
+#[cfg(unix)]
+fn verify_private_directory(meta: &fs::Metadata, identity: DirectoryIdentity) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    if !meta.file_type().is_dir()
+        || meta.file_type().is_symlink()
+        || meta.uid() != unsafe { libc::geteuid() }
+        || meta.mode() & 0o777 != 0o700
+        || directory_identity(meta) != identity
+    {
+        bail!("unsafe private Jcode workspace directory")
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn open_directory_nofollow(path: &Path) -> Result<File> {
+    OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)
+        .with_context(|| format!("open private Jcode directory {}", path.display()))
+}
+
+#[cfg(unix)]
+fn open_child_directory(parent: &File, name: &str) -> Result<File> {
+    let name = std::ffi::CString::new(name)?;
+    let fd = unsafe {
+        libc::openat(
+            parent.as_raw_fd(),
+            name.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error()).context("open private Jcode workspace");
+    }
+    Ok(unsafe { File::from_raw_fd(fd) })
+}
+
+#[cfg(unix)]
+fn directory_entry_count(path: &Path, stop_after: usize) -> Result<usize> {
+    let mut count = 0usize;
+    for entry in fs::read_dir(path)? {
+        entry?;
+        count += 1;
+        if count >= stop_after {
+            break;
+        }
+    }
+    Ok(count)
+}
+
+#[cfg(unix)]
+fn ensure_jcode_workspace_outside_task_cwd(workspace: &Path, task_cwd: &Path) -> Result<()> {
+    let workspace = fs::canonicalize(workspace)?;
+    let task_cwd = fs::canonicalize(task_cwd)?;
+    if workspace.starts_with(&task_cwd) {
+        bail!(
+            "private Jcode workspace {} is inside task cwd {}",
+            workspace.display(),
+            task_cwd.display()
+        )
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn random_jcode_workspace_name(prefix: &str) -> Result<String> {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut nonce = [0u8; 16];
+    File::open("/dev/urandom")
+        .context("open OS randomness for private Jcode workspace")?
+        .read_exact(&mut nonce)
+        .context("read OS randomness for private Jcode workspace")?;
+    let mut name = String::with_capacity(prefix.len() + 1 + nonce.len() * 2);
+    name.push_str(prefix);
+    name.push('-');
+    for byte in nonce {
+        name.push(HEX[usize::from(byte >> 4)] as char);
+        name.push(HEX[usize::from(byte & 0x0f)] as char);
+    }
+    Ok(name)
+}
+
+#[cfg(unix)]
+#[derive(Debug)]
+struct JcodeWorkspaceRoot {
+    path: PathBuf,
+    dir: File,
+    thread_lock: std::sync::Mutex<()>,
+}
+
+#[cfg(unix)]
+impl JcodeWorkspaceRoot {
+    fn open(path: &Path) -> Result<Self> {
+        use std::os::unix::fs::DirBuilderExt;
+        let mut created = false;
+        let mut builder = fs::DirBuilder::new();
+        builder.mode(0o700);
+        match builder.create(path) {
+            Ok(()) => created = true,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error).context("create private Jcode workspace root"),
+        }
+        let dir = open_directory_nofollow(path)?;
+        if created {
+            let result = unsafe { libc::fchmod(dir.as_raw_fd(), 0o700) };
+            if result != 0 {
+                return Err(std::io::Error::last_os_error())
+                    .context("permission private Jcode workspace root");
+            }
+        }
+        let meta = dir.metadata()?;
+        verify_private_directory(&meta, directory_identity(&meta))?;
+        Ok(Self {
+            path: path.to_owned(),
+            dir,
+            thread_lock: std::sync::Mutex::new(()),
+        })
+    }
+
+    fn path_is_bound(&self) -> Result<()> {
+        let opened = open_directory_nofollow(&self.path)?;
+        let expected = directory_identity(&self.dir.metadata()?);
+        verify_private_directory(&opened.metadata()?, expected)
+    }
+}
+
+#[cfg(unix)]
+static JCODE_WORKSPACE_ROOT: OnceLock<Arc<JcodeWorkspaceRoot>> = OnceLock::new();
+
+#[cfg(unix)]
+fn jcode_workspace_root() -> Result<Arc<JcodeWorkspaceRoot>> {
+    if let Some(root) = JCODE_WORKSPACE_ROOT.get() {
+        return Ok(Arc::clone(root));
+    }
+    let path = PathBuf::from("/tmp").join(format!("azdaja-jcode-{}", unsafe { libc::geteuid() }));
+    let candidate = Arc::new(JcodeWorkspaceRoot::open(&path)?);
+    let _ = JCODE_WORKSPACE_ROOT.set(candidate);
+    Ok(Arc::clone(JCODE_WORKSPACE_ROOT.get().ok_or_else(|| {
+        anyhow!("private Jcode workspace root unavailable")
+    })?))
+}
+
+#[cfg(unix)]
+fn with_jcode_workspace_root_lock<T>(
+    root: &JcodeWorkspaceRoot,
+    operation: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    let _thread = root
+        .thread_lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let lock = open_directory_nofollow(&root.path)?;
+    let expected = directory_identity(&root.dir.metadata()?);
+    verify_private_directory(&lock.metadata()?, expected)?;
+    FileExt::lock_exclusive(&lock).context("lock private Jcode workspace root")?;
+    operation()
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum JcodeWorkspaceRetentionReason {
+    ArchiveUnconfirmed,
+    Nonempty,
+    BindingChanged,
+    CleanupError,
+}
+#[cfg(unix)]
+impl JcodeWorkspaceRetentionReason {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::ArchiveUnconfirmed => "archive_unconfirmed",
+            Self::Nonempty => "nonempty",
+            Self::BindingChanged => "binding_changed",
+            Self::CleanupError => "cleanup_error",
+        }
+    }
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum JcodeWorkspaceFinish {
+    Removed,
+    Retained(JcodeWorkspaceRetentionReason),
+}
+
+#[cfg(unix)]
+fn warn_retained_jcode_workspace(path: &Path, reason: JcodeWorkspaceRetentionReason) {
+    eprintln!(
+        "azdaja: no automatic removal of private Jcode workspace; former requested_path={} reason={}; this root entry consumes the {MAX_JCODE_WORKSPACE_ENTRIES}-directory count cap; verify the provider session and path binding independently",
+        path.display(),
+        reason.as_str()
+    );
+}
+
+#[cfg(unix)]
+fn unlink_empty_jcode_workspace(root: &JcodeWorkspaceRoot, name: &str) -> Result<()> {
+    let name = std::ffi::CString::new(name)?;
+    if unsafe { libc::unlinkat(root.dir.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR) } != 0 {
+        return Err(std::io::Error::last_os_error())
+            .context("remove empty private Jcode workspace");
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn cleanup_failed_jcode_allocation(root: &JcodeWorkspaceRoot, name: &str) {
+    if unlink_empty_jcode_workspace(root, name).is_err() {
+        warn_retained_jcode_workspace(
+            &root.path.join(name),
+            JcodeWorkspaceRetentionReason::CleanupError,
+        );
+    }
+}
+
+#[cfg(unix)]
+#[derive(Debug)]
+struct JcodeWorkspace {
+    root: Arc<JcodeWorkspaceRoot>,
+    name: String,
+    path: PathBuf,
+    dir: File,
+    identity: DirectoryIdentity,
+    exposed: bool,
+    finished: bool,
+}
+
+#[cfg(unix)]
+impl JcodeWorkspace {
+    fn create() -> Result<Self> {
+        Self::create_in(jcode_workspace_root()?)
+    }
+
+    fn create_in(root: Arc<JcodeWorkspaceRoot>) -> Result<Self> {
+        Self::create_in_with_cap(root, MAX_JCODE_WORKSPACE_ENTRIES)
+    }
+
+    fn create_in_with_cap(root: Arc<JcodeWorkspaceRoot>, cap: usize) -> Result<Self> {
+        if cap == 0 {
+            bail!("private Jcode workspace directory cap must be positive")
+        }
+        with_jcode_workspace_root_lock(&root, || {
+            root.path_is_bound()?;
+            let entry_count = directory_entry_count(&root.path, cap)?;
+            root.path_is_bound()?;
+            if entry_count >= cap {
+                bail!(
+                    "private Jcode workspace directory cap reached ({cap}); retained workspaces require manual review"
+                )
+            }
+            for _ in 0..32 {
+                let name = random_jcode_workspace_name("session")?;
+                let name_c = std::ffi::CString::new(name.as_str())?;
+                let made = unsafe { libc::mkdirat(root.dir.as_raw_fd(), name_c.as_ptr(), 0o700) };
+                if made != 0 {
+                    let error = std::io::Error::last_os_error();
+                    if error.kind() == std::io::ErrorKind::AlreadyExists {
+                        continue;
+                    }
+                    return Err(error).context("create private Jcode workspace");
+                }
+                let allocated = (|| -> Result<(File, DirectoryIdentity)> {
+                    let dir = open_child_directory(&root.dir, &name)?;
+                    if unsafe { libc::fchmod(dir.as_raw_fd(), 0o700) } != 0 {
+                        return Err(std::io::Error::last_os_error())
+                            .context("permission private Jcode workspace");
+                    }
+                    let meta = dir.metadata()?;
+                    let identity = directory_identity(&meta);
+                    verify_private_directory(&meta, identity)?;
+                    Ok((dir, identity))
+                })();
+                match allocated {
+                    Ok((dir, identity)) => {
+                        return Ok(Self {
+                            path: root.path.join(&name),
+                            root: Arc::clone(&root),
+                            name,
+                            dir,
+                            identity,
+                            exposed: false,
+                            finished: false,
+                        });
+                    }
+                    Err(error) => {
+                        cleanup_failed_jcode_allocation(&root, &name);
+                        return Err(error);
+                    }
+                }
+            }
+            bail!("could not allocate exclusive private Jcode workspace")
+        })
+    }
+
+    fn binding_is_current(&self) -> Result<bool> {
+        let held = self.dir.metadata()?;
+        if verify_private_directory(&held, self.identity).is_err() {
+            return Ok(false);
+        }
+        let current = match open_child_directory(&self.root.dir, &self.name) {
+            Ok(current) => current,
+            Err(_) => return Ok(false),
+        };
+        if verify_private_directory(&current.metadata()?, self.identity).is_err() {
+            return Ok(false);
+        }
+        let path = match open_directory_nofollow(&self.path) {
+            Ok(path) => path,
+            Err(_) => return Ok(false),
+        };
+        Ok(verify_private_directory(&path.metadata()?, self.identity).is_ok())
+    }
+
+    fn create_session_request(&self) -> Result<serde_json::Value> {
+        self.create_session_request_for_cwd(&env::current_dir()?)
+    }
+
+    fn create_session_request_for_cwd(&self, task_cwd: &Path) -> Result<serde_json::Value> {
+        let root = Arc::clone(&self.root);
+        with_jcode_workspace_root_lock(&root, || {
+            if !self.binding_is_current()? {
+                bail!("private Jcode workspace binding changed before session creation")
+            }
+            if directory_entry_count(&self.path, 1)? != 0 {
+                bail!("private Jcode workspace is not empty before session creation")
+            }
+            if !self.binding_is_current()? {
+                bail!("private Jcode workspace binding changed during session creation")
+            }
+            ensure_jcode_workspace_outside_task_cwd(&self.path, task_cwd)?;
+            if !self.binding_is_current()? {
+                bail!("private Jcode workspace binding changed during cwd isolation check")
+            }
+            Ok(serde_json::json!({"req":"create_session","working_dir":self.path}))
+        })
+    }
+
+    fn mark_exposed(&mut self) {
+        self.exposed = true;
+    }
+
+    fn finish(&mut self, archive_confirmed: bool) -> JcodeWorkspaceFinish {
+        if self.finished {
+            return JcodeWorkspaceFinish::Retained(JcodeWorkspaceRetentionReason::CleanupError);
+        }
+        let root = Arc::clone(&self.root);
+        let outcome = with_jcode_workspace_root_lock(&root, || {
+            if self.exposed && !archive_confirmed {
+                return Ok(JcodeWorkspaceFinish::Retained(
+                    JcodeWorkspaceRetentionReason::ArchiveUnconfirmed,
+                ));
+            }
+            if !self.binding_is_current()? {
+                return Ok(JcodeWorkspaceFinish::Retained(
+                    JcodeWorkspaceRetentionReason::BindingChanged,
+                ));
+            }
+            if directory_entry_count(&self.path, 1)? != 0 {
+                return Ok(JcodeWorkspaceFinish::Retained(
+                    JcodeWorkspaceRetentionReason::Nonempty,
+                ));
+            }
+            if !self.binding_is_current()? {
+                return Ok(JcodeWorkspaceFinish::Retained(
+                    JcodeWorkspaceRetentionReason::BindingChanged,
+                ));
+            }
+            if unlink_empty_jcode_workspace(&self.root, &self.name).is_err() {
+                return Ok(JcodeWorkspaceFinish::Retained(
+                    JcodeWorkspaceRetentionReason::CleanupError,
+                ));
+            }
+            Ok(JcodeWorkspaceFinish::Removed)
+        })
+        .unwrap_or(JcodeWorkspaceFinish::Retained(
+            JcodeWorkspaceRetentionReason::CleanupError,
+        ));
+        self.finished = true;
+        if let JcodeWorkspaceFinish::Retained(reason) = outcome {
+            warn_retained_jcode_workspace(&self.path, reason);
+        }
+        outcome
+    }
+}
+
+#[cfg(unix)]
+impl Drop for JcodeWorkspace {
+    fn drop(&mut self) {
+        if !self.finished {
+            let _ = self.finish(false);
+        }
+    }
+}
+
+#[cfg(unix)]
 fn bridge_paths() -> Result<BridgePaths> {
     use std::os::unix::ffi::OsStrExt;
     let state = state_home()?;
@@ -2100,6 +2655,7 @@ struct JcodeSession {
     timeout: Duration,
     idle_timeout: Duration,
     cancel_before_archive: bool,
+    workspace: Option<JcodeWorkspace>,
 }
 #[cfg(unix)]
 static SOLO_SHARED_JCODE: std::sync::Mutex<Option<JcodeSession>> = std::sync::Mutex::new(None);
@@ -2298,6 +2854,7 @@ impl JcodeSession {
         observation.substage = ModelSetupSubstage::Connect;
         let socket = ensure_jcode_bridge(cfg)?;
         let stream = UnixStream::connect(&socket)?;
+        let workspace = JcodeWorkspace::create()?;
         stream.set_read_timeout(Some(timeout))?;
         stream.set_write_timeout(Some(Duration::from_secs(10)))?;
         let reader = BufReader::new(stream.try_clone()?);
@@ -2314,6 +2871,7 @@ impl JcodeSession {
             timeout,
             idle_timeout,
             cancel_before_archive: true,
+            workspace: Some(workspace),
         };
         let setup_deadline = Instant::now() + Duration::from_secs(12);
         observation.substage = ModelSetupSubstage::Hello;
@@ -2321,8 +2879,16 @@ impl JcodeSession {
         this.reply_before(id, "hello_ok", setup_deadline)
             .context("jcode hello setup")?;
         observation.substage = ModelSetupSubstage::Attach;
-        let id = this
-            .send(serde_json::json!({"req":"create_session","working_dir":env::current_dir()?}))?;
+        let create_session = this
+            .workspace
+            .as_ref()
+            .ok_or_else(|| anyhow!("private Jcode workspace unavailable"))?
+            .create_session_request()?;
+        this.workspace
+            .as_mut()
+            .ok_or_else(|| anyhow!("private Jcode workspace unavailable"))?
+            .mark_exposed();
+        let id = this.send(create_session)?;
         let session_id = this
             .attached_before(id, setup_deadline)
             .context("jcode attach setup")?;
@@ -2549,21 +3115,25 @@ impl JcodeSession {
 impl Drop for JcodeSession {
     fn drop(&mut self) {
         let sid = self.session.clone();
-        if sid.is_empty() {
-            return;
+        let mut archive_confirmed = false;
+        if !sid.is_empty() {
+            // Cleanup is control-plane work, not another model turn. In particular, never reuse the
+            // prompt-sized turn timeout here: a missing archive acknowledgement used to add 15--55
+            // seconds to an otherwise completed batch item. A failed/poisoned stream still gets an
+            // ordered best-effort cancel + archive before it is closed so the bridge does not retain an
+            // active subscription session indefinitely.
+            const CLEANUP_TIMEOUT: Duration = Duration::from_secs(1);
+            let _ = self.stream.set_write_timeout(Some(CLEANUP_TIMEOUT));
+            if self.cancel_before_archive {
+                let _ = self.send(serde_json::json!({"req":"cancel","session_id":sid}));
+            }
+            if let Ok(id) = self.send(serde_json::json!({"req":"archive_session","session_id":sid}))
+            {
+                archive_confirmed = self.reply_with_timeout(id, "ok", CLEANUP_TIMEOUT).is_ok();
+            }
         }
-        // Cleanup is control-plane work, not another model turn. In particular, never reuse the
-        // prompt-sized turn timeout here: a missing archive acknowledgement used to add 15--55
-        // seconds to an otherwise completed batch item. A failed/poisoned stream still gets an
-        // ordered best-effort cancel + archive before it is closed so the bridge does not retain an
-        // active subscription session indefinitely.
-        const CLEANUP_TIMEOUT: Duration = Duration::from_secs(1);
-        let _ = self.stream.set_write_timeout(Some(CLEANUP_TIMEOUT));
-        if self.cancel_before_archive {
-            let _ = self.send(serde_json::json!({"req":"cancel","session_id":sid}));
-        }
-        if let Ok(id) = self.send(serde_json::json!({"req":"archive_session","session_id":sid})) {
-            let _ = self.reply_with_timeout(id, "ok", CLEANUP_TIMEOUT);
+        if let Some(mut workspace) = self.workspace.take() {
+            let _ = workspace.finish(archive_confirmed);
         }
     }
 }
@@ -3469,22 +4039,21 @@ mod unit_tests {
                 ExecFailureKind::Index | ExecFailureKind::Program
             ));
         }
-        for infrastructure in [
-            ExcType::TimeoutError,
-            ExcType::MemoryError,
-            ExcType::RecursionError,
-            ExcType::RuntimeError,
-            ExcType::OSError,
-            ExcType::PermissionError,
-            ExcType::SystemExit,
+        assert_eq!(
+            exec_failure_kind(Some(ExcType::Exception)),
+            ExecFailureKind::Program
+        );
+        for (infrastructure, expected) in [
+            (ExcType::BaseException, ExecFailureKind::Other),
+            (ExcType::RuntimeError, ExecFailureKind::Other),
+            (ExcType::OSError, ExecFailureKind::Other),
+            (ExcType::PermissionError, ExecFailureKind::Other),
+            (ExcType::TimeoutError, ExecFailureKind::Timeout),
+            (ExcType::MemoryError, ExecFailureKind::Memory),
+            (ExcType::RecursionError, ExecFailureKind::Recursion),
+            (ExcType::SystemExit, ExecFailureKind::Other),
         ] {
-            assert!(matches!(
-                exec_failure_kind(Some(infrastructure)),
-                ExecFailureKind::Timeout
-                    | ExecFailureKind::Memory
-                    | ExecFailureKind::Recursion
-                    | ExecFailureKind::Other
-            ));
+            assert_eq!(exec_failure_kind(Some(infrastructure)), expected);
         }
     }
 
@@ -3499,6 +4068,185 @@ mod unit_tests {
         assert_ne!(a, b);
         assert!(a.starts_with("/tmp/azdaja-501"));
     }
+    fn jcode_workspace_test_root(label: &str) -> (PathBuf, Arc<JcodeWorkspaceRoot>) {
+        let path = env::temp_dir().join(format!(
+            "azdaja-jcode-{label}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let root = Arc::new(JcodeWorkspaceRoot::open(&path).unwrap());
+        (path, root)
+    }
+
+    #[test]
+    fn create_session_cwd_is_bound_private_empty_and_not_task_cwd() {
+        use std::os::unix::fs::MetadataExt;
+        let (root_path, root) = jcode_workspace_test_root("wire");
+        let mut workspace = JcodeWorkspace::create_in(root).unwrap();
+        let request = workspace.create_session_request().unwrap();
+        workspace.mark_exposed();
+        assert_eq!(request["req"], "create_session");
+        let cwd = PathBuf::from(request["working_dir"].as_str().unwrap());
+        assert!(cwd.is_absolute());
+        assert!(cwd.starts_with(&root_path));
+        assert!(
+            ensure_jcode_workspace_outside_task_cwd(&cwd, &env::current_dir().unwrap()).is_ok()
+        );
+        assert!(ensure_jcode_workspace_outside_task_cwd(&cwd, &env::temp_dir()).is_err());
+        let meta = fs::symlink_metadata(&cwd).unwrap();
+        assert!(meta.file_type().is_dir());
+        assert!(!meta.file_type().is_symlink());
+        assert_eq!(meta.uid(), unsafe { libc::geteuid() });
+        assert_eq!(meta.mode() & 0o777, 0o700);
+        assert!(fs::read_dir(&cwd).unwrap().next().is_none());
+        assert_eq!(workspace.finish(true), JcodeWorkspaceFinish::Removed);
+        assert!(!cwd.exists());
+        fs::remove_dir(root_path).unwrap();
+    }
+
+    #[test]
+    fn local_cwd_containment_rejection_removes_unexposed_workspace() {
+        let (root_path, root) = jcode_workspace_test_root("cwd-reject");
+        let mut workspace = JcodeWorkspace::create_in(root).unwrap();
+        assert!(
+            workspace
+                .create_session_request_for_cwd(&env::temp_dir())
+                .is_err()
+        );
+        assert!(!workspace.exposed);
+        assert_eq!(workspace.finish(false), JcodeWorkspaceFinish::Removed);
+        assert_eq!(directory_entry_count(&root_path, 1).unwrap(), 0);
+        fs::remove_dir(root_path).unwrap();
+    }
+
+    #[test]
+    fn jcode_workspace_retains_nonempty_and_archive_uncertain_evidence() {
+        let (root_path, root) = jcode_workspace_test_root("retain");
+        let mut nonempty = JcodeWorkspace::create_in(Arc::clone(&root)).unwrap();
+        let nonempty_path = nonempty.path.clone();
+        nonempty.create_session_request().unwrap();
+        nonempty.mark_exposed();
+        fs::write(nonempty_path.join("provider-side-effect"), b"retained").unwrap();
+        assert_eq!(
+            nonempty.finish(true),
+            JcodeWorkspaceFinish::Retained(JcodeWorkspaceRetentionReason::Nonempty)
+        );
+        assert_eq!(
+            fs::read(nonempty_path.join("provider-side-effect")).unwrap(),
+            b"retained"
+        );
+
+        let mut uncertain = JcodeWorkspace::create_in(root).unwrap();
+        let uncertain_path = uncertain.path.clone();
+        uncertain.create_session_request().unwrap();
+        uncertain.mark_exposed();
+        assert_eq!(
+            uncertain.finish(false),
+            JcodeWorkspaceFinish::Retained(JcodeWorkspaceRetentionReason::ArchiveUnconfirmed)
+        );
+        assert!(uncertain_path.is_dir());
+
+        fs::remove_file(nonempty_path.join("provider-side-effect")).unwrap();
+        fs::remove_dir(nonempty_path).unwrap();
+        fs::remove_dir(uncertain_path).unwrap();
+        fs::remove_dir(root_path).unwrap();
+    }
+
+    #[test]
+    fn jcode_workspace_same_owner_substitution_never_deletes_or_renames() {
+        let (root_path, root) = jcode_workspace_test_root("substitution");
+        let mut workspace = JcodeWorkspace::create_in(root).unwrap();
+        workspace.create_session_request().unwrap();
+        workspace.mark_exposed();
+        let requested_path = workspace.path.clone();
+        let moved_original = root_path.join("moved-original");
+        fs::rename(&requested_path, &moved_original).unwrap();
+        fs::write(moved_original.join("original-must-survive"), b"original").unwrap();
+        fs::create_dir(&requested_path).unwrap();
+        chmod(&requested_path, 0o700).unwrap();
+        fs::write(requested_path.join("must-survive"), b"substitute").unwrap();
+
+        assert_eq!(
+            workspace.finish(true),
+            JcodeWorkspaceFinish::Retained(JcodeWorkspaceRetentionReason::BindingChanged)
+        );
+        assert_eq!(
+            fs::read(moved_original.join("original-must-survive")).unwrap(),
+            b"original"
+        );
+        assert_eq!(
+            fs::read(requested_path.join("must-survive")).unwrap(),
+            b"substitute"
+        );
+
+        fs::remove_file(moved_original.join("original-must-survive")).unwrap();
+        fs::remove_dir(moved_original).unwrap();
+        fs::remove_file(requested_path.join("must-survive")).unwrap();
+        fs::remove_dir(requested_path).unwrap();
+        fs::remove_dir(root_path).unwrap();
+    }
+
+    #[test]
+    fn jcode_workspace_cap_is_atomic_and_empty_cleanup_frees_slots() {
+        let (root_path, root) = jcode_workspace_test_root("cap");
+        let mut threads = Vec::new();
+        for _ in 0..8 {
+            let root = Arc::clone(&root);
+            threads.push(thread::spawn(move || {
+                JcodeWorkspace::create_in_with_cap(root, 8).unwrap()
+            }));
+        }
+        let mut workspaces: Vec<_> = threads
+            .into_iter()
+            .map(|thread| thread.join().unwrap())
+            .collect();
+        let names: std::collections::HashSet<_> =
+            workspaces.iter().map(|workspace| &workspace.name).collect();
+        assert_eq!(names.len(), 8);
+        assert!(JcodeWorkspace::create_in_with_cap(Arc::clone(&root), 8).is_err());
+        assert_eq!(workspaces[0].finish(false), JcodeWorkspaceFinish::Removed);
+        let mut replacement = JcodeWorkspace::create_in_with_cap(root, 8).unwrap();
+        assert_eq!(replacement.finish(false), JcodeWorkspaceFinish::Removed);
+        for workspace in &mut workspaces[1..] {
+            assert_eq!(workspace.finish(false), JcodeWorkspaceFinish::Removed);
+        }
+        fs::remove_dir(root_path).unwrap();
+    }
+
+    #[test]
+    fn failed_local_allocation_cleanup_never_removes_nonempty_data() {
+        let (root_path, root) = jcode_workspace_test_root("partial");
+        let name = "session-injected-post-mkdir-failure";
+        let path = root_path.join(name);
+        fs::create_dir(&path).unwrap();
+        chmod(&path, 0o700).unwrap();
+        fs::write(path.join("must-survive"), b"partial").unwrap();
+        cleanup_failed_jcode_allocation(&root, name);
+        assert_eq!(fs::read(path.join("must-survive")).unwrap(), b"partial");
+        fs::remove_file(path.join("must-survive")).unwrap();
+        fs::remove_dir(path).unwrap();
+        fs::remove_dir(root_path).unwrap();
+    }
+
+    #[test]
+    fn jcode_workspace_root_rejects_nonprivate_mode() {
+        let path = env::temp_dir().join(format!(
+            "azdaja-jcode-mode-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&path).unwrap();
+        chmod(&path, 0o755).unwrap();
+        assert!(JcodeWorkspaceRoot::open(&path).is_err());
+        fs::remove_dir(path).unwrap();
+    }
+
     #[test]
     fn root_and_batch_timeouts_are_capped_without_changing_config() {
         let mut cfg = Config {
@@ -3636,6 +4384,7 @@ mod unit_tests {
             timeout: Duration::from_secs(30),
             idle_timeout: Duration::from_secs(30),
             cancel_before_archive: false,
+            workspace: None,
         };
         let reply = api.turn("prompt").unwrap();
         assert_eq!(reply.text, "retained text");
@@ -3690,6 +4439,7 @@ mod unit_tests {
             timeout: Duration::from_secs(30),
             idle_timeout: Duration::from_secs(30),
             cancel_before_archive: false,
+            workspace: None,
         };
         let error = api.turn("prompt").unwrap_err().to_string();
         assert!(
@@ -3720,6 +4470,7 @@ mod unit_tests {
             timeout: Duration::from_secs(30),
             idle_timeout: Duration::from_secs(30),
             cancel_before_archive: false,
+            workspace: None,
         };
         *SOLO_SHARED_JCODE.lock().unwrap() = Some(api);
         drop(SoloJcodeLeaseGuard {
@@ -3757,6 +4508,7 @@ mod unit_tests {
             timeout: Duration::from_secs(55),
             idle_timeout: Duration::from_secs(55),
             cancel_before_archive: false,
+            workspace: None,
         };
         let started = Instant::now();
         drop(api);
@@ -3814,6 +4566,79 @@ mod unit_tests {
             previous = current;
         }
         longest
+    }
+
+    #[test]
+    fn structural_sample_includes_bounded_low_frequency_line_exemplars() {
+        let filler = "ordinary repeated prose without schema punctuation";
+        let mut text = String::from("document header\n");
+        for _ in 0..50 {
+            text.push_str(filler);
+            text.push('\n');
+        }
+        text.push_str("SCHEMA ALPHA = BETA\n");
+        for _ in 0..350 {
+            text.push_str(filler);
+            text.push('\n');
+        }
+        text.push_str("document question\n");
+        let sample = structural_sample(&text, text.chars().count()).unwrap();
+        assert!(sample.contains("[DISTINCT chars"));
+        assert!(sample.contains(r#"["S","C","H","E","M","A""#));
+        assert!(sample.len() <= SOLO_STRUCTURAL_SAMPLE_BYTES);
+
+        let mut escape_heavy = String::new();
+        for index in 0..12 {
+            escape_heavy.push_str(&format!("line-{index}-{}\n", "\0".repeat(300)));
+        }
+        let escaped = structural_sample(&escape_heavy, escape_heavy.chars().count()).unwrap();
+        assert!(escaped.len() <= SOLO_STRUCTURAL_SAMPLE_BYTES);
+
+        let mut sensitive = format!("header\n{}", format!("{filler}\n").repeat(50));
+        sensitive.push_str(&format!("sk-{}\n", "A".repeat(40)));
+        sensitive.push_str(&format!("{filler}\n").repeat(350));
+        sensitive.push_str("tail\n");
+        let redacted = structural_sample(&sensitive, sensitive.chars().count()).unwrap();
+        assert!(redacted.contains(r#"["s","k","-","A""#));
+        assert!(!redacted.contains("sk-AAAAAAAA"));
+    }
+
+    #[test]
+    fn structural_overlap_guard_streams_large_source_against_bounded_sample_hashes() {
+        let source = "A".repeat(2 * 1024 * 1024);
+        assert!(structural_sample_has_potential_exact_overlap(
+            &source,
+            &"A".repeat(SOLO_SAMPLE_EXACT_OVERLAP_CHARS)
+        ));
+        assert!(!structural_sample_has_potential_exact_overlap(
+            &source,
+            &"B".repeat(SOLO_SAMPLE_EXACT_OVERLAP_CHARS)
+        ));
+    }
+
+    #[test]
+    fn structural_sample_drops_self_embedded_distinct_metadata() {
+        let total = 10_000usize;
+        let prefix = format!("{}\n", "x".repeat(100)).repeat(10);
+        let start = prefix.chars().count();
+        let end = start + SOLO_SAMPLE_CHUNK_CHARS;
+        let label = format!("[DISTINCT chars {start}..{end}/{total}; char-json]");
+        let mut chunk = String::from("[");
+        for (index, character) in label.chars().take(SOLO_SAMPLE_CHUNK_CHARS).enumerate() {
+            if index > 0 {
+                chunk.push(',');
+            }
+            chunk.push_str(&encoded_sample_char(character).unwrap());
+        }
+        chunk.push(']');
+        let mut source = format!("{prefix}{label}\n{chunk}\n");
+        source.push_str(&"z".repeat(total - source.chars().count()));
+        let sample = structural_sample(&source, source.chars().count()).unwrap();
+        let longest = longest_common_substring(&source, &sample);
+        assert!(
+            longest < SOLO_SAMPLE_EXACT_OVERLAP_CHARS,
+            "copied {longest} chars"
+        );
     }
 
     #[test]

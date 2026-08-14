@@ -224,6 +224,56 @@ and opens gold only after terminal schedule/run validation. Owner-only modes
 reduce accidental disclosure; they are not encryption or an information-flow
 sandbox.
 
+
+## Frozen fixed-width execution workflows
+
+`run.py` exposes benchmark-controller workflow selection only; it does not add a
+product tool, subcommand, config field, or strategy. Every workflow is selected
+before inference and is bound into the schedule ID, run IDs, exact fixture-ID
+list and list hash:
+
+* `full-v1`: the official 90-fixture × three-arm (270-row) comparative cohort;
+* `candidate-full-90-v1`: the same seeded 90-fixture order, candidate-only, for
+  the ≤12-minute iteration/performance target;
+* `candidate-smoke-20-v1`: an immutable no-gold candidate slice for the
+  ≤5-minute smoke target. Its 20 fixture IDs and payload hashes are code-frozen
+  from public-manifest SHA-256
+  `57536fdfe1e28964d29857821d8bd91457d247aa71e163c8326849b7186ed41d`.
+  It takes two fixtures per task/length cell plus one extra NIAH 8K and one extra
+  VT 32K fixture, selected once by ascending public fixture ID.
+
+All workflows use one **global** fixed worker width of four. A single coordinator
+buffers all returned rows, freezes exact batch peak/makespan evidence, then
+appends rows and creates completion receipts only in the original ordinal order.
+Per-row controller evidence records configured global width, active count at
+arm start, monotonic half-open arm interval, independently recomputable global
+peak, and overall makespan. The candidate product performance ledger repeats the
+frozen width and observed active-at-start count without relabeling these
+controller spans as provider/model time. `score.py` independently recomputes the
+interval peak/makespan and accepts only `full-v1`; candidate-only workflows are
+never official scored cohorts.
+
+Fixed-width execution is fresh-only. `--resume` fails closed: after a crash an
+orphan claim may correspond to already performed inference, so there is no safe
+retry or resume. Existing outputs, schedules, claims, or artifact roots are
+never merged or replaced. OAuth preflights occur serially once before launch;
+every worker retains a distinct HOME, product state, daemon runtime, task file,
+trace set, and run directory. Provider rate limiting and local resource
+contention at width four are measured benchmark conditions; the 12/5-minute
+values are targets, not guarantees asserted before an untouched run measures
+them.
+
+Example no-gold smoke launch:
+
+```bash
+python -I -S -B bench/ruler/run.py \
+  --manifest "$PUBLIC/manifest.json" \
+  --workflow candidate-smoke-20-v1 \
+  --output "$G/private/ruler-smoke.jsonl" \
+  --azdaja-skill /absolute/path/to/frozen-candidate \
+  --yes-run-inference
+```
+
 ## Scored cohort gates and denominators
 
 A frozen cohort is exactly 90 scheduled fixtures **per arm** (270 terminal

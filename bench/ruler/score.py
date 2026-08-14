@@ -36,6 +36,20 @@ EXPECTED_FIXTURES = len(TASKS) * len(TARGET_LENGTHS) * EXPECTED_PER_CELL
 ARMS = ("jcode-native", "jcode-azdaja", "prime-agent")
 MODEL = "gpt-5.6-luna"
 REASONING = "medium"
+FULL_WORKFLOW = "full-v1"
+PARALLEL_WIDTH = 4
+PARALLEL_WIDTH_SCOPE = "global"
+RUNNER_PARALLELISM_AUTHORITY = (
+    "controller time.perf_counter_ns half-open arm intervals from one pre-launch "
+    "batch origin; active-at-start counted under the controller lock"
+)
+RUNNER_PARALLELISM_KEYS = {
+    "schema_version", "configured_global_width", "scope",
+    "observed_active_at_start", "observed_peak_concurrency",
+    "batch_started_at_unix_s", "monotonic_arm_start_offset_ms",
+    "monotonic_arm_end_offset_ms", "controller_arm_wall_ms",
+    "overall_makespan_ms", "authority",
+}
 WRAPPER_TEMPLATE_SHA256 = "8999a98d32e56e6e019b1908844fe081ee243cb967aa9e7462351a71b544260d"
 STAGED_NAME_RE = re.compile(r"[0-9a-f]{32}\.txt\Z")
 RUN_ID_DOMAIN = b"ruler-run-v1\0"
@@ -407,6 +421,86 @@ def _positive_int(value: Any) -> bool:
 
 def _nonnegative_number(value: Any) -> bool:
     return type(value) in (int, float) and math.isfinite(float(value)) and value >= 0
+
+
+def _validate_runner_parallel_observation(
+    value: Any, index: int, *, expected_width: int
+) -> None:
+    if (
+        not isinstance(value, dict)
+        or set(value) != RUNNER_PARALLELISM_KEYS
+        or value.get("schema_version") != 1
+        or value.get("configured_global_width") != expected_width
+        or value.get("scope") != PARALLEL_WIDTH_SCOPE
+        or value.get("authority") != RUNNER_PARALLELISM_AUTHORITY
+        or type(value.get("observed_active_at_start")) is not int
+        or not 1 <= value["observed_active_at_start"] <= expected_width
+        or type(value.get("observed_peak_concurrency")) is not int
+        or not value["observed_active_at_start"] <= value["observed_peak_concurrency"] <= expected_width
+        or not _nonnegative_number(value.get("batch_started_at_unix_s"))
+        or not _nonnegative_number(value.get("monotonic_arm_start_offset_ms"))
+        or not _nonnegative_number(value.get("monotonic_arm_end_offset_ms"))
+        or not _nonnegative_number(value.get("controller_arm_wall_ms"))
+        or not _nonnegative_number(value.get("overall_makespan_ms"))
+        or value["monotonic_arm_end_offset_ms"]
+        < value["monotonic_arm_start_offset_ms"]
+        or value["overall_makespan_ms"] < value["monotonic_arm_end_offset_ms"]
+        or not math.isclose(
+            value["controller_arm_wall_ms"],
+            value["monotonic_arm_end_offset_ms"]
+            - value["monotonic_arm_start_offset_ms"],
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        )
+    ):
+        raise ScoreError(f"inference row {index} runner parallelism is invalid")
+
+
+def _validate_runner_parallel_batch(
+    rows: Sequence[dict[str, Any]], *, expected_width: int
+) -> dict[str, Any]:
+    observations: list[dict[str, Any]] = []
+    for index, row in enumerate(rows, 1):
+        evidence = row.get("arm_evidence")
+        value = evidence.get("runner_parallelism") if isinstance(evidence, dict) else None
+        _validate_runner_parallel_observation(value, index, expected_width=expected_width)
+        observations.append(value)
+    origins = {item["batch_started_at_unix_s"] for item in observations}
+    starts = [item["monotonic_arm_start_offset_ms"] for item in observations]
+    peaks = {item["observed_peak_concurrency"] for item in observations}
+    makespans = {item["overall_makespan_ms"] for item in observations}
+    if (
+        len(origins) != 1 or len(set(starts)) != len(starts)
+        or len(peaks) != 1 or len(makespans) != 1
+    ):
+        raise ScoreError("runner parallel batch totals or interval identities are ambiguous")
+    ordered = sorted(observations, key=lambda item: item["monotonic_arm_start_offset_ms"])
+    prior: list[dict[str, Any]] = []
+    observed_peak = 0
+    for item in ordered:
+        active = 1 + sum(
+            previous["monotonic_arm_end_offset_ms"]
+            > item["monotonic_arm_start_offset_ms"]
+            for previous in prior
+        )
+        if active != item["observed_active_at_start"] or active > expected_width:
+            raise ScoreError(
+                "runner observed concurrency disagrees with half-open arm intervals"
+            )
+        observed_peak = max(observed_peak, active)
+        prior.append(item)
+    overall_makespan_ms = max(
+        item["monotonic_arm_end_offset_ms"] for item in observations
+    )
+    if peaks != {observed_peak} or makespans != {overall_makespan_ms}:
+        raise ScoreError("runner peak concurrency or makespan does not recompute exactly")
+    return {
+        "configured_global_width": expected_width,
+        "scope": PARALLEL_WIDTH_SCOPE,
+        "observed_peak_concurrency": observed_peak,
+        "overall_makespan_ms": overall_makespan_ms,
+        "authority": RUNNER_PARALLELISM_AUTHORITY,
+    }
 
 
 def manifest_identity_sha256(manifest: dict[str, Any]) -> str:
@@ -809,6 +903,8 @@ def validate_schedule(
         raise ScoreError("schedule suite binding has an unexpected object shape")
     if set(configuration) != {
         "model", "reasoning", "arms", "repetitions", "seed", "timeout_seconds",
+        "workflow", "workflow_fixture_ids", "workflow_fixture_ids_sha256",
+        "parallel_width", "configured_global_width", "parallel_width_scope",
         "wrapper_template_sha256", "candidate", "candidate_source_path",
         "controller", "controller_source_paths", "executables", "containment",
     }:
@@ -856,6 +952,16 @@ def validate_schedule(
     _require_equal(configuration.get("repetitions"), 1, "schedule repetitions")
     _require_equal(configuration.get("model"), MODEL, "schedule model")
     _require_equal(configuration.get("reasoning"), REASONING, "schedule reasoning")
+    _require_equal(configuration.get("workflow"), FULL_WORKFLOW, "schedule scored workflow")
+    _require_equal(configuration.get("parallel_width"), PARALLEL_WIDTH, "schedule parallel width")
+    _require_equal(
+        configuration.get("configured_global_width"), PARALLEL_WIDTH,
+        "schedule configured global width",
+    )
+    _require_equal(
+        configuration.get("parallel_width_scope"), PARALLEL_WIDTH_SCOPE,
+        "schedule parallel width scope",
+    )
     if type(configuration.get("seed")) is not int:
         raise ScoreError("schedule seed must be an integer")
     _require_equal(configuration.get("timeout_seconds"), 1800, "schedule timeout_seconds")
@@ -1173,6 +1279,15 @@ def validate_schedule(
     rng.shuffle(expected_fixture_order)
     expected_arm_orders = list(itertools.permutations(ARMS)) * 15
     rng.shuffle(expected_arm_orders)
+    workflow_ids = configuration.get("workflow_fixture_ids")
+    expected_workflow_ids = list(expected_fixture_order)
+    if workflow_ids != expected_workflow_ids:
+        raise ScoreError("schedule workflow fixture IDs are not the exact seeded full order")
+    _require_equal(
+        configuration.get("workflow_fixture_ids_sha256"),
+        sha256_bytes(canonical_json_bytes(expected_workflow_ids)),
+        "schedule workflow fixture ID list hash",
+    )
     reconstructed = [
         (fixture_id, arm)
         for fixture_id, order in zip(expected_fixture_order, expected_arm_orders)
@@ -1550,7 +1665,12 @@ PERFORMANCE_AUTHORITY = (
 
 
 def _independent_performance_ledger(
-    model_data: bytes, solo_data: bytes, index: int
+    model_data: bytes,
+    solo_data: bytes,
+    index: int,
+    *,
+    parallel_width: int,
+    parallel_active_at_start: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     label = f"inference row {index} performance ledger"
     try:
@@ -1697,6 +1817,9 @@ def _independent_performance_ledger(
         "sub_call_wall_ms": runtime["sub_call_wall_ns"] / 1_000_000.0,
         "repair_count": len(repair_rows),
         "repair_cost": repair_cost,
+        "configured_global_width": parallel_width,
+        "parallel_width_scope": PARALLEL_WIDTH_SCOPE,
+        "observed_active_at_start": parallel_active_at_start,
     }
     assertion = {
         "applicable": True,
@@ -1731,7 +1854,8 @@ def _validate_recorded_performance_shape(
         "exec_invocation_count", "exec_wall_ms", "snapshot_save_count",
         "snapshot_save_ms", "snapshot_load_count", "snapshot_load_ms",
         "sub_call_count", "sub_call_turn_count", "sub_call_wall_ms",
-        "repair_count", "repair_cost",
+        "repair_count", "repair_cost", "configured_global_width",
+        "parallel_width_scope", "observed_active_at_start",
     }
     integer_keys = {
         "root_turn_count", "root_inference_ms", "exec_invocation_count",
@@ -1743,6 +1867,10 @@ def _validate_recorded_performance_shape(
         or set(ledger) != keys
         or ledger.get("schema_version") != 1
         or type(ledger.get("complete")) is not bool
+        or ledger.get("configured_global_width") != PARALLEL_WIDTH
+        or ledger.get("parallel_width_scope") != PARALLEL_WIDTH_SCOPE
+        or type(ledger.get("observed_active_at_start")) is not int
+        or not 1 <= ledger["observed_active_at_start"] <= PARALLEL_WIDTH
         or any(not _nonnegative_int(ledger.get(key)) for key in integer_keys)
         or any(not _nonnegative_number(ledger.get(key)) for key in (
             "exec_wall_ms", "snapshot_save_ms", "snapshot_load_ms", "sub_call_wall_ms"
@@ -1800,11 +1928,28 @@ def _audit_performance_evidence(
         raise ScoreError(f"inference row {index} Azdaja performance assertion is invalid")
     if row["execution_success"] and not assertion["asserted"]:
         raise ScoreError(f"inference row {index} successful Azdaja ledger is incomplete")
+    parallel = evidence.get("runner_parallelism")
+    if not isinstance(parallel, dict):
+        raise ScoreError(
+            f"inference row {index} runner parallelism evidence is missing"
+        )
+    if ledger is not None and (
+        ledger["configured_global_width"] != parallel.get("configured_global_width")
+        or ledger["observed_active_at_start"]
+        != parallel.get("observed_active_at_start")
+    ):
+        raise ScoreError(
+            f"inference row {index} product ledger disagrees with controller concurrency"
+        )
     if not assertion["asserted"]:
         return None
     try:
         expected_ledger, expected_assertion = _independent_performance_ledger(
-            retained["azdaja_model_trace"], retained["azdaja_solo_trace"], index
+            retained["azdaja_model_trace"],
+            retained["azdaja_solo_trace"],
+            index,
+            parallel_width=parallel["configured_global_width"],
+            parallel_active_at_start=parallel["observed_active_at_start"],
         )
     except KeyError as exc:
         raise ScoreError(
@@ -2059,7 +2204,9 @@ def validate_run_rows(
     expected_row_keys = {
         "schema_version", "record_type", "schedule_id", "run_id", "fixture_id",
         "payload_sha256", "execution_ordinal", "arm", "repetition", "model",
-        "reasoning", "schedule_seed", "timeout_seconds", "timed_out", "exit_code",
+        "reasoning", "schedule_seed", "timeout_seconds", "workflow",
+        "workflow_fixture_ids_sha256", "parallel_width", "configured_global_width",
+        "parallel_width_scope", "timed_out", "exit_code",
         "candidate_sha256", "controller_sha256", "success", "score",
         "scoring_status", "execution_success",
         "latency_seconds", "response", "route_assertion", "usage",
@@ -2082,6 +2229,13 @@ def validate_run_rows(
             "reasoning": configuration["reasoning"],
             "schedule_seed": configuration["seed"],
             "timeout_seconds": configuration["timeout_seconds"],
+            "workflow": configuration["workflow"],
+            "workflow_fixture_ids_sha256": configuration[
+                "workflow_fixture_ids_sha256"
+            ],
+            "parallel_width": configuration["parallel_width"],
+            "configured_global_width": configuration["configured_global_width"],
+            "parallel_width_scope": configuration["parallel_width_scope"],
             "candidate_sha256": candidate_sha,
             "controller_sha256": controller_sha,
             "success": None,
@@ -2123,6 +2277,11 @@ def validate_run_rows(
         arm_evidence = row["arm_evidence"]
         if not isinstance(arm_evidence, dict):
             raise ScoreError(f"inference row {index} arm_evidence must be an object")
+        _validate_runner_parallel_observation(
+            arm_evidence.get("runner_parallelism"),
+            index,
+            expected_width=configuration["configured_global_width"],
+        )
         if "staged_filename" in arm_evidence:
             _require_equal(
                 arm_evidence["staged_filename"], job["staged_filename"],
@@ -2157,6 +2316,11 @@ def validate_run_rows(
             raise ScoreError(f"inference row {index} has unknown fixture id")
         seen.add(row["run_id"])
 
+    runner_batch = _validate_runner_parallel_batch(
+        rows, expected_width=configuration["configured_global_width"]
+    )
+    for audit in independent_audits.values():
+        audit["runner_batch"] = runner_batch
     if artifact_work_root is None:
         raise ScoreError("terminal inference has no artifact work root")
     try:
