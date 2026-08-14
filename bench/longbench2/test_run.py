@@ -275,12 +275,13 @@ class RunnerTests(unittest.TestCase):
                 "--yes-run-inference",
             ]
         )
+        rehearsal = RUN._rehearsal_module()
         with (
             mock.patch.object(
-                RUN.REHEARSAL, "build_target_identity", return_value={"target_sha256": "a" * 64}
+                rehearsal, "build_target_identity", return_value={"target_sha256": "a" * 64}
             ),
             mock.patch.object(
-                RUN.REHEARSAL, "verify_rehearsal_receipt", return_value={"receipt_id": "b" * 64}
+                rehearsal, "verify_rehearsal_receipt", return_value={"receipt_id": "b" * 64}
             ),
             mock.patch.object(
                 RUN, "fresh_source_preflight",
@@ -293,6 +294,21 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(output.exists())
         self.assertFalse(Path(str(output) + ".schedule.json").exists())
         self.assertFalse(Path(str(output) + ".claims").exists())
+
+    def test_late_rehearsal_replay_refuses_mutated_binding_before_use(self):
+        target = {"target_sha256": "a" * 64}
+        binding = {"path": "/private/tmp/rehearsal/final-receipt.json", "receipt_id": "b" * 64}
+        rehearsal = mock.Mock()
+        rehearsal.RehearsalError = RuntimeError
+        rehearsal.verify_rehearsal_receipt.return_value = {
+            **binding, "receipt_id": "c" * 64
+        }
+        rehearsal.load_bound_target.return_value = target
+        with self.assertRaisesRegex(RUN.BenchError, "drifted"):
+            RUN.reverify_rehearsal_gate(rehearsal, binding, target)
+        rehearsal.verify_rehearsal_receipt.assert_called_once_with(
+            binding["path"], expected_target=target
+        )
 
     def test_legacy_adapter_without_repair_configuration_needs_schema_proof(self):
         legacy_adapter = object()
@@ -747,7 +763,7 @@ class RunnerTests(unittest.TestCase):
         }
         paths = RUN.FrozenPaths(
             root=Path("/frozen"), controller=Path("/frozen/run.py"),
-            validator=Path("/frozen/score.py"), adapter=Path("/frozen/adapter.py"),
+            rehearsal=Path("/frozen/rehearsal.py"), validator=Path("/frozen/score.py"), adapter=Path("/frozen/adapter.py"),
             candidate=Path("/frozen/candidate"), jcode=Path("/frozen/jcode"),
             node=Path("/frozen/node"), kernel_environment=Path("/frozen/kernel"),
             runtime_python=Path("/frozen/runtime-python"),

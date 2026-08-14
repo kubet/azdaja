@@ -44,6 +44,10 @@ def _load_python(name: str, path: Path):
 
 
 SCORE = _load_python("azdaja_lb2_score_for_pre_freeze_rehearsal", PRODUCTION_VALIDATOR)
+RUN = _load_python("azdaja_lb2_run_for_pre_freeze_rehearsal", PRODUCTION_CONTROLLER)
+ADAPTER = _load_python("azdaja_oolong_for_pre_freeze_rehearsal", PRODUCTION_ADAPTER)
+ADAPTER.MODEL = SCORE.MODEL
+ADAPTER.REASONING = SCORE.REASONING
 
 SCHEMA_VERSION = 1
 SUITE_ID = "lb2-pre-freeze-rehearsal-20x3-v1"
@@ -56,6 +60,7 @@ PRODUCTION_FIXTURE_COUNT = 63
 PRODUCTION_JOB_COUNT = 189
 PRODUCTION_MINIMUM_CORRECT_N = 16
 RUN_ID_DOMAIN = b"lb2-pre-freeze-rehearsal-run-v1\0"
+EXPECTED_LABELS = tuple("ABCD"[index % 4] for index in range(FIXTURE_COUNT))
 CANDIDATE_FILES = ("SKILL.md", "azdaja", "config.toml")
 SUCCESS_TRACE_SHA256 = "41e4456b4a6601424ae03b3b3d0821a4866666a8e117cd5f6d6e5d51a17f754f"
 RETRY_TRACE_SHA256 = "9294429a6354f9e42690adbf1b6ac453fd3d0657d035b357adbf9a9dcc3b8f5c"
@@ -274,32 +279,87 @@ def build_target_identity(
     *, manifest: Path | str, candidate: Path | str, jcode: Path | str,
     prime_agent: Path | str, seed: int, timeout: int,
 ) -> dict[str, Any]:
-    """Capture the exact source inputs a fresh production freeze will consume."""
+    """Capture the complete source/runtime closure a fresh production freeze consumes."""
     manifest_identity = _file_identity(Path(manifest), "target production manifest")
     candidate_identity = _candidate_identity(Path(candidate))
     jcode_path = _resolve_executable(jcode, "jcode")
     prime_path = _resolve_executable(prime_agent, "prime-agent")
+    node_path = _resolve_executable("node", "Node")
     azdaja_path = Path(candidate_identity["path"]) / "azdaja"
+    home = os.environ.get("HOME")
+    if not home:
+        raise RehearsalError("HOME is required to bind the Prime kernel closure")
+    kernel_root = _absolute(Path(home) / ".prime" / "agent" / "kernel-venv")
+    kernel_python_path = kernel_root / "bin" / "python"
+    if not kernel_python_path.exists():
+        raise RehearsalError("Prime kernel environment is unavailable for target binding")
+    runtime_python_root = kernel_python_path.resolve(strict=True).parents[1]
+    try:
+        package_root, cli_relative = RUN.find_prime_package_root(prime_path)
+        prime_inventory = RUN.recursive_inventory(package_root, hash_files=True)
+        kernel_inventory = RUN.ambient_recursive_inventory(kernel_root)
+        runtime_inventory = RUN.ambient_recursive_inventory(runtime_python_root)
+        executables = {
+            "jcode": RUN._version_identity(jcode_path, "target jcode"),
+            "azdaja": RUN._version_identity(azdaja_path, "target azdaja"),
+            "prime-agent": RUN._version_identity(
+                prime_path, "target prime-agent", path_prefix=node_path.parent
+            ),
+        }
+        node = RUN._version_identity(node_path, "target Node")
+        kernel_python = RUN._version_identity(
+            kernel_python_path.resolve(strict=True), "target Prime kernel Python"
+        )
+    except RUN.BenchError as exc:
+        raise RehearsalError(f"cannot bind complete production runtime target: {exc}") from exc
+    runtime_closure = {
+        "adapter": _file_identity(PRODUCTION_ADAPTER, "target production adapter"),
+        "validator": _file_identity(PRODUCTION_VALIDATOR, "target production validator"),
+        "prime_package": {
+            "snapshot_root": str(package_root),
+            "inventory_sha256": sha256_bytes(canonical_json_bytes(prime_inventory)),
+            "entry_count": len(prime_inventory),
+            "cli_relative": cli_relative.as_posix(),
+        },
+        "node": node,
+        "kernel_python": kernel_python,
+        "kernel_launcher": {
+            "path": str(kernel_python_path),
+            "target": (
+                os.readlink(kernel_python_path)
+                if kernel_python_path.is_symlink() and not os.path.isabs(os.readlink(kernel_python_path))
+                else "bin/python"
+            ),
+            "resolved_path": str(kernel_python_path.resolve(strict=True)),
+        },
+        "kernel_environment": {
+            "root": str(kernel_root),
+            "inventory_sha256": sha256_bytes(canonical_json_bytes(kernel_inventory)),
+            "entry_count": len(kernel_inventory),
+        },
+        "runtime_python": {
+            "snapshot_root": str(runtime_python_root),
+            "inventory_sha256": sha256_bytes(canonical_json_bytes(runtime_inventory)),
+            "entry_count": len(runtime_inventory),
+        },
+        "ambient_closure_disclosure": SCORE.AMBIENT_CLOSURE_DISCLOSURE,
+    }
     target = {
         "schema_version": SCHEMA_VERSION,
         "record_type": "lb2_pre_freeze_rehearsal_target",
         "manifest": manifest_identity,
         "candidate": candidate_identity,
         "controller": _file_identity(PRODUCTION_CONTROLLER, "target production controller"),
-        "validator": _file_identity(PRODUCTION_VALIDATOR, "target production validator"),
-        "adapter": _file_identity(PRODUCTION_ADAPTER, "target production adapter"),
-        "executables": {
-            "jcode": _file_identity(jcode_path, "target jcode", executable=True),
-            "azdaja": _file_identity(azdaja_path, "target azdaja", executable=True),
-            "prime-agent": _file_identity(prime_path, "target prime-agent", executable=True),
-        },
+        "rehearsal": _file_identity(Path(__file__), "target rehearsal controller"),
+        "validator": runtime_closure["validator"],
+        "adapter": runtime_closure["adapter"],
+        "executables": executables,
+        "runtime_closure": runtime_closure,
         "config": _file_identity(
             Path(candidate_identity["path"]) / "config.toml", "target candidate config"
         ),
         "configuration": production_configuration(seed=seed, timeout=timeout),
     }
-    # The separately named config and executable identities must be exact aliases
-    # of the candidate components, closing accidental target substitution.
     config_component = candidate_identity["components"]["config.toml"]
     binary_component = candidate_identity["components"]["azdaja"]
     if any(target["config"][key] != config_component[key] for key in ("sha256", "bytes")):
@@ -308,7 +368,6 @@ def build_target_identity(
         raise RehearsalError("target candidate/azdaja executable identity diverged")
     target["target_sha256"] = sha256_bytes(canonical_json_bytes(target))
     return target
-
 
 def _reopen_target(target: Any) -> dict[str, Any]:
     """Rebuild an embedded target from paths; no identity check may be skipped."""
@@ -336,7 +395,7 @@ def _fixture_id(index: int) -> str:
 
 
 def _synthetic_answer(index: int) -> str:
-    return SCORE.CHOICE_LABELS[index % len(SCORE.CHOICE_LABELS)]
+    return EXPECTED_LABELS[index]
 
 
 def _manifest_identity(manifest: dict[str, Any]) -> str:
@@ -378,6 +437,8 @@ def generate_synthetic_phase(bundle: Path) -> tuple[Path, Path, dict[str, Any]]:
             "payload": f"payloads/{payload_name}",
             "payload_sha256": sha256_bytes(payload_bytes),
             "payload_bytes": len(payload_bytes),
+            "domain": "Synthetic",
+            "sub_domain": "Offline pipeline",
         })
         gold_fixtures.append({
             "id": fixture_id,
@@ -452,7 +513,8 @@ def _load_public(manifest_path: Path) -> tuple[dict[str, Any], dict[str, dict[st
     by_id: dict[str, dict[str, Any]] = {}
     for index, item in enumerate(entries):
         if not isinstance(item, dict) or set(item) != {
-            "id", "ordinal", "payload", "payload_sha256", "payload_bytes"
+            "id", "ordinal", "payload", "payload_sha256", "payload_bytes",
+            "domain", "sub_domain"
         }:
             raise RehearsalError(f"rehearsal fixture {index + 1} shape is invalid")
         fixture_id = _fixture_id(index)
@@ -463,6 +525,8 @@ def _load_public(manifest_path: Path) -> tuple[dict[str, Any], dict[str, dict[st
             "payload": f"payloads/{payload_name}",
             "payload_sha256": item["payload_sha256"],
             "payload_bytes": item["payload_bytes"],
+            "domain": "Synthetic",
+            "sub_domain": "Offline pipeline",
         } or fixture_id in by_id:
             raise RehearsalError(f"rehearsal fixture {index + 1} identity/order drifted")
         data = _read_regular(payloads / payload_name, f"rehearsal payload {fixture_id}", owner_only=True)
@@ -474,7 +538,10 @@ def _load_public(manifest_path: Path) -> tuple[dict[str, Any], dict[str, dict[st
         if item["payload_sha256"] != sha256_bytes(data) or item["payload_bytes"] != len(data):
             raise RehearsalError(f"rehearsal payload {fixture_id} commitment drifted")
         expected_names.add(payload_name)
-        by_id[fixture_id] = {**item, "payload_object": payload}
+        by_id[fixture_id] = {
+            **item, "payload_object": payload, "_payload_bytes_captured": data,
+            "fixture_id": fixture_id,
+        }
     if {item.name for item in os.scandir(payloads)} != expected_names:
         raise RehearsalError("rehearsal payload inventory is not exact")
     if manifest_bytes != canonical_json_file_bytes(manifest):
@@ -482,130 +549,66 @@ def _load_public(manifest_path: Path) -> tuple[dict[str, Any], dict[str, dict[st
     return manifest, by_id
 
 
-def build_schedule(manifest: dict[str, Any], target: dict[str, Any]) -> dict[str, Any]:
-    target_sha = target.get("target_sha256")
-    if not isinstance(target_sha, str) or not SHA256_RE.fullmatch(target_sha):
-        raise RehearsalError("target identity is missing its aggregate hash")
-    rng = random.Random(REHEARSAL_SEED)
-    fixture_order = list(manifest["fixtures"])
-    rng.shuffle(fixture_order)
-    jobs: list[dict[str, Any]] = []
-    for fixture in fixture_order:
-        arm_order = list(ARMS)
-        rng.shuffle(arm_order)
-        for arm in arm_order:
-            jobs.append({
-                "ordinal": len(jobs) + 1,
-                "fixture_id": fixture["id"],
-                "payload_sha256": fixture["payload_sha256"],
-                "arm": arm,
-                "repetition": 1,
-            })
-    schedule: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
-        "record_type": "lb2_pre_freeze_rehearsal_schedule",
-        "suite": {
-            "suite_id": SUITE_ID,
-            "manifest_sha256": sha256_bytes(canonical_json_file_bytes(manifest)),
-            "fixture_count": FIXTURE_COUNT,
-        },
-        "configuration": {
-            "arms": list(ARMS),
-            "repetitions": 1,
-            "seed": REHEARSAL_SEED,
-            "timeout_seconds": REHEARSAL_TIMEOUT_SECONDS,
-            "offline": True,
-            "oauth": False,
-            "inference": False,
-            "gold_path_parameter": False,
-            "target_sha256": target_sha,
-        },
-        "target": copy.deepcopy(target),
-        "jobs": jobs,
-    }
-    schedule_id = sha256_bytes(canonical_json_bytes(schedule))
-    for job in jobs:
-        job["run_id"] = sha256_bytes(
-            RUN_ID_DOMAIN + schedule_id.encode("ascii") + canonical_json_bytes(job)
+def _captured_suite(
+    manifest_path: Path, manifest: dict[str, Any], fixtures: dict[str, dict[str, Any]]
+) -> Any:
+    captured = tuple(
+        RUN.CapturedFixture(
+            fixture_id=item["id"], entry=fixtures[item["id"]],
+            payload=fixtures[item["id"]]["payload_object"],
+            payload_bytes=fixtures[item["id"]]["_payload_bytes_captured"],
         )
-    schedule["schedule_id"] = schedule_id
-    return schedule
+        for item in manifest["fixtures"]
+    )
+    return RUN.CapturedSuite(
+        manifest_path=manifest_path, public_root=manifest_path.parent,
+        manifest=manifest, manifest_bytes=canonical_json_file_bytes(manifest),
+        manifest_sha256=sha256_bytes(canonical_json_file_bytes(manifest)),
+        fixtures=captured, notice_bytes={},
+    )
+
+
+def build_schedule(
+    manifest_path: Path, manifest: dict[str, Any], fixtures: dict[str, dict[str, Any]],
+    target: dict[str, Any],
+) -> dict[str, Any]:
+    """Fixed wrapper over the production schedule constructor."""
+    suite = _captured_suite(manifest_path, manifest, fixtures)
+    try:
+        candidate = copy.deepcopy(target["candidate"])
+        candidate.pop("path", None)
+        return RUN.build_schedule(
+            suite, seed=REHEARSAL_SEED, timeout=REHEARSAL_TIMEOUT_SECONDS,
+            candidate=candidate,
+            controller=copy.deepcopy(target["controller"]),
+            executables=copy.deepcopy(target["executables"]),
+            runtime_closure=copy.deepcopy(target["runtime_closure"]),
+            profile=SCORE.REHEARSAL_PROFILE,
+        )
+    except (RUN.BenchError, SCORE.ScoreError, KeyError) as exc:
+        raise RehearsalError(f"production schedule helper refused rehearsal: {exc}") from exc
 
 
 def _validate_schedule(
-    schedule: dict[str, Any], manifest: dict[str, Any], fixtures: dict[str, dict[str, Any]],
+    schedule: dict[str, Any], manifest_path: Path, manifest: dict[str, Any],
+    fixtures: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    if set(schedule) != {
-        "schema_version", "record_type", "suite", "configuration", "target", "jobs", "schedule_id"
-    }:
-        raise RehearsalError("rehearsal schedule shape is invalid")
-    schedule_id = schedule.get("schedule_id")
-    if not isinstance(schedule_id, str) or not SHA256_RE.fullmatch(schedule_id):
-        raise RehearsalError("rehearsal schedule_id is invalid")
-    identity = copy.deepcopy(schedule)
-    identity.pop("schedule_id")
-    for job in identity.get("jobs", []):
-        if isinstance(job, dict):
-            job.pop("run_id", None)
-    if schedule_id != sha256_bytes(canonical_json_bytes(identity)):
-        raise RehearsalError("rehearsal schedule identity drifted")
-    if schedule["schema_version"] != SCHEMA_VERSION or schedule["record_type"] != "lb2_pre_freeze_rehearsal_schedule":
-        raise RehearsalError("rehearsal schedule literals drifted")
-    if schedule["suite"] != {
-        "suite_id": SUITE_ID,
-        "manifest_sha256": sha256_bytes(canonical_json_file_bytes(manifest)),
-        "fixture_count": FIXTURE_COUNT,
-    }:
-        raise RehearsalError("rehearsal schedule/public binding drifted")
-    target = schedule["target"]
-    if not isinstance(target, dict) or target.get("target_sha256") != schedule["configuration"].get("target_sha256"):
-        raise RehearsalError("rehearsal schedule target binding drifted")
-    if schedule["configuration"] != {
-        "arms": list(ARMS), "repetitions": 1, "seed": REHEARSAL_SEED,
-        "timeout_seconds": REHEARSAL_TIMEOUT_SECONDS, "offline": True,
-        "oauth": False, "inference": False, "gold_path_parameter": False,
-        "target_sha256": target["target_sha256"],
-    }:
-        raise RehearsalError("rehearsal schedule configuration drifted")
-    jobs = schedule["jobs"]
-    if not isinstance(jobs, list) or len(jobs) != JOB_COUNT:
-        raise RehearsalError("rehearsal schedule must contain exactly 60 jobs")
-    rng = random.Random(REHEARSAL_SEED)
-    fixture_order = list(manifest["fixtures"])
-    rng.shuffle(fixture_order)
-    expected: list[tuple[str, str]] = []
-    for fixture in fixture_order:
-        arm_order = list(ARMS)
-        rng.shuffle(arm_order)
-        expected.extend((fixture["id"], arm) for arm in arm_order)
-    grid: set[tuple[str, str]] = set()
-    for index, (job, cell) in enumerate(zip(jobs, expected), 1):
-        if not isinstance(job, dict) or set(job) != {
-            "ordinal", "fixture_id", "payload_sha256", "arm", "repetition", "run_id"
-        }:
-            raise RehearsalError(f"rehearsal schedule job {index} shape is invalid")
-        if (job["fixture_id"], job["arm"]) != cell or job["ordinal"] != index or job["repetition"] != 1:
-            raise RehearsalError(f"rehearsal schedule job {index} sequence drifted")
-        fixture = fixtures.get(job["fixture_id"])
-        if fixture is None or job["payload_sha256"] != fixture["payload_sha256"]:
-            raise RehearsalError(f"rehearsal schedule job {index} payload drifted")
-        base = dict(job)
-        run_id = base.pop("run_id")
-        expected_run = sha256_bytes(
-            RUN_ID_DOMAIN + schedule_id.encode("ascii") + canonical_json_bytes(base)
+    try:
+        jobs, arms = SCORE.validate_schedule(
+            copy.deepcopy(schedule), manifest_path, fixtures,
+            manifest_sha256=sha256_bytes(canonical_json_file_bytes(manifest)),
+            profile=SCORE.REHEARSAL_PROFILE,
         )
-        if run_id != expected_run or (job["fixture_id"], job["arm"]) in grid:
-            raise RehearsalError(f"rehearsal schedule job {index} run/grid identity drifted")
-        grid.add((job["fixture_id"], job["arm"]))
-    if grid != {(fixture_id, arm) for fixture_id in fixtures for arm in ARMS}:
-        raise RehearsalError("rehearsal schedule is not the exact 20 x 3 grid")
+    except SCORE.ScoreError as exc:
+        raise RehearsalError(f"shared schedule validator refused rehearsal: {exc}") from exc
+    if len(jobs) != JOB_COUNT or arms != ARMS:
+        raise RehearsalError("rehearsal schedule is not the exact fixed 20 x 3 grid")
     return jobs
 
 
 def _response_for(job: dict[str, Any], fixture: dict[str, Any]) -> str:
-    index = fixture["ordinal"] - 1
-    answer = _synthetic_answer(index)
-    # Exercise all production extraction envelopes without consulting gold.
+    # Independent fixed response vector. Gold is not passed to or opened by run phase.
+    answer = EXPECTED_LABELS[fixture["ordinal"] - 1]
     if job["arm"] == "jcode-native":
         return f"The correct answer is ({answer})"
     if job["arm"] == "jcode-azdaja":
@@ -618,297 +621,332 @@ def _validate_committed_trace_authority() -> tuple[bytes, bytes]:
     retry = _read_regular(RETRY_TRACE, "committed v43 transient retry trace")
     if sha256_bytes(success) != SUCCESS_TRACE_SHA256 or sha256_bytes(retry) != RETRY_TRACE_SHA256:
         raise RehearsalError("committed retained v43 model-trace sample identity drifted")
-    try:
-        routes = SCORE._category_routes_from_retained_trace(success, 1, SCORE.MODEL)
-        retried_routes = SCORE._category_routes_from_retained_trace(retry, 1, SCORE.MODEL)
-    except SCORE.ScoreError as exc:
-        raise RehearsalError(f"production trace validator rejected committed v43 trace: {exc}") from exc
-    if len(routes) != 1 or routes[0].get("depth") != 0 or routes[0].get("model") != SCORE.MODEL:
-        raise RehearsalError("committed v43 success trace route drifted")
-    if retried_routes != []:
-        raise RehearsalError("committed v43 transient timeout/retry trace must suppress route assertion")
-    # Prove the live validator accepts every duplicate-free compact permutation
-    # of known fields rather than depending on serde or sorted key order.
-    parsed = _decode_object(success, "committed v43 success trace", canonical=False)
-    permutations = [
-        dict(reversed(list(parsed.items()))),
-        {"event": parsed["event"], **{key: value for key, value in parsed.items() if key != "event"}},
-    ]
-    for permutation in permutations:
-        compact = json.dumps(
-            permutation, ensure_ascii=False, sort_keys=False, separators=(",", ":")
-        ).encode("utf-8") + b"\n"
-        try:
-            if SCORE._category_routes_from_retained_trace(compact, 1, SCORE.MODEL) != routes:
-                raise RehearsalError("trace validator changed route under a known-field key permutation")
-        except SCORE.ScoreError as exc:
-            raise RehearsalError("trace validator rejected a duplicate-free compact known-field key order") from exc
+    # The actual adapter parsers and scorer parser must agree on these exact raw bytes.
+    import tempfile
+    with tempfile.TemporaryDirectory() as directory:
+        success_path = Path(directory) / "success.jsonl"
+        retry_path = Path(directory) / "retry.jsonl"
+        success_path.write_bytes(success)
+        retry_path.write_bytes(retry)
+        adapter_success = ADAPTER.parse_azdaja_route_evidence(success_path)
+        adapter_retry = ADAPTER.parse_azdaja_route_evidence(retry_path)
+        usage_success = ADAPTER.parse_azdaja_usage(success_path)
+        usage_retry = ADAPTER.parse_azdaja_usage(retry_path)
+    scorer_success = SCORE._category_routes_from_retained_trace(success, 1, SCORE.MODEL)
+    scorer_retry = SCORE._category_routes_from_retained_trace(retry, 1, SCORE.MODEL)
+    if (
+        not isinstance(adapter_success, dict)
+        or adapter_success.get("route_rows") != [
+            {key: row[key] for key in ("depth", "category", "provider", "model")}
+            for row in scorer_success
+        ]
+        or usage_success is None
+        or not isinstance(adapter_retry, dict)
+        or adapter_retry.get("route_rows") != []
+        or usage_retry is not None
+        or scorer_retry != []
+    ):
+        raise RehearsalError("OOLONG adapter and production scorer disagree on actual v43 trace bytes")
     return success, retry
+
+
+def _root_trace(job: dict[str, Any]) -> bytes:
+    request_id = json.dumps("rehearsal-" + job["run_id"][:12])
+    model = json.dumps(SCORE.MODEL)
+    request = "synthetic offline root request without fixture context"
+    return (
+        f"\n=== root request begin request_id={request_id} model={model} request_chars={len(request)} ===\n"
+        f"{request}\n=== root request end request_id={request_id} ===\n"
+        f"=== turn 0 request_id={request_id} category=turn outcome=succeeded provider=\"OpenAI OAuth\" "
+        f"model={model} input=1 output=1 cache_read=0 latency_ms=1 ===\n"
+    ).encode()
+
+
+def _artifact_receipt(path: Path, data: bytes, *, exact: bool = False) -> dict[str, Any]:
+    receipt = {
+        "path": str(path.resolve()), "sha256": sha256_bytes(data), "bytes": len(data),
+        "mode": "0600", "contains_private_raw_trajectory": False,
+        "credential_redacted": True, "sensitivity": "committed synthetic rehearsal trajectory",
+    }
+    if exact:
+        receipt.update({
+            "source_sha256_before_redaction": sha256_bytes(data),
+            "exact_text_preserved": True,
+        })
+    return receipt
+
+
+def _auth(arm: str) -> dict[str, Any]:
+    del arm
+    return {
+        "asserted": False, "offline_rehearsal": True,
+        "oauth_used": False, "inference_used": False,
+    }
+
+
+def _adapter_row(
+    job: dict[str, Any], fixture: dict[str, Any], response: str,
+    run_dir: Path, model_trace: bytes | None,
+) -> tuple[dict[str, Any], bytes, bytes | None]:
+    arm = job["arm"]
+    if arm == "jcode-native":
+        stdout_object = {"type": "tokens", "input": 11, "output": 2,
+                         "cache_read_input": 0, "cache_creation_input": 0}
+        done = {"type": "done", "provider": "OpenAI", "model": SCORE.MODEL,
+                "response": response}
+        stdout = (json.dumps(stdout_object, separators=(",", ":")) + "\n" +
+                  json.dumps(done, separators=(",", ":")) + "\n").encode()
+        root_usage = ADAPTER.parse_jcode_usage(stdout.decode(), "")
+        usage = ADAPTER.combine_usage(root_usage, None)
+        evidence = ADAPTER.usage_evidence_assertion(
+            usage, root_usage=root_usage, subusage_required=False, azdaja_usage=None
+        )
+        route = ADAPTER.runtime_assertion(arm, stdout.decode())
+        azdaja_usage = None
+        lifecycle = {"asserted": True, "requirement": "not applicable: non-product control arm"}
+        root_trace = None
+    elif arm == "prime-agent":
+        event = {"type": "message_end", "message": {
+            "role": "assistant", "provider": "openai-codex", "model": SCORE.MODEL,
+            "api": "openai-codex-responses", "usage": {
+                "input": 11, "output": 2, "cacheRead": 0, "cacheWrite": 0,
+                "totalTokens": 13,
+            }, "content": [{"type": "text", "text": response}],
+        }}
+        stdout = (json.dumps(event, separators=(",", ":")) + "\n").encode()
+        root_usage = ADAPTER.sum_usage_fields(ADAPTER.json_objects(stdout.decode()), prime=True)
+        usage = ADAPTER.combine_usage(root_usage, None)
+        evidence = ADAPTER.usage_evidence_assertion(
+            usage, root_usage=root_usage, subusage_required=False, azdaja_usage=None
+        )
+        route = ADAPTER.runtime_assertion(arm, stdout.decode())
+        azdaja_usage = None
+        lifecycle = {"asserted": True, "requirement": "not applicable: non-product control arm"}
+        root_trace = None
+    else:
+        assert model_trace is not None
+        model_path = run_dir / "azdaja-model-usage.jsonl"
+        model_path.write_bytes(model_trace)
+        model_path.chmod(0o600)
+        route_evidence = ADAPTER.parse_azdaja_route_evidence(model_path)
+        azdaja_usage = ADAPTER.parse_azdaja_usage(model_path)
+        route = ADAPTER.runtime_assertion(
+            arm, "", route_evidence, repair_model=SCORE.MODEL
+        )
+        root_usage = ADAPTER.usage_fields_from_azdaja(
+            None if azdaja_usage is None else azdaja_usage.get("depth_usage", {}).get("0")
+        )
+        usage = ADAPTER.usage_fields_from_azdaja(azdaja_usage)
+        evidence = ADAPTER.direct_solo_usage_evidence(usage, azdaja_usage)
+        lifecycle = ADAPTER.direct_solo_lifecycle_assertion(
+            exit_code=0, timed_out=False, response=response, trace_usage=route_evidence
+        )
+        root_trace = _root_trace(job)
+        root_path = run_dir / "azdaja-solo-trace.log"
+        root_path.write_bytes(root_trace)
+        root_path.chmod(0o600)
+        stdout = (json.dumps({"type": "result", "response": response},
+                             separators=(",", ":")) + "\n").encode()
+    stdout_path = run_dir / "stdout.ndjson"
+    stderr_path = run_dir / "stderr.log"
+    stdout_path.write_bytes(stdout); stdout_path.chmod(0o600)
+    stderr_path.write_bytes(b""); stderr_path.chmod(0o600)
+    artifacts = {
+        "stdout": _artifact_receipt(stdout_path, stdout),
+        "stderr": _artifact_receipt(stderr_path, b""),
+    }
+    if arm == "jcode-azdaja":
+        assert model_trace is not None and root_trace is not None
+        artifacts.update({
+            "azdaja_model_trace": _artifact_receipt(
+                run_dir / "azdaja-model-usage.jsonl", model_trace, exact=True
+            ),
+            "azdaja_solo_trace": _artifact_receipt(
+                run_dir / "azdaja-solo-trace.log", root_trace, exact=True
+            ),
+        })
+    retained = sorted(path.name for path in run_dir.iterdir())
+    success = bool(route["asserted"] and lifecycle["asserted"] and evidence["valid"])
+    adapter_row = {
+        "execution_success": success, "latency_seconds": 0.01,
+        "started_at_unix_s": 1_700_000_000 + job["ordinal"],
+        "fresh_session": True, "serial": True,
+        "hidden_context_and_official_question_identical_across_arms": True,
+        "timed_out": False, "exit_code": 0, "auth_assertion": _auth(arm),
+        "runtime_route_assertion": route,
+        "product_lifecycle_assertion": lifecycle,
+        "product_execution_asserted": lifecycle["asserted"],
+        "trace_capture_assertion": {
+            "asserted": True,
+            "required": ["azdaja_model_trace", "azdaja_solo_trace"] if arm == "jcode-azdaja" else [],
+            "captured": ["azdaja_model_trace", "azdaja_solo_trace"] if arm == "jcode-azdaja" else [],
+            "missing": [],
+        },
+        "task_context_integrity": {
+            "asserted_before": True, "asserted_after": True,
+            "expected_sha256": job["payload_sha256"],
+            "source_sha256_before": job["payload_sha256"],
+            "source_sha256_after_copy": job["payload_sha256"],
+            "staged_sha256_before": job["payload_sha256"],
+            "staged_sha256_after": job["payload_sha256"],
+            "source_sha256_after": job["payload_sha256"],
+            "staged_mode_before": "0444", "staged_mode_after": "0444",
+            "task_directory_single_file_before": True,
+            "task_directory_single_file_after": True,
+            "random_context_filename": True, "errors": [],
+        },
+        "tool_access_policy_assertion": {
+            "asserted": True, "events_scanned": 0, "violations": [],
+            "policy": "no network or external dataset access in executed tool command/code events",
+            "enforcement": "post-hoc event detection only; not OS-level containment",
+            "containment_asserted": False,
+        },
+        "credential_cleanup_assertion": {
+            "asserted": True, "credential_homes_deleted": True,
+            "retained_entries": retained, "retention_allowlist": retained,
+        },
+        "cleanup_errors": [], "root_usage": root_usage,
+        "azdaja_model_usage": azdaja_usage, "efficiency_evidence": evidence,
+        "usage": usage, "failure": (
+            None if success else {
+                "kind": "route_assertion",
+                "message": "actual retry trace conservatively suppresses route assertion",
+                "stderr": "",
+            }
+        ),
+        "trajectory_artifacts": artifacts,
+    }
+    return adapter_row, stdout, root_trace
 
 
 def run_offline_phase(
     *, manifest_path: Path, schedule_path: Path, runs_path: Path,
     claims_root: Path, artifacts_root: Path,
 ) -> None:
-    """Write 60 rows + 60 claims + 60 done + 60 artifacts; accepts no gold path."""
+    """Shared production claim -> job/artifact -> append -> done pipeline; no gold arg."""
     manifest, fixtures = _load_public(manifest_path)
     schedule, _ = _read_object(schedule_path, "rehearsal schedule")
-    jobs = _validate_schedule(schedule, manifest, fixtures)
+    jobs = _validate_schedule(schedule, manifest_path, manifest, fixtures)
     success_trace, retry_trace = _validate_committed_trace_authority()
-    _mkdir(claims_root)
+    _mkdir(claims_root); claims = claims_root / schedule["schedule_id"]; _mkdir(claims)
     _mkdir(artifacts_root)
-    row_bytes: list[bytes] = []
-    for job in jobs:
-        run_id = job["run_id"]
-        _write_json(claims_root / f"{run_id}.claim.json", {
-            "schema_version": SCHEMA_VERSION,
-            "record_type": "lb2_pre_freeze_rehearsal_claim",
-            "schedule_id": schedule["schedule_id"],
-            "run_id": run_id,
-            "ordinal": job["ordinal"],
-        })
-        run_dir = artifacts_root / run_id
-        _mkdir(run_dir)
-        fixture = fixtures[job["fixture_id"]]
-        response = _response_for(job, fixture)
-        response_bytes = response.encode("utf-8")
-        _write_exclusive(run_dir / "response.txt", response_bytes)
-        trace_kind = None
-        trace_sha = None
-        if job["arm"] == "jcode-azdaja":
-            trace_kind = "v43_success" if fixture["ordinal"] % 2 else "v43_transient_timeout_retry"
-            trace_bytes = success_trace if trace_kind == "v43_success" else retry_trace
-            _write_exclusive(run_dir / "model-trace.jsonl", trace_bytes)
-            trace_sha = sha256_bytes(trace_bytes)
-        row = {
-            "schema_version": SCHEMA_VERSION,
-            "record_type": "lb2_pre_freeze_rehearsal_run",
-            "suite_id": SUITE_ID,
-            "benchmark_result": False,
-            "schedule_id": schedule["schedule_id"],
-            "run_id": run_id,
-            "execution_ordinal": job["ordinal"],
-            "fixture_id": job["fixture_id"],
-            "payload_sha256": job["payload_sha256"],
-            "arm": job["arm"],
-            "repetition": 1,
-            "offline": True,
-            "oauth_used": False,
-            "inference_used": False,
-            "execution_success": True,
-            "scoring_status": "rehearsal_deferred",
-            "response": response,
-            "artifact": {
-                "directory": run_id,
-                "response_sha256": sha256_bytes(response_bytes),
-                "response_bytes": len(response_bytes),
-                "model_trace_kind": trace_kind,
-                "model_trace_sha256": trace_sha,
-            },
-        }
-        encoded = canonical_json_file_bytes(row)
-        row_bytes.append(encoded)
-        _write_json(claims_root / f"{run_id}.done.json", {
-            "schema_version": SCHEMA_VERSION,
-            "record_type": "lb2_pre_freeze_rehearsal_done",
-            "schedule_id": schedule["schedule_id"],
-            "run_id": run_id,
-            "row_sha256": sha256_bytes(canonical_json_bytes(row)),
-        })
-    _write_exclusive(runs_path, b"".join(row_bytes))
+    claims_fd = os.open(claims, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    state = None
+    try:
+        for job in jobs:
+            RUN.publish_job_claim_at(claims_fd, job, schedule, pid=os.getpid())
+            run_dir = artifacts_root / f"r001-{job['ordinal']:03d}-{job['arm']}"
+            _mkdir(run_dir)
+            fixture = fixtures[job["fixture_id"]]
+            response = _response_for(job, fixture)
+            trace = None
+            if job["arm"] == "jcode-azdaja":
+                trace = success_trace if fixture["ordinal"] % 2 else retry_trace
+            adapter_row, stdout, root_trace = _adapter_row(
+                job, fixture, response, run_dir, trace
+            )
+            row = RUN.transform_adapter_row(
+                adapter_row, job, schedule, raw_response=response,
+                trajectory_artifacts=adapter_row["trajectory_artifacts"],
+                stdout_bytes=stdout, root_trace_bytes=root_trace,
+                public_context=fixture["payload_object"]["context"],
+                profile=SCORE.REHEARSAL_PROFILE,
+            )
+            try:
+                SCORE.validate_run_rows(
+                    [row], [job], schedule, fixtures,
+                    profile=SCORE.REHEARSAL_PROFILE,
+                )
+            except SCORE.ScoreError as exc:
+                raise RehearsalError(f"shared live row validation failed: {exc}") from exc
+            state = RUN.append_job_row(runs_path, row, expected_state=state)
+            RUN.publish_job_done_at(claims_fd, job, schedule, row)
+    finally:
+        os.close(claims_fd)
 
 
 def _load_rows(path: Path) -> tuple[list[dict[str, Any]], bytes]:
     data = _read_regular(path, "rehearsal runs JSONL", owner_only=True)
-    lines = data.splitlines(keepends=True)
-    if len(lines) != JOB_COUNT:
+    try:
+        rows = SCORE._load_run_rows_captured(data)
+    except SCORE.ScoreError as exc:
+        raise RehearsalError(f"shared row loader refused rehearsal: {exc}") from exc
+    if len(rows) != JOB_COUNT:
         raise RehearsalError("rehearsal runs JSONL must contain exactly 60 rows")
-    rows: list[dict[str, Any]] = []
-    for index, line in enumerate(lines, 1):
-        if not line.endswith(b"\n") or not line[:-1]:
-            raise RehearsalError(f"rehearsal row {index} lacks exact final LF")
-        row = _decode_object(line, f"rehearsal row {index}")
-        rows.append(row)
     return rows, data
 
 
 def _inventory(root: Path, *, exclude_receipt: bool = False) -> list[dict[str, Any]]:
+    # Every verify performs this exact full-tree snapshot twice; SCORE's validators
+    # separately use held O_NOFOLLOW descriptors for claims/artifacts.
     root = _require_owner_directory(root, "rehearsal bundle root")
     entries: list[dict[str, Any]] = []
     for current, directories, files in os.walk(root, topdown=True, followlinks=False):
-        directories.sort()
-        files.sort()
-        current_path = Path(current)
+        directories.sort(); files.sort(); current_path = Path(current)
         for name in list(directories):
-            path = current_path / name
-            metadata = path.lstat()
+            path = current_path / name; metadata = path.lstat()
             if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
                 raise RehearsalError(f"bundle contains an unsafe directory entry: {path}")
             if os.name == "posix" and _mode(metadata) != 0o700:
                 raise RehearsalError(f"bundle directory mode is not 0700: {path}")
-            entries.append({
-                "path": path.relative_to(root).as_posix(),
-                "type": "directory",
-                "mode": _mode(metadata),
-            })
+            entries.append({"path": path.relative_to(root).as_posix(), "type": "directory", "mode": _mode(metadata)})
         for name in files:
-            path = current_path / name
-            relative = path.relative_to(root).as_posix()
-            if exclude_receipt and relative == FINAL_RECEIPT_NAME:
-                continue
+            path = current_path / name; relative = path.relative_to(root).as_posix()
+            if exclude_receipt and relative == FINAL_RECEIPT_NAME: continue
             data = _read_regular(path, f"bundle inventory {relative}", owner_only=True)
-            entries.append({
-                "path": relative,
-                "type": "file",
-                "mode": _mode(path.stat()),
-                "sha256": sha256_bytes(data),
-                "bytes": len(data),
-            })
+            entries.append({"path": relative, "type": "file", "mode": _mode(path.stat()),
+                            "sha256": sha256_bytes(data), "bytes": len(data)})
     entries.sort(key=lambda item: item["path"])
     return entries
 
 
 def _inventory_slice(inventory: list[dict[str, Any]], prefix: str) -> dict[str, Any]:
     selected = [item for item in inventory if item["path"] == prefix or item["path"].startswith(prefix + "/")]
-    return {
-        "prefix": prefix,
-        "entry_count": len(selected),
-        "inventory_sha256": sha256_bytes(canonical_json_bytes(selected)),
-    }
+    return {"prefix": prefix, "entry_count": len(selected),
+            "inventory_sha256": sha256_bytes(canonical_json_bytes(selected))}
 
 
 def terminal_validate(
     *, manifest_path: Path, schedule_path: Path, runs_path: Path,
     claims_root: Path, artifacts_root: Path,
 ) -> dict[str, Any]:
-    """No-gold terminal validator over the complete fixed schedule and artifacts."""
+    """Shared exact-60 validators. Signature intentionally cannot receive gold."""
     manifest, fixtures = _load_public(manifest_path)
     schedule, schedule_bytes = _read_object(schedule_path, "rehearsal schedule")
-    jobs = _validate_schedule(schedule, manifest, fixtures)
+    jobs = _validate_schedule(schedule, manifest_path, manifest, fixtures)
     rows, runs_bytes = _load_rows(runs_path)
-    claims = _require_owner_directory(claims_root, "rehearsal claims root")
-    artifacts = _require_owner_directory(artifacts_root, "rehearsal artifacts root")
-    expected_claim_names = {
-        name for job in jobs for name in (
-            f"{job['run_id']}.claim.json", f"{job['run_id']}.done.json"
+    try:
+        SCORE.validate_run_rows(
+            rows, jobs, schedule, fixtures, profile=SCORE.REHEARSAL_PROFILE
         )
-    }
-    if {item.name for item in os.scandir(claims)} != expected_claim_names:
-        raise RehearsalError("rehearsal claims inventory is not the exact 60 claim/60 done set")
-    if {item.name for item in os.scandir(artifacts)} != {job["run_id"] for job in jobs}:
-        raise RehearsalError("rehearsal artifact inventory is not exactly 60 run directories")
-    trace_counts: Counter[str] = Counter()
-    seen_runs: set[str] = set()
-    row_shape = {
-        "schema_version", "record_type", "suite_id", "benchmark_result", "schedule_id",
-        "run_id", "execution_ordinal", "fixture_id", "payload_sha256", "arm", "repetition",
-        "offline", "oauth_used", "inference_used", "execution_success", "scoring_status",
-        "response", "artifact",
-    }
-    for index, (row, job) in enumerate(zip(rows, jobs), 1):
-        if set(row) != row_shape:
-            raise RehearsalError(f"rehearsal row {index} shape is invalid")
-        expected_literals = {
-            "schema_version": SCHEMA_VERSION,
-            "record_type": "lb2_pre_freeze_rehearsal_run",
-            "suite_id": SUITE_ID,
-            "benchmark_result": False,
-            "schedule_id": schedule["schedule_id"],
-            "run_id": job["run_id"],
-            "execution_ordinal": index,
-            "fixture_id": job["fixture_id"],
-            "payload_sha256": job["payload_sha256"],
-            "arm": job["arm"],
-            "repetition": 1,
-            "offline": True,
-            "oauth_used": False,
-            "inference_used": False,
-            "execution_success": True,
-            "scoring_status": "rehearsal_deferred",
-        }
-        if any(row.get(key) != value for key, value in expected_literals.items()):
-            raise RehearsalError(f"rehearsal row {index} job/literal binding drifted")
-        if row["run_id"] in seen_runs:
-            raise RehearsalError(f"rehearsal row {index} duplicates a run_id")
-        seen_runs.add(row["run_id"])
-        fixture = fixtures[job["fixture_id"]]
-        if row["response"] != _response_for(job, fixture):
-            raise RehearsalError(f"rehearsal row {index} deterministic response drifted")
-        claim, _ = _read_object(claims / f"{job['run_id']}.claim.json", f"rehearsal claim {index}")
-        done, _ = _read_object(claims / f"{job['run_id']}.done.json", f"rehearsal done {index}")
-        if claim != {
-            "schema_version": SCHEMA_VERSION,
-            "record_type": "lb2_pre_freeze_rehearsal_claim",
-            "schedule_id": schedule["schedule_id"],
-            "run_id": job["run_id"],
-            "ordinal": index,
-        }:
-            raise RehearsalError(f"rehearsal claim {index} binding drifted")
-        if done != {
-            "schema_version": SCHEMA_VERSION,
-            "record_type": "lb2_pre_freeze_rehearsal_done",
-            "schedule_id": schedule["schedule_id"],
-            "run_id": job["run_id"],
-            "row_sha256": sha256_bytes(canonical_json_bytes(row)),
-        }:
-            raise RehearsalError(f"rehearsal done {index} row binding drifted")
-        run_dir = _require_owner_directory(artifacts / job["run_id"], f"rehearsal artifact {index}")
-        expected_artifact_names = {"response.txt"}
-        if job["arm"] == "jcode-azdaja":
-            expected_artifact_names.add("model-trace.jsonl")
-        if {item.name for item in os.scandir(run_dir)} != expected_artifact_names:
-            raise RehearsalError(f"rehearsal artifact {index} file inventory drifted")
-        response_bytes = _read_regular(run_dir / "response.txt", f"rehearsal response artifact {index}", owner_only=True)
-        artifact = row["artifact"]
-        if not isinstance(artifact, dict) or set(artifact) != {
-            "directory", "response_sha256", "response_bytes", "model_trace_kind", "model_trace_sha256"
-        } or artifact["directory"] != job["run_id"] or artifact["response_sha256"] != sha256_bytes(response_bytes) or artifact["response_bytes"] != len(response_bytes) or response_bytes != row["response"].encode("utf-8"):
-            raise RehearsalError(f"rehearsal response artifact {index} binding drifted")
-        if job["arm"] != "jcode-azdaja":
-            if artifact["model_trace_kind"] is not None or artifact["model_trace_sha256"] is not None:
-                raise RehearsalError(f"rehearsal control artifact {index} has model trace metadata")
-            continue
-        trace = _read_regular(run_dir / "model-trace.jsonl", f"rehearsal model trace {index}", owner_only=True)
-        trace_sha = sha256_bytes(trace)
-        expected_kind = "v43_success" if fixture["ordinal"] % 2 else "v43_transient_timeout_retry"
-        expected_sha = SUCCESS_TRACE_SHA256 if expected_kind == "v43_success" else RETRY_TRACE_SHA256
-        if artifact["model_trace_kind"] != expected_kind or artifact["model_trace_sha256"] != trace_sha or trace_sha != expected_sha:
-            raise RehearsalError(f"rehearsal model trace {index} exact sample binding drifted")
-        try:
-            routes = SCORE._category_routes_from_retained_trace(trace, index, SCORE.MODEL)
-        except SCORE.ScoreError as exc:
-            raise RehearsalError(f"production trace validator rejected rehearsal artifact {index}: {exc}") from exc
-        if expected_kind == "v43_success" and len(routes) != 1:
-            raise RehearsalError(f"rehearsal success trace {index} lost its route")
-        if expected_kind != "v43_success" and routes != []:
-            raise RehearsalError(f"rehearsal transient retry trace {index} asserted a route")
-        trace_counts[expected_kind] += 1
-    if trace_counts != Counter({"v43_success": 10, "v43_transient_timeout_retry": 10}):
-        raise RehearsalError(f"rehearsal trace coverage drifted: {dict(trace_counts)}")
+        SCORE.validate_claims(claims_root, rows, jobs, schedule)
+        SCORE.validate_artifact_rows(artifacts_root, rows, jobs, fixtures)
+    except SCORE.ScoreError as exc:
+        raise RehearsalError(f"shared terminal pipeline validation failed: {exc}") from exc
+    treatment = [row for row in rows if row["arm"] == "jcode-azdaja"]
+    trace_counts = Counter({
+        "v43_success": sum(row["runtime_route_assertion"]["asserted"] for row in treatment),
+        "v43_transient_timeout_retry": sum(not row["runtime_route_assertion"]["asserted"] for row in treatment),
+    })
+    if len(rows) != JOB_COUNT or trace_counts != Counter({"v43_success": 10, "v43_transient_timeout_retry": 10}):
+        raise RehearsalError("exact 60-row/actual-trace coverage oracle drifted")
     _validate_committed_trace_authority()
     return {
         "schema_version": SCHEMA_VERSION,
         "record_type": "lb2_pre_freeze_rehearsal_terminal_validation",
-        "suite_id": SUITE_ID,
-        "benchmark_result": False,
-        "gold_path_parameter": False,
-        "gold_opened": False,
-        "terminal_validated": True,
+        "suite_id": SUITE_ID, "benchmark_result": False,
+        "gold_path_parameter": False, "gold_opened": False,
+        "terminal_validated": True, "shared_validators": [
+            "validate_run_rows", "validate_claims", "validate_artifact_rows"
+        ],
         "schedule_id": schedule["schedule_id"],
         "manifest_sha256": sha256_bytes(canonical_json_file_bytes(manifest)),
-        "schedule_sha256": sha256_bytes(schedule_bytes),
-        "runs_sha256": sha256_bytes(runs_bytes),
-        "fixture_count": FIXTURE_COUNT,
-        "job_count": JOB_COUNT,
-        "row_count": len(rows),
-        "claim_count": JOB_COUNT,
-        "done_count": JOB_COUNT,
-        "artifact_run_count": JOB_COUNT,
+        "schedule_sha256": sha256_bytes(schedule_bytes), "runs_sha256": sha256_bytes(runs_bytes),
+        "fixture_count": FIXTURE_COUNT, "job_count": JOB_COUNT, "row_count": len(rows),
+        "claim_count": JOB_COUNT, "done_count": JOB_COUNT, "artifact_run_count": JOB_COUNT,
         "trace_sample_counts": dict(sorted(trace_counts.items())),
         "trace_validator": {
-            "authority": "score.py:_category_routes_from_retained_trace",
-            "known_fields": list(SCORE.MODEL_TRACE_FIELDS),
-            "duplicate_free_compact_any_known_field_order": True,
+            "authority": "OOLONG parse_azdaja_route_evidence/parse_azdaja_usage + score retained parser",
             "v43_success_sha256": SUCCESS_TRACE_SHA256,
             "v43_transient_timeout_retry_sha256": RETRY_TRACE_SHA256,
         },
@@ -924,24 +962,15 @@ def _load_gold_after_terminal(
     gold, gold_bytes = _read_object(gold_path, "rehearsal synthetic gold")
     if sha256_bytes(gold_bytes) != manifest["gold_sha256"]:
         raise RehearsalError("rehearsal public/gold exact-file commitment drifted")
-    if set(gold) != {
-        "schema_version", "record_type", "suite_id", "synthetic", "benchmark_result",
-        "manifest_identity_sha256", "fixtures",
-    } or gold.get("record_type") != "lb2_pre_freeze_rehearsal_synthetic_gold" or gold.get("suite_id") != SUITE_ID or gold.get("synthetic") is not True or gold.get("benchmark_result") is not False or gold.get("schema_version") != SCHEMA_VERSION:
-        raise RehearsalError("rehearsal synthetic gold shape/literals drifted")
-    if gold["manifest_identity_sha256"] != _manifest_identity(manifest):
-        raise RehearsalError("rehearsal synthetic gold/public identity edge drifted")
-    entries = gold["fixtures"]
+    entries = gold.get("fixtures")
+    answers: dict[str, str] = {}
     if not isinstance(entries, list) or len(entries) != FIXTURE_COUNT:
         raise RehearsalError("rehearsal synthetic gold fixture count drifted")
-    answers: dict[str, str] = {}
     for index, item in enumerate(entries):
         fixture_id = _fixture_id(index)
-        if item != {
-            "id": fixture_id,
-            "answer": _synthetic_answer(index),
-            "payload_sha256": fixtures[fixture_id]["payload_sha256"],
-        } or fixture_id in answers:
+        expected = {"id": fixture_id, "answer": EXPECTED_LABELS[index],
+                    "payload_sha256": fixtures[fixture_id]["payload_sha256"]}
+        if item != expected or fixture_id in answers:
             raise RehearsalError(f"rehearsal synthetic gold fixture {index + 1} drifted")
         answers[fixture_id] = item["answer"]
     return gold, answers
@@ -951,99 +980,78 @@ def build_report_after_terminal(
     *, terminal_path: Path, manifest_path: Path, schedule_path: Path,
     runs_path: Path, claims_root: Path, artifacts_root: Path, gold_path: Path,
 ) -> dict[str, Any]:
-    # Revalidate the full no-gold terminal bundle first. Only after exact equality
-    # with the committed terminal record is the synthetic gold pathname opened.
     terminal, terminal_bytes = _read_object(terminal_path, "rehearsal terminal validation")
-    rebuilt_terminal = terminal_validate(
+    rebuilt = terminal_validate(
         manifest_path=manifest_path, schedule_path=schedule_path, runs_path=runs_path,
         claims_root=claims_root, artifacts_root=artifacts_root,
     )
-    if terminal != rebuilt_terminal:
+    if terminal != rebuilt:
         raise RehearsalError("rehearsal terminal validation receipt drifted")
     manifest, fixtures = _load_public(manifest_path)
     schedule, _ = _read_object(schedule_path, "rehearsal schedule")
-    jobs = _validate_schedule(schedule, manifest, fixtures)
+    jobs = _validate_schedule(schedule, manifest_path, manifest, fixtures)
     rows, runs_bytes = _load_rows(runs_path)
     gold, answers = _load_gold_after_terminal(gold_path, manifest, fixtures)
-    score_rows: list[dict[str, Any]] = []
-    per_arm: dict[str, dict[str, int]] = {
-        arm: {"official_correct_n": 0, "strict_correct_n": 0, "derived_correct_n": 0}
-        for arm in ARMS
+    try:
+        core = SCORE.build_report_core(
+            schedule=schedule, jobs=jobs, rows=rows, arms=ARMS,
+            fixtures=fixtures, answers=answers, profile=SCORE.REHEARSAL_PROFILE,
+            bootstrap_seed=REHEARSAL_SEED, bootstrap_resamples=256,
+            envelope_threshold_n=10,
+        )
+    except SCORE.ScoreError as exc:
+        raise RehearsalError(f"shared scoring/report core refused rehearsal: {exc}") from exc
+    oracle = {
+        "jcode-native": {"official": 20, "strict": 20, "end_to_end": 20},
+        "jcode-azdaja": {"official": 0, "strict": 0, "end_to_end": 0,
+                           "derived_end_to_end": 10},
+        "prime-agent": {"official": 20, "strict": 0, "end_to_end": 20},
     }
-    derived_sources: Counter[str] = Counter()
-    for row, job in zip(rows, jobs):
-        answer = answers[job["fixture_id"]]
-        response = row["response"]
-        official_prediction = SCORE.official_extract_answer(response)
-        strict_prediction = SCORE.strict_extract_answer(response)
-        derived_prediction, derived_source = SCORE.derived_envelope_extract_answer(response)
-        diagnostics = SCORE.official_answer_diagnostics(response)
-        cell = {
-            "fixture_id": job["fixture_id"],
-            "arm": job["arm"],
-            "answer": answer,
-            "response": response,
-            "official_prediction": official_prediction,
-            "strict_prediction": strict_prediction,
-            "derived_prediction": derived_prediction,
-            "derived_source": derived_source,
-            "official_correct": official_prediction == answer,
-            "strict_correct": strict_prediction == answer,
-            "derived_correct": derived_prediction == answer,
-            "official_diagnostics": diagnostics,
+    for arm, expected in oracle.items():
+        overall = core["arms"][arm]["overall"]
+        observed = {
+            "official": overall["answer_scoring_all_terminal_outputs"]["official_longbench_v2_correct_n"],
+            "strict": overall["answer_scoring_all_terminal_outputs"]["strict_mcq_correct_n"],
+            "end_to_end": overall["end_to_end_fixed_denominator"]["official_longbench_v2_correct_n"],
         }
-        score_rows.append(cell)
-        aggregate = per_arm[job["arm"]]
-        aggregate["official_correct_n"] += int(cell["official_correct"])
-        aggregate["strict_correct_n"] += int(cell["strict_correct"])
-        aggregate["derived_correct_n"] += int(cell["derived_correct"])
-        derived_sources[str(derived_source)] += 1
-    arm_report = {
-        arm: {
-            **counts,
-            "fixed_denominator_n": FIXTURE_COUNT,
-            "official_accuracy": counts["official_correct_n"] / FIXTURE_COUNT,
-            "strict_accuracy": counts["strict_correct_n"] / FIXTURE_COUNT,
-            "derived_accuracy": counts["derived_correct_n"] / FIXTURE_COUNT,
-        }
-        for arm, counts in per_arm.items()
-    }
+        for key in ("official", "strict", "end_to_end"):
+            if observed[key] != expected[key]:
+                raise RehearsalError(f"exact synthetic scoring oracle drifted for {arm}/{key}")
+    gate = core["envelope_compatible_gate"]["arms"]
+    if {arm: gate[arm]["correct_n"] for arm in ARMS} != {
+        "jcode-native": 20, "jcode-azdaja": 10, "prime-agent": 20,
+    }:
+        raise RehearsalError(
+            "exact synthetic derived scoring oracle drifted: "
+            + repr({arm: gate[arm]["correct_n"] for arm in ARMS})
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "record_type": "lb2_pre_freeze_rehearsal_private_report",
-        "suite_id": SUITE_ID,
-        "synthetic": True,
-        "benchmark_result": False,
-        "disclosure": (
-            "Deterministic offline pipeline dress rehearsal only; no OAuth, model inference, "
-            "LongBench observation, candidate result, benchmark claim, or leaderboard claim."
-        ),
+        "suite_id": SUITE_ID, "synthetic": True, "benchmark_result": False,
+        "disclosure": "Offline shared-pipeline dress rehearsal; no OAuth or inference.",
         "integrity": {
             "terminal_validated_before_gold_open": True,
             "terminal_validation_sha256": sha256_bytes(terminal_bytes),
             "gold_sha256": sha256_bytes(canonical_json_file_bytes(gold)),
-            "runs_sha256": sha256_bytes(runs_bytes),
-            "schedule_id": schedule["schedule_id"],
-            "fixture_count": FIXTURE_COUNT,
-            "row_count": JOB_COUNT,
-            "claim_count": JOB_COUNT,
-            "done_count": JOB_COUNT,
+            "runs_sha256": sha256_bytes(runs_bytes), "schedule_id": schedule["schedule_id"],
+            "fixture_count": FIXTURE_COUNT, "row_count": JOB_COUNT,
+            "claim_count": JOB_COUNT, "done_count": JOB_COUNT,
             "artifact_run_count": JOB_COUNT,
-            "actual_score_extractors": [
-                "official_extract_answer", "strict_extract_answer",
-                "derived_envelope_extract_answer", "official_answer_diagnostics",
-            ],
+            "shared_score_core": True, "exact_synthetic_oracle_asserted": True,
         },
-        "arms": arm_report,
-        "derived_source_counts": dict(sorted(derived_sources.items())),
-        "scores": score_rows,
+        "arms": core["arms"], "domains": core["domains"],
+        "comparisons": core["comparisons"],
+        "envelope_compatible_gate": core["envelope_compatible_gate"],
+        "scores": core["score_rows"], "oracle": oracle,
     }
-
 
 def _contract_identity() -> dict[str, Any]:
     return {
         "implementation": _file_identity(Path(__file__), "rehearsal implementation"),
+        "production_runner": _file_identity(PRODUCTION_CONTROLLER, "shared production runner"),
         "score_validator": _file_identity(PRODUCTION_VALIDATOR, "rehearsal score authority"),
+        "production_adapter": _file_identity(PRODUCTION_ADAPTER, "shared OOLONG adapter"),
         "retained_trace_samples": {
             "v43_success": _file_identity(SUCCESS_TRACE, "committed v43 success trace"),
             "v43_transient_timeout_retry": _file_identity(RETRY_TRACE, "committed v43 retry trace"),
@@ -1055,7 +1063,7 @@ def _counts_from_inventory(inventory: list[dict[str, Any]]) -> dict[str, int]:
     paths = {item["path"] for item in inventory}
     return {
         "rows": JOB_COUNT,
-        "claims": sum(path.startswith("claims/") and path.endswith(".claim.json") for path in paths),
+        "claims": sum(path.startswith("claims/") and path.endswith(".json") and not path.endswith(".done.json") for path in paths),
         "done": sum(path.startswith("claims/") and path.endswith(".done.json") for path in paths),
         "artifact_runs": sum(
             item["type"] == "directory" and item["path"].count("/") == 1
@@ -1125,7 +1133,7 @@ def receipt_binding(receipt_path: Path, receipt: dict[str, Any], receipt_bytes: 
     }
 
 
-def verify_rehearsal_receipt(
+def _verify_rehearsal_receipt_unheld(
     receipt_path: Path | str, *, expected_target: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Reopen and revalidate the complete bundle and every target identity."""
@@ -1205,7 +1213,52 @@ def verify_rehearsal_receipt(
     )
     if report != rebuilt_report:
         raise RehearsalError("pre-freeze rehearsal private report failed replay")
+    final_inventory = _inventory(bundle, exclude_receipt=True)
+    final_receipt, final_receipt_bytes = _read_object(
+        receipt_path, "rechecked pre-freeze rehearsal final receipt"
+    )
+    if final_inventory != inventory or final_receipt != receipt or final_receipt_bytes != receipt_bytes:
+        raise RehearsalError("rehearsal bundle/receipt changed across full replay")
     return receipt_binding(receipt_path, receipt, receipt_bytes)
+
+
+def verify_rehearsal_receipt(
+    receipt_path: Path | str, *, expected_target: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Hold the no-symlink bundle root across the complete replay and rebind it."""
+    receipt_path = _absolute(receipt_path)
+    try:
+        held_path, held_fd = SCORE._open_directory_fd(
+            receipt_path.parent, "held rehearsal bundle root"
+        )
+    except SCORE.ScoreError as exc:
+        raise RehearsalError(f"cannot hold rehearsal bundle root: {exc}") from exc
+    fingerprint = SCORE._directory_fingerprint(os.fstat(held_fd))
+    try:
+        result = _verify_rehearsal_receipt_unheld(
+            receipt_path, expected_target=expected_target
+        )
+        try:
+            rebound_path, rebound_fd = SCORE._open_directory_fd(
+                receipt_path.parent, "rebound rehearsal bundle root"
+            )
+        except SCORE.ScoreError as exc:
+            raise RehearsalError(f"cannot rebind rehearsal bundle root: {exc}") from exc
+        try:
+            held_identity = os.fstat(held_fd)
+            rebound_identity = os.fstat(rebound_fd)
+            if (
+                held_path != rebound_path
+                or (held_identity.st_dev, held_identity.st_ino)
+                != (rebound_identity.st_dev, rebound_identity.st_ino)
+                or SCORE._directory_fingerprint(held_identity) != fingerprint
+            ):
+                raise RehearsalError("held rehearsal bundle root changed across replay")
+        finally:
+            os.close(rebound_fd)
+        return result
+    finally:
+        os.close(held_fd)
 
 
 def load_bound_target(
@@ -1237,6 +1290,8 @@ def assert_schedule_target_binding(
         raise RehearsalError("production schedule is malformed for rehearsal binding")
     if configuration.get("pre_freeze_rehearsal") != binding:
         raise RehearsalError("production schedule does not contain the verified rehearsal binding")
+    if binding.get("target_sha256") != target.get("target_sha256"):
+        raise RehearsalError("production schedule receipt does not bind the full runtime target")
     expected_config = target["configuration"]
     if (
         suite.get("suite_id") != expected_config["suite_id"]
@@ -1271,8 +1326,20 @@ def assert_schedule_target_binding(
     for name in ("jcode", "azdaja", "prime-agent"):
         scheduled = configuration.get("executables", {}).get(name, {})
         source = target["executables"][name]
-        if any(scheduled.get(key) != source.get(key) for key in ("sha256", "bytes")):
+        if any(scheduled.get(key) != source.get(key) for key in ("sha256", "bytes", "version")):
             raise RehearsalError(f"production frozen {name} executable differs from rehearsal target")
+    target_runtime = target.get("runtime_closure", {})
+    for name in ("node", "kernel_python"):
+        scheduled = runtime.get(name, {})
+        source = target_runtime.get(name, {})
+        if any(scheduled.get(key) != source.get(key) for key in ("sha256", "bytes", "version")):
+            raise RehearsalError(f"production frozen runtime {name} differs from rehearsal target")
+    for name in ("prime_package", "runtime_python"):
+        scheduled = runtime.get(name, {})
+        source = target_runtime.get(name, {})
+        keys = ("inventory_sha256", "entry_count") + (("cli_relative",) if name == "prime_package" else ())
+        if any(scheduled.get(key) != source.get(key) for key in keys):
+            raise RehearsalError(f"production frozen runtime inventory {name} differs from rehearsal target")
 
 
 def run_rehearsal(args: argparse.Namespace) -> dict[str, Any]:
@@ -1288,7 +1355,8 @@ def run_rehearsal(args: argparse.Namespace) -> dict[str, Any]:
     del parent
     _mkdir(bundle)
     manifest_path, gold_path, manifest = generate_synthetic_phase(bundle)
-    schedule = build_schedule(manifest, target)
+    _, fixtures = _load_public(manifest_path)
+    schedule = build_schedule(manifest_path, manifest, fixtures, target)
     schedule_path = bundle / "schedule.json"
     _write_json(schedule_path, schedule)
     runs_path = bundle / "runs.jsonl"

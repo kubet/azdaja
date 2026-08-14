@@ -34,7 +34,13 @@ class PreFreezeRehearsalSubprocessTests(unittest.TestCase):
             (self.candidate / name).chmod(0o600)
         self.azdaja = self.candidate / "azdaja"
         self.jcode = self.root / "jcode"
-        self.prime = self.root / "prime-agent"
+        prime_root = self.root / "prime-package"
+        (prime_root / "dist" / "bundle").mkdir(parents=True, mode=0o700)
+        self.prime = prime_root / "dist" / "bundle" / "cli.js"
+        (prime_root / "package.json").write_text(
+            json.dumps({"name": "prime-agent", "bin": {"prime-agent": "dist/bundle/cli.js"}})
+        )
+        (prime_root / "package.json").chmod(0o600)
         for path in (self.azdaja, self.jcode, self.prime):
             path.write_bytes(b"#!/bin/sh\necho synthetic-version\n")
             path.chmod(0o700)
@@ -69,8 +75,10 @@ class PreFreezeRehearsalSubprocessTests(unittest.TestCase):
         self.assertEqual(binding["record_type"], "lb2_pre_freeze_rehearsal_binding")
         rows = (bundle / "runs.jsonl").read_bytes().splitlines()
         self.assertEqual(len(rows), 60)
-        claims = list((bundle / "claims").iterdir())
-        self.assertEqual(sum(path.name.endswith(".claim.json") for path in claims), 60)
+        claim_roots = list((bundle / "claims").iterdir())
+        self.assertEqual(len(claim_roots), 1)
+        claims = list(claim_roots[0].iterdir())
+        self.assertEqual(sum(path.name.endswith(".json") and not path.name.endswith(".done.json") for path in claims), 60)
         self.assertEqual(sum(path.name.endswith(".done.json") for path in claims), 60)
         self.assertEqual(len(list((bundle / "artifacts").iterdir())), 60)
         terminal = json.loads((bundle / "terminal-validation.json").read_text())
@@ -81,10 +89,19 @@ class PreFreezeRehearsalSubprocessTests(unittest.TestCase):
         report = json.loads((bundle / "report.json").read_text())
         self.assertFalse(report["benchmark_result"])
         self.assertTrue(report["integrity"]["terminal_validated_before_gold_open"])
+        self.assertTrue(report["integrity"]["shared_score_core"])
+        self.assertTrue(report["integrity"]["exact_synthetic_oracle_asserted"])
+        terminal_rows = [json.loads(line) for line in (bundle / "runs.jsonl").read_text().splitlines()]
+        self.assertEqual(len(terminal_rows), 60)
+        self.assertTrue(all(row["auth_assertion"] == {
+            "asserted": False, "offline_rehearsal": True,
+            "oauth_used": False, "inference_used": False,
+        } for row in terminal_rows))
+        self.assertEqual(report["envelope_compatible_gate"]["arms"]["jcode-azdaja"]["correct_n"], 10)
 
     def test_tampered_artifact_is_refused_by_real_verifier_subprocess(self) -> None:
         bundle = self.create_bundle()
-        response = next((bundle / "artifacts").glob("*/response.txt"))
+        response = next((bundle / "artifacts").glob("*/stdout.ndjson"))
         response.write_bytes(response.read_bytes() + b"tamper")
         response.chmod(0o600)
         result = self.command("verify", "--receipt", bundle / "final-receipt.json")

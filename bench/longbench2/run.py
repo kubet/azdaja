@@ -75,9 +75,19 @@ def _load_python(name: str, path: Path):
 # The scorer is the public no-gold validator and the schedule schema authority.
 # Loading it cannot open gold; load_gold/build_report are never called here.
 SCORE = _load_python("azdaja_lb2_live_score_for_runner", HERE / "score.py")
-REHEARSAL = _load_python(
-    "azdaja_lb2_pre_freeze_rehearsal_for_runner", HERE / "rehearsal.py"
-)
+REHEARSAL: Any | None = None
+
+
+def _rehearsal_module():
+    """Load the gate lazily so rehearsal.py can import this production runner."""
+    global REHEARSAL
+    if REHEARSAL is None:
+        REHEARSAL = _load_python(
+            "azdaja_lb2_pre_freeze_rehearsal_for_runner", HERE / "rehearsal.py"
+        )
+    return REHEARSAL
+
+
 MODEL = SCORE.MODEL
 REASONING = SCORE.REASONING
 ARMS = tuple(SCORE.ARMS)
@@ -177,6 +187,7 @@ class AdapterPublicFixture:
 class FrozenPaths:
     root: Path
     controller: Path
+    rehearsal: Path
     validator: Path
     adapter: Path
     candidate: Path
@@ -981,6 +992,7 @@ def frozen_paths(work_root: Path) -> FrozenPaths:
     return FrozenPaths(
         root=root,
         controller=root / "controller" / "run.py",
+        rehearsal=root / "controller" / "rehearsal.py",
         validator=root / "controller" / "score.py",
         adapter=root / "adapter" / "oolong-run.py",
         candidate=root / "candidate",
@@ -1015,6 +1027,7 @@ def create_snapshots(
         directory.mkdir(mode=0o700)
 
     _copy_captured_file(Path(__file__).resolve(strict=True), paths.controller, "controller", executable=False)
+    _copy_captured_file(HERE / "rehearsal.py", paths.rehearsal, "pre-freeze rehearsal gate", executable=False)
     _copy_captured_file(HERE / "score.py", paths.validator, "live score validator", executable=False)
     _copy_captured_file(OOLONG_SOURCE.resolve(strict=True), paths.adapter, "OOLONG adapter", executable=False)
 
@@ -1064,8 +1077,8 @@ def create_snapshots(
         # The scorer only needs an executable identity, but this runner freezes
         # the known package layout rather than guessing at a launcher.
         paths = FrozenPaths(
-            root=paths.root, controller=paths.controller, validator=paths.validator,
-            adapter=paths.adapter, candidate=paths.candidate, jcode=paths.jcode,
+            root=paths.root, controller=paths.controller, rehearsal=paths.rehearsal,
+            validator=paths.validator, adapter=paths.adapter, candidate=paths.candidate, jcode=paths.jcode,
             node=paths.node, kernel_environment=paths.kernel_environment,
             runtime_python=paths.runtime_python, prime_package=paths.prime_package,
             prime_agent=actual_prime_cli, public=paths.public,
@@ -1129,6 +1142,7 @@ def create_snapshots(
             "inventory": sorted(PUBLIC_ROOT_NAMES),
         },
         "controller": controller,
+        "rehearsal": _component_identity(paths.rehearsal),
         "runtime_closure": runtime_closure,
         "candidate": candidate,
         "executables": executables,
@@ -1198,7 +1212,7 @@ def _validate_inventory_entries(entries: Any, label: str) -> None:
 
 def validate_snapshot_attestation(value: dict[str, Any]) -> None:
     expected_top = {
-        "schema_version", "record_type", "containment", "public", "controller",
+        "schema_version", "record_type", "containment", "public", "controller", "rehearsal",
         "runtime_closure", "candidate", "executables", "prime_package",
         "kernel_environment", "runtime_python",
     }
@@ -1225,7 +1239,7 @@ def validate_snapshot_attestation(value: dict[str, Any]) -> None:
         "source_root", "snapshot_root", "manifest_sha256", "fixture_count", "inventory"
     } or public["fixture_count"] != SCORE.EXPECTED_FIXTURES or public["inventory"] != sorted(PUBLIC_ROOT_NAMES):
         raise BenchError("snapshot public identity schema is invalid")
-    for component_name in ("controller",):
+    for component_name in ("controller", "rehearsal"):
         SCORE._validate_component_identity(value[component_name], f"snapshot {component_name}", path=True)
     SCORE._validate_candidate_identity(value["candidate"])
     executables = value["executables"]
@@ -1325,6 +1339,8 @@ def verify_snapshots(
         raise BenchError("snapshot root inventory drifted")
     if _component_identity(paths.controller) != attestation.get("controller"):
         raise BenchError("frozen controller drifted")
+    if _component_identity(paths.rehearsal) != attestation.get("rehearsal"):
+        raise BenchError("frozen rehearsal gate drifted")
     runtime = attestation.get("runtime_closure")
     if not isinstance(runtime, dict):
         raise BenchError("snapshot runtime closure attestation is missing")
@@ -2729,7 +2745,9 @@ def build_schedule(
     repair_model: str = MODEL,
     legacy_repair_model_capability: dict[str, Any] | None = None,
     pre_freeze_rehearsal: dict[str, Any] | None = None,
+    profile: Any = None,
 ) -> dict[str, Any]:
+    profile = SCORE.PRODUCTION_PROFILE if profile is None else profile
     fixture_identities = [
         {
             "fixture_id": item.fixture_id,
@@ -2744,7 +2762,7 @@ def build_schedule(
     rng.shuffle(fixture_order)
     jobs: list[dict[str, Any]] = []
     for item in fixture_order:
-        arm_order = list(ARMS)
+        arm_order = list(profile.arms)
         rng.shuffle(arm_order)
         for arm in arm_order:
             jobs.append(
@@ -2762,7 +2780,7 @@ def build_schedule(
         "schema_version": SCORE.SCHEMA_VERSION,
         "record_type": "lb2_frozen_schedule",
         "suite": {
-            "suite_id": SCORE.SUITE_ID,
+            "suite_id": profile.suite_id,
             "manifest_sha256": suite.manifest_sha256,
             "fixtures": fixture_identities,
         },
@@ -2773,8 +2791,8 @@ def build_schedule(
             "legacy_repair_model_capability": copy.deepcopy(
                 legacy_repair_model_capability
             ),
-            "derived_gate": copy.deepcopy(DERIVED_GATE),
-            "arms": list(ARMS),
+            "derived_gate": copy.deepcopy(profile.derived_gate),
+            "arms": list(profile.arms),
             "repetitions": 1,
             "seed": seed,
             "timeout_seconds": timeout,
@@ -2788,12 +2806,14 @@ def build_schedule(
     }
     if legacy_repair_model_capability is None:
         schedule["configuration"].pop("legacy_repair_model_capability")
+    if profile.derived_gate is None:
+        schedule["configuration"].pop("derived_gate")
     if pre_freeze_rehearsal is None:
         schedule["configuration"].pop("pre_freeze_rehearsal")
     schedule_id = sha256_bytes(canonical_json_bytes(schedule))
     for job in jobs:
         job["run_id"] = sha256_bytes(
-            SCORE.RUN_ID_DOMAIN
+            profile.run_id_domain
             + schedule_id.encode("ascii")
             + canonical_json_bytes(job)
         )
@@ -2804,11 +2824,12 @@ def build_schedule(
             suite.manifest_path,
             suite.fixtures_by_id,
             manifest_sha256=suite.manifest_sha256,
+            profile=profile,
         )
     except SCORE.ScoreError as exc:
         raise BenchError(f"constructed schedule violates live scorer contract: {exc}") from exc
-    if len(validated_jobs) != SCORE.EXPECTED_FIXTURES * len(ARMS) or arms != ARMS:
-        raise BenchError("constructed schedule is not the exact 189-job three-arm grid")
+    if len(validated_jobs) != profile.expected_fixtures * len(profile.arms) or arms != profile.arms:
+        raise BenchError("constructed schedule is not the exact fixed-profile three-arm grid")
     return schedule
 
 
@@ -3346,7 +3367,9 @@ def transform_adapter_row(
     stdout_bytes: bytes = b"",
     root_trace_bytes: bytes | None = None,
     public_context: str | None = None,
+    profile: Any = None,
 ) -> dict[str, Any]:
+    profile = SCORE.PRODUCTION_PROFILE if profile is None else profile
     config = schedule["configuration"]
     arm = job["arm"]
     relevant = (
@@ -3377,7 +3400,7 @@ def transform_adapter_row(
         }
     row = {
         "schema_version": SCORE.SCHEMA_VERSION,
-        "benchmark": SCORE.SUITE_ID,
+        "benchmark": profile.suite_id,
         "record_type": "inference",
         "schedule_id": schedule["schedule_id"],
         "run_id": job["run_id"],
@@ -3423,6 +3446,44 @@ def transform_adapter_row(
                 "stderr": retained_stderr,
             }
     return row
+
+
+def publish_job_claim_at(
+    claims_fd: int, job: dict[str, Any], schedule: dict[str, Any], *, pid: int | None = None
+) -> None:
+    """Shared claim-before-job publisher used by production and offline rehearsal."""
+    atomic_create_private_json_at(
+        claims_fd,
+        job["run_id"] + ".json",
+        {
+            "schedule_id": schedule["schedule_id"],
+            "run_id": job["run_id"],
+            "ordinal": job["ordinal"],
+            "pid": os.getpid() if pid is None else pid,
+        },
+    )
+
+
+def append_job_row(
+    output: Path, row: dict[str, Any], *, expected_state: OutputState
+) -> OutputState:
+    """Shared canonical append-only row commit helper."""
+    return _append_private_jsonl(output, row, expected_state=expected_state)
+
+
+def publish_job_done_at(
+    claims_fd: int, job: dict[str, Any], schedule: dict[str, Any], row: dict[str, Any]
+) -> None:
+    """Publish completion only after the exact row bytes have been appended."""
+    atomic_create_private_json_at(
+        claims_fd,
+        job["run_id"] + ".done.json",
+        {
+            "schedule_id": schedule["schedule_id"],
+            "run_id": job["run_id"],
+            "row_sha256": sha256_bytes(canonical_json_bytes(row)),
+        },
+    )
 
 
 def _verify_row_live(
@@ -3939,16 +4000,7 @@ def _run_held_ceremony(
             auth_jcode = adapter.preflight_jcode(source_home, args.jcode)
         else:
             auth_prime = adapter.preflight_prime(source_home)
-        atomic_create_private_json_at(
-            handles.claims_fd,
-            job["run_id"] + ".json",
-            {
-                "schedule_id": schedule["schedule_id"],
-                "run_id": job["run_id"],
-                "ordinal": job["ordinal"],
-                "pid": os.getpid(),
-            },
-        )
+        publish_job_claim_at(handles.claims_fd, job, schedule)
         recheck_ceremony_handles(handles)
         # A crash or swap after this point leaves an orphan in the held claims
         # authority. Resume refuses a second billed turn.
@@ -3975,15 +4027,7 @@ def _run_held_ceremony(
         recheck_ceremony_handles(handles)
         if _held_output_state(handles.output_fd) != output_state:
             raise BenchError("inference output bytes changed before completion receipt")
-        atomic_create_private_json_at(
-            handles.claims_fd,
-            job["run_id"] + ".done.json",
-            {
-                "schedule_id": schedule["schedule_id"],
-                "run_id": job["run_id"],
-                "row_sha256": sha256_bytes(canonical_json_bytes(row)),
-            },
-        )
+        publish_job_done_at(handles.claims_fd, job, schedule, row)
         recheck_ceremony_handles(handles)
         print(
             json.dumps(
@@ -4064,7 +4108,23 @@ def fresh_source_preflight(
     }
 
 
+def reverify_rehearsal_gate(
+    rehearsal: Any, binding: dict[str, Any], target: dict[str, Any]
+) -> None:
+    """Replay the full bundle+target and compare the exact binding at a use boundary."""
+    try:
+        observed = rehearsal.verify_rehearsal_receipt(
+            binding.get("path", ""), expected_target=target
+        )
+        rebound = rehearsal.load_bound_target(binding.get("path", ""), observed)
+    except rehearsal.RehearsalError as exc:
+        raise BenchError(f"late pre-freeze rehearsal replay refused: {exc}") from exc
+    if observed != binding or rebound != target:
+        raise BenchError("late pre-freeze rehearsal binding/target drifted")
+
+
 def run_suite(args: argparse.Namespace) -> int:
+    rehearsal = _rehearsal_module()
     if not args.yes_run_inference:
         raise BenchError("refusing subscription inference without --yes-run-inference")
     if args.model != MODEL or args.reasoning != REASONING:
@@ -4087,7 +4147,7 @@ def run_suite(args: argparse.Namespace) -> int:
         # This full-bundle replay and exact target capture occurs before OAuth
         # preflight and before any output/work/schedule/claim artifact is created.
         try:
-            rehearsal_target = REHEARSAL.build_target_identity(
+            rehearsal_target = rehearsal.build_target_identity(
                 manifest=args.manifest,
                 candidate=args.azdaja_skill,
                 jcode=args.jcode,
@@ -4095,11 +4155,11 @@ def run_suite(args: argparse.Namespace) -> int:
                 seed=args.seed,
                 timeout=args.timeout,
             )
-            rehearsal_binding = REHEARSAL.verify_rehearsal_receipt(
+            rehearsal_binding = rehearsal.verify_rehearsal_receipt(
                 args.pre_freeze_rehearsal_receipt,
                 expected_target=rehearsal_target,
             )
-        except REHEARSAL.RehearsalError as exc:
+        except rehearsal.RehearsalError as exc:
             raise BenchError(f"pre-freeze rehearsal receipt refused: {exc}") from exc
 
     suite = capture_public_suite(args.manifest)
@@ -4129,25 +4189,25 @@ def run_suite(args: argparse.Namespace) -> int:
         if not isinstance(rehearsal_binding, dict):
             raise BenchError("resume schedule lacks its mandatory pre-freeze rehearsal binding")
         try:
-            verified_binding = REHEARSAL.verify_rehearsal_receipt(
+            verified_binding = rehearsal.verify_rehearsal_receipt(
                 rehearsal_binding.get("path", "")
             )
-        except REHEARSAL.RehearsalError as exc:
+        except rehearsal.RehearsalError as exc:
             raise BenchError(f"schedule-bound pre-freeze rehearsal receipt refused: {exc}") from exc
         if verified_binding != rehearsal_binding:
             raise BenchError("schedule-bound pre-freeze rehearsal receipt identity drifted")
         try:
-            rehearsal_target = REHEARSAL.load_bound_target(
+            rehearsal_target = rehearsal.load_bound_target(
                 rehearsal_binding["path"], rehearsal_binding
             )
-        except REHEARSAL.RehearsalError as exc:
+        except rehearsal.RehearsalError as exc:
             raise BenchError(f"schedule-bound rehearsal target refused: {exc}") from exc
         paths = frozen_paths(work)
         attestation = load_snapshot_attestation(paths)
         prime_relative = Path(attestation["prime_package"]["cli_relative"])
         paths = FrozenPaths(
-            root=paths.root, controller=paths.controller, validator=paths.validator,
-            adapter=paths.adapter, candidate=paths.candidate, jcode=paths.jcode,
+            root=paths.root, controller=paths.controller, rehearsal=paths.rehearsal,
+            validator=paths.validator, adapter=paths.adapter, candidate=paths.candidate, jcode=paths.jcode,
             node=paths.node, kernel_environment=paths.kernel_environment,
             runtime_python=paths.runtime_python, prime_package=paths.prime_package,
             prime_agent=paths.prime_package / prime_relative, public=paths.public,
@@ -4159,10 +4219,10 @@ def run_suite(args: argparse.Namespace) -> int:
         _assert_schedule_matches_attestation(schedule, attestation, paths)
         assert rehearsal_target is not None and rehearsal_binding is not None
         try:
-            REHEARSAL.assert_schedule_target_binding(
+            rehearsal.assert_schedule_target_binding(
                 schedule, rehearsal_target, rehearsal_binding
             )
-        except REHEARSAL.RehearsalError as exc:
+        except rehearsal.RehearsalError as exc:
             raise BenchError(f"resume rehearsal/schedule target binding failed: {exc}") from exc
         kernel_environment = Path(
             schedule["configuration"]["runtime_closure"]["kernel_environment"]["root"]
@@ -4222,13 +4282,16 @@ def run_suite(args: argparse.Namespace) -> int:
         _assert_schedule_matches_attestation(schedule, attestation, paths)
         assert rehearsal_target is not None and rehearsal_binding is not None
         try:
-            REHEARSAL.assert_schedule_target_binding(
+            rehearsal.assert_schedule_target_binding(
                 schedule, rehearsal_target, rehearsal_binding
             )
-        except REHEARSAL.RehearsalError as exc:
+        except rehearsal.RehearsalError as exc:
             raise BenchError(f"fresh rehearsal/schedule target binding failed: {exc}") from exc
+        reverify_rehearsal_gate(rehearsal, rehearsal_binding, rehearsal_target)
         atomic_create_private_json(schedule_path, schedule)
 
+    assert rehearsal_binding is not None and rehearsal_target is not None
+    reverify_rehearsal_gate(rehearsal, rehearsal_binding, rehearsal_target)
     claims = _create_or_open_claims(
         claims_root,
         schedule["schedule_id"],
@@ -4241,6 +4304,7 @@ def run_suite(args: argparse.Namespace) -> int:
         if os.name == "posix":
             os.chmod(runs_work, 0o700)
     _require_owner_directory(runs_work, "retained run-artifact root")
+    reverify_rehearsal_gate(rehearsal, rehearsal_binding, rehearsal_target)
     handles = open_ceremony_handles(
         output=output,
         claims_root=claims_root,
@@ -4249,6 +4313,7 @@ def run_suite(args: argparse.Namespace) -> int:
         allow_existing_output=args.resume,
     )
     try:
+        reverify_rehearsal_gate(rehearsal, rehearsal_binding, rehearsal_target)
         return _run_held_ceremony(
             args=args, suite=suite, schedule=schedule, paths=paths,
             attestation=attestation, output=output,

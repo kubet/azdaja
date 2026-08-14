@@ -13,8 +13,9 @@ gold path. `score.py` is the owner-only deferred scorer.
 ## Mandatory offline pre-freeze rehearsal
 
 Every fresh production run now requires a completed `rehearsal.py` receipt for
-its exact manifest, candidate, controller, validator, OOLONG adapter,
-executables, candidate config, seed, and timeout. This is a fixed, deterministic
+its exact manifest, candidate, controller, rehearsal, validator, OOLONG adapter,
+versioned executables, Node/Prime package/kernel/runtime recursive closures,
+candidate config, seed, and timeout. This is a fixed, deterministic
 20-fixture x 3-arm synthetic pipeline exercise. It performs no OAuth and no
 inference, and its distinct `lb2_pre_freeze_rehearsal_*` records are never a
 benchmark or candidate-performance claim.
@@ -34,12 +35,15 @@ python3 bench/longbench2/rehearsal.py verify \
   --receipt "$REHEARSAL_PARENT/bundle/final-receipt.json"
 ```
 
-The offline run boundary has no gold argument. It writes exactly 60 deferred
-rows, 60 claim receipts, 60 done receipts, and 60 artifact directories. The
-no-gold terminal validator traverses the committed v43 serde-order success and
-transient-timeout/retry traces using the real `score.py` trace validator, which
-accepts any duplicate-free compact ordering of known fields. Only then is
-synthetic gold opened and the canonical private rehearsal report created. The
+The offline run boundary has no gold argument. The fixed wrapper uses the production
+schedule constructor and claim-before-job / canonical-append / done-after-row
+helpers to write exactly 60 production-shaped deferred rows, 60 claims, 60 done
+receipts, and 60 production-shaped artifact directories. The no-gold terminal
+stage calls the shared `validate_run_rows`, `validate_claims`, and
+`validate_artifact_rows` authorities. Committed actual v43 success and retry raw
+bytes are parsed by both the real OOLONG adapter parsers and scorer parser. Only
+then is synthetic gold opened; shared score-row, aggregate, paired-comparison,
+and report-core code runs and must match the exact committed synthetic oracle. The
 final receipt is published last and binds the complete bundle inventories and
 production target.
 

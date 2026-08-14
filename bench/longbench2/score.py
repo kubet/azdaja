@@ -24,6 +24,7 @@ import secrets
 import stat
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -137,6 +138,39 @@ ROOT_TOKEN_ECONOMY_AUTHORITIES = frozenset({
     "validated_AZDAJA_SOLO_TRACE_root_request_unicode_characters_div_4",
     "unavailable",
 })
+@dataclass(frozen=True)
+class ScoreProfile:
+    """Internal fixed pipeline profile; never exposed as a CLI count knob."""
+
+    suite_id: str
+    expected_fixtures: int
+    arms: tuple[str, ...]
+    run_id_domain: bytes
+    domain_counts: dict[str, int]
+    derived_gate: dict[str, Any] | None
+    require_live_auth: bool
+
+
+PRODUCTION_PROFILE = ScoreProfile(
+    suite_id=SUITE_ID,
+    expected_fixtures=EXPECTED_FIXTURES,
+    arms=ARMS,
+    run_id_domain=RUN_ID_DOMAIN,
+    domain_counts=SELECTED_DOMAIN_COUNTS,
+    derived_gate=DERIVED_GATE,
+    require_live_auth=True,
+)
+REHEARSAL_PROFILE = ScoreProfile(
+    suite_id="lb2-pre-freeze-rehearsal-20x3-v1",
+    expected_fixtures=20,
+    arms=ARMS,
+    run_id_domain=b"lb2-pre-freeze-rehearsal-run-v1\0",
+    domain_counts={"Synthetic": 20},
+    derived_gate=None,
+    require_live_auth=False,
+)
+
+
 INFERENCE_ROW_KEYS = frozenset({
     "schema_version", "benchmark", "record_type", "schedule_id", "run_id",
     "fixture_id", "payload_sha256", "execution_ordinal", "arm", "repetition",
@@ -1120,6 +1154,7 @@ def validate_schedule(
     fixtures: dict[str, dict[str, Any]],
     *,
     manifest_sha256: str | None = None,
+    profile: ScoreProfile = PRODUCTION_PROFILE,
 ) -> tuple[list[dict[str, Any]], tuple[str, ...]]:
     if set(schedule) != {
         "schema_version", "record_type", "suite", "configuration", "jobs", "schedule_id"
@@ -1152,7 +1187,7 @@ def validate_schedule(
         raise ScoreError("schedule suite/configuration must be objects")
     if set(suite) != {"suite_id", "manifest_sha256", "fixtures"}:
         raise ScoreError("schedule suite has an unexpected object shape")
-    _require_equal(suite["suite_id"], SUITE_ID, "schedule suite_id")
+    _require_equal(suite["suite_id"], profile.suite_id, "schedule suite_id")
     if manifest_sha256 is None:
         _, captured_manifest, _ = load_json_object_captured(
             manifest_path, "public suite manifest schedule binding"
@@ -1160,7 +1195,7 @@ def validate_schedule(
         manifest_sha256 = sha256_bytes(captured_manifest)
     _require_equal(suite["manifest_sha256"], manifest_sha256, "schedule manifest SHA-256")
     scheduled_fixtures = suite["fixtures"]
-    if not isinstance(scheduled_fixtures, list) or len(scheduled_fixtures) != EXPECTED_FIXTURES:
+    if not isinstance(scheduled_fixtures, list) or len(scheduled_fixtures) != profile.expected_fixtures:
         raise ScoreError("schedule suite fixture identity list is incomplete")
     manifest_order = list(fixtures)
     scheduled_order: list[str] = []
@@ -1196,7 +1231,7 @@ def validate_schedule(
         raise ScoreError("legacy repair capability requires repair model and derived gate")
     if "derived_gate" in configuration:
         _require_equal(
-            configuration["derived_gate"], DERIVED_GATE,
+            configuration["derived_gate"], profile.derived_gate,
             "schedule preregistered derived gate",
         )
     if "pre_freeze_rehearsal" in configuration:
@@ -1211,7 +1246,7 @@ def validate_schedule(
     ):
         raise ScoreError("schedule repair model is invalid")
     arms_raw = configuration["arms"]
-    _require_equal(arms_raw, list(ARMS), "schedule exact three-arm order")
+    _require_equal(arms_raw, list(profile.arms), "schedule exact three-arm order")
     arms = tuple(arms_raw)
     _require_equal(configuration["repetitions"], 1, "schedule repetitions")
     if type(configuration["seed"]) is not int:
@@ -1248,10 +1283,10 @@ def validate_schedule(
     _validate_runtime_closure(configuration["runtime_closure"])
 
     jobs = schedule["jobs"]
-    expected_jobs = EXPECTED_FIXTURES * len(ARMS)
+    expected_jobs = profile.expected_fixtures * len(profile.arms)
     if not isinstance(jobs, list) or len(jobs) != expected_jobs:
         raise ScoreError(f"schedule must contain exactly {expected_jobs} jobs")
-    expected_grid = {(fixture_id, arm, 1) for fixture_id in fixtures for arm in ARMS}
+    expected_grid = {(fixture_id, arm, 1) for fixture_id in fixtures for arm in profile.arms}
     observed_grid: set[tuple[str, str, int]] = set()
     run_ids: set[str] = set()
     permutations: Counter[tuple[str, ...]] = Counter()
@@ -1260,7 +1295,7 @@ def validate_schedule(
     rng.shuffle(expected_fixture_order)
     expected_sequence: list[tuple[str, str]] = []
     for fixture_id in expected_fixture_order:
-        arm_order = list(ARMS)
+        arm_order = list(profile.arms)
         rng.shuffle(arm_order)
         permutations[tuple(arm_order)] += 1
         expected_sequence.extend((fixture_id, arm) for arm in arm_order)
@@ -1291,14 +1326,14 @@ def validate_schedule(
         base_job = dict(job)
         del base_job["run_id"]
         expected_run_id = sha256_bytes(
-            RUN_ID_DOMAIN + schedule_id.encode("ascii") + canonical_json_bytes(base_job)
+            profile.run_id_domain + schedule_id.encode("ascii") + canonical_json_bytes(base_job)
         )
         _require_equal(run_id, expected_run_id, f"schedule job {index} run_id")
         observed_grid.add(cell)
         run_ids.add(run_id)
     if observed_grid != expected_grid:
-        raise ScoreError("schedule is not the exact complete 63 x 3 grid")
-    if sum(permutations.values()) != EXPECTED_FIXTURES:
+        raise ScoreError("schedule is not the exact complete fixed profile grid")
+    if sum(permutations.values()) != profile.expected_fixtures:
         raise ScoreError("schedule arm-order receipts are incomplete")
     return jobs, arms
 
@@ -1894,7 +1929,10 @@ def _validate_auth_assertion(auth: Any, arm: str, index: int) -> None:
         _require_equal(auth["credential_type_asserted"], "oauth", f"inference row {index} credential type")
 
 
-def _validate_success_evidence(row: dict[str, Any], job: dict[str, Any], schedule: dict[str, Any], index: int) -> None:
+def _validate_success_evidence(
+    row: dict[str, Any], job: dict[str, Any], schedule: dict[str, Any], index: int,
+    *, profile: ScoreProfile = PRODUCTION_PROFILE,
+) -> None:
     arm = job["arm"]
     _require_equal(row.get("timed_out"), False, f"inference row {index} timed_out")
     _require_equal(row.get("exit_code"), 0, f"inference row {index} exit_code")
@@ -1909,9 +1947,15 @@ def _validate_success_evidence(row: dict[str, Any], job: dict[str, Any], schedul
     latency = float(row["latency_seconds"])
     if latency <= 0 or latency > timeout * 1.10 + 1.0:
         raise ScoreError(f"inference row {index} successful latency is zero or exceeds its timeout envelope")
-    _validate_auth_assertion(row.get("auth_assertion"), arm, index)
-    if row["auth_assertion"]["expires_at_ms"] <= int(float(started) * 1000) + 60_000:
-        raise ScoreError(f"inference row {index} OAuth receipt expires too close to run start")
+    if profile.require_live_auth:
+        _validate_auth_assertion(row.get("auth_assertion"), arm, index)
+        if row["auth_assertion"]["expires_at_ms"] <= int(float(started) * 1000) + 60_000:
+            raise ScoreError(f"inference row {index} OAuth receipt expires too close to run start")
+    elif row.get("auth_assertion") != {
+        "asserted": False, "offline_rehearsal": True,
+        "oauth_used": False, "inference_used": False,
+    }:
+        raise ScoreError(f"inference row {index} offline rehearsal auth receipt is invalid")
 
     trace = row.get("trace_capture_assertion")
     required = ["azdaja_model_trace", "azdaja_solo_trace"] if arm == "jcode-azdaja" else []
@@ -2177,6 +2221,8 @@ def validate_run_rows(
     jobs: list[dict[str, Any]],
     schedule: dict[str, Any],
     fixtures: dict[str, dict[str, Any]],
+    *,
+    profile: ScoreProfile = PRODUCTION_PROFILE,
 ) -> None:
     if len(rows) != len(jobs):
         raise ScoreError(
@@ -2203,7 +2249,7 @@ def validate_run_rows(
         }
         expected = {
             "schema_version": SCHEMA_VERSION,
-            "benchmark": SUITE_ID,
+            "benchmark": profile.suite_id,
             "record_type": "inference",
             "schedule_id": schedule["schedule_id"],
             "run_id": job["run_id"],
@@ -2263,7 +2309,7 @@ def validate_run_rows(
         if row["execution_success"]:
             if failure is not None:
                 raise ScoreError(f"inference row {index} succeeded but has a failure object")
-            _validate_success_evidence(row, job, schedule, index)
+            _validate_success_evidence(row, job, schedule, index, profile=profile)
         else:
             if not isinstance(failure, dict) or set(failure) != {"kind", "message", "stderr"}:
                 raise ScoreError(f"inference row {index} execution failure has an unexpected shape")
@@ -2379,6 +2425,7 @@ def validate_frozen_runs(
     captured_schedule: bytes | None = None,
     captured_runs: bytes | None = None,
     held_claims_root_fd: int | None = None,
+    profile: ScoreProfile = PRODUCTION_PROFILE,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], tuple[str, ...]]:
     """Validate terminal completion.  This function cannot receive or read gold."""
     schedule_path = schedule_path or Path(str(runs_path) + ".schedule.json")
@@ -2391,12 +2438,13 @@ def validate_frozen_runs(
     jobs, arms = validate_schedule(
         schedule, manifest_path, fixtures,
         manifest_sha256=sha256_bytes(canonical_json_file_bytes(manifest)),
+        profile=profile,
     )
     rows = (
         load_run_rows(runs_path)
         if captured_runs is None else _load_run_rows_captured(captured_runs)
     )
-    validate_run_rows(rows, jobs, schedule, fixtures)
+    validate_run_rows(rows, jobs, schedule, fixtures, profile=profile)
     validate_claims(
         claims_root, rows, jobs, schedule, held_root_fd=held_claims_root_fd
     )
@@ -2904,18 +2952,19 @@ def _fixed_denominator_summary(
 
 
 def aggregate_scores(
-    score_rows: list[dict[str, Any]], raw_rows: list[dict[str, Any]], arms: Sequence[str]
+    score_rows: list[dict[str, Any]], raw_rows: list[dict[str, Any]], arms: Sequence[str],
+    *, profile: ScoreProfile = PRODUCTION_PROFILE,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     raw_by_run = {row["run_id"]: row for row in raw_rows}
     arm_documents: dict[str, Any] = {}
     domain_documents: list[dict[str, Any]] = []
     for arm in arms:
         selected = [item for item in score_rows if item["arm"] == arm]
-        if len(selected) != EXPECTED_FIXTURES:
-            raise ScoreError(f"arm {arm} does not have the fixed denominator {EXPECTED_FIXTURES}")
+        if len(selected) != profile.expected_fixtures:
+            raise ScoreError(f"arm {arm} does not have the fixed denominator {profile.expected_fixtures}")
         overall = _fixed_denominator_summary(selected, raw_by_run)
         domains: list[dict[str, Any]] = []
-        for domain, expected_n in SELECTED_DOMAIN_COUNTS.items():
+        for domain, expected_n in profile.domain_counts.items():
             domain_rows = [item for item in selected if item["domain"] == domain]
             if len(domain_rows) != expected_n:
                 raise ScoreError(f"arm {arm} domain {domain!r} denominator drift")
@@ -2925,9 +2974,9 @@ def aggregate_scores(
             domain_documents.append(summary)
         completed = [item for item in selected if item["execution_success"]]
         arm_documents[arm] = {
-            "scheduled": EXPECTED_FIXTURES,
-            "scheduled_n": EXPECTED_FIXTURES,
-            "execution_rate": len(completed) / EXPECTED_FIXTURES,
+            "scheduled": profile.expected_fixtures,
+            "scheduled_n": profile.expected_fixtures,
+            "execution_rate": len(completed) / profile.expected_fixtures,
             "completed_accuracy": _mean_bool(
                 item["official_longbench_v2_correct"] for item in completed
             ),
@@ -2948,11 +2997,12 @@ def paired_comparisons(
     *,
     seed: int = DEFAULT_BOOTSTRAP_SEED,
     resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
+    profile: ScoreProfile = PRODUCTION_PROFILE,
 ) -> dict[str, Any]:
     if type(seed) is not int or type(resamples) is not int or resamples <= 0:
         raise ScoreError("bootstrap seed/resamples must be integers and resamples positive")
     fixture_ids = list(fixtures)
-    if len(fixture_ids) != EXPECTED_FIXTURES:
+    if len(fixture_ids) != profile.expected_fixtures:
         raise ScoreError("paired bootstrap requires the exact 63-fixture cohort")
     by_key = {(item["fixture_id"], item["arm"]): item for item in score_rows}
     metrics = (
@@ -2971,7 +3021,7 @@ def paired_comparisons(
             for metric in metrics
         }
         observed = {
-            metric: sum(values) / EXPECTED_FIXTURES
+            metric: sum(values) / profile.expected_fixtures
             for metric, values in differences.items()
         }
         draws: dict[str, list[float]] = {metric: [] for metric in metrics}
@@ -2980,12 +3030,12 @@ def paired_comparisons(
         )
         rng = random.Random(rng_seed)
         for _ in range(resamples):
-            indices = [rng.randrange(EXPECTED_FIXTURES) for _ in range(EXPECTED_FIXTURES)]
+            indices = [rng.randrange(profile.expected_fixtures) for _ in range(profile.expected_fixtures)]
             for metric in metrics:
                 values = differences[metric]
-                draws[metric].append(sum(values[index] for index in indices) / EXPECTED_FIXTURES)
+                draws[metric].append(sum(values[index] for index in indices) / profile.expected_fixtures)
         result[f"{arm_a}__minus__{arm_b}"] = {
-            "paired_fixture_n": EXPECTED_FIXTURES,
+            "paired_fixture_n": profile.expected_fixtures,
             "direction": "first arm minus second arm",
             "resamples": resamples,
             "metrics": {
@@ -3023,9 +3073,10 @@ def envelope_compatible_gate(
     arms: Sequence[str],
     *,
     threshold_n: int = 16,
+    profile: ScoreProfile = PRODUCTION_PROFILE,
 ) -> dict[str, Any]:
     """Report the preregistered fixed-denominator envelope compatibility gate."""
-    if type(threshold_n) is not int or not 0 <= threshold_n <= EXPECTED_FIXTURES:
+    if type(threshold_n) is not int or not 0 <= threshold_n <= profile.expected_fixtures:
         raise ScoreError("envelope-compatible gate threshold is invalid")
     if len(rows) != len(jobs):
         raise ScoreError("envelope-compatible gate row/job cardinality drift")
@@ -3034,7 +3085,7 @@ def envelope_compatible_gate(
         selected = [
             (row, job) for row, job in zip(rows, jobs) if job["arm"] == arm
         ]
-        if len(selected) != EXPECTED_FIXTURES:
+        if len(selected) != profile.expected_fixtures:
             raise ScoreError(f"envelope-compatible gate arm {arm} denominator drift")
         execution_failures: list[str] = []
         unrecognized: list[str] = []
@@ -3055,13 +3106,13 @@ def envelope_compatible_gate(
             else:
                 wrong.append(fixture_id)
                 sources[str(source)] += 1
-        if sum(map(len, (execution_failures, unrecognized, wrong, correct))) != EXPECTED_FIXTURES:
+        if sum(map(len, (execution_failures, unrecognized, wrong, correct))) != profile.expected_fixtures:
             raise AssertionError("envelope-compatible taxonomy is not exhaustive")
         cells[arm] = {
-            "fixed_denominator_n": EXPECTED_FIXTURES,
+            "fixed_denominator_n": profile.expected_fixtures,
             "threshold_n": threshold_n,
             "correct_n": len(correct),
-            "accuracy": len(correct) / EXPECTED_FIXTURES,
+            "accuracy": len(correct) / profile.expected_fixtures,
             "passes_threshold": len(correct) >= threshold_n,
             "recognized_source_counts": dict(sorted(sources.items())),
             "taxonomy": {
@@ -3088,6 +3139,45 @@ def envelope_compatible_gate(
         "candidate_arm": DERIVED_GATE["candidate_arm"],
         "threshold_n": threshold_n,
         "arms": cells,
+    }
+
+
+def build_report_core(
+    *,
+    schedule: dict[str, Any],
+    jobs: list[dict[str, Any]],
+    rows: list[dict[str, Any]],
+    arms: Sequence[str],
+    fixtures: dict[str, dict[str, Any]],
+    answers: dict[str, str],
+    profile: ScoreProfile,
+    bootstrap_seed: int = DEFAULT_BOOTSTRAP_SEED,
+    bootstrap_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
+    envelope_threshold_n: int | None = None,
+) -> dict[str, Any]:
+    """Shared post-terminal scoring/aggregation core used by production and rehearsal."""
+    if len(rows) != profile.expected_fixtures * len(profile.arms):
+        raise ScoreError("report core terminal row cardinality drift")
+    score_rows = build_score_rows(rows, jobs, fixtures, answers)
+    arm_documents, domain_documents = aggregate_scores(
+        score_rows, rows, arms, profile=profile
+    )
+    comparisons = paired_comparisons(
+        score_rows, fixtures, arms, seed=bootstrap_seed,
+        resamples=bootstrap_resamples, profile=profile,
+    )
+    envelope_gate = None
+    if envelope_threshold_n is not None:
+        envelope_gate = envelope_compatible_gate(
+            rows, jobs, answers, arms, threshold_n=envelope_threshold_n,
+            profile=profile,
+        )
+    return {
+        "score_rows": score_rows,
+        "arms": arm_documents,
+        "domains": domain_documents,
+        "comparisons": comparisons,
+        "envelope_compatible_gate": envelope_gate,
     }
 
 
@@ -3175,23 +3265,21 @@ def build_report(
         ):
             if descriptor is not None:
                 os.close(descriptor)
-    score_rows = build_score_rows(rows, jobs, fixtures, answers)
-    arm_documents, domain_documents = aggregate_scores(score_rows, rows, arms)
-    comparisons = paired_comparisons(
-        score_rows, fixtures, arms, seed=bootstrap_seed, resamples=bootstrap_resamples
-    )
     configuration = schedule["configuration"]
-    envelope_gate = (
-        envelope_compatible_gate(
-            rows,
-            jobs,
-            answers,
-            arms,
-            threshold_n=configuration["derived_gate"]["minimum_correct_n"],
-        )
-        if "derived_gate" in configuration
-        else None
+    core = build_report_core(
+        schedule=schedule, jobs=jobs, rows=rows, arms=arms,
+        fixtures=fixtures, answers=answers, profile=PRODUCTION_PROFILE,
+        bootstrap_seed=bootstrap_seed, bootstrap_resamples=bootstrap_resamples,
+        envelope_threshold_n=(
+            configuration["derived_gate"]["minimum_correct_n"]
+            if "derived_gate" in configuration else None
+        ),
     )
+    score_rows = core["score_rows"]
+    arm_documents = core["arms"]
+    domain_documents = core["domains"]
+    comparisons = core["comparisons"]
+    envelope_gate = core["envelope_compatible_gate"]
     candidate_binary = configuration["candidate"]["components"]["azdaja"]
     executable_binary = configuration["executables"]["azdaja"]
     candidate_binary_matches_executable = (
