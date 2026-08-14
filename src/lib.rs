@@ -1098,18 +1098,34 @@ fn structural_sample(text: &str, total: usize) -> Result<String> {
             .unwrap_or(without_newline);
         let line_chars = line.chars().count();
         if !line.is_empty() && line_bucket_counts[structural_line_bucket(line)] == 1 {
-            rare_lines.push((
-                char_offset,
-                char_offset + line_chars.min(SOLO_SAMPLE_DISTINCT_CHARS),
-            ));
+            rare_lines.push((char_offset, char_offset + line_chars));
         }
         char_offset += raw_line.chars().count();
     }
-    rare_lines.retain(|(start, end)| {
-        regions
-            .iter()
-            .all(|(_, region_start, region_end)| *end <= *region_start || *start >= *region_end)
-    });
+    rare_lines = rare_lines
+        .into_iter()
+        .filter_map(|(line_start, line_end)| {
+            let mut cursor = line_start;
+            for (_, region_start, region_end) in &regions {
+                if cursor >= line_end {
+                    return None;
+                }
+                if cursor < *region_start {
+                    return Some((
+                        cursor,
+                        line_end
+                            .min(*region_start)
+                            .min(cursor + SOLO_SAMPLE_DISTINCT_CHARS),
+                    ));
+                }
+                if cursor < *region_end && line_end > *region_start {
+                    cursor = *region_end;
+                }
+            }
+            (cursor < line_end)
+                .then_some((cursor, line_end.min(cursor + SOLO_SAMPLE_DISTINCT_CHARS)))
+        })
+        .collect();
     let exemplar_count = rare_lines.len().min(SOLO_SAMPLE_DISTINCT_REGIONS);
     if exemplar_count == 1 {
         let (start, end) = rare_lines[0];
@@ -4566,6 +4582,19 @@ mod unit_tests {
             previous = current;
         }
         longest
+    }
+
+    #[test]
+    fn structural_sample_continues_a_long_rare_line_beyond_the_head_region() {
+        let mut text = "H".repeat(SOLO_SAMPLE_REGION_CHARS);
+        text.push_str("SCHEMA ALPHA = BETA ");
+        text.push_str(&"x".repeat(10_000));
+        text.push('\n');
+        text.push_str(&"ordinary repeated filler line\n".repeat(200));
+        let sample = structural_sample(&text, text.chars().count()).unwrap();
+        assert!(sample.contains(&format!("[DISTINCT chars {}..", SOLO_SAMPLE_REGION_CHARS)));
+        assert!(sample.contains(r#"["S","C","H","E","M","A""#));
+        assert!(sample.len() <= SOLO_STRUCTURAL_SAMPLE_BYTES);
     }
 
     #[test]

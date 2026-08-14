@@ -1081,8 +1081,10 @@ fn root_repair_prompt(failure: &SoloProgramFailure) -> String {
         SoloProgramFailureKind::Compile => {
             "Return a newly compiled complete program, not a patch or continuation."
         }
-        SoloProgramFailureKind::Assertion
-        | SoloProgramFailureKind::Value
+        SoloProgramFailureKind::Assertion => {
+            "An asserted assumption was false. Do not preserve the failing slice or boundary merely because an earlier check passed. Re-derive it from raw ctx, then confirm the candidate region is nonempty and contains varied records before aggregating and calling FINAL."
+        }
+        SoloProgramFailureKind::Value
         | SoloProgramFailureKind::Key
         | SoloProgramFailureKind::Index
         | SoloProgramFailureKind::Regex
@@ -1612,6 +1614,10 @@ mod tests {
             let prompt = root_repair_prompt(&failure);
             assert!(prompt.len() <= 1024);
             assert!(!prompt.contains("secret"));
+            if expected == SoloProgramFailureKind::Assertion {
+                assert!(prompt.contains("merely because an earlier check passed"));
+                assert!(prompt.contains("contains varied records"));
+            }
         }
         let source_line = "assert parsed_count == expected_count  # this suffix must be capped before any source-sized span can enter a repair";
         let diagnostic_failure = SoloProgramFailure {

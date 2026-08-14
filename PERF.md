@@ -261,3 +261,109 @@ results but one trace-retention failure; its sampler was superseded after an exa
 206-character adversarial self-embedding was reproduced. V42 adds a streaming,
 fail-closed 100-codepoint overlap guard with bounded sample hashes and no
 source-sized hash materialization.
+
+
+## Frozen RULER v42 candidate-90 terminal gate
+
+The immutable v42 `candidate-full-90-v1` run terminated naturally with the exact 90-row
+frozen schedule and no retry, resume, scoring, or gold access. Its output SHA-256 is
+`420e2519a0846675d480588fdbbd109f6af1bc4b666a514c68761a1de7f4a291` and its
+schedule ID is `1dcfee1b32f29813fbfe04081af3c5c3d4b8867b678ec310e63c5380bb9e5177`.
+It missed the reliability gate at **89/90 execution**. Ordinal 87, fixture
+`rxm-9361854e5de1e01d72c8c549b4006f9e` (`fwe`, 32,768), exited 2 after the second
+typed Assertion repair still produced an empty answer. This remains a
+`monty_subset_error` fixed-denominator zero. The exact stderr SHA-256 is
+`d4c63188bfb017749772c25483fa305fd8f1da91aebb9434d5cfaa46d00347aa`.
+
+The global-width-4 makespan was **699.178999 s**, which passed the 720-second target
+with 20.821001 s headroom, but speed cannot compensate for the failed row. The run used
+122 root turns, 32 repairs, 2,659.833 s provider inference, 122 exec invocations, 90
+snapshot saves, 32 loads, and zero subcalls. All 90 claims/done receipts, schedules,
+component and payload identities, route assertions, exact trace captures, workspace/credential cleanup checks, and >=100-character leak scans
+passed; every ledger was present and exactly replayed (89 complete; the failed row
+intentionally incomplete);
+leaks were zero. Product lifecycle passed only 89/90 because of the process failure.
+The terminal record is `/private/tmp/azdaja-ruler-width4-candidate90-v42-v1-terminal-record.json`,
+SHA-256 `9f82058818f516ed429ece25bc6fc694475e85441ddab0c3bfb7621cc8be6909`. Official `full-v1` remained blocked.
+
+## Frozen RULER width-4 smoke: v42 to v43
+
+This is an immutable paired comparison over the same ordered 20-fixture commitment,
+frozen controller, OAuth route, model, reasoning level, global width 4, and
+`candidate-smoke-20-v1` no-score/no-gold workflow described above. V43 is a generic
+reliability/speed candidate: long low-frequency lines can contribute their first
+uncovered bounded structural continuation instead of being suppressed by an overlapping
+head/middle/tail region, and typed Assertion repair explicitly re-derives a false
+boundary rather than retaining it because an earlier check passed. No benchmark names,
+question templates, product tools, config keys, or SKILL strategy were added.
+
+Immutable before (v42):
+
+- candidate binary `5fa5e399801d152915a698a82498ac379ac8ae0335d4626c290c782b3989cd0a`
+- output `99dad202607fafb1a9f1102414b596f4d5648d5d498ba0aef9ad9981f36ba38b`
+- schedule ID `3f7589e4a497364056be8a96daab8e44cf61fbaa200c3b0dbfd7e4ffecd90512`
+- result 20/20 execution, 175.236998 s makespan
+
+Immutable after (v43):
+
+- candidate binary `6be5b9ff567eca6d1a5c2315dfb0c12fb5bd847b58daef0b3b8191151e45b509`
+- source patch `b11f34b195a8efcb3f9a857236da03b6fc036dc46dd543a304c4f67b9ab43997`
+- source stamp `fd4dcedac4beae4fd55b24d0c6be3f8053b522bb65b3bcf67b82b8a7326b2d0d`
+- output `3ffc7e9187b57eeae738f291dea00c935506268338b49599bf82066e93325cfc`
+- schedule ID `bce16a4287857d3d0f65c10792d7f8a14d3cc0f4bfe483578eb1c40099cce677`
+- result **20/20 execution**, zero process exits/timeouts, 119.739380 s makespan
+- 20/20 one root turn and one exec invocation; **zero repairs and zero subcalls**
+- all 20 exact traces, ledgers, usage rows, routes, payloads, lifecycles, candidate
+  staging, tool-policy checks, credential cleanups, claims/done receipts, and
+  >=100-character leak scans passed; leaks 0/20
+
+Aggregate v42 -> v43:
+
+| measure | v42 | v43 | delta |
+|---|---:|---:|---:|
+| execution | 20/20 | 20/20 | unchanged |
+| makespan s | 175.236998 | 119.739380 | -55.497618 (-31.67%) |
+| item mean s | 29.284071 | 21.746139 | -7.537932 (-25.74%) |
+| item median s | 19.969727 | 21.560276 | +1.590549 (+7.96%) |
+| item p95 s | 59.591941 | 29.987673 | -29.604267 (-49.68%) |
+| root turns / repairs | 29 / 9 | 20 / 0 | -9 / -9 |
+| provider inference s | 577.511 | 426.826 | -150.685 (-26.09%) |
+| provider output tokens | 44,240 | 31,859 | -12,381 (-27.99%) |
+| provider input tokens | 96,791 | 52,565 | -44,226 (-45.69%) |
+| exec count / wall ms | 29 / 251.655 | 20 / 241.386 | -9 / -10.269 |
+| snapshot saves / wall ms | 20 / 4.904 | 20 / 4.265 | 0 / -0.640 |
+| snapshot loads / wall ms | 9 / 1.888 | 0 / 0.000 | -9 / -1.888 |
+| logical subcalls / wall ms | 0 / 0.000 | 0 / 0.000 | unchanged |
+
+This is a `DUAL-WIN:` smoke result: it preserves 20/20 while eliminating every measured
+repair, lowering failure surface, mean latency, tail latency, makespan, inference time,
+and tokens. Median item latency rose 1.590549 s, so the per-item table remains essential.
+The v43 mean is still **2.504x** the historical v38 native mean of 8.685748 s, so the
+<=1.5x target remains missed. This smoke proves neither frozen-90 reliability nor
+comparative accuracy; v43 must run the entire fresh frozen 90 before `full-v1` can begin.
+
+Per-item columns are root `turns/repairs`, provider inference milliseconds, provider
+output tokens across all turns, and `exec/save/load/subcall` counts.
+
+| # | fixture | v42 wall s | v42 t/r | v42 provider ms | v42 out | v42 e/s/l/c | v43 wall s | v43 t/r | v43 provider ms | v43 out | v43 e/s/l/c | wall delta s |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | `0842be47` | 16.691 | 1/0 | 16187 | 1208 | 1/1/0/0 | 17.054 | 1/0 | 16532 | 1212 | 1/1/0/0 | +0.364 |
+| 2 | `6670e3c8` | 10.022 | 1/0 | 9524 | 636 | 1/1/0/0 | 22.878 | 1/0 | 22374 | 1737 | 1/1/0/0 | +12.856 |
+| 3 | `6a55c9a3` | 17.814 | 1/0 | 17311 | 1203 | 1/1/0/0 | 17.068 | 1/0 | 16559 | 1222 | 1/1/0/0 | -0.746 |
+| 4 | `05b3f054` | 20.082 | 1/0 | 19573 | 1417 | 1/1/0/0 | 21.967 | 1/0 | 21428 | 1636 | 1/1/0/0 | +1.885 |
+| 5 | `324ca4d7` | 16.709 | 1/0 | 16328 | 1238 | 1/1/0/0 | 21.313 | 1/0 | 20893 | 1592 | 1/1/0/0 | +4.604 |
+| 6 | `20717f3b` | 44.029 | 2/1 | 43629 | 3440 | 2/1/1/0 | 22.320 | 1/0 | 21938 | 1691 | 1/1/0/0 | -21.709 |
+| 7 | `2a38707a` | 43.109 | 2/1 | 42724 | 3321 | 2/1/1/0 | 21.210 | 1/0 | 20835 | 1540 | 1/1/0/0 | -21.899 |
+| 8 | `0d5ef27c` | 23.006 | 1/0 | 22659 | 1768 | 1/1/0/0 | 17.320 | 1/0 | 16980 | 1203 | 1/1/0/0 | -5.687 |
+| 9 | `2285810b` | 16.738 | 1/0 | 16380 | 1215 | 1/1/0/0 | 21.434 | 1/0 | 21085 | 1472 | 1/1/0/0 | +4.696 |
+| 10 | `1d930dbb` | 18.901 | 1/0 | 18549 | 1417 | 1/1/0/0 | 24.023 | 1/0 | 23651 | 1762 | 1/1/0/0 | +5.122 |
+| 11 | `4373136e` | 19.857 | 1/0 | 19522 | 1496 | 1/1/0/0 | 23.827 | 1/0 | 23495 | 1800 | 1/1/0/0 | +3.970 |
+| 12 | `513316fa` | 47.260 | 2/1 | 46887 | 3621 | 2/1/1/0 | 29.541 | 1/0 | 29179 | 2204 | 1/1/0/0 | -17.719 |
+| 13 | `11dc65da` | 59.268 | 2/1 | 58888 | 4674 | 2/1/1/0 | 23.256 | 1/0 | 22882 | 1696 | 1/1/0/0 | -36.012 |
+| 14 | `9361854e` | 37.005 | 2/1 | 36648 | 2827 | 2/1/1/0 | 21.687 | 1/0 | 21361 | 1609 | 1/1/0/0 | -15.318 |
+| 15 | `2ac3ee8a` | 19.410 | 1/0 | 18934 | 1405 | 1/1/0/0 | 15.300 | 1/0 | 14889 | 1085 | 1/1/0/0 | -4.110 |
+| 16 | `4423687d` | 9.755 | 1/0 | 9379 | 604 | 1/1/0/0 | 14.573 | 1/0 | 14092 | 1045 | 1/1/0/0 | +4.819 |
+| 17 | `00cc544f` | 11.419 | 1/0 | 11039 | 795 | 1/1/0/0 | 38.481 | 1/0 | 38106 | 2879 | 1/1/0/0 | +27.062 |
+| 18 | `0638d6b8` | 34.206 | 1/0 | 33826 | 2654 | 1/1/0/0 | 20.851 | 1/0 | 20493 | 1479 | 1/1/0/0 | -13.355 |
+| 19 | `1ed71e2b` | 54.655 | 3/2 | 54224 | 4165 | 3/1/2/0 | 24.306 | 1/0 | 23937 | 1859 | 1/1/0/0 | -30.349 |
+| 20 | `44cd3a58` | 65.749 | 3/2 | 65300 | 5136 | 3/1/2/0 | 16.517 | 1/0 | 16117 | 1136 | 1/1/0/0 | -49.232 |
