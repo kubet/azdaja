@@ -189,6 +189,7 @@ class ScoreTests(unittest.TestCase):
                 "model": SCORE.MODEL,
                 "reasoning": SCORE.REASONING,
                 "repair_model": "gpt-5.4-mini",
+                "derived_gate": copy.deepcopy(SCORE.DERIVED_GATE),
                 "arms": list(SCORE.ARMS),
                 "repetitions": 1,
                 "seed": SCORE.DEFAULT_BOOTSTRAP_SEED,
@@ -652,6 +653,79 @@ class ScoreTests(unittest.TestCase):
             receipt["source_sha256_before_redaction"] = receipt["sha256"]
             receipt["exact_text_preserved"] = True
 
+    def test_legacy_repair_capability_exact_shape_and_bindings(self):
+        candidate = {
+            "sha256": "a" * 64,
+            "components": {
+                "SKILL.md": {"sha256": "1" * 64, "bytes": 1},
+                "azdaja": {"sha256": "2" * 64, "bytes": 2},
+                "config.toml": {"sha256": "3" * 64, "bytes": 3},
+            },
+        }
+        receipt = {
+            "schema_version": 1,
+            "kind": "legacy_deny_unknown_default_model",
+            "field": "jcode_repair_model",
+            "expected_repair_model": SCORE.MODEL,
+            "candidate_sha256": candidate["sha256"],
+            "binary_sha256": candidate["components"]["azdaja"]["sha256"],
+            "config_sha256": candidate["components"]["config.toml"]["sha256"],
+            "augmented_config_sha256": "4" * 64,
+            "probe_command": ["azdaja", "list"],
+            "exact_config_exit_code": 0,
+            "augmented_config_exit_code": 2,
+            "augmented_error_class": "unknown_field",
+            "stdout_empty": True,
+            "credentials_inherited": False,
+            "model_trace_created": False,
+        }
+        SCORE._validate_legacy_repair_capability(receipt, candidate, SCORE.MODEL)
+        for mutation in (
+            lambda value: value.pop("field"),
+            lambda value: value.__setitem__("extra", True),
+            lambda value: value.__setitem__("binary_sha256", "5" * 64),
+            lambda value: value.__setitem__("expected_repair_model", "other"),
+            lambda value: value.__setitem__("stdout_empty", False),
+        ):
+            bad = copy.deepcopy(receipt)
+            mutation(bad)
+            with self.assertRaises(SCORE.ScoreError):
+                SCORE._validate_legacy_repair_capability(bad, candidate, SCORE.MODEL)
+        with self.assertRaisesRegex(SCORE.ScoreError, "Luna-only"):
+            SCORE._validate_legacy_repair_capability(
+                receipt, candidate, "gpt-5.4-mini"
+            )
+
+    def test_derived_gate_fixed_63_threshold_and_execution_failures(self):
+        jobs = []
+        rows = []
+        answers = {}
+        for index in range(SCORE.EXPECTED_FIXTURES):
+            fixture_id = f"lb2-{index:032x}"
+            answers[fixture_id] = "A"
+            for arm in SCORE.ARMS:
+                jobs.append({"fixture_id": fixture_id, "arm": arm})
+                if arm == "jcode-azdaja":
+                    response = "A\n" if index < 16 else "B\n"
+                else:
+                    response = "The correct answer is (A)"
+                rows.append({"execution_success": True, "response": response})
+        gate = SCORE.envelope_compatible_gate(rows, jobs, answers, SCORE.ARMS)
+        candidate = gate["arms"]["jcode-azdaja"]
+        self.assertEqual(candidate["correct_n"], 16)
+        self.assertTrue(candidate["passes_threshold"])
+        self.assertEqual(candidate["recognized_source_counts"], {"exact_bare_lf": 63})
+        candidate_row_index = next(
+            i for i, job in enumerate(jobs)
+            if job["arm"] == "jcode-azdaja" and job["fixture_id"] == "lb2-00000000000000000000000000000000"
+        )
+        rows[candidate_row_index]["execution_success"] = False
+        gate = SCORE.envelope_compatible_gate(rows, jobs, answers, SCORE.ARMS)
+        candidate = gate["arms"]["jcode-azdaja"]
+        self.assertEqual(candidate["correct_n"], 15)
+        self.assertFalse(candidate["passes_threshold"])
+        self.assertEqual(candidate["taxonomy"]["execution_failure_n"], 1)
+
     def test_category_route_receipt_allows_mini_only_for_depth_zero_repairs(self):
         route = {
             "asserted": True,
@@ -726,6 +800,25 @@ class ScoreTests(unittest.TestCase):
         self.assertIsNone(SCORE.strict_extract_answer("Reasoning. The correct answer is (B)"))
         self.assertIsNone(SCORE.strict_extract_answer("**The correct answer is (B)**"))
 
+        for response, source in (
+            ("B\n", "exact_bare_lf"),
+            ("The correct answer is (B)", "official"),
+            ("The correct answer is (B)\n", "official"),
+            ("Reasoning. The correct answer is (B)", "official"),
+        ):
+            with self.subTest(envelope_response=response):
+                self.assertEqual(
+                    SCORE.derived_envelope_extract_answer(response), ("B", source)
+                )
+        for response in (
+            "B", " B\n", "B ", "B\r\n", "B\n\n", "b\n", "(B)\n",
+            "Answer: B\n", "A or B\n",
+        ):
+            with self.subTest(rejected_envelope_response=response):
+                self.assertEqual(
+                    SCORE.derived_envelope_extract_answer(response), (None, None)
+                )
+
     def test_complete_report_fixed_denominators_efficiency_and_disclosure(self):
         with tempfile.TemporaryDirectory(dir="/private/tmp") as directory:
             artifacts = self.make_artifacts(Path(directory))
@@ -735,6 +828,13 @@ class ScoreTests(unittest.TestCase):
             )
             self.assertTrue(report["integrity"]["terminal_complete_before_gold_read"])
             self.assertTrue(report["integrity"]["manifest_gold_hash_cycle_checked"])
+            gate = report["envelope_compatible_gate"]
+            self.assertEqual(gate["threshold_n"], 16)
+            self.assertIn("not the pinned upstream official metric", gate["metric_authority"])
+            for arm in SCORE.ARMS:
+                cell = gate["arms"][arm]
+                self.assertEqual(cell["fixed_denominator_n"], SCORE.EXPECTED_FIXTURES)
+                self.assertEqual(sum(cell["taxonomy"].values()), SCORE.EXPECTED_FIXTURES)
             self.assertFalse(report["disclosure"]["official_longbench_v2_leaderboard_result"])
             self.assertFalse(report["disclosure"]["blind_or_secret_gold"])
             self.assertTrue(report["disclosure"]["publicly_joinable_to_upstream_answers"])

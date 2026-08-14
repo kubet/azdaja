@@ -34,6 +34,14 @@ EXPECTED_FIXTURES = 63
 ARMS = ("jcode-native", "jcode-azdaja", "prime-agent")
 MODEL = "gpt-5.6-luna"
 REASONING = "medium"
+DERIVED_GATE = {
+    "schema_version": 1,
+    "metric": "end_to_end_official_plus_exact_bare_lf_correct",
+    "extractor": "official_then_fullmatch_upper_ad_plus_one_lf_v1",
+    "candidate_arm": "jcode-azdaja",
+    "fixed_denominator": EXPECTED_FIXTURES,
+    "minimum_correct_n": 16,
+}
 AMBIENT_CLOSURE_DISCLOSURE = (
     "The Prime npm package, Node executable, and complete Prime kernel venv are frozen "
     "owner-only snapshots with schedule-bound recursive inventories. Node/Python dynamic "
@@ -973,6 +981,51 @@ def _validate_candidate_identity(value: Any) -> None:
 
 
 
+def _validate_legacy_repair_capability(
+    value: Any, candidate: dict[str, Any], repair_model: str
+) -> None:
+    expected_keys = {
+        "schema_version", "kind", "field", "expected_repair_model",
+        "candidate_sha256", "binary_sha256", "config_sha256",
+        "augmented_config_sha256", "probe_command", "exact_config_exit_code",
+        "augmented_config_exit_code", "augmented_error_class", "stdout_empty",
+        "credentials_inherited", "model_trace_created",
+    }
+    if not isinstance(value, dict) or set(value) != expected_keys:
+        raise ScoreError("legacy repair capability has an unexpected shape")
+    expected_literals = {
+        "schema_version": 1,
+        "kind": "legacy_deny_unknown_default_model",
+        "field": "jcode_repair_model",
+        "expected_repair_model": MODEL,
+        "probe_command": ["azdaja", "list"],
+        "exact_config_exit_code": 0,
+        "augmented_config_exit_code": 2,
+        "augmented_error_class": "unknown_field",
+        "stdout_empty": True,
+        "credentials_inherited": False,
+        "model_trace_created": False,
+    }
+    for key, expected in expected_literals.items():
+        _require_equal(value[key], expected, f"legacy repair capability {key}")
+    _require_equal(repair_model, MODEL, "legacy repair capability Luna-only route")
+    components = candidate["components"]
+    _require_equal(
+        value["candidate_sha256"], candidate["sha256"],
+        "legacy repair capability candidate binding",
+    )
+    _require_equal(
+        value["binary_sha256"], components["azdaja"]["sha256"],
+        "legacy repair capability binary binding",
+    )
+    _require_equal(
+        value["config_sha256"], components["config.toml"]["sha256"],
+        "legacy repair capability config binding",
+    )
+    if not _is_sha256(value["augmented_config_sha256"]):
+        raise ScoreError("legacy repair capability augmented config hash is invalid")
+
+
 def _validate_runtime_closure(value: Any) -> None:
     if not isinstance(value, dict) or set(value) != {
         "adapter", "validator", "prime_package", "node", "kernel_python",
@@ -1097,11 +1150,22 @@ def validate_schedule(
         "model", "reasoning", "arms", "repetitions", "seed", "timeout_seconds",
         "candidate", "controller", "executables", "runtime_closure",
     }
-    if set(configuration) not in {
-        frozenset(required_config),
-        frozenset(required_config | {"repair_model"}),
-    }:
+    optional_config = {
+        "repair_model", "legacy_repair_model_capability", "derived_gate",
+    }
+    if not required_config.issubset(configuration) or not set(configuration).issubset(
+        required_config | optional_config
+    ):
         raise ScoreError("schedule configuration has an unexpected object shape")
+    if "legacy_repair_model_capability" in configuration and (
+        "repair_model" not in configuration or "derived_gate" not in configuration
+    ):
+        raise ScoreError("legacy repair capability requires repair model and derived gate")
+    if "derived_gate" in configuration:
+        _require_equal(
+            configuration["derived_gate"], DERIVED_GATE,
+            "schedule preregistered derived gate",
+        )
     _require_equal(configuration["model"], MODEL, "schedule exact model")
     _require_equal(configuration["reasoning"], REASONING, "schedule reasoning")
     repair_model = configuration.get("repair_model", MODEL)
@@ -1121,6 +1185,12 @@ def validate_schedule(
         raise ScoreError("schedule timeout_seconds must be positive and finite")
     candidate = configuration["candidate"]
     _validate_candidate_identity(candidate)
+    if "legacy_repair_model_capability" in configuration:
+        _validate_legacy_repair_capability(
+            configuration["legacy_repair_model_capability"],
+            candidate,
+            repair_model,
+        )
     controller = configuration["controller"]
     _validate_component_identity(controller, "schedule controller", path=True)
     executables = configuration["executables"]
@@ -2422,6 +2492,24 @@ def strict_extract_answer(response: str) -> str | None:
     return match.group(1) if match else None
 
 
+def derived_envelope_extract_answer(response: str) -> tuple[str | None, str | None]:
+    """Apply the pinned official extractor, then only v43's exact bare-LF envelope."""
+    if not isinstance(response, str):
+        return None, None
+    official = official_extract_answer(response)
+    if official is not None:
+        return official, "official"
+    match = re.fullmatch(r"([A-D])\n", response)
+    if match:
+        return match.group(1), "exact_bare_lf"
+    return None, None
+
+
+def envelope_compatible_extract_answer(response: str) -> str | None:
+    """Compatibility spelling for the preregistered derived prediction only."""
+    return derived_envelope_extract_answer(response)[0]
+
+
 def strict_mcq_correct(response: str, answer: str) -> bool:
     return strict_extract_answer(response) == answer
 
@@ -2784,6 +2872,81 @@ def _validate_separate_roots(public_root: Path, gold_root: Path, runs_root: Path
             )
 
 
+def envelope_compatible_gate(
+    rows: list[dict[str, Any]],
+    jobs: list[dict[str, Any]],
+    answers: dict[str, str],
+    arms: Sequence[str],
+    *,
+    threshold_n: int = 16,
+) -> dict[str, Any]:
+    """Report the preregistered fixed-denominator envelope compatibility gate."""
+    if type(threshold_n) is not int or not 0 <= threshold_n <= EXPECTED_FIXTURES:
+        raise ScoreError("envelope-compatible gate threshold is invalid")
+    if len(rows) != len(jobs):
+        raise ScoreError("envelope-compatible gate row/job cardinality drift")
+    cells: dict[str, Any] = {}
+    for arm in arms:
+        selected = [
+            (row, job) for row, job in zip(rows, jobs) if job["arm"] == arm
+        ]
+        if len(selected) != EXPECTED_FIXTURES:
+            raise ScoreError(f"envelope-compatible gate arm {arm} denominator drift")
+        execution_failures: list[str] = []
+        unrecognized: list[str] = []
+        wrong: list[str] = []
+        correct: list[str] = []
+        sources: Counter[str] = Counter()
+        for row, job in selected:
+            fixture_id = job["fixture_id"]
+            if not row["execution_success"]:
+                execution_failures.append(fixture_id)
+                continue
+            prediction, source = derived_envelope_extract_answer(row["response"])
+            if prediction is None:
+                unrecognized.append(fixture_id)
+            elif prediction == answers[fixture_id]:
+                correct.append(fixture_id)
+                sources[str(source)] += 1
+            else:
+                wrong.append(fixture_id)
+                sources[str(source)] += 1
+        if sum(map(len, (execution_failures, unrecognized, wrong, correct))) != EXPECTED_FIXTURES:
+            raise AssertionError("envelope-compatible taxonomy is not exhaustive")
+        cells[arm] = {
+            "fixed_denominator_n": EXPECTED_FIXTURES,
+            "threshold_n": threshold_n,
+            "correct_n": len(correct),
+            "accuracy": len(correct) / EXPECTED_FIXTURES,
+            "passes_threshold": len(correct) >= threshold_n,
+            "recognized_source_counts": dict(sorted(sources.items())),
+            "taxonomy": {
+                "execution_failure_n": len(execution_failures),
+                "extractor_unrecognized_n": len(unrecognized),
+                "wrong_n": len(wrong),
+                "correct_n": len(correct),
+            },
+            "fixture_ids": {
+                "execution_failure": execution_failures,
+                "extractor_unrecognized": unrecognized,
+                "wrong": wrong,
+                "correct": correct,
+            },
+        }
+    return {
+        "metric_authority": (
+            "preregistered syntax-only envelope compatibility diagnostic; "
+            "not the pinned upstream official metric"
+        ),
+        "extractor": DERIVED_GATE["extractor"],
+        "fallback_accepted_form": "exactly one uppercase A-D followed by exactly one LF",
+        "normalization": "none; pinned official extractor first, then exact fullmatch fallback",
+        "candidate_arm": DERIVED_GATE["candidate_arm"],
+        "threshold_n": threshold_n,
+        "arms": cells,
+    }
+
+
 def build_report(
     manifest_path: Path,
     gold_path: Path,
@@ -2874,6 +3037,17 @@ def build_report(
         score_rows, fixtures, arms, seed=bootstrap_seed, resamples=bootstrap_resamples
     )
     configuration = schedule["configuration"]
+    envelope_gate = (
+        envelope_compatible_gate(
+            rows,
+            jobs,
+            answers,
+            arms,
+            threshold_n=configuration["derived_gate"]["minimum_correct_n"],
+        )
+        if "derived_gate" in configuration
+        else None
+    )
     candidate_binary = configuration["candidate"]["components"]["azdaja"]
     executable_binary = configuration["executables"]["azdaja"]
     candidate_binary_matches_executable = (
@@ -2949,6 +3123,14 @@ def build_report(
                 "Recorded response string must be exactly 'The correct answer is (X)' "
                 "for one uppercase A-D; the scorer applies no whitespace normalization"
             ),
+            "envelope_compatible_gate_metric": (
+                "Schedule-preregistered derived diagnostic applying the pinned official "
+                "extractor first and then only an exact uppercase A-D plus one LF fallback; "
+                "it does not replace the pinned upstream official metric"
+            ),
+            "derived_gate_preregistered": copy.deepcopy(
+                configuration.get("derived_gate")
+            ),
         },
         "integrity": {
             "validated": True,
@@ -2984,6 +3166,7 @@ def build_report(
         "arms": arm_documents,
         "domains": domain_documents,
         "comparisons": comparisons,
+        "envelope_compatible_gate": envelope_gate,
         "scores": score_rows,
         "gold_provenance": {
             "manifest_identity_sha256": gold["manifest_identity_sha256"],

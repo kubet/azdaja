@@ -30,6 +30,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 from dataclasses import dataclass
@@ -77,6 +78,14 @@ SCORE = _load_python("azdaja_lb2_live_score_for_runner", HERE / "score.py")
 MODEL = SCORE.MODEL
 REASONING = SCORE.REASONING
 ARMS = tuple(SCORE.ARMS)
+DERIVED_GATE = {
+    "schema_version": 1,
+    "metric": "end_to_end_official_plus_exact_bare_lf_correct",
+    "extractor": "official_then_fullmatch_upper_ad_plus_one_lf_v1",
+    "candidate_arm": "jcode-azdaja",
+    "fixed_denominator": SCORE.EXPECTED_FIXTURES,
+    "minimum_correct_n": 16,
+}
 
 
 class BenchError(RuntimeError):
@@ -2131,9 +2140,110 @@ def _validate_adapter_contract(module: Any) -> None:
         raise BenchError("frozen OOLONG adapter arm contract drifted")
 
 
-def _adapter_candidate_repair_model(
+def _legacy_luna_only_repair_contract(
+    candidate: Path, config_text: str
+) -> dict[str, Any]:
+    """Prove, without inference, that an old Luna candidate denies repair config.
+
+    The receipt proves only parser capability.  Runtime schema-v2 category/model
+    receipts remain authoritative for every billed turn.
+    """
+    try:
+        config = tomllib.loads(config_text)
+    except tomllib.TOMLDecodeError as exc:
+        raise BenchError(f"cannot parse legacy candidate config: {exc}") from exc
+    if "jcode_repair_model" in config:
+        raise BenchError("legacy repair probe requires the repair field to be absent")
+    if config.get("default_model") != MODEL:
+        raise BenchError("legacy candidate root model is not the frozen Luna route")
+    if config.get("jcode_provider") != "openai":
+        raise BenchError("legacy candidate provider is not the frozen OpenAI route")
+    if config.get("jcode_reasoning") != REASONING:
+        raise BenchError("legacy candidate reasoning is not the frozen medium route")
+
+    identity = candidate_identity(candidate)
+    binary = candidate / "azdaja"
+    original = config_text.encode("utf-8")
+    augmented = original
+    if augmented and not augmented.endswith(b"\n"):
+        augmented += b"\n"
+    augmented += f'jcode_repair_model = "{MODEL}"\n'.encode("utf-8")
+    marker = "unknown field `jcode_repair_model`"
+    results: list[subprocess.CompletedProcess[bytes]] = []
+    trace_created = False
+    with tempfile.TemporaryDirectory(prefix="azdaja-lb2-legacy-schema-") as raw:
+        probe_root = Path(raw)
+        if os.name == "posix":
+            os.chmod(probe_root, 0o700)
+        for index, data in enumerate((original, augmented)):
+            probe_config = probe_root / f"config-{index}.toml"
+            probe_config.write_bytes(data)
+            if os.name == "posix":
+                os.chmod(probe_config, 0o600)
+            trace_path = probe_root / f"must-not-exist-{index}.jsonl"
+            env = {
+                "AZDAJA_CONFIG": str(probe_config),
+                "AZDAJA_HOME": str(probe_root / f"state-{index}"),
+                "AZDAJA_MODEL_TRACE": str(trace_path),
+                "HOME": str(probe_root),
+                "PATH": os.defpath,
+                "LANG": "C",
+                "LC_ALL": "C",
+            }
+            try:
+                completed = subprocess.run(
+                    [str(binary), "list"],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env=env,
+                    cwd=probe_root,
+                    timeout=5,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise BenchError(f"legacy repair-model schema probe failed: {exc}") from exc
+            results.append(completed)
+            trace_created = trace_created or trace_path.exists()
+    positive, negative = results
+    if positive.returncode != 0 or positive.stdout or positive.stderr:
+        raise BenchError("legacy exact-config list probe was not silent success")
+    if negative.returncode != 2:
+        raise BenchError("legacy augmented-config list probe did not exit 2")
+    if negative.stdout:
+        raise BenchError("legacy augmented-config list probe emitted stdout")
+    if len(negative.stderr) > 16 * 1024:
+        raise BenchError("legacy repair-model schema probe stderr exceeded bound")
+    try:
+        stderr = negative.stderr.decode("utf-8")
+    except UnicodeError as exc:
+        raise BenchError("legacy repair-model schema probe stderr is not UTF-8") from exc
+    if marker not in stderr:
+        raise BenchError("candidate lacks explicit repair model without legacy schema proof")
+    if trace_created:
+        raise BenchError("legacy repair-model schema probe created a model trace")
+    return {
+        "schema_version": 1,
+        "kind": "legacy_deny_unknown_default_model",
+        "field": "jcode_repair_model",
+        "expected_repair_model": MODEL,
+        "candidate_sha256": identity["sha256"],
+        "binary_sha256": identity["components"]["azdaja"]["sha256"],
+        "config_sha256": identity["components"]["config.toml"]["sha256"],
+        "augmented_config_sha256": sha256_bytes(augmented),
+        "probe_command": ["azdaja", "list"],
+        "exact_config_exit_code": 0,
+        "augmented_config_exit_code": 2,
+        "augmented_error_class": "unknown_field",
+        "stdout_empty": True,
+        "credentials_inherited": False,
+        "model_trace_created": False,
+    }
+
+
+def _adapter_candidate_repair_contract(
     module: Any, candidate: Path, *, require_support: bool
-) -> str:
+) -> dict[str, Any]:
     configure = getattr(module, "configure_azdaja_repair_model_from_skill", None)
     if configure is None:
         if require_support:
@@ -2141,34 +2251,47 @@ def _adapter_candidate_repair_model(
                 "OOLONG adapter lacks callable "
                 "configure_azdaja_repair_model_from_skill"
             )
-        return MODEL
+        return {"repair_model": MODEL, "legacy_repair_model_capability": None}
     if not callable(configure):
         raise BenchError(
             "OOLONG adapter configure_azdaja_repair_model_from_skill is not callable"
         )
     explicit_model: str | None = None
+    legacy_receipt: dict[str, Any] | None = None
     if require_support:
         try:
-            config = tomllib.loads(
-                (candidate / "config.toml").read_text(encoding="utf-8")
-            )
+            config_text = (candidate / "config.toml").read_text(encoding="utf-8")
+            config = tomllib.loads(config_text)
         except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
             raise BenchError(f"cannot parse candidate repair-model config: {exc}") from exc
         if "jcode_repair_model" not in config:
-            raise BenchError("fresh candidate config lacks explicit jcode_repair_model")
-        explicit_model = config["jcode_repair_model"]
-        if (
-            not isinstance(explicit_model, str)
-            or not explicit_model
-            or explicit_model.strip() != explicit_model
-        ):
-            raise BenchError("fresh candidate repair model is invalid")
+            legacy_receipt = _legacy_luna_only_repair_contract(candidate, config_text)
+            explicit_model = MODEL
+        else:
+            explicit_model = config["jcode_repair_model"]
+            if (
+                not isinstance(explicit_model, str)
+                or not explicit_model
+                or explicit_model.strip() != explicit_model
+            ):
+                raise BenchError("fresh candidate repair model is invalid")
     model = configure(candidate)
     if not isinstance(model, str) or not model or model.strip() != model:
         raise BenchError("OOLONG adapter returned an invalid repair model")
     if explicit_model is not None and model != explicit_model:
-        raise BenchError("OOLONG adapter repair model differs from explicit config")
-    return model
+        raise BenchError("OOLONG adapter repair model differs from proven config contract")
+    return {
+        "repair_model": model,
+        "legacy_repair_model_capability": legacy_receipt,
+    }
+
+
+def _adapter_candidate_repair_model(
+    module: Any, candidate: Path, *, require_support: bool
+) -> str:
+    return _adapter_candidate_repair_contract(
+        module, candidate, require_support=require_support
+    )["repair_model"]
 
 
 def _argument_string_leaves(value: Any) -> list[str]:
@@ -2601,6 +2724,7 @@ def build_schedule(
     executables: dict[str, Any],
     runtime_closure: dict[str, Any],
     repair_model: str = MODEL,
+    legacy_repair_model_capability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     fixture_identities = [
         {
@@ -2642,6 +2766,10 @@ def build_schedule(
             "model": MODEL,
             "reasoning": REASONING,
             "repair_model": repair_model,
+            "legacy_repair_model_capability": copy.deepcopy(
+                legacy_repair_model_capability
+            ),
+            "derived_gate": copy.deepcopy(DERIVED_GATE),
             "arms": list(ARMS),
             "repetitions": 1,
             "seed": seed,
@@ -2653,6 +2781,8 @@ def build_schedule(
         },
         "jobs": jobs,
     }
+    if legacy_repair_model_capability is None:
+        schedule["configuration"].pop("legacy_repair_model_capability")
     schedule_id = sha256_bytes(canonical_json_bytes(schedule))
     for job in jobs:
         job["run_id"] = sha256_bytes(
@@ -3533,6 +3663,21 @@ def _assert_schedule_matches_attestation(
         raise BenchError("schedule/executable snapshot binding drifted")
     if config.get("runtime_closure") != attestation.get("runtime_closure"):
         raise BenchError("schedule/runtime-closure snapshot binding drifted")
+    if config.get("derived_gate") not in (None, DERIVED_GATE):
+        raise BenchError("schedule derived gate contract drifted")
+    receipt = config.get("legacy_repair_model_capability")
+    if receipt is not None:
+        candidate = attestation.get("candidate", {})
+        components = candidate.get("components", {})
+        if (
+            receipt.get("candidate_sha256") != candidate.get("sha256")
+            or receipt.get("binary_sha256")
+            != components.get("azdaja", {}).get("sha256")
+            or receipt.get("config_sha256")
+            != components.get("config.toml", {}).get("sha256")
+            or receipt.get("expected_repair_model") != config.get("repair_model")
+        ):
+            raise BenchError("legacy repair capability is not bound to attestation")
     if config["controller"].get("path") != str(paths.controller):
         raise BenchError("schedule controller path is not the frozen controller")
     expected_paths = {
@@ -3721,13 +3866,17 @@ def _run_held_ceremony(
     try:
         adapter.validate_skill(str(paths.candidate))
         expected_repair_model = schedule["configuration"].get("repair_model", MODEL)
-        configured_repair_model = _adapter_candidate_repair_model(
+        configured_contract = _adapter_candidate_repair_contract(
             adapter,
             paths.candidate,
             require_support="repair_model" in schedule["configuration"],
         )
-        if configured_repair_model != expected_repair_model:
+        if configured_contract["repair_model"] != expected_repair_model:
             raise BenchError("frozen adapter/candidate repair model differs from schedule")
+        if configured_contract["legacy_repair_model_capability"] != schedule[
+            "configuration"
+        ].get("legacy_repair_model_capability"):
+            raise BenchError("frozen legacy repair capability differs from schedule")
     except Exception as exc:
         raise BenchError(f"frozen candidate validation failed: {exc}") from exc
     args.jcode = str(paths.jcode)
@@ -3880,7 +4029,7 @@ def fresh_source_preflight(
     source_adapter.REASONING = REASONING
     try:
         source_adapter.validate_skill(str(candidate_source))
-        repair_model = _adapter_candidate_repair_model(
+        repair_contract = _adapter_candidate_repair_contract(
             source_adapter, candidate_source, require_support=True
         )
     except Exception as exc:
@@ -3901,7 +4050,10 @@ def fresh_source_preflight(
         "prime_source": prime_source,
         "node_source": node_source,
         "kernel_environment": kernel_environment,
-        "repair_model": repair_model,
+        "repair_model": repair_contract["repair_model"],
+        "legacy_repair_model_capability": repair_contract[
+            "legacy_repair_model_capability"
+        ],
     }
 
 
@@ -3964,6 +4116,9 @@ def run_suite(args: argparse.Namespace) -> int:
         node_source = fresh_inputs["node_source"]
         kernel_environment = fresh_inputs["kernel_environment"]
         repair_model = fresh_inputs["repair_model"]
+        legacy_repair_model_capability = fresh_inputs[
+            "legacy_repair_model_capability"
+        ]
         paths, attestation = create_snapshots(
             work,
             suite,
@@ -3979,11 +4134,16 @@ def run_suite(args: argparse.Namespace) -> int:
         )
         try:
             adapter.validate_skill(str(paths.candidate))
-            frozen_repair_model = _adapter_candidate_repair_model(
+            frozen_repair_contract = _adapter_candidate_repair_contract(
                 adapter, paths.candidate, require_support=True
             )
-            if frozen_repair_model != repair_model:
+            if frozen_repair_contract["repair_model"] != repair_model:
                 raise BenchError("source/frozen repair model identity drifted")
+            if (
+                frozen_repair_contract["legacy_repair_model_capability"]
+                != legacy_repair_model_capability
+            ):
+                raise BenchError("source/frozen legacy repair capability drifted")
         except Exception as exc:
             raise BenchError(f"frozen candidate validation failed: {exc}") from exc
         schedule = build_schedule(
@@ -3995,6 +4155,7 @@ def run_suite(args: argparse.Namespace) -> int:
             executables=attestation["executables"],
             runtime_closure=attestation["runtime_closure"],
             repair_model=repair_model,
+            legacy_repair_model_capability=legacy_repair_model_capability,
         )
         _assert_schedule_matches_attestation(schedule, attestation, paths)
         atomic_create_private_json(schedule_path, schedule)

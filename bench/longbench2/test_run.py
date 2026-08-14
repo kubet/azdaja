@@ -285,7 +285,7 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(Path(str(output) + ".schedule.json").exists())
         self.assertFalse(Path(str(output) + ".claims").exists())
 
-    def test_legacy_adapter_without_repair_configuration_is_resume_only(self):
+    def test_legacy_adapter_without_repair_configuration_needs_schema_proof(self):
         legacy_adapter = object()
         candidate = self.root / "legacy-candidate"
         self.assertEqual(
@@ -299,14 +299,49 @@ class RunnerTests(unittest.TestCase):
                 legacy_adapter, candidate, require_support=True
             )
         candidate.mkdir()
-        (candidate / "config.toml").write_text(
-            'default_model="gpt-5.6-luna"\n', encoding="utf-8"
+        config = (
+            'default_model="gpt-5.6-luna"\n'
+            'jcode_provider="openai"\n'
+            'jcode_reasoning="medium"\n'
         )
+        (candidate / "config.toml").write_text(config, encoding="utf-8")
+        (candidate / "SKILL.md").write_text("legacy test skill\n", encoding="utf-8")
+        binary = candidate / "azdaja"
+        binary.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        binary.chmod(0o700)
         current_adapter = mock.Mock()
         current_adapter.configure_azdaja_repair_model_from_skill = (
             lambda _candidate: RUN.MODEL
         )
-        with self.assertRaisesRegex(RUN.BenchError, "explicit"):
+        with self.assertRaisesRegex(RUN.BenchError, "exact-config"):
+            RUN._adapter_candidate_repair_model(
+                current_adapter, candidate, require_support=True
+            )
+
+        binary.write_text(
+            "#!/bin/sh\n"
+            "if grep -q '^jcode_repair_model' \"$AZDAJA_CONFIG\"; then\n"
+            "  printf 'unknown field `jcode_%s`\\n' repair_model >&2\n"
+            "  exit 2\n"
+            "fi\n"
+            "exit 0\n",
+            encoding="utf-8",
+        )
+        binary.chmod(0o700)
+        contract = RUN._adapter_candidate_repair_contract(
+            current_adapter, candidate, require_support=True
+        )
+        self.assertEqual(contract["repair_model"], RUN.MODEL)
+        receipt = contract["legacy_repair_model_capability"]
+        self.assertEqual(receipt["probe_command"], ["azdaja", "list"])
+        self.assertEqual(receipt["expected_repair_model"], RUN.MODEL)
+        self.assertEqual(
+            receipt["candidate_sha256"], RUN.candidate_identity(candidate)["sha256"]
+        )
+
+        binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        binary.chmod(0o700)
+        with self.assertRaisesRegex(RUN.BenchError, "did not exit 2"):
             RUN._adapter_candidate_repair_model(
                 current_adapter, candidate, require_support=True
             )
