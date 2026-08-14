@@ -1400,6 +1400,7 @@ def parse_azdaja_route_evidence(path: Path | None) -> dict[str, Any] | None:
     error_depth_counts: dict[str, int] = {}
     depth_zero_input_tokens = 0
     depth_zero_usage_valid = True
+    saw_physical_failure = False
     for line in raw_rows:
         try:
             row = json.loads(line)
@@ -1424,16 +1425,22 @@ def parse_azdaja_route_evidence(path: Path | None) -> dict[str, Any] | None:
         depth_key = str(depth)
         if "error" in row:
             error = row.get("error")
+            category = row.get("category")
             if not isinstance(error, str) or not error.strip():
                 return None
             if schema_version == 2 and (
-                row.get("category") != "session_setup"
+                category not in {"session_setup", "turn", "repair"}
                 or row.get("outcome") != "failed"
-                or row.get("stage") != "session_setup"
+                or row.get("stage") != category
                 or error != "provider_call_failed"
+                or row.get("error_category") not in {
+                    "bridge_io", "bridge_protocol", "provider", "timeout",
+                    "setup_route", "unknown",
+                }
             ):
                 return None
             error_depth_counts[depth_key] = error_depth_counts.get(depth_key, 0) + 1
+            saw_physical_failure = True
             continue
         provider = row.get("provider")
         model = row.get("model")
@@ -1450,6 +1457,20 @@ def parse_azdaja_route_evidence(path: Path | None) -> dict[str, Any] | None:
             or (schema_version == 2 and row.get("outcome") != "succeeded")
         ):
             return None
+        if schema_version == 2:
+            attempt = _nonnegative_int(row.get("attempt"))
+            failed_before = _nonnegative_int(row.get("failed_attempts_before_success"))
+            degraded = row.get("degraded_transport")
+            if (
+                attempt is None or attempt < 1
+                or failed_before is None
+                or failed_before != attempt - 1
+                or type(degraded) is not bool
+                or degraded != (attempt > 1)
+            ):
+                return None
+            if attempt > 1 or failed_before > 0 or degraded:
+                saw_physical_failure = True
         routes.add(f"{provider}/{model}")
         route_rows.append({
             "depth": depth,
@@ -1465,10 +1486,12 @@ def parse_azdaja_route_evidence(path: Path | None) -> dict[str, Any] | None:
             else:
                 depth_zero_input_tokens += input_tokens
     return {
-        "routes": sorted(routes),
-        "route_rows": route_rows,
+        "routes": [] if saw_physical_failure else sorted(routes),
+        "route_rows": [] if saw_physical_failure else route_rows,
         "depth_counts": depth_counts,
-        "transport_error_rows": sum(error_depth_counts.values()),
+        "transport_error_rows": max(
+            sum(error_depth_counts.values()), int(saw_physical_failure)
+        ),
         "transport_error_depth_counts": error_depth_counts,
         "all_rows_structurally_valid": True,
         "depth_zero_input_tokens": (
@@ -1496,6 +1519,7 @@ def parse_azdaja_usage(path: Path | None) -> dict[str, Any] | None:
     if not raw_rows:
         return None
     rows: list[dict[str, Any]] = []
+    saw_physical_failure = False
     for line in raw_rows:
         try:
             row = json.loads(line)
@@ -1504,14 +1528,36 @@ def parse_azdaja_usage(path: Path | None) -> dict[str, Any] | None:
         if not isinstance(row, dict):
             return None
         if "error" in row:
+            category = row.get("category")
             if (
                 row.get("error") == "provider_call_failed"
-                and row.get("stage") == "session_setup"
+                and category in {"session_setup", "turn", "repair"}
+                and row.get("outcome") == "failed"
+                and row.get("stage") == category
+                and row.get("error_category") in {
+                    "bridge_io", "bridge_protocol", "provider", "timeout",
+                    "setup_route", "unknown",
+                }
                 and _nonnegative_int(row.get("depth")) is not None
                 and _nonnegative_int(row.get("timestamp_ms")) is not None
             ):
+                saw_physical_failure = True
                 continue
             return None
+        if row.get("schema_version") == 2:
+            attempt = _nonnegative_int(row.get("attempt"))
+            failed_before = _nonnegative_int(row.get("failed_attempts_before_success"))
+            degraded = row.get("degraded_transport")
+            if (
+                attempt is None or attempt < 1
+                or failed_before is None
+                or failed_before != attempt - 1
+                or type(degraded) is not bool
+                or degraded != (attempt > 1)
+            ):
+                return None
+            if attempt > 1 or failed_before > 0 or degraded:
+                saw_physical_failure = True
         depth = _nonnegative_int(row.get("depth"))
         input_tokens = _nonnegative_int(row.get("input_tokens"))
         output_tokens = _nonnegative_int(row.get("output_tokens"))
@@ -1550,6 +1596,8 @@ def parse_azdaja_usage(path: Path | None) -> dict[str, Any] | None:
                 "model": model,
             }
         )
+    if saw_physical_failure:
+        return None
     result: dict[str, Any] = {
         "calls": len(rows),
         "input_tokens": 0,

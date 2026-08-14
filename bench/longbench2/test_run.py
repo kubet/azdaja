@@ -1091,9 +1091,8 @@ class RunnerTests(unittest.TestCase):
         route = adapter_row["runtime_route_assertion"]
         self.assertFalse(route["asserted"])
         self.assertEqual(route["transport_error_rows"], 1)
-        self.assertEqual(
-            route["routes"], [{"provider": "openai", "model": RUN.MODEL}]
-        )
+        self.assertEqual(route["routes"], [])
+        self.assertEqual(route["category_routes"], [])
         self.assertFalse(adapter_row["execution_success"])
         self.assertEqual(adapter_row["failure"]["kind"], "route_assertion")
         self.assertIsNone(adapter_row["azdaja_model_usage"])

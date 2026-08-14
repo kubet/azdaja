@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 import os
@@ -352,24 +353,58 @@ class ControllerTests(unittest.TestCase):
                 encoding="utf-8",
             )
             setup_usage = RUN.parse_azdaja_usage(path)
-            self.assertIsNotNone(setup_usage)
-            self.assertEqual(setup_usage["calls"], 1)
+            self.assertIsNone(setup_usage)
             route_evidence = RUN.parse_azdaja_route_evidence(path)
             self.assertEqual(route_evidence["depth_counts"], {"0": 1})
             self.assertEqual(route_evidence["transport_error_rows"], 1)
-            self.assertTrue(
+            self.assertEqual(route_evidence["routes"], [])
+            self.assertEqual(route_evidence["route_rows"], [])
+            self.assertFalse(
                 RUN.runtime_assertion("jcode-azdaja", "", route_evidence)["asserted"]
             )
-            self.assertTrue(
+            self.assertFalse(
                 RUN.direct_solo_lifecycle_assertion(
                     exit_code=0,
                     timed_out=False,
                     response="Answer: 1",
-                    trace_usage=route_evidence,
+                    trace_usage=setup_usage,
                 )["asserted"]
             )
             usage = RUN.usage_fields_from_azdaja(RUN.parse_azdaja_usage(path))
             self.assertFalse(RUN.direct_solo_usage_evidence(usage, None)["valid"])
+
+    def test_actual_v43_trace_samples_are_conservative_across_adapter_parsers(self):
+        fixtures = Path(__file__).resolve().parents[1] / "longbench2" / "fixtures"
+        success = fixtures / "v43-rust-serde-success.jsonl"
+        retry = fixtures / "v43-rust-serde-transient-retry.jsonl"
+        self.assertEqual(
+            hashlib.sha256(success.read_bytes()).hexdigest(),
+            "41e4456b4a6601424ae03b3b3d0821a4866666a8e117cd5f6d6e5d51a17f754f",
+        )
+        self.assertEqual(
+            hashlib.sha256(retry.read_bytes()).hexdigest(),
+            "9294429a6354f9e42690adbf1b6ac453fd3d0657d035b357adbf9a9dcc3b8f5c",
+        )
+        success_route = RUN.parse_azdaja_route_evidence(success)
+        self.assertEqual(len(success_route["route_rows"]), 1)
+        self.assertTrue(RUN.runtime_assertion("jcode-azdaja", "", success_route)["asserted"])
+        self.assertIsNotNone(RUN.parse_azdaja_usage(success))
+
+        retry_route = RUN.parse_azdaja_route_evidence(retry)
+        self.assertEqual(retry_route["routes"], [])
+        self.assertEqual(retry_route["route_rows"], [])
+        self.assertEqual(retry_route["transport_error_rows"], 1)
+        self.assertFalse(RUN.runtime_assertion("jcode-azdaja", "", retry_route)["asserted"])
+        self.assertIsNone(RUN.parse_azdaja_usage(retry))
+
+        with tempfile.TemporaryDirectory() as directory:
+            success_only_retry = Path(directory) / "success-only-retry.jsonl"
+            success_only_retry.write_bytes(retry.read_bytes().splitlines(keepends=True)[1])
+            route = RUN.parse_azdaja_route_evidence(success_only_retry)
+            self.assertEqual(route["routes"], [])
+            self.assertEqual(route["route_rows"], [])
+            self.assertEqual(route["transport_error_rows"], 1)
+            self.assertIsNone(RUN.parse_azdaja_usage(success_only_retry))
 
     def test_fresh_candidate_requires_exact_explicit_repair_model(self):
         with tempfile.TemporaryDirectory() as directory:
