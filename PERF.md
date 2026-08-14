@@ -670,3 +670,27 @@ No V52, V53, or V54 candidate, build, smoke, score, gold access, source mechanis
 Run `/private/tmp/azdaja-lb2-v43-refresh-v1` completed the entire frozen schedule before refusal: 189 canonical result rows, 189 claim receipts, 189 done receipts, and exact retained artifacts. Output SHA-256 is `1578d7a38200f0c7631f90f17bc7b233f735af6b0ecd0792f540b1cc66fe3062`; schedule SHA-256 `f7de7ed119347a9cea27ace3bb9cc1b7a6879e781a6e50da5f8c014ba68d4249`; schedule ID `b419be9844d635169642945ee1f20306dc4b276e3beedcd0c3b0d8265c10a908`; terminal closure SHA-256 `cf9cac65ef28cbdada293d8b7e82d4159d8c261ae430416d2a618367ca9c4915`. Execution was Azdaja 48/63, native 63/63, Prime 57/63.
 
 The frozen validator SHA-256 `8466b39a0a60bbd10ae7762af283cfa028977ea92ecd6c7c103a632e9d647c81` stopped before gold access because it compared each model-trace object to sorted-key `canonical_json_file_bytes`, whereas Rust `serde_json` emits compact duplicate-free struct-field order. All 247/247 retained Azdaja trace lines parse as duplicate-free schema-v2 known-field JSON; 246 succeeded and one typed depth-1 timeout was followed by a successful degraded retry. The latter exposed a second frozen omission: only session-setup failures were accepted. Independent audit found complete inference closure and exact artifact receipts, but the pre-frozen acceptance predicate controls. Protocol disposition is permanently terminal-invalid and unscored: no post-hoc authoritative salvage, no gold opening, no retry/resume/replay, and no OOLONG authorization. A generic future validator correction and mandatory pre-freeze synthetic-gold dress rehearsal are separate new protocol work and cannot relabel this run.
+
+
+## Two-speed benchmark operation (effective 2026-08-14)
+
+Benchmark iteration now has exactly two modes; neither changes candidate semantics, output bytes, models, or the frozen-score contract.
+
+### SCOUT
+
+SCOUT is fast, disposable, and gold-blind. It may use any existing slice size and exists only to answer directional execution, recognition, latency, or token questions. A scout has no receipts, frozen schedule binding, protocol audit, gold access, authoritative score, promotion authority, or publication path. Its results may be recorded only in `PERF.md`/`FAILS.md`, never in README headline tables.
+
+A candidate may enter a future frozen LongBench run only after the existing 20-item scout slice records **20/20 execution** and **at least 17/20 (85%) gold-blind extractor recognition**. Recognition means `execution_success` plus a non-null prediction from the existing preregistered derived extractor: pinned official extraction first, then only `re.fullmatch(r"([A-D])\n", response)`. It makes no correctness claim.
+
+### FROZEN
+
+FROZEN retains the complete version-bound schedule, receipts, artifacts, terminal no-gold validator, scorer, fixed denominators, and immutable evidence rules. It is reserved for candidates that already cleared SCOUT. The already-launched exact-v43 189-row freeze is explicitly grandfathered: its execution/recognition rates are known, it runs to terminal completion regardless of checkpoints, and its deliverable is a score.
+
+### Mandatory gold-blind early aborts after v43
+
+Both modes use the candidate arm first within each checkpoint window so the signal arrives before controls. Checkpoints count cumulative scheduled `jcode-azdaja` rows, not total three-arm rows:
+
+- after 10 Azdaja rows: abort if execution is below 8/10 **or** recognition is below 7/10;
+- after 30 Azdaja rows: abort if cumulative execution is below 80% (fewer than 24/30) **or** recognition is below 75% (fewer than 23/30).
+
+An abort opens no gold. It immediately records per-row execution failure kinds plus recognized/unrecognized output taxonomy, stops unscheduled work, and returns to iteration. Correct/wrong taxonomy remains impossible until a terminal frozen validator authorizes scoring. No retry, resume, selective completion, headline result, or promotion may be derived from an aborted run.
