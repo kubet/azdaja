@@ -10,6 +10,55 @@ be compared as though they were official direct-prompt LongBench numbers.
 `run.py` is the separate subscription-inference ceremony; it never accepts a
 gold path. `score.py` is the owner-only deferred scorer.
 
+## Mandatory offline pre-freeze rehearsal
+
+Every fresh production run now requires a completed `rehearsal.py` receipt for
+its exact manifest, candidate, controller, validator, OOLONG adapter,
+executables, candidate config, seed, and timeout. This is a fixed, deterministic
+20-fixture x 3-arm synthetic pipeline exercise. It performs no OAuth and no
+inference, and its distinct `lb2_pre_freeze_rehearsal_*` records are never a
+benchmark or candidate-performance claim.
+
+```bash
+umask 077
+REHEARSAL_PARENT=$(mktemp -d /private/tmp/azdaja-lb2-rehearsal.XXXXXX)
+python3 bench/longbench2/rehearsal.py run \
+  --bundle "$REHEARSAL_PARENT/bundle" \
+  --target-manifest "$PUBLIC/manifest.json" \
+  --target-candidate /absolute/path/to/candidate \
+  --target-jcode /absolute/path/to/jcode \
+  --target-prime-agent /absolute/path/to/prime-agent \
+  --target-seed 20260813 --target-timeout 1800
+
+python3 bench/longbench2/rehearsal.py verify \
+  --receipt "$REHEARSAL_PARENT/bundle/final-receipt.json"
+```
+
+The offline run boundary has no gold argument. It writes exactly 60 deferred
+rows, 60 claim receipts, 60 done receipts, and 60 artifact directories. The
+no-gold terminal validator traverses the committed v43 serde-order success and
+transient-timeout/retry traces using the real `score.py` trace validator, which
+accepts any duplicate-free compact ordering of known fields. Only then is
+synthetic gold opened and the canonical private rehearsal report created. The
+final receipt is published last and binds the complete bundle inventories and
+production target.
+
+Pass that exact receipt only on a **fresh** production invocation:
+
+```bash
+python3 bench/longbench2/run.py ... \
+  --pre-freeze-rehearsal-receipt "$REHEARSAL_PARENT/bundle/final-receipt.json" \
+  --yes-run-inference
+```
+
+Absence, tamper, target drift, or incomplete bundle replay is refused before
+OAuth preflight or production artifact creation. `--resume` refuses the CLI
+option and instead reopens the full receipt bound into the frozen schedule; no
+verification skip exists. The production contract remains exactly 63 fixtures,
+189 jobs, three fixed arms, and the preregistered 16-correct candidate gate.
+The receipt's path and all target source paths must therefore remain available
+and byte-identical through resume.
+
 ## Frozen source
 
 The only accepted dataset revision is:
@@ -339,6 +388,7 @@ python3 bench/longbench2/run.py \
   --jcode "$JCODE" \
   --prime-agent "$PRIME_AGENT" \
   --azdaja-skill "$CANDIDATE" \
+  --pre-freeze-rehearsal-receipt "$REHEARSAL_PARENT/bundle/final-receipt.json" \
   --yes-run-inference
 ```
 

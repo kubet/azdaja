@@ -75,6 +75,9 @@ def _load_python(name: str, path: Path):
 # The scorer is the public no-gold validator and the schedule schema authority.
 # Loading it cannot open gold; load_gold/build_report are never called here.
 SCORE = _load_python("azdaja_lb2_live_score_for_runner", HERE / "score.py")
+REHEARSAL = _load_python(
+    "azdaja_lb2_pre_freeze_rehearsal_for_runner", HERE / "rehearsal.py"
+)
 MODEL = SCORE.MODEL
 REASONING = SCORE.REASONING
 ARMS = tuple(SCORE.ARMS)
@@ -2725,6 +2728,7 @@ def build_schedule(
     runtime_closure: dict[str, Any],
     repair_model: str = MODEL,
     legacy_repair_model_capability: dict[str, Any] | None = None,
+    pre_freeze_rehearsal: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     fixture_identities = [
         {
@@ -2778,11 +2782,14 @@ def build_schedule(
             "controller": controller,
             "executables": executables,
             "runtime_closure": runtime_closure,
+            "pre_freeze_rehearsal": copy.deepcopy(pre_freeze_rehearsal),
         },
         "jobs": jobs,
     }
     if legacy_repair_model_capability is None:
         schedule["configuration"].pop("legacy_repair_model_capability")
+    if pre_freeze_rehearsal is None:
+        schedule["configuration"].pop("pre_freeze_rehearsal")
     schedule_id = sha256_bytes(canonical_json_bytes(schedule))
     for job in jobs:
         job["run_id"] = sha256_bytes(
@@ -4066,6 +4073,34 @@ def run_suite(args: argparse.Namespace) -> int:
         raise BenchError("--seed must be an integer and --timeout must be positive")
     if not args.work_dir:
         raise BenchError("--work-dir is required so work and runs roots can be non-nested")
+    if args.resume and args.pre_freeze_rehearsal_receipt is not None:
+        raise BenchError("--pre-freeze-rehearsal-receipt is fresh-only; resume uses the schedule-bound receipt")
+    rehearsal_target: dict[str, Any] | None = None
+    rehearsal_binding: dict[str, Any] | None = None
+    if not args.resume:
+        if args.pre_freeze_rehearsal_receipt is None:
+            raise BenchError(
+                "fresh production inference requires --pre-freeze-rehearsal-receipt"
+            )
+        if args.azdaja_skill is None:
+            raise BenchError("--azdaja-skill is mandatory for a fresh schedule")
+        # This full-bundle replay and exact target capture occurs before OAuth
+        # preflight and before any output/work/schedule/claim artifact is created.
+        try:
+            rehearsal_target = REHEARSAL.build_target_identity(
+                manifest=args.manifest,
+                candidate=args.azdaja_skill,
+                jcode=args.jcode,
+                prime_agent=args.prime_agent,
+                seed=args.seed,
+                timeout=args.timeout,
+            )
+            rehearsal_binding = REHEARSAL.verify_rehearsal_receipt(
+                args.pre_freeze_rehearsal_receipt,
+                expected_target=rehearsal_target,
+            )
+        except REHEARSAL.RehearsalError as exc:
+            raise BenchError(f"pre-freeze rehearsal receipt refused: {exc}") from exc
 
     suite = capture_public_suite(args.manifest)
     output = _absolute(args.output)
@@ -4088,6 +4123,25 @@ def run_suite(args: argparse.Namespace) -> int:
         schedule = _load_existing_schedule(
             schedule_path, suite, seed=args.seed, timeout=args.timeout
         )
+        rehearsal_binding = schedule.get("configuration", {}).get(
+            "pre_freeze_rehearsal"
+        )
+        if not isinstance(rehearsal_binding, dict):
+            raise BenchError("resume schedule lacks its mandatory pre-freeze rehearsal binding")
+        try:
+            verified_binding = REHEARSAL.verify_rehearsal_receipt(
+                rehearsal_binding.get("path", "")
+            )
+        except REHEARSAL.RehearsalError as exc:
+            raise BenchError(f"schedule-bound pre-freeze rehearsal receipt refused: {exc}") from exc
+        if verified_binding != rehearsal_binding:
+            raise BenchError("schedule-bound pre-freeze rehearsal receipt identity drifted")
+        try:
+            rehearsal_target = REHEARSAL.load_bound_target(
+                rehearsal_binding["path"], rehearsal_binding
+            )
+        except REHEARSAL.RehearsalError as exc:
+            raise BenchError(f"schedule-bound rehearsal target refused: {exc}") from exc
         paths = frozen_paths(work)
         attestation = load_snapshot_attestation(paths)
         prime_relative = Path(attestation["prime_package"]["cli_relative"])
@@ -4103,6 +4157,13 @@ def run_suite(args: argparse.Namespace) -> int:
         smoke_frozen_versions(paths, attestation)
         verify_live_authorities(paths, attestation)
         _assert_schedule_matches_attestation(schedule, attestation, paths)
+        assert rehearsal_target is not None and rehearsal_binding is not None
+        try:
+            REHEARSAL.assert_schedule_target_binding(
+                schedule, rehearsal_target, rehearsal_binding
+            )
+        except REHEARSAL.RehearsalError as exc:
+            raise BenchError(f"resume rehearsal/schedule target binding failed: {exc}") from exc
         kernel_environment = Path(
             schedule["configuration"]["runtime_closure"]["kernel_environment"]["root"]
         )
@@ -4156,8 +4217,16 @@ def run_suite(args: argparse.Namespace) -> int:
             runtime_closure=attestation["runtime_closure"],
             repair_model=repair_model,
             legacy_repair_model_capability=legacy_repair_model_capability,
+            pre_freeze_rehearsal=rehearsal_binding,
         )
         _assert_schedule_matches_attestation(schedule, attestation, paths)
+        assert rehearsal_target is not None and rehearsal_binding is not None
+        try:
+            REHEARSAL.assert_schedule_target_binding(
+                schedule, rehearsal_target, rehearsal_binding
+            )
+        except REHEARSAL.RehearsalError as exc:
+            raise BenchError(f"fresh rehearsal/schedule target binding failed: {exc}") from exc
         atomic_create_private_json(schedule_path, schedule)
 
     claims = _create_or_open_claims(
@@ -4217,6 +4286,13 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--azdaja-skill",
         help="fresh-only explicit candidate; inventory must be exactly SKILL.md, azdaja, config.toml",
+    )
+    p.add_argument(
+        "--pre-freeze-rehearsal-receipt",
+        help=(
+            "mandatory fresh-only final-receipt.json from rehearsal.py; resume reopens "
+            "the exact receipt bound into the frozen schedule"
+        ),
     )
     p.add_argument(
         "--yes-run-inference", action="store_true",

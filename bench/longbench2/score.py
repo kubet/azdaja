@@ -988,6 +988,30 @@ def _validate_candidate_identity(value: Any) -> None:
     )
 
 
+def _validate_pre_freeze_rehearsal_binding(value: Any) -> None:
+    expected = {
+        "schema_version", "record_type", "path", "receipt_sha256", "receipt_id",
+        "bundle_inventory_sha256", "target_sha256", "suite_id",
+    }
+    if not isinstance(value, dict) or set(value) != expected:
+        raise ScoreError("schedule pre-freeze rehearsal binding has an unexpected shape")
+    _require_equal(value["schema_version"], 1, "pre-freeze rehearsal binding schema")
+    _require_equal(
+        value["record_type"], "lb2_pre_freeze_rehearsal_binding",
+        "pre-freeze rehearsal binding record type",
+    )
+    _require_equal(
+        value["suite_id"], "lb2-pre-freeze-rehearsal-20x3-v1",
+        "pre-freeze rehearsal suite",
+    )
+    if not isinstance(value["path"], str) or not Path(value["path"]).is_absolute():
+        raise ScoreError("schedule pre-freeze rehearsal receipt path is invalid")
+    for key in (
+        "receipt_sha256", "receipt_id", "bundle_inventory_sha256", "target_sha256"
+    ):
+        if not _is_sha256(value[key]):
+            raise ScoreError(f"schedule pre-freeze rehearsal {key} is invalid")
+
 
 def _validate_legacy_repair_capability(
     value: Any, candidate: dict[str, Any], repair_model: str
@@ -1160,6 +1184,7 @@ def validate_schedule(
     }
     optional_config = {
         "repair_model", "legacy_repair_model_capability", "derived_gate",
+        "pre_freeze_rehearsal",
     }
     if not required_config.issubset(configuration) or not set(configuration).issubset(
         required_config | optional_config
@@ -1174,6 +1199,8 @@ def validate_schedule(
             configuration["derived_gate"], DERIVED_GATE,
             "schedule preregistered derived gate",
         )
+    if "pre_freeze_rehearsal" in configuration:
+        _validate_pre_freeze_rehearsal_binding(configuration["pre_freeze_rehearsal"])
     _require_equal(configuration["model"], MODEL, "schedule exact model")
     _require_equal(configuration["reasoning"], REASONING, "schedule reasoning")
     repair_model = configuration.get("repair_model", MODEL)

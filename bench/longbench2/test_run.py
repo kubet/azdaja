@@ -271,12 +271,21 @@ class RunnerTests(unittest.TestCase):
             [
                 "--manifest", str(manifest), "--output", str(output),
                 "--work-dir", str(work), "--azdaja-skill", str(self.root / "candidate"),
+                "--pre-freeze-rehearsal-receipt", str(self.root / "receipt.json"),
                 "--yes-run-inference",
             ]
         )
-        with mock.patch.object(
-            RUN, "fresh_source_preflight",
-            side_effect=RUN.BenchError("injected invalid OAuth"),
+        with (
+            mock.patch.object(
+                RUN.REHEARSAL, "build_target_identity", return_value={"target_sha256": "a" * 64}
+            ),
+            mock.patch.object(
+                RUN.REHEARSAL, "verify_rehearsal_receipt", return_value={"receipt_id": "b" * 64}
+            ),
+            mock.patch.object(
+                RUN, "fresh_source_preflight",
+                side_effect=RUN.BenchError("injected invalid OAuth"),
+            ),
         ):
             with self.assertRaisesRegex(RUN.BenchError, "invalid OAuth"):
                 RUN.run_suite(args)
