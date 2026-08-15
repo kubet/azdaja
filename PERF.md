@@ -985,3 +985,28 @@ Exact Jcode v0.75.3 source `fd1ff012cd463c413d53a3de358ceb7a7b8459a2` proves two
 ### Fresh RULER measurements
 
 Native disposable smoke: 20/20 execution, 19/20 official/exact, median 11.446s. The sole 131K NIAH miss returned `Ready.`; native root-context leak is N/A. Query-cap inference differential on ten identical rows per product arm: predecessor 10/10 execution, p50 13.924s; cap-512 candidate 10/10, p50 12.421s; zero leaks both; exact outputs differed on two rows. This is an unscored inference differential, not accuracy or promotion evidence.
+
+
+## 2026-08-15 terminal product-mode measurements
+
+### RULER-20 reasoning effort sweep
+
+The same immutable binary and the same 20 public fixtures were used for every arm. Each of the 60 turns had a fresh isolated root session. Gold was unavailable during inference, the terminal artifact validator passed all 60 rows, and the leak scan found 0/60 root-context leaks.
+
+| Effort | Execution | Median latency, all attempts | Observed root tokens | Root input / output | Cache-read tokens | Accuracy |
+|---|---:|---:|---:|---:|---:|---:|
+| low | 20/20 | **11.304s** | **74,180** | 57,194 / 16,986 | 0 | unavailable |
+| medium | 20/20 | 21.124s | 89,264 | 57,184 / 32,080 | 0 | unavailable |
+| high | 17/20 | 33.277s | 91,686 | 48,883 / 42,803 | 0 | unavailable |
+
+High retained two 120-second turn timeouts and one subscription-route transport failure. Token totals include only emitted usage and therefore do not impute missing failed-turn usage. The one-shot scorer consumed and opened gold, then failed on a retained high-effort row with null usage. It produced no score report. The inference and scorer failure are frozen and will not be retried, so the low arm's clear execution-cost advantage is **not** a 20/20 accuracy result and no effort is adopted. Results SHA-256: `fe389ab87e6de5bf3c707f1ecf4fb8c6df0f7d84bd625268db30390472246ed0`; terminal record SHA-256: `f90768bd9836af044040aebb80f44312fa297120c47ed425d2d2df2a3994b776`.
+
+### Warm-root strict-isolation boundary
+
+A live Jcode v0.75.3 Harness API probe held one session and one static contract prefix. The contract turn took 4.547s (790 input, 18 output, zero cache read). TASK A took 1.266s and planted `AZDAJA_CROSS_TASK_7Q4M9X`. Without a reset, TASK B took 1.933s and returned that exact prior-task marker: persistent continuation contaminated the request. Rewinding to the two contract messages yielded a stored history containing only the contract and `READY`; the same TASK B then took 1.857s and returned `NONE` (855 input, 21 output, zero cache read).
+
+The source boundary is decisive: Jcode rewind explicitly clears both provider-session identifiers so the next turn sends the truncated context from scratch. Clear creates a genuinely fresh session, and the shipped Harness API has no fork/branch operation retaining an upstream prefix response. Thus this route can provide provider continuation or zero cross-task content, but not both. Lazy warm spawn, daemon idle timeout, and an `azdaja-warm` arm were not implemented after the isolation gate failed. Audit SHA-256: `b6ccaaf2e2dd2332062d48955d80c8d0f8c1822b16fed81b2d49f565a336f97b`.
+
+### Effective knob decision
+
+`openai_reasoning_effort` is materially relevant to cost and latency, but the failed terminal accuracy score prevents adoption. Stable keyed prompt caching and `max_output_tokens` remain inapplicable on the OAuth/ChatGPT request path; every reasoning-sweep root reported zero cache-read tokens. `priority` service tier remains the shipped setting, transport remains auto, native compaction remains irrelevant below 200,000 tokens, and the 180-second stream idle timeout remains a failure bound rather than a speed mechanism. With no safe warm+cached+tuned operating point, multi-turn peek-first snippets are ineligible and the fail-closed one-cell path remains unchanged.
