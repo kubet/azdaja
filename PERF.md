@@ -730,4 +730,18 @@ Across retained RULER, LongBench, and OOLONG traces, successful root latency is 
 
 A cross-fixture dual-flight estimate initially appeared to exceed 10%, but conditioning on RULER's actual repeated `task x target_length` strata corrects it to 22.520s -> 20.612s, only **8.47%**, so dual flight is also a latency NO-GO. Triple flight projects 17.541s / -22.11% on the same-stratum order statistic, but can approach 3x provider tokens, repeats physical work, and selects stochastically by first success. It is rejected because the active objective requires materially better token numbers as well as latency and because conservative attempt policy disallows hiding duplicate attempts. Immutable projection erratum SHA-256 `efe3b7e719246b8d1570016d6791ff008938e8dc65985ba396a479bfb1e59d0e`.
 
-Result: no defensible generic single-trajectory >=10% mechanism remains under unchanged Luna/medium plus unmodified Jcode. The only clean frontier move is a separately authorized gold-blind SCOUT of Luna **low** root reasoning (or a faster root model), retaining the 20/20 execution, >=17/20 recognition, >=10% latency, lower-token, and early-abort gates. No such inference was launched. Evidence record SHA-256 `a2a7f082a18aa661cd7dffeb42f4c79c76ee8ceacd46e34be830546dc54d9c04`.
+Result: no defensible generic single-trajectory >=10% mechanism remains under unchanged Luna/medium plus unmodified Jcode. The only clean frontier move is a separately authorized gold-blind SCOUT of Luna **low** root reasoning (or a faster root model), retaining the 20/20 execution, >=17/20 recognition, >=10% latency, lower-token, and early-abort gates. No such inference had yet been launched. Evidence record SHA-256 `a2a7f082a18aa661cd7dffeb42f4c79c76ee8ceacd46e34be830546dc54d9c04`.
+
+
+## SCOUT Luna/low root v1 — checkpoint-10 rejection
+
+This disposable, gold-blind SCOUT changed exactly one candidate setting from exact-v43: `jcode_reasoning = "medium"` to `"low"`. It retained exact-v43's `SKILL.md` and binary byte-for-byte, used unmodified Jcode v0.75.3 through subscription OAuth, and produced candidate aggregate SHA-256 `5fbd279c778691d1c57018ea5c1a3613469b58850269e572ad421e1f87693216` (binary `6be5b9ff567eca6d1a5c2315dfb0c12fb5bd847b58daef0b3b8191151e45b509`, config `ca3f153c8a5a80c3727473fea90452ade5c556a24d026fb54084257791fd8eb8`). The existing public 20-item LongBench SCOUT slice was selected without gold; only its first 10 candidate rows ran because checkpoint 10 was terminal.
+
+| Same 10 public fixtures | Execution | Gold-blind recognition | All-attempt latency p50 | Total tokens | Token p50 |
+|---|---:|---:|---:|---:|---:|
+| exact-v43 Luna/medium retained baseline | 8/10 | 8/10 | 52.775s | 263,776 | 26,422 |
+| disposable Luna/low SCOUT v1 | **3/10** | **3/10** | 27.567s | 246,782 | 13,838 |
+
+The low-root direction cut all-attempt median latency 47.77%, token p50 47.63%, and aggregate tokens 6.44% on this aborted window, but reliability collapsed. All seven failures normalized to `monty_subset_tax`; their exact raw responses were empty. The three executed rows were all recognized by the preregistered gold-blind extractor, so taxonomy is three executed-and-recognized, zero executed-but-unrecognized, and seven execution failures. All ten runs retained byte-transparent stdout, asserted the Luna OAuth route with reasoning `low`, used fresh isolated task/session state, had zero >=100-character root-context leaks, and reported zero cleanup errors.
+
+The mandatory 8/10 execution and 7/10 recognition checkpoint failed at 3/10 and 3/10. The controller therefore stopped immediately: rows 11-20, all control inference, gold access, scoring, retry, FROZEN promotion, and publication were not attempted. Frozen v43 evidence was read-only and unchanged. The disposable directional results JSONL has SHA-256 `003fc64aaff709674056ee6f22b2131db94d2536b879603919e053e0e48f6fe3`; it is not a receipt, schedule, score, or promotable artifact.
