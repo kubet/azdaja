@@ -419,6 +419,20 @@ class ControllerTests(unittest.TestCase):
                 RUN.configure_azdaja_repair_model_from_skill(
                     skill, require_explicit=True
                 )
+            self.assertEqual(
+                RUN.configure_azdaja_repair_model_from_skill(
+                    skill,
+                    require_explicit=True,
+                    candidate={"sha256": RUN.LEGACY_V43_CANDIDATE_SHA256},
+                ),
+                RUN.MODEL,
+            )
+            with self.assertRaisesRegex(RUN.BenchError, "explicit"):
+                RUN.configure_azdaja_repair_model_from_skill(
+                    skill,
+                    require_explicit=True,
+                    candidate={"sha256": RUN.LEGACY_V43_CANDIDATE_SHA256[:-1] + "0"},
+                )
             (skill / "config.toml").write_text(
                 'default_model="gpt-5.6-luna"\n'
                 'jcode_repair_model=" gpt-5.4-mini "\n',

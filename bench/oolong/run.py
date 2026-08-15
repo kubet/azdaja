@@ -37,6 +37,13 @@ from typing import Any, Iterable
 MODEL = "gpt-5.6-luna"
 REASONING = "medium"
 AZDAJA_REPAIR_MODEL = MODEL
+# Exact immutable pre-explicit-config v43 bundle. Its config omits
+# jcode_repair_model, but the binary contract predates that field and permits
+# only the unchanged Luna repair route. No other fresh candidate gets this
+# compatibility path.
+LEGACY_V43_CANDIDATE_SHA256 = (
+    "88607982e80165f6e34fc55e5155af9243c788a78b8ae2408e481216de763503"
+)
 
 
 def configure_azdaja_repair_model(model: str) -> None:
@@ -48,7 +55,10 @@ def configure_azdaja_repair_model(model: str) -> None:
 
 
 def configure_azdaja_repair_model_from_skill(
-    skill: Path, *, require_explicit: bool = False
+    skill: Path,
+    *,
+    require_explicit: bool = False,
+    candidate: dict[str, Any] | None = None,
 ) -> str:
     try:
         config = tomllib.loads((skill / "config.toml").read_text(encoding="utf-8"))
@@ -57,7 +67,12 @@ def configure_azdaja_repair_model_from_skill(
     if config.get("default_model") != MODEL:
         raise BenchError("candidate root model does not match the frozen benchmark model")
     if require_explicit and "jcode_repair_model" not in config:
-        raise BenchError("fresh candidate config lacks explicit jcode_repair_model")
+        if (
+            candidate is None
+            or candidate.get("sha256") != LEGACY_V43_CANDIDATE_SHA256
+            or MODEL != "gpt-5.6-luna"
+        ):
+            raise BenchError("fresh candidate config lacks explicit jcode_repair_model")
     model = config.get("jcode_repair_model", MODEL)
     if not isinstance(model, str) or not model or model.strip() != model:
         raise BenchError("candidate repair model must be nonempty without surrounding whitespace")
@@ -3208,9 +3223,10 @@ def run_suite(args: argparse.Namespace, suite: Suite) -> int:
     skill = validate_skill(args.azdaja_skill) if "jcode-azdaja" in args.arms else Path(
         args.azdaja_skill
     )
+    candidate = candidate_identity(skill) if "jcode-azdaja" in args.arms else None
     if "jcode-azdaja" in args.arms:
         configure_azdaja_repair_model_from_skill(
-            skill, require_explicit=not args.resume
+            skill, require_explicit=not args.resume, candidate=candidate
         )
     executable_identities: dict[str, Any] = {}
     if any(arm.startswith("jcode") for arm in args.arms):
@@ -3224,7 +3240,6 @@ def run_suite(args: argparse.Namespace, suite: Suite) -> int:
             str(skill / "azdaja"), "azdaja"
         )
     args.executable_identities = executable_identities
-    candidate = candidate_identity(skill) if "jcode-azdaja" in args.arms else None
     schedule = build_suite_schedule(
         suite, args, candidate, controller_identity(), executable_identities
     )
@@ -3424,9 +3439,10 @@ def main(argv: list[str] | None = None) -> int:
     args.jcode = ensure_executable(args.jcode, "jcode") if any(a.startswith("jcode") for a in args.arms) else args.jcode
     args.prime_agent = ensure_executable(args.prime_agent, "prime-agent") if "prime-agent" in args.arms else args.prime_agent
     skill = validate_skill(args.azdaja_skill) if "jcode-azdaja" in args.arms else Path(args.azdaja_skill)
+    candidate = candidate_identity(skill) if "jcode-azdaja" in args.arms else None
     if "jcode-azdaja" in args.arms:
         configure_azdaja_repair_model_from_skill(
-            skill, require_explicit=not args.resume
+            skill, require_explicit=not args.resume, candidate=candidate
         )
     executable_identities: dict[str, Any] = {}
     if any(a.startswith("jcode") for a in args.arms):
