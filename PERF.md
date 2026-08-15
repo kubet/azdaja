@@ -745,3 +745,17 @@ This disposable, gold-blind SCOUT changed exactly one candidate setting from exa
 The low-root direction cut all-attempt median latency 47.77%, token p50 47.63%, and aggregate tokens 6.44% on this aborted window, but reliability collapsed. All seven failures normalized to `monty_subset_tax`; their exact raw responses were empty. The three executed rows were all recognized by the preregistered gold-blind extractor, so taxonomy is three executed-and-recognized, zero executed-but-unrecognized, and seven execution failures. All ten runs retained byte-transparent stdout, asserted the Luna OAuth route with reasoning `low`, used fresh isolated task/session state, had zero >=100-character root-context leaks, and reported zero cleanup errors.
 
 The mandatory 8/10 execution and 7/10 recognition checkpoint failed at 3/10 and 3/10. The controller therefore stopped immediately: rows 11-20, all control inference, gold access, scoring, retry, FROZEN promotion, and publication were not attempted. Frozen v43 evidence was read-only and unchanged. The disposable directional results JSONL has SHA-256 `003fc64aaff709674056ee6f22b2131db94d2536b879603919e053e0e48f6fe3`; it is not a receipt, schedule, score, or promotable artifact.
+
+
+## SCOUT Luna/low root v2 — generic envelope guidance still rejected
+
+A second disposable candidate kept Luna/low and added one 896-character generic solo instruction: preflight semantic item size, derive faithful task-anchored evidence instead of sending an oversized whole document, represent a single choice as one item with alternative labels, and keep banned introspection out of repairs. Candidate aggregate SHA-256 is `8f3e193e85fbab51dcbbd183678174e753428cd2fb2ea8a4143603e88d108633`; its binary and config are unchanged from SCOUT v1, and its SKILL SHA-256 is `bbc100feff440392afeae625eb622e53fe0ca2fa4317f4c331d19837d2acbc1d`. It used the same first checkpoint window, without gold or controls.
+
+| Same 10 public fixtures | Execution | Gold-blind recognition | All-attempt latency p50 | Total tokens | Token p50 |
+|---|---:|---:|---:|---:|---:|
+| exact-v43 Luna/medium retained baseline | 8/10 | 8/10 | 52.775s | 263,776 | 26,422 |
+| disposable Luna/low SCOUT v2 | **6/10** | **6/10** | 30.308s | 300,400 | 20,020.5 |
+
+All six executed outputs were recognized and all four failures normalized to `monty_subset_tax`: three still exceeded the semantic item envelope after repairs and one supplied invalid helper labels after repairs. Typical latency and token p50 improved 42.57% and 24.23%, respectively, but total tokens regressed 13.88%; reliability remained below both checkpoint thresholds. Zero rows leaked >=100 context characters and zero reported cleanup errors.
+
+The 8/10 execution and 7/10 recognition checkpoint again forced an immediate abort at 6/10 and 6/10. Rows 11-20, controls, gold, scoring, retry, FROZEN promotion, and publication were not attempted. Directional results JSONL SHA-256 is `b9bc67cf90b2050466fe5d38c3511fc2b303f195aa8a03ba93c60189d8b74064`; it carries no receipt, schedule, score, or promotion authority.
