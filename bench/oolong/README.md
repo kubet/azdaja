@@ -32,3 +32,14 @@ python3 bench/oolong/report.py /private/tmp/suite.jsonl \
 ```
 
 No benchmark result is a release claim until repeated unseen items establish accuracy noninferiority and paired token/latency advantages.
+
+
+## Isolated V58 low-reasoning campaign
+
+The prospective V58 campaign does **not** retarget the historical medium-reasoning controller above. It uses versioned files `v58_run.py`, `v58_validate.py`, `v58_score.py`, `v58_report.py`, and `v58_rehearsal.py`. The inference process can read only the goldless public manifest at `/private/tmp/azdaja-v58-oolong-public-v1/manifest.json` (SHA-256 `bbf624cec245d971879ad3c1058148a1d188eadeb546f2cc6f860f8c74584eb4`). Expected answers remain in the detached encrypted custody image and are accepted only by the one-shot scorer after independent terminal validation.
+
+The V58 runner admits only the evaluated three-component candidate, the pinned Jcode v0.75.3 executable, Luna/low, seed `20260813`, timeout 600, and the fixed production root `/private/tmp/azdaja-v58-oolong-frozen-v1`. Its 78-job order is candidate 1–10, both controls for those fixtures 11–30, candidate 31–46, then remaining controls 47–78. After candidate row/claim/done 10 it durably seals pass or abort. Abort exits 3 and permanently refuses resume before OAuth or further inference. The inference runner never opens gold and never scores.
+
+Before any authorized production launch, run the OAuth-free synthetic rehearsal at a fresh root. It proves exact 78-row/claim/done/artifact validation, independent no-gold validation, the 25/24 report boundary, a sealed abort at 10, and pre-OAuth resume refusal. The resulting receipt binds the runner, historical adapter, validator, scorer, reporter, rehearsal, public suite, candidate components, Jcode, Prime, Node, kernel Python, platform, schedule, Luna/low profile, and fixed production root.
+
+Production remains blocked unless the separately audited receipt is supplied and explicit launch authorization is given. The required post-inference sequence is: independent goldless `v58_validate.py`; one attachment of the committed gold image; one `v58_score.py` invocation; immediate gold detachment; then one `v58_report.py` invocation. A valid report passes continuation only at candidate execution ≥25/26, strict exact ≥24/26, and all integrity/route/leak/cleanup gates. Even PASS does not authorize RAH, publication, release, or a superiority claim.

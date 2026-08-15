@@ -1866,6 +1866,38 @@ def scan_tool_policy(
     }
 
 
+def extract_final_exact(name: str, stdout: str) -> str:
+    """Extract the final response without trimming or normalizing it."""
+    if name == "jcode-azdaja":
+        return stdout
+    if name == "prime-agent":
+        final = ""
+        for obj in json_objects(stdout):
+            if obj.get("type") != "message_end":
+                continue
+            message = obj.get("message")
+            if not isinstance(message, dict) or message.get("role") != "assistant":
+                continue
+            content = message.get("content")
+            if not isinstance(content, list):
+                continue
+            text = "".join(part.get("text", "") for part in content if isinstance(part, dict) and part.get("type") == "text")
+            if text:
+                final = text
+        return final
+    assembled = ""
+    completed = ""
+    for obj in json_objects(stdout):
+        typ = obj.get("type") or obj.get("ev")
+        if typ in {"text_delta", "assistant_text_delta"} and isinstance(obj.get("text"), str):
+            assembled += obj["text"]
+        for key in ("response", "output_text", "text", "content"):
+            value = obj.get(key)
+            if typ in {"result", "message_end", "assistant", "final", "done"} and isinstance(value, str):
+                completed = value
+    return completed or assembled
+
+
 def extract_final(name: str, stdout: str) -> str:
     if name == "prime-agent":
         final = ""
@@ -2295,6 +2327,7 @@ def public_command(command: list[str], prompt_index: int = -1) -> list[str]:
 def write_private_artifact(path: Path, content: str) -> dict[str, Any]:
     # Retain the complete event stream for usage/tool audits, but never raw
     # credential-shaped values.  Unlike bounded(), this does not truncate.
+    source_data = content.encode("utf-8")
     data = redact_sensitive(content).encode("utf-8")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     fd = os.open(path, flags, 0o600)
@@ -2317,6 +2350,7 @@ def write_private_artifact(path: Path, content: str) -> dict[str, Any]:
         "mode": "0600",
         "contains_private_raw_trajectory": False,
         "credential_redacted": True,
+        "exact_text_preserved": data == source_data,
         "sensitivity": "complete model/tool event stream with credential-shaped values redacted",
     }
 
@@ -2350,6 +2384,7 @@ def run_one(
     auth_prime: dict[str, Any],
     work_root: Path,
     defer_scoring: bool = False,
+    return_exact_response: bool = False,
 ) -> dict[str, Any]:
     del root, prompt  # Inference prompts/cwd are always rebuilt from the staged copy.
     frozen_suite = bool(getattr(args, "oolong_private_frozen_suite", False))
@@ -2440,6 +2475,7 @@ def run_one(
         retention = purge_transient_run_state(run_dir, retained_names, cleanup_errors)
 
     response = extract_final(arm_name, stdout)
+    exact_response = extract_final_exact(arm_name, stdout) if return_exact_response else None
     model_trace = trace_paths.get("azdaja_model_trace")
     azdaja_usage = (
         parse_azdaja_usage(model_trace)
@@ -2741,6 +2777,7 @@ def run_one(
         "trajectory_run_directory": str(run_dir),
         "cleanup_errors": cleanup_errors,
         "failure": failure,
+        **({"_exact_response": exact_response} if return_exact_response else {}),
     }
 
 
