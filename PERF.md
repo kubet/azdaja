@@ -764,3 +764,19 @@ The 8/10 execution and 7/10 recognition checkpoint again forced an immediate abo
 ### Causal erratum: SCOUT v2 guidance was not on the solo inference path
 
 Post-run trace inspection found that `azdaja solo` constructs its root request from text compiled into the binary; the staged `SKILL.md` is not interpolated into that request. None of v2's added 896 characters appears in any retained root request. Because v1 and v2 used the same binary, config, model, and effective solo prompt, v2 is only an independent stochastic Luna/low repeat, not a causal test of the proposed envelope guidance. Its 6/10 execution, 6/10 recognition, latency, token, and mandatory-abort observations remain exact directional facts, but the apparent improvement over v1 cannot be attributed to the SKILL edit. Any real retrieval/envelope mechanism must change the compiled generic solo protocol or runtime helper and receive a new candidate identity.
+
+
+## SCOUT V55 Luna/low + native lexical relevance — promotion-impossibility abort at 10
+
+V55 is the first causal low-root retrieval candidate. Starting from exact-v43 source commit `6588c06`, it adds a compiled, solo-only native `lexical_relevance` helper: deterministic integer chunk-document-frequency ranking, verbatim Unicode character ranges, explicit omission metadata, a 20,000-character serialized evidence cap, no provider calls, and no availability in ordinary `exec`. Its compiled root contract permits it only for relevance-local semantic work and forbids exact/exhaustive use. Candidate source commit is `40f9819beeab9348b0a88b0af1f57ce7cc3fb619`; source patch SHA-256 `28c797b7960beb3967832655d65705414d160c69394d77f9fd4f6e262cc78ce2`; candidate aggregate `f1c38aeebdf0dbe839fdbc37cd651e6fc21b412f66e794af795a661dd7a359fe`; binary `5852be035329b547e14416c14db14d0b2ec43c0449582febe345a336b7d4409e`. The only config change from exact-v43 is root reasoning medium to low.
+
+Before inference, full locked tests passed, strict clippy passed, a 16M-character release stress completed in 0.56s, and an independent source audit found no P0/P1. A gold-blind local diagnostic constructed capped views for all 20 public SCOUT contexts; per-item helper time was 69-954ms (median about 153ms), with exact output ranges and no provider calls. This quantified a credible path below the retained 52.775s / 263,776-token same-10 baseline.
+
+| Same 10 public fixtures | Execution | Gold-blind recognition | All-attempt latency p50 | Total tokens | Token p50 |
+|---|---:|---:|---:|---:|---:|
+| exact-v43 Luna/medium retained baseline | 8/10 | 8/10 | 52.775s | 263,776 | 26,422 |
+| disposable V55 Luna/low native relevance | **8/10** | **8/10** | **19.799s** | **175,571** | **16,134** |
+
+V55 cut median latency 62.48%, aggregate tokens 33.44%, and token p50 38.94%. All eight executed outputs were extractor-recognized. The native helper appeared in model-authored code on 9/10 rows. The two failures normalized to `monty_subset_tax`: row 7 never invoked the helper and still sent oversized evidence after both repairs; row 9 invoked it but a later repair supplied non-list labels. Zero rows leaked >=100 context characters and zero reported cleanup errors.
+
+V55 exactly met the mandatory checkpoint-10 floors (8/10 execution, 8/10 recognition), but two failures made the required 20/20 full-SCOUT execution gate mathematically unreachable. The run therefore stopped at 10 rather than spending on non-promotable rows 11-20. No controls, gold, scoring, retry, FROZEN promotion, merge to main, or publication occurred. Directional results JSONL SHA-256 is `01449dc6e41c76e54aae061e56cc55166795b9d5879f2353f637019ba8c5390c`; it is not a receipt, schedule, score, or promotion artifact.
