@@ -9,7 +9,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
-    collections::{HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     env,
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, Read, Write},
@@ -51,14 +51,7 @@ pub struct Config {
     pub idle_timeout: u64,
     pub clean_patterns: Vec<String>,
     pub jcode_provider: String,
-    /// Reasoning effort for the initial root planning turn.
     pub jcode_reasoning: String,
-    /// Reasoning effort for semantic child turns.
-    pub jcode_sub_reasoning: String,
-    /// Model pin for same-session root repair turns.
-    pub jcode_repair_model: String,
-    /// Reasoning effort for same-session root repair turns.
-    pub jcode_repair_reasoning: String,
     pub max_calls_per_cell: usize,
 }
 impl Default for Config {
@@ -75,9 +68,6 @@ impl Default for Config {
             clean_patterns: Vec::new(),
             jcode_provider: "openai".into(),
             jcode_reasoning: "medium".into(),
-            jcode_sub_reasoning: "low".into(),
-            jcode_repair_model: "gpt-5.4-mini".into(),
-            jcode_repair_reasoning: "low".into(),
             max_calls_per_cell: 64,
         }
     }
@@ -103,12 +93,6 @@ impl Config {
     pub fn validate(self) -> Result<Self> {
         if self.sub_llm_cmd.trim().is_empty() {
             bail!("sub_llm_cmd cannot be empty")
-        }
-        if self.jcode_repair_model.trim().is_empty() {
-            bail!("jcode_repair_model cannot be empty")
-        }
-        if self.jcode_repair_model.trim() != self.jcode_repair_model {
-            bail!("jcode_repair_model cannot have surrounding whitespace")
         }
         if self.output_cap < 256 {
             bail!("output_cap must be at least 256")
@@ -424,25 +408,6 @@ pub enum ExecFailureKind {
     Other,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TracebackSnippetOrigin {
-    CurrentSnippet,
-    EarlierSnippet,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecTracebackFrame {
-    pub origin: TracebackSnippetOrigin,
-    pub function_name: Option<String>,
-    pub preview_line: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecFailureTraceback {
-    pub caller: ExecTracebackFrame,
-    pub terminal: ExecTracebackFrame,
-}
-
 pub struct ExecResult {
     pub output: String,
     pub success: bool,
@@ -452,14 +417,6 @@ pub struct ExecResult {
     pub sub_call_wall_ns: u128,
     pub failure_kind: ExecFailureKind,
     pub failure_line: Option<String>,
-}
-
-/// Additive solo-only diagnostics kept separate so [`ExecResult`] remains source-compatible.
-pub struct SoloExecResult {
-    pub result: ExecResult,
-    /// Bounded raw exception message. Never trust it without validating traceback provenance.
-    pub failure_message: Option<String>,
-    pub failure_traceback: Option<ExecFailureTraceback>,
 }
 fn exec_failure_kind(exception: Option<ExcType>) -> ExecFailureKind {
     match exception {
@@ -496,65 +453,13 @@ fn exec_failure_kind(exception: Option<ExcType>) -> ExecFailureKind {
     }
 }
 
-struct MontyFailureInfo {
-    exception: ExcType,
-    message: Option<String>,
-    traceback: Option<ExecFailureTraceback>,
-}
-
-fn bounded_monty_field(value: &str) -> String {
-    value.chars().take(1024).collect()
-}
-
-fn monty_exception_info(error: &MontyException) -> MontyFailureInfo {
-    let traceback = error.traceback();
-    let structured = traceback
-        .first()
-        .zip(traceback.last())
-        .map(|(caller, terminal)| {
-            let current_filename = &caller.filename;
-            let convert = |frame: &monty_types::StackFrame| ExecTracebackFrame {
-                origin: if frame.filename == *current_filename {
-                    TracebackSnippetOrigin::CurrentSnippet
-                } else {
-                    TracebackSnippetOrigin::EarlierSnippet
-                },
-                function_name: frame.frame_name.clone(),
-                preview_line: frame.preview_line.as_deref().map(bounded_monty_field),
-            };
-            ExecFailureTraceback {
-                caller: convert(caller),
-                terminal: convert(terminal),
-            }
-        });
-    MontyFailureInfo {
-        exception: error.exc_type(),
-        message: error.message().map(bounded_monty_field),
-        traceback: structured,
-    }
-}
-
-fn exec_failure_fields(
-    failure: Option<MontyFailureInfo>,
-) -> (
-    ExecFailureKind,
-    Option<String>,
-    Option<String>,
-    Option<ExecFailureTraceback>,
-) {
-    let Some(failure) = failure else {
-        return (ExecFailureKind::None, None, None, None);
-    };
-    let terminal_line = failure
-        .traceback
-        .as_ref()
-        .and_then(|traceback| traceback.terminal.preview_line.clone());
-    (
-        exec_failure_kind(Some(failure.exception)),
-        terminal_line,
-        failure.message,
-        failure.traceback,
-    )
+fn monty_exception_info(error: &MontyException) -> (ExcType, Option<String>) {
+    let failure_line = error
+        .traceback()
+        .last()
+        .and_then(|frame| frame.preview_line.as_deref())
+        .map(str::to_owned);
+    (error.exc_type(), failure_line)
 }
 
 fn as_string(o: &MontyObject, name: &str) -> Result<String> {
@@ -623,17 +528,310 @@ fn parse_call(
     };
     Ok((prompts, model, workers))
 }
-// Keep callback plumbing explicit: these borrowed counters and outputs share one call lifetime.
-#[allow(clippy::too_many_arguments)]
+fn relevance_terms(text: &str) -> Vec<String> {
+    fn push_run(run: &mut String, out: &mut Vec<String>) {
+        if run.is_empty() {
+            return;
+        }
+        let lowered: String = run.chars().flat_map(char::to_lowercase).collect();
+        let chars: Vec<char> = lowered.chars().collect();
+        if chars.iter().all(|c| c.is_ascii_alphanumeric()) {
+            if chars.len() >= 3 {
+                out.push(lowered);
+            }
+        } else if chars.len() == 1 {
+            out.push(lowered);
+        } else {
+            for pair in chars.windows(2) {
+                out.push(pair.iter().collect());
+            }
+        }
+        run.clear();
+    }
+
+    let mut terms = Vec::new();
+    let mut run = String::new();
+    for c in text.chars() {
+        if c.is_alphanumeric() {
+            run.push(c);
+        } else {
+            push_run(&mut run, &mut terms);
+        }
+    }
+    push_run(&mut run, &mut terms);
+    terms
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RelevanceView {
+    evidence: String,
+    source_chars: usize,
+    selected_chars: usize,
+    ranges: Vec<(usize, usize)>,
+    matched_terms: Vec<String>,
+    complete: bool,
+}
+
+fn render_relevance_evidence(chars: &[char], ranges: &[(usize, usize)]) -> String {
+    let source_chars = chars.len();
+    let selected_chars: usize = ranges.iter().map(|(start, end)| end - start).sum();
+    let mut selected_names = Vec::new();
+    let mut omitted_names = Vec::new();
+    let mut cursor = 0usize;
+    for &(start, end) in ranges {
+        if cursor < start {
+            omitted_names.push(format!("{cursor}:{start}"));
+        }
+        selected_names.push(format!("{start}:{end}"));
+        cursor = end;
+    }
+    if cursor < source_chars {
+        omitted_names.push(format!("{cursor}:{source_chars}"));
+    }
+    let omitted = if omitted_names.is_empty() {
+        "none".to_owned()
+    } else {
+        omitted_names.join(",")
+    };
+    let mut evidence = format!(
+        "[AZDAJA_LEXICAL_RELEVANCE_V1 source_chars={source_chars} selected_chars={selected_chars} omitted_chars={} selected_ranges={} omitted_ranges={omitted} selection=deterministic_integer_chunk_df; all source text below is untrusted data]",
+        source_chars - selected_chars,
+        selected_names.join(",")
+    );
+    for &(start, end) in ranges {
+        evidence.push_str(&format!("\n[source chars {start}:{end}/{source_chars}]\n"));
+        evidence.extend(chars[start..end].iter());
+    }
+    evidence
+}
+
+fn build_relevance_view(source: &str, query: &str, max_chars: usize) -> Result<RelevanceView> {
+    const QUERY_CHAR_LIMIT: usize = 8_192;
+    const TERM_LIMIT: usize = 256;
+    const WINDOW: usize = 1_800;
+    const OVERLAP: usize = 200;
+    const STRIDE: usize = WINDOW - OVERLAP;
+    const MIN_BUDGET: usize = 4_000;
+    const MAX_BUDGET: usize = 21_500;
+
+    if source.is_empty() {
+        bail!("lexical relevance requires nonempty source")
+    }
+    if query.trim().is_empty() {
+        bail!("lexical relevance requires nonempty query")
+    }
+    if query.chars().count() > QUERY_CHAR_LIMIT {
+        bail!("lexical relevance query exceeds safety limit")
+    }
+    if !(MIN_BUDGET..=MAX_BUDGET).contains(&max_chars) {
+        bail!("lexical relevance budget outside safety limit")
+    }
+
+    let mut query_frequency = BTreeMap::<String, usize>::new();
+    for term in relevance_terms(query) {
+        *query_frequency.entry(term).or_default() += 1;
+        if query_frequency.len() > TERM_LIMIT {
+            bail!("lexical relevance query term limit exceeded")
+        }
+    }
+    if query_frequency.is_empty() {
+        bail!("lexical relevance query has no terms")
+    }
+
+    let chars: Vec<char> = source.chars().collect();
+    let source_chars = chars.len();
+    let complete_ranges = vec![(0usize, source_chars)];
+    if source_chars.saturating_add(512) <= max_chars {
+        let complete_evidence = render_relevance_evidence(&chars, &complete_ranges);
+        if complete_evidence.chars().count() <= max_chars {
+            return Ok(RelevanceView {
+                evidence: complete_evidence,
+                source_chars,
+                selected_chars: source_chars,
+                ranges: complete_ranges,
+                matched_terms: Vec::new(),
+                complete: true,
+            });
+        }
+    }
+
+    let starts: Vec<usize> = (0..source_chars).step_by(STRIDE).collect();
+    let window_count = starts.len();
+    let wanted: BTreeSet<&str> = query_frequency.keys().map(String::as_str).collect();
+    let mut document_frequency = BTreeMap::<String, usize>::new();
+    let mut matched = BTreeSet::<String>::new();
+    for &start in &starts {
+        let end = (start + WINDOW).min(source_chars);
+        let window_text: String = chars[start..end].iter().collect();
+        let mut present = BTreeSet::<String>::new();
+        for term in relevance_terms(&window_text) {
+            if wanted.contains(term.as_str()) {
+                present.insert(term);
+            }
+        }
+        for term in present {
+            *document_frequency.entry(term.clone()).or_default() += 1;
+            matched.insert(term);
+        }
+    }
+    if matched.is_empty() {
+        bail!("lexical relevance found no query terms")
+    }
+    if matched
+        .iter()
+        .all(|term| document_frequency[term] == window_count)
+    {
+        bail!("lexical relevance query does not discriminate")
+    }
+
+    let mut ranked = Vec::<(u128, usize, usize)>::new();
+    for &start in &starts {
+        let end = (start + WINDOW).min(source_chars);
+        let window_text: String = chars[start..end].iter().collect();
+        let mut frequency = BTreeMap::<String, usize>::new();
+        for term in relevance_terms(&window_text) {
+            if wanted.contains(term.as_str()) {
+                *frequency.entry(term).or_default() += 1;
+            }
+        }
+        let mut score = 0u128;
+        for (term, count) in frequency {
+            let df = document_frequency[&term] as u128;
+            let rarity = ((window_count as u128 + 1) * 1_000_000) / (df + 1);
+            let capped_tf = count.min(4) as u128;
+            let query_weight = 1 + query_frequency[&term].min(4) as u128;
+            score = score.saturating_add(rarity * capped_tf * query_weight);
+        }
+        if score > 0 {
+            ranked.push((score, start, end));
+        }
+    }
+    ranked.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+
+    let mut selected = Vec::<(usize, usize)>::new();
+    for (_, start, end) in ranked {
+        let mut trial = selected.clone();
+        trial.push((start, end));
+        trial.sort_unstable();
+        let mut merged = Vec::<(usize, usize)>::new();
+        for (span_start, span_end) in trial {
+            if let Some(last) = merged.last_mut()
+                && span_start <= last.1
+            {
+                last.1 = last.1.max(span_end);
+            } else {
+                merged.push((span_start, span_end));
+            }
+        }
+        let evidence = render_relevance_evidence(&chars, &merged);
+        if evidence.chars().count() <= max_chars {
+            selected = merged;
+        }
+    }
+    if selected.is_empty() {
+        bail!("lexical relevance budget fits no window")
+    }
+    let evidence = render_relevance_evidence(&chars, &selected);
+    let selected_chars = selected.iter().map(|(start, end)| end - start).sum();
+    Ok(RelevanceView {
+        evidence,
+        source_chars,
+        selected_chars,
+        ranges: selected,
+        matched_terms: matched.into_iter().collect(),
+        complete: false,
+    })
+}
+
+fn relevance_object(view: RelevanceView) -> Result<MontyObject> {
+    let integer = |value: usize| {
+        i64::try_from(value)
+            .map(MontyObject::Int)
+            .map_err(|_| anyhow!("lexical relevance integer overflow"))
+    };
+    let mut ranges = Vec::new();
+    for (start, end) in &view.ranges {
+        ranges.push(MontyObject::List(vec![integer(*start)?, integer(*end)?]));
+    }
+    let matched_terms = view
+        .matched_terms
+        .iter()
+        .cloned()
+        .map(MontyObject::String)
+        .collect();
+    Ok(MontyObject::Dict(
+        vec![
+            (
+                MontyObject::String("algorithm".into()),
+                MontyObject::String("deterministic_integer_chunk_df_v1".into()),
+            ),
+            (
+                MontyObject::String("complete".into()),
+                MontyObject::Bool(view.complete),
+            ),
+            (
+                MontyObject::String("source_chars".into()),
+                integer(view.source_chars)?,
+            ),
+            (
+                MontyObject::String("selected_chars".into()),
+                integer(view.selected_chars)?,
+            ),
+            (
+                MontyObject::String("evidence_chars".into()),
+                integer(view.evidence.chars().count())?,
+            ),
+            (
+                MontyObject::String("omitted_chars".into()),
+                integer(view.source_chars - view.selected_chars)?,
+            ),
+            (
+                MontyObject::String("ranges".into()),
+                MontyObject::List(ranges),
+            ),
+            (
+                MontyObject::String("matched_terms".into()),
+                MontyObject::List(matched_terms),
+            ),
+            (
+                MontyObject::String("evidence".into()),
+                MontyObject::String(view.evidence),
+            ),
+        ]
+        .into(),
+    ))
+}
+
+#[derive(Clone, Copy)]
+struct CellCapabilities<'a> {
+    default_model: &'a str,
+    allow_relevance: bool,
+}
+
+struct ExternalState<'a> {
+    final_out: &'a mut Option<Final>,
+    call_count: &'a mut usize,
+    sub_call_wall: &'a mut Duration,
+}
+
+type RunCellOutcome = (
+    MontyRepl,
+    String,
+    bool,
+    Option<Final>,
+    usize,
+    Duration,
+    Option<ExcType>,
+    Option<String>,
+);
+
 fn external(
     name: &str,
     args: &[MontyObject],
     kwargs: &[(MontyObject, MontyObject)],
     cfg: &Config,
-    default_model: &str,
-    final_out: &mut Option<Final>,
-    call_count: &mut usize,
-    sub_call_wall: &mut Duration,
+    capabilities: CellCapabilities<'_>,
+    state: ExternalState<'_>,
 ) -> Result<MontyObject> {
     match name {
         "FINAL" => {
@@ -641,7 +839,7 @@ fn external(
                 .first()
                 .ok_or_else(|| anyhow!("FINAL requires an answer"))?
                 .clone();
-            *final_out = Some(Final::Value(v));
+            *state.final_out = Some(Final::Value(v));
             Ok(MontyObject::None)
         }
         "FINAL_VAR" => {
@@ -656,8 +854,31 @@ fn external(
             {
                 bail!("FINAL_VAR requires an identifier")
             }
-            *final_out = Some(Final::Var(name));
+            *state.final_out = Some(Final::Var(name));
             Ok(MontyObject::None)
+        }
+        "lexical_relevance" if capabilities.allow_relevance => {
+            if args.len() < 2 || args.len() > 3 {
+                bail!("lexical_relevance requires source, query, and optional max_chars")
+            }
+            if kwargs
+                .iter()
+                .any(|(key, _)| !matches!(key, MontyObject::String(name) if name == "max_chars"))
+            {
+                bail!("lexical_relevance received an unknown keyword")
+            }
+            if args.len() == 3 && kw(kwargs, "max_chars").is_some() {
+                bail!("lexical_relevance max_chars supplied twice")
+            }
+            let source = as_string(&args[0], "source")?;
+            let query = as_string(&args[1], "query")?;
+            let budget = match kw(kwargs, "max_chars").or(args.get(2)) {
+                None => 20_000usize,
+                Some(MontyObject::Int(value)) => usize::try_from(*value)
+                    .map_err(|_| anyhow!("lexical_relevance max_chars must be an integer"))?,
+                Some(_) => bail!("lexical_relevance max_chars must be an integer"),
+            };
+            relevance_object(build_relevance_view(&source, &query, budget)?)
         }
         "llm" | "llm_batch" | "llm_batch_fresh" => {
             let batch = name != "llm";
@@ -666,18 +887,18 @@ fn external(
             let model = model
                 .as_deref()
                 .filter(|s| !s.is_empty())
-                .unwrap_or(default_model);
-            *call_count = call_count.saturating_add(prompts.len());
-            if *call_count > cfg.max_calls_per_cell {
+                .unwrap_or(capabilities.default_model);
+            *state.call_count = (*state.call_count).saturating_add(prompts.len());
+            if *state.call_count > cfg.max_calls_per_cell {
                 bail!(
                     "llm call budget exceeded: {} > {}",
-                    *call_count,
+                    *state.call_count,
                     cfg.max_calls_per_cell
                 )
             }
             let sub_call_started = Instant::now();
             let values = call_many_items(&prompts, model, workers, cfg, batch, use_shared);
-            *sub_call_wall += sub_call_started.elapsed();
+            *state.sub_call_wall += sub_call_started.elapsed();
             let values = values?;
             if batch {
                 Ok(MontyObject::List(
@@ -774,24 +995,21 @@ fn run_cell(
     code: &str,
     cfg: &Config,
     default_model: &str,
-) -> (
-    MontyRepl,
-    String,
-    bool,
-    Option<Final>,
-    usize,
-    Duration,
-    Option<MontyFailureInfo>,
-) {
+    allow_relevance: bool,
+) -> RunCellOutcome {
     repl.tracker_mut()
         .set_max_duration(Duration::from_secs(cfg.cell_timeout));
-    let inputs = ["llm", "llm_batch", "llm_batch_fresh", "FINAL", "FINAL_VAR"]
+    let mut input_names = vec!["llm", "llm_batch", "llm_batch_fresh", "FINAL", "FINAL_VAR"];
+    if allow_relevance {
+        input_names.push("lexical_relevance");
+    }
+    let inputs = input_names
         .into_iter()
-        .map(|n| {
+        .map(|name| {
             (
-                n.into(),
+                name.into(),
                 MontyObject::Function {
-                    name: n.into(),
+                    name: name.into(),
                     docstring: None,
                 },
             )
@@ -805,7 +1023,7 @@ fn run_cell(
         Ok(p) => p,
         Err(e) => {
             let e = *e;
-            let failure = monty_exception_info(&e.error);
+            let (exception, failure_line) = monty_exception_info(&e.error);
             printed.push_str(&e.error.to_string());
             return (
                 e.repl,
@@ -814,7 +1032,8 @@ fn run_cell(
                 final_out,
                 call_count,
                 sub_call_wall,
-                Some(failure),
+                Some(exception),
+                failure_line,
             );
         }
     };
@@ -840,6 +1059,7 @@ fn run_cell(
                     call_count,
                     sub_call_wall,
                     None,
+                    None,
                 );
             }
             ReplProgress::FunctionCall(call) => {
@@ -848,10 +1068,15 @@ fn run_cell(
                     &call.args,
                     &call.kwargs,
                     cfg,
-                    default_model,
-                    &mut final_out,
-                    &mut call_count,
-                    &mut sub_call_wall,
+                    CellCapabilities {
+                        default_model,
+                        allow_relevance,
+                    },
+                    ExternalState {
+                        final_out: &mut final_out,
+                        call_count: &mut call_count,
+                        sub_call_wall: &mut sub_call_wall,
+                    },
                 )
                 .map_err(MontyException::runtime_error);
                 let resumed = match result {
@@ -862,7 +1087,13 @@ fn run_cell(
                     Ok(p) => p,
                     Err(e) => {
                         let e = *e;
-                        let failure = monty_exception_info(&e.error);
+                        let exception = e.error.exc_type();
+                        let failure_line = e
+                            .error
+                            .traceback()
+                            .last()
+                            .and_then(|frame| frame.preview_line.as_deref())
+                            .map(str::to_owned);
                         printed.push_str(&e.error.to_string());
                         return (
                             e.repl,
@@ -871,7 +1102,8 @@ fn run_cell(
                             final_out,
                             call_count,
                             sub_call_wall,
-                            Some(failure),
+                            Some(exception),
+                            failure_line,
                         );
                     }
                 }
@@ -883,7 +1115,13 @@ fn run_cell(
                 Ok(p) => p,
                 Err(e) => {
                     let e = *e;
-                    let failure = monty_exception_info(&e.error);
+                    let exception = e.error.exc_type();
+                    let failure_line = e
+                        .error
+                        .traceback()
+                        .last()
+                        .and_then(|frame| frame.preview_line.as_deref())
+                        .map(str::to_owned);
                     printed.push_str(&e.error.to_string());
                     return (
                         e.repl,
@@ -892,7 +1130,8 @@ fn run_cell(
                         final_out,
                         call_count,
                         sub_call_wall,
-                        Some(failure),
+                        Some(exception),
+                        failure_line,
                     );
                 }
             },
@@ -903,7 +1142,13 @@ fn run_cell(
                 Ok(p) => p,
                 Err(e) => {
                     let e = *e;
-                    let failure = monty_exception_info(&e.error);
+                    let exception = e.error.exc_type();
+                    let failure_line = e
+                        .error
+                        .traceback()
+                        .last()
+                        .and_then(|frame| frame.preview_line.as_deref())
+                        .map(str::to_owned);
                     printed.push_str(&e.error.to_string());
                     return (
                         e.repl,
@@ -912,7 +1157,8 @@ fn run_cell(
                         final_out,
                         call_count,
                         sub_call_wall,
-                        Some(failure),
+                        Some(exception),
+                        failure_line,
                     );
                 }
             },
@@ -925,6 +1171,7 @@ fn run_cell(
                     final_out,
                     call_count,
                     sub_call_wall,
+                    None,
                     None,
                 );
             }
@@ -1331,9 +1578,6 @@ impl SoloSession {
         Ok(())
     }
     pub fn exec(&mut self, code: &str, cfg: &Config) -> Result<ExecResult> {
-        Ok(self.exec_detailed(code, cfg)?.result)
-    }
-    pub fn exec_detailed(&mut self, code: &str, cfg: &Config) -> Result<SoloExecResult> {
         let repl = self
             .repl
             .take()
@@ -1345,8 +1589,9 @@ impl SoloSession {
             mut final_out,
             external_calls,
             sub_call_wall,
-            mut failure,
-        ) = run_cell(repl, code, cfg, &self.sub_model);
+            mut exception,
+            mut failure_line,
+        ) = run_cell(repl, code, cfg, &self.sub_model, true);
         let mut success = success;
         if success
             && final_out.is_none()
@@ -1363,7 +1608,9 @@ impl SoloSession {
                 Final::Var(name) => match repl.feed_run(&name, vec![], PrintWriter::Disabled) {
                     Ok(v) => Some(v),
                     Err(e) => {
-                        failure = Some(monty_exception_info(&e));
+                        let (kind, line) = monty_exception_info(&e);
+                        exception = Some(kind);
+                        failure_line = line;
                         output.push_str(&format!("\n{e}"));
                         success = false;
                         None
@@ -1376,20 +1623,14 @@ impl SoloSession {
             }
         }
         self.repl = Some(repl);
-        let (failure_kind, failure_line, failure_message, failure_traceback) =
-            exec_failure_fields(failure);
-        Ok(SoloExecResult {
-            result: ExecResult {
-                output: cap(&output, cfg.output_cap),
-                success,
-                finalized,
-                external_calls,
-                sub_call_wall_ns: sub_call_wall.as_nanos(),
-                failure_kind,
-                failure_line,
-            },
-            failure_message,
-            failure_traceback,
+        Ok(ExecResult {
+            output: cap(&output, cfg.output_cap),
+            success,
+            finalized,
+            external_calls,
+            sub_call_wall_ns: sub_call_wall.as_nanos(),
+            failure_kind: exec_failure_kind(exception),
+            failure_line,
         })
     }
     pub fn final_answer_is_blank(&self) -> Result<bool> {
@@ -1413,8 +1654,16 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
     let meta = read_meta(&dir)?;
     let model = meta.sub_model.as_deref().unwrap_or(&cfg.default_model);
     let repl = load_repl(&dir)?;
-    let (mut repl, mut output, success, mut final_out, external_calls, sub_call_wall, mut failure) =
-        run_cell(repl, code, cfg, model);
+    let (
+        mut repl,
+        mut output,
+        success,
+        mut final_out,
+        external_calls,
+        sub_call_wall,
+        mut exception,
+        mut failure_line,
+    ) = run_cell(repl, code, cfg, model, false);
     let mut success = success;
     // Paper-style trajectories sometimes assign `FINAL = answer` instead of calling it.
     if success
@@ -1432,7 +1681,9 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
             Final::Var(name) => match repl.feed_run(&name, vec![], PrintWriter::Disabled) {
                 Ok(v) => Some(v),
                 Err(e) => {
-                    failure = Some(monty_exception_info(&e));
+                    let (kind, line) = monty_exception_info(&e);
+                    exception = Some(kind);
+                    failure_line = line;
                     output.push_str(&format!("\n{e}"));
                     success = false;
                     None
@@ -1445,15 +1696,13 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         }
     }
     save_repl(&dir, &repl)?;
-    let (failure_kind, failure_line, _failure_message, _failure_traceback) =
-        exec_failure_fields(failure);
     Ok(ExecResult {
         output: cap(&output, cfg.output_cap),
         success,
         finalized,
         external_calls,
         sub_call_wall_ns: sub_call_wall.as_nanos(),
-        failure_kind,
+        failure_kind: exec_failure_kind(exception),
         failure_line,
     })
 }
@@ -1588,42 +1837,6 @@ fn call_many_items(
                             None
                         };
                         if let Some(mut api) = shared {
-                            let model_started = Instant::now();
-                            if let Err(error) = api.set_model(model) {
-                                let observation = JcodeSetupObservation {
-                                    session_id: Some(api.session.clone()),
-                                    substage: ModelSetupSubstage::SetModel,
-                                };
-                                record_model_trace_result(trace_model_setup_failure_attempt(
-                                    depth + 1,
-                                    &request_id,
-                                    1,
-                                    &observation,
-                                    &error,
-                                    Some(model_started.elapsed().as_millis()),
-                                ));
-                                api.discard();
-                                return Err(error.context("configure shared subcall model"));
-                            }
-                            let reasoning_started = Instant::now();
-                            if let Err(error) =
-                                api.set_reasoning_effort(&cfg.jcode_sub_reasoning)
-                            {
-                                let observation = JcodeSetupObservation {
-                                    session_id: Some(api.session.clone()),
-                                    substage: ModelSetupSubstage::Reasoning,
-                                };
-                                record_model_trace_result(trace_model_setup_failure_attempt(
-                                    depth + 1,
-                                    &request_id,
-                                    1,
-                                    &observation,
-                                    &error,
-                                    Some(reasoning_started.elapsed().as_millis()),
-                                ));
-                                api.discard();
-                                return Err(error.context("configure shared subcall reasoning"));
-                            }
                             let entered_turn = entered_turn_budget.try_enter()?;
                             let first_started = Instant::now();
                             match api.turn(&wire) {
@@ -2912,14 +3125,9 @@ impl JcodeSession {
             }
         }
     }
-    fn open(
-        cfg: &Config,
-        model: &str,
-        reasoning_effort: &str,
-        observation: &mut JcodeSetupObservation,
-    ) -> Result<Self> {
+    fn open(cfg: &Config, model: &str, observation: &mut JcodeSetupObservation) -> Result<Self> {
         let timeout = Duration::from_secs(cfg.sub_timeout);
-        Self::open_with_timeout(cfg, model, reasoning_effort, timeout, timeout, observation)
+        Self::open_with_timeout(cfg, model, timeout, timeout, observation)
     }
     fn open_for_root(
         cfg: &Config,
@@ -2929,7 +3137,6 @@ impl JcodeSession {
         Self::open_with_timeout(
             cfg,
             model,
-            &cfg.jcode_reasoning,
             jcode_root_timeout(cfg),
             jcode_root_idle_timeout(cfg),
             observation,
@@ -2942,14 +3149,7 @@ impl JcodeSession {
         observation: &mut JcodeSetupObservation,
     ) -> Result<Self> {
         let timeout = jcode_batch_timeout(cfg, prompt_chars);
-        Self::open_with_timeout(
-            cfg,
-            model,
-            &cfg.jcode_sub_reasoning,
-            timeout,
-            timeout,
-            observation,
-        )
+        Self::open_with_timeout(cfg, model, timeout, timeout, observation)
     }
     fn open_for_batch_serialized(
         cfg: &Config,
@@ -2982,7 +3182,6 @@ impl JcodeSession {
     fn open_with_timeout(
         cfg: &Config,
         model: &str,
-        reasoning_effort: &str,
         timeout: Duration,
         idle_timeout: Duration,
         observation: &mut JcodeSetupObservation,
@@ -3087,50 +3286,12 @@ impl JcodeSession {
         this.model = model.into();
         thread::sleep(Duration::from_millis(50));
         observation.substage = ModelSetupSubstage::Reasoning;
-        let id=this.send(serde_json::json!({"req":"set_reasoning_effort","session_id":this.session,"effort":reasoning_effort}))?;
+        let id=this.send(serde_json::json!({"req":"set_reasoning_effort","session_id":this.session,"effort":cfg.jcode_reasoning}))?;
         this.reply_before(id, "ok", setup_deadline)
             .context("jcode reasoning setup")?;
         this.cancel_before_archive = false;
         Ok(this)
     }
-    fn set_model(&mut self, model: &str) -> Result<()> {
-        if self.model == model {
-            return Ok(());
-        }
-        let id = self.send(serde_json::json!({
-            "req": "set_model",
-            "session_id": self.session,
-            "model": format!("openai-oauth:{model}"),
-        }))?;
-        self.reply_with_timeout(id, "ok", Duration::from_secs(10))
-            .context("jcode repair model reconfiguration")?;
-        let id = self.send(serde_json::json!({
-            "req": "get_runtime_info",
-            "session_id": self.session,
-        }))?;
-        let runtime = self
-            .reply_with_timeout(id, "runtime_info", Duration::from_secs(10))
-            .context("jcode repair model route assertion")?;
-        if !Self::runtime_is_subscription_route(&runtime, model) {
-            bail!("repair subscription OAuth route mismatch for model {model:?}")
-        }
-        self.requested_model = model.to_owned();
-        self.model = model.to_owned();
-        self.provider = "OpenAI OAuth".into();
-        Ok(())
-    }
-
-    fn set_reasoning_effort(&mut self, effort: &str) -> Result<()> {
-        let id = self.send(serde_json::json!({
-            "req": "set_reasoning_effort",
-            "session_id": self.session,
-            "effort": effort,
-        }))?;
-        self.reply_with_timeout(id, "ok", Duration::from_secs(10))
-            .context("jcode reasoning reconfiguration")?;
-        Ok(())
-    }
-
     fn discard(&mut self) {
         // A failed turn can leave unread frames on the stream. Mark it for an ordered, bounded
         // cancel-before-archive cleanup rather than trying to reuse the poisoned protocol state.
@@ -3432,40 +3593,6 @@ impl RootDriver {
         let repair_request_id = format!("{}-repair-{repair_index}", self.request_id);
         #[cfg(unix)]
         if let Some(api) = &mut self.api {
-            let model_started = Instant::now();
-            if let Err(error) = api.set_model(&self.cfg.jcode_repair_model) {
-                let observation = JcodeSetupObservation {
-                    session_id: Some(api.session.clone()),
-                    substage: ModelSetupSubstage::SetModel,
-                };
-                record_model_trace_result(trace_model_setup_failure_attempt(
-                    0,
-                    &repair_request_id,
-                    1,
-                    &observation,
-                    &error,
-                    Some(model_started.elapsed().as_millis()),
-                ));
-                api.discard();
-                return Err(error.context("configure root repair model"));
-            }
-            let reasoning_started = Instant::now();
-            if let Err(error) = api.set_reasoning_effort(&self.cfg.jcode_repair_reasoning) {
-                let observation = JcodeSetupObservation {
-                    session_id: Some(api.session.clone()),
-                    substage: ModelSetupSubstage::Reasoning,
-                };
-                record_model_trace_result(trace_model_setup_failure_attempt(
-                    0,
-                    &repair_request_id,
-                    1,
-                    &observation,
-                    &error,
-                    Some(reasoning_started.elapsed().as_millis()),
-                ));
-                api.discard();
-                return Err(error.context("configure root repair reasoning"));
-            }
             let entered_turn = self.entered_turn_budget.try_enter()?;
             let started = Instant::now();
             let reply = match api.turn(prompt) {
@@ -3986,12 +4113,7 @@ fn call_model_reply_with_attempt(
         {
             let setup_started = Instant::now();
             let mut observation = JcodeSetupObservation::default();
-            let reasoning_effort = if depth == 0 {
-                &cfg.jcode_reasoning
-            } else {
-                &cfg.jcode_sub_reasoning
-            };
-            let mut api = match JcodeSession::open(cfg, model, reasoning_effort, &mut observation) {
+            let mut api = match JcodeSession::open(cfg, model, &mut observation) {
                 Ok(api) => api,
                 Err(error) => {
                     record_model_trace_result(trace_model_setup_failure_attempt(
@@ -4237,87 +4359,6 @@ mod unit_tests {
     use super::*;
 
     #[test]
-    fn monty_traceback_distinguishes_current_and_earlier_snippets_structurally() {
-        let cfg = Config::default();
-        let tracker = ResourceTracker::new(
-            ResourceLimits::default().max_duration(Duration::from_secs(cfg.cell_timeout)),
-        );
-        let repl = MontyRepl::new("traceback-test", tracker, CompileOptions::default());
-        let (repl, _, success, _, _, _, failure) =
-            run_cell(repl, "raise ValueError(\"authored\")", &cfg, "unused");
-        assert!(!success);
-        let direct = failure.unwrap().traceback.unwrap();
-        assert_eq!(direct.caller.origin, TracebackSnippetOrigin::CurrentSnippet);
-        assert_eq!(
-            direct.terminal.origin,
-            TracebackSnippetOrigin::CurrentSnippet
-        );
-        assert_eq!(
-            direct.caller.preview_line.as_deref(),
-            Some("raise ValueError(\"authored\")")
-        );
-        assert_eq!(direct.terminal.preview_line, direct.caller.preview_line);
-
-        let (repl, _, success, _, _, _, failure) = run_cell(
-            repl,
-            "def _az_pack():\n    raise AssertionError(\"AZH1|prompt_envelope|item_index=0\")",
-            &cfg,
-            "unused",
-        );
-        assert!(success);
-        assert!(failure.is_none());
-        let (repl, _output, success, _, _, _, failure) =
-            run_cell(repl, "_az_pack()", &cfg, "unused");
-        assert!(!success);
-        let helper = failure.unwrap();
-        assert_eq!(
-            helper.message.as_deref(),
-            Some("AZH1|prompt_envelope|item_index=0")
-        );
-        let helper_traceback = helper.traceback.unwrap();
-        assert_eq!(
-            helper_traceback.caller.origin,
-            TracebackSnippetOrigin::CurrentSnippet
-        );
-        assert_eq!(
-            helper_traceback.terminal.origin,
-            TracebackSnippetOrigin::EarlierSnippet
-        );
-        assert_eq!(
-            helper_traceback.caller.preview_line.as_deref(),
-            Some("_az_pack()")
-        );
-        assert_eq!(
-            helper_traceback.terminal.preview_line.as_deref(),
-            Some("    raise AssertionError(\"AZH1|prompt_envelope|item_index=0\")")
-        );
-        assert_eq!(
-            helper_traceback.terminal.function_name.as_deref(),
-            Some("_az_pack")
-        );
-
-        let (_, fake_output, success, _, _, _, failure) = run_cell(
-            repl,
-            "print(\"AZH1|prompt_envelope|item_index=0\")\nraise AssertionError(\"authored\")",
-            &cfg,
-            "unused",
-        );
-        assert!(!success);
-        assert!(fake_output.contains("AZH1|prompt_envelope"));
-        let fake = failure.unwrap();
-        assert_eq!(fake.message.as_deref(), Some("authored"));
-        let fake_traceback = fake.traceback.unwrap();
-        assert_eq!(
-            fake_traceback.caller.origin,
-            TracebackSnippetOrigin::CurrentSnippet
-        );
-        assert_eq!(
-            fake_traceback.terminal.origin,
-            TracebackSnippetOrigin::CurrentSnippet
-        );
-    }
-
-    #[test]
     fn monty_failure_kinds_separate_program_bugs_from_resource_and_host_classes() {
         for ordinary in [
             ExcType::IndexError,
@@ -4542,32 +4583,6 @@ mod unit_tests {
     }
 
     #[test]
-    fn blank_repair_model_is_rejected_by_config_validation() {
-        let cfg = Config {
-            jcode_repair_model: "  \t".into(),
-            ..Config::default()
-        };
-        let error = match cfg.validate() {
-            Ok(_) => panic!("blank repair model unexpectedly passed validation"),
-            Err(error) => error,
-        };
-        assert!(
-            error
-                .to_string()
-                .contains("jcode_repair_model cannot be empty")
-        );
-        let padded = Config {
-            jcode_repair_model: " gpt-5.4-mini ".into(),
-            ..Config::default()
-        };
-        let error = match padded.validate() {
-            Ok(_) => panic!("padded repair model unexpectedly passed validation"),
-            Err(error) => error,
-        };
-        assert!(error.to_string().contains("surrounding whitespace"));
-    }
-
-    #[test]
     fn root_and_batch_timeouts_are_capped_without_changing_config() {
         let mut cfg = Config {
             sub_timeout: 300,
@@ -4654,212 +4669,6 @@ mod unit_tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("hard deadline timed out"), "{error}");
-    }
-
-    #[test]
-    fn repair_model_reconfiguration_failure_does_not_enter_a_provider_turn() {
-        let (stream, peer) = UnixStream::pair().unwrap();
-        let reader = BufReader::new(stream.try_clone().unwrap());
-        let server = thread::spawn(move || {
-            let mut peer = BufReader::new(peer);
-            let mut request = String::new();
-            peer.read_line(&mut request).unwrap();
-            let first: serde_json::Value = serde_json::from_str(&request).unwrap();
-            assert_eq!(first["req"], "set_model");
-            assert_eq!(first["model"], "openai-oauth:gpt-5.4-mini");
-            writeln!(
-                peer.get_mut(),
-                "{{\"ev\":\"error\",\"code\":\"invalid_request\",\"message\":\"unsupported model\"}}"
-            )
-            .unwrap();
-            peer.get_mut().flush().unwrap();
-            request.clear();
-            peer.read_line(&mut request).unwrap();
-            let cancel: serde_json::Value = serde_json::from_str(&request).unwrap();
-            assert_eq!(cancel["req"], "cancel");
-            assert_eq!(cancel["session_id"], "repair-model");
-            request.clear();
-            peer.read_line(&mut request).unwrap();
-            let archive: serde_json::Value = serde_json::from_str(&request).unwrap();
-            assert_eq!(archive["req"], "archive_session");
-            assert_eq!(archive["session_id"], "repair-model");
-            let reply_to = archive["id"].as_u64().unwrap();
-            writeln!(peer.get_mut(), "{{\"ev\":\"ok\",\"reply_to\":{reply_to}}}").unwrap();
-            peer.get_mut().flush().unwrap();
-        });
-        let api = JcodeSession {
-            stream,
-            reader,
-            next_id: 1,
-            session: "repair-model".into(),
-            usage: ModelUsage::default(),
-            usage_observed: false,
-            provider: "OpenAI OAuth".into(),
-            model: "gpt-5.6-luna".into(),
-            requested_model: "gpt-5.6-luna".into(),
-            timeout: Duration::from_secs(30),
-            idle_timeout: Duration::from_secs(30),
-            cancel_before_archive: false,
-            workspace: None,
-        };
-        let entered = Arc::new(EnteredTurnBudget::new(3));
-        let mut driver = RootDriver {
-            cfg: Config::default(),
-            model: "mock".into(),
-            request_id: "repair-model-request".into(),
-            attempt: 1,
-            entered_turn_budget: Arc::clone(&entered),
-            api: Some(api),
-            history: String::new(),
-        };
-        let error = driver.repair_turn("replacement", 1).unwrap_err();
-        assert!(error.to_string().contains("configure root repair model"));
-        assert_eq!(entered.entered(), 0);
-        assert!(driver.api.as_ref().unwrap().cancel_before_archive);
-        drop(driver);
-        server.join().unwrap();
-    }
-
-    #[test]
-    fn repair_reasoning_reconfiguration_failure_does_not_enter_a_provider_turn() {
-        let (stream, peer) = UnixStream::pair().unwrap();
-        let reader = BufReader::new(stream.try_clone().unwrap());
-        let server = thread::spawn(move || {
-            let mut peer = BufReader::new(peer);
-            let mut request = String::new();
-            peer.read_line(&mut request).unwrap();
-            let request: serde_json::Value = serde_json::from_str(&request).unwrap();
-            assert_eq!(request["req"], "set_reasoning_effort");
-            assert_eq!(request["effort"], "low");
-            writeln!(
-                peer.get_mut(),
-                "{{\"ev\":\"error\",\"code\":\"invalid_request\",\"message\":\"unsupported effort\"}}"
-            )
-            .unwrap();
-            peer.get_mut().flush().unwrap();
-        });
-        let api = JcodeSession {
-            stream,
-            reader,
-            next_id: 1,
-            session: "repair-reasoning".into(),
-            usage: ModelUsage::default(),
-            usage_observed: false,
-            provider: "OpenAI OAuth".into(),
-            model: "gpt-5.4-mini".into(),
-            requested_model: "gpt-5.4-mini".into(),
-            timeout: Duration::from_secs(30),
-            idle_timeout: Duration::from_secs(30),
-            cancel_before_archive: false,
-            workspace: None,
-        };
-        let entered = Arc::new(EnteredTurnBudget::new(3));
-        let mut driver = RootDriver {
-            cfg: Config::default(),
-            model: "mock".into(),
-            request_id: "repair-reasoning-request".into(),
-            attempt: 1,
-            entered_turn_budget: Arc::clone(&entered),
-            api: Some(api),
-            history: String::new(),
-        };
-        let error = driver.repair_turn("replacement", 1).unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("configure root repair reasoning")
-        );
-        assert_eq!(entered.entered(), 0);
-        assert!(driver.api.as_ref().unwrap().cancel_before_archive);
-        driver.api.as_mut().unwrap().session.clear();
-        drop(driver);
-        server.join().unwrap();
-    }
-
-    #[test]
-    fn jcode_repair_model_reconfiguration_pins_and_asserts_the_oauth_route() {
-        let (stream, peer) = UnixStream::pair().unwrap();
-        let reader = BufReader::new(stream.try_clone().unwrap());
-        let server = thread::spawn(move || {
-            let mut peer = BufReader::new(peer);
-            let mut line = String::new();
-            peer.read_line(&mut line).unwrap();
-            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
-            assert_eq!(request["req"], "set_model");
-            assert_eq!(request["model"], "openai-oauth:gpt-5.4-mini");
-            let id = request["id"].as_u64().unwrap();
-            writeln!(peer.get_mut(), "{{\"ev\":\"ok\",\"reply_to\":{id}}}").unwrap();
-            peer.get_mut().flush().unwrap();
-            line.clear();
-            peer.read_line(&mut line).unwrap();
-            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
-            assert_eq!(request["req"], "get_runtime_info");
-            let id = request["id"].as_u64().unwrap();
-            writeln!(
-                peer.get_mut(),
-                "{{\"ev\":\"runtime_info\",\"reply_to\":{id},\"provider\":\"OpenAI\",\"model\":\"gpt-5.4-mini\",\"routes\":[{{\"provider\":\"OpenAI\",\"model\":\"gpt-5.4-mini\",\"api_method\":\"openai-oauth\",\"available\":true}}]}}"
-            )
-            .unwrap();
-            peer.get_mut().flush().unwrap();
-        });
-        let mut api = JcodeSession {
-            stream,
-            reader,
-            next_id: 1,
-            session: "repair-model".into(),
-            usage: ModelUsage::default(),
-            usage_observed: false,
-            provider: "OpenAI OAuth".into(),
-            model: "gpt-5.6-luna".into(),
-            requested_model: "gpt-5.6-luna".into(),
-            timeout: Duration::from_secs(30),
-            idle_timeout: Duration::from_secs(30),
-            cancel_before_archive: false,
-            workspace: None,
-        };
-        api.set_model("gpt-5.4-mini").unwrap();
-        assert_eq!(api.model, "gpt-5.4-mini");
-        assert_eq!(api.requested_model, "gpt-5.4-mini");
-        api.session.clear();
-        drop(api);
-        server.join().unwrap();
-    }
-
-    #[test]
-    fn jcode_reasoning_reconfiguration_sends_the_exact_requested_effort() {
-        let (stream, peer) = UnixStream::pair().unwrap();
-        let reader = BufReader::new(stream.try_clone().unwrap());
-        let server = thread::spawn(move || {
-            let mut peer = BufReader::new(peer);
-            let mut request = String::new();
-            peer.read_line(&mut request).unwrap();
-            let request: serde_json::Value = serde_json::from_str(&request).unwrap();
-            assert_eq!(request["req"], "set_reasoning_effort");
-            assert_eq!(request["session_id"], "reasoning-session");
-            assert_eq!(request["effort"], "low");
-            let id = request["id"].as_u64().unwrap();
-            writeln!(peer.get_mut(), "{{\"ev\":\"ok\",\"reply_to\":{id}}}").unwrap();
-            peer.get_mut().flush().unwrap();
-        });
-        let mut api = JcodeSession {
-            stream,
-            reader,
-            next_id: 1,
-            session: "reasoning-session".into(),
-            usage: ModelUsage::default(),
-            usage_observed: false,
-            provider: "OpenAI OAuth".into(),
-            model: "mock".into(),
-            requested_model: "mock".into(),
-            timeout: Duration::from_secs(30),
-            idle_timeout: Duration::from_secs(30),
-            cancel_before_archive: false,
-            workspace: None,
-        };
-        api.set_reasoning_effort("low").unwrap();
-        api.session.clear();
-        drop(api);
-        server.join().unwrap();
     }
 
     #[test]
@@ -5305,52 +5114,118 @@ mod unit_tests {
     }
 
     #[test]
-    fn fixed_line_evidence_assumption_fails_closed_without_publishing_final() {
-        let dir = env::temp_dir().join(format!(
-            "azdaja-fixed-line-assumption-{}-{}",
-            std::process::id(),
-            now_ms()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        let input = dir.join("input.txt");
-        let mut text = "alpha beta gamma ".repeat(2_000);
-        text.push_str(
-            "
-Question: identify the requested aggregate",
-        );
-        fs::write(&input, text).unwrap();
-
-        let cfg = Config::default();
-        let mut session = SoloSession::new(&cfg, None).unwrap();
-        session.load(&input, "ctx", &cfg).unwrap();
-        let bad_fixed_line_program = r#"
-lines = ctx.split("\n")
-assert len(lines) == 2
-body = lines[1]
-end = body.rfind("Question:")
-assert end >= 0
-source = body[:end]
-words = re.findall(r"[a-z]+", source)
-counts = collections.Counter(words)
-top = counts.most_common(3)
-assert len(top) == 3
-FINAL(", ".join(item[0] for item in top))
-"#;
-        let result = session.exec_detailed(bad_fixed_line_program, &cfg).unwrap();
-        assert!(!result.result.success);
-        assert!(!result.result.finalized);
-        assert_eq!(result.result.failure_kind, ExecFailureKind::Assertion);
-        assert_eq!(result.result.external_calls, 0);
-        assert!(session.final_answer(&cfg).is_err());
-        fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
     fn failed_solo_cell_cannot_publish_final() {
         let cfg = Config::default();
         let mut session = SoloSession::new(&cfg, None).unwrap();
         let result = session.exec("FINAL('wrong')\n1/0", &cfg).unwrap();
         assert!(!result.success && !result.finalized);
         assert!(session.final_answer(&cfg).is_err());
+    }
+}
+
+#[cfg(test)]
+mod lexical_relevance_tests {
+    use super::*;
+
+    #[test]
+    fn lexical_relevance_is_deterministic_and_byte_faithful() {
+        let source = format!(
+            "{}TARGET alpha βeta\r\n{}TARGET alpha ending",
+            "ordinary filler. ".repeat(2_000),
+            "other filler. ".repeat(2_000)
+        );
+        let one = build_relevance_view(&source, "TARGET alpha", 8_000).unwrap();
+        let two = build_relevance_view(&source, "TARGET alpha", 8_000).unwrap();
+        assert_eq!(one, two);
+        assert!(!one.complete);
+        assert!(one.evidence.chars().count() <= 8_000);
+        assert!(one.evidence.contains("omitted_ranges="));
+        let chars: Vec<char> = source.chars().collect();
+        for &(start, end) in &one.ranges {
+            let exact: String = chars[start..end].iter().collect();
+            assert!(one.evidence.contains(&exact));
+        }
+        assert_eq!(
+            one.source_chars,
+            one.selected_chars + (one.source_chars - one.selected_chars)
+        );
+    }
+
+    #[test]
+    fn lexical_relevance_handles_non_ascii_runs_without_normalizing_evidence() {
+        let source = format!(
+            "{}目标句子含有稀有词麒麟。 emoji 👩‍💻 and e\u{301}.{}另一个麒麟线索。",
+            "无关文本。".repeat(3_000),
+            "普通内容。".repeat(3_000)
+        );
+        let view = build_relevance_view(&source, "请查找麒麟相关目标", 8_000).unwrap();
+        assert!(view.evidence.contains("麒麟"));
+        assert!(view.evidence.contains("👩‍💻") || view.evidence.contains("另一个麒麟"));
+        assert!(view.matched_terms.iter().any(|term| term.contains('麒')));
+    }
+
+    #[test]
+    fn lexical_relevance_fails_closed_without_discriminating_matches() {
+        let no_match =
+            build_relevance_view(&"ordinary source ".repeat(2_000), "absentneedle", 8_000)
+                .unwrap_err();
+        assert!(no_match.to_string().contains("found no query terms"));
+
+        let repeated =
+            build_relevance_view(&"sameword ".repeat(10_000), "sameword", 8_000).unwrap_err();
+        assert!(repeated.to_string().contains("does not discriminate"));
+    }
+
+    #[test]
+    fn lexical_relevance_is_available_to_solo_without_provider_calls() {
+        let cfg = Config::default();
+        let mut session = SoloSession::new(&cfg, None).unwrap();
+        let result = session
+            .exec(
+                "view=lexical_relevance(('filler ' * 2000) + 'rare anchor', 'rare anchor', 8000)\nassert view['omitted_chars'] > 0\nassert view['evidence_chars'] <= 8000\nassert 'rare anchor' in view['evidence']\nFINAL('ok')",
+                &cfg,
+            )
+            .unwrap();
+        assert!(result.success);
+        assert!(result.finalized);
+        assert_eq!(result.external_calls, 0);
+        assert_eq!(session.final_answer(&cfg).unwrap(), "ok");
+    }
+
+    #[test]
+    fn lexical_relevance_is_absent_from_ordinary_cells() {
+        let cfg = Config::default();
+        let mut session = SoloSession::new(&cfg, None).unwrap();
+        let repl = session.repl.take().unwrap();
+        let (_, _, success, _, calls, _, failure, _) = run_cell(
+            repl,
+            "lexical_relevance('source', 'query', 4000)",
+            &cfg,
+            &cfg.default_model,
+            false,
+        );
+        assert!(!success);
+        assert_eq!(calls, 0);
+        assert_eq!(failure, Some(ExcType::RuntimeError));
+    }
+
+    #[test]
+    #[ignore = "release-only 16M-character stress"]
+    fn lexical_relevance_release_stress_16m() {
+        let mut source = "filler ".repeat(2_000_000);
+        source.push_str(" rareanchor ending");
+        let started = Instant::now();
+        let view = build_relevance_view(&source, "rareanchor", 20_000).unwrap();
+        assert!(view.evidence.contains("rareanchor"));
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
+    #[test]
+    fn lexical_relevance_returns_complete_small_source() {
+        let source = "small exact source";
+        let view = build_relevance_view(source, "exact", 4_000).unwrap();
+        assert!(view.complete);
+        assert_eq!(view.ranges, vec![(0, source.chars().count())]);
+        assert!(view.evidence.contains(source));
     }
 }

@@ -334,29 +334,6 @@ fn assert_exact_semantic_trace(
 }
 
 #[test]
-fn exec_result_and_solo_exec_api_remain_source_compatible_and_additive() {
-    let _legacy = azdaja::ExecResult {
-        output: String::new(),
-        success: true,
-        finalized: false,
-        external_calls: 0,
-        sub_call_wall_ns: 0,
-        failure_kind: azdaja::ExecFailureKind::None,
-        failure_line: None,
-    };
-    let _legacy_method: fn(
-        &mut azdaja::SoloSession,
-        &str,
-        &azdaja::Config,
-    ) -> anyhow::Result<azdaja::ExecResult> = azdaja::SoloSession::exec;
-    let _detail_method: fn(
-        &mut azdaja::SoloSession,
-        &str,
-        &azdaja::Config,
-    ) -> anyhow::Result<azdaja::SoloExecResult> = azdaja::SoloSession::exec_detailed;
-}
-
-#[test]
 fn lifecycle_is_persistent_and_load_is_metadata_only() {
     let t = temp("life");
     let cfg = config(&t, "cat", 512, 1, 2, 4);
@@ -1141,234 +1118,12 @@ else:
         "",
     );
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("AZH1|call_envelope"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("semantic dual/adjudication call envelope")
+    );
     assert!(!marker.exists(), "preflight must precede every child call");
     fs::remove_dir_all(t).unwrap();
-}
-
-#[test]
-fn solo_trusted_helper_limits_repair_without_leaking_dynamic_evidence() {
-    for variant in ["prompt", "calls"] {
-        let t = temp(&format!("solo-helper-limit-{variant}"));
-        let calls = t.join("calls");
-        let mock = t.join("limit.py");
-        fs::write(
-            &mock,
-            r#"import os, pathlib, sys
-calls = pathlib.Path(sys.argv[1])
-variant = sys.argv[2]
-depth = os.environ.get("RLM_DEPTH", "?")
-calls.open("a").write(depth + "\n")
-if depth != "0":
-    print("UNEXPECTED_CHILD")
-else:
-    count = len(calls.read_text().splitlines())
-    prompt = sys.stdin.read()
-    if count == 1 and variant == "prompt":
-        print('```python\nitems = [{"id":"PRIVATE_ID","evidence":ctx}]\nlabels = semantic_manifest(items, "PRIVATE_TASK", ["left","right"])\nFINAL(labels["PRIVATE_ID"])\n```')
-    elif count == 1:
-        print('```python\ncut = len(ctx) // 2\nitems = [{"id":"PRIVATE_LEFT","evidence":ctx[:cut]}, {"id":"PRIVATE_RIGHT","evidence":ctx[cut:]}]\nlabels = semantic_manifest(items, "PRIVATE_TASK", ["left","right"])\nFINAL(labels["PRIVATE_LEFT"])\n```')
-    else:
-        assert "typed category Assertion" in prompt
-        print('```python\nassert ctx.startswith("PRIVATE_EVIDENCE")\nFINAL("bounded-repair")\n```')
-"#,
-        )
-        .unwrap();
-        let cfg = config(
-            &t,
-            &format!("python3 {} {} {variant}", mock.display(), calls.display()),
-            4096,
-            1,
-            3,
-            4,
-        );
-        if variant == "calls" {
-            let cfg_text = fs::read_to_string(&cfg)
-                .unwrap()
-                .replace("max_calls_per_cell = 64", "max_calls_per_cell = 4");
-            fs::write(&cfg, cfg_text).unwrap();
-        }
-        let input = t.join("input.txt");
-        let input_chars = if variant == "prompt" { 46_000 } else { 70_000 };
-        fs::write(
-            &input,
-            format!("PRIVATE_EVIDENCE{}", "x".repeat(input_chars)),
-        )
-        .unwrap();
-        let trace = t.join("solo.trace");
-        let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
-            .env_remove("RLM_DEPTH")
-            .env("AZDAJA_HOME", t.join("state"))
-            .env("AZDAJA_CONFIG", &cfg)
-            .env("AZDAJA_SOLO_TRACE", &trace)
-            .args([
-                "solo",
-                "generic bounded classification",
-                "-f",
-                input.to_str().unwrap(),
-            ])
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{variant}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert_eq!(
-            String::from_utf8_lossy(&output.stdout).trim(),
-            "bounded-repair"
-        );
-        assert_eq!(
-            fs::read_to_string(&calls)
-                .unwrap()
-                .lines()
-                .collect::<Vec<_>>(),
-            ["0", "0"]
-        );
-        let retained = fs::read_to_string(&trace).unwrap();
-        let repair = retained
-            .split("=== repair request begin")
-            .nth(1)
-            .unwrap()
-            .split("=== repair request end")
-            .next()
-            .unwrap();
-        assert!(repair.len() <= 1200);
-        assert!(!repair.contains("PRIVATE_EVIDENCE"));
-        assert!(!repair.contains("PRIVATE_TASK"));
-        assert!(!repair.contains("PRIVATE_ID"));
-        let rejection_header = retained
-            .lines()
-            .find(|line| line.contains("result outcome=failed"))
-            .unwrap();
-        assert!(rejection_header.contains("provenance=CurrentSnippet->EarlierSnippet"));
-        let dynamic_keys = [
-            "item_index=",
-            "evidence_chars=",
-            "head_chars=",
-            "wire_chars=",
-            "prompt_chars=",
-            "cap_chars=",
-            "required_calls=",
-            "primary_shards=",
-            "retry_shards=",
-            "judge_shards=",
-            "cap_calls=",
-            "over_by=",
-        ];
-        for key in dynamic_keys {
-            assert!(!repair.contains(key), "repair leaked {key}: {repair}");
-            assert!(
-                !rejection_header.contains(key),
-                "trace header leaked {key}: {rejection_header}"
-            );
-        }
-        if variant == "prompt" {
-            assert!(repair.contains("Trusted helper rejection: prompt_envelope"));
-            assert!(repair.contains("narrower complete observed containing boundary"));
-            assert!(repair.contains("never pad or truncate evidence"));
-            assert!(rejection_header.contains("trusted_helper=prompt_envelope"));
-        } else {
-            assert!(repair.contains("Trusted helper rejection: call_envelope"));
-            assert!(repair.contains("Reduce semantic items and shards"));
-            assert!(repair.contains("preserving complete records"));
-            assert!(rejection_header.contains("trusted_helper=call_envelope"));
-        }
-        fs::remove_dir_all(t).unwrap();
-    }
-}
-
-#[test]
-fn solo_emits_exact_requested_answer_without_a_trailing_newline_and_matches_pinned_extractor() {
-    let checker = r#"import importlib.util, os, sys
-path = os.environ["AZDAJA_PINNED_SCORE"]
-spec = importlib.util.spec_from_file_location("azdaja_pinned_lb2_score", path)
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
-response = sys.stdin.read()
-assert module.official_extract_answer(response) == "B"
-assert module.strict_extract_answer(response) == "B"
-assert module.official_extract_answer("B\n") is None
-"#;
-    for (case, failed_programs) in [("initial", 0), ("repair-one", 1), ("repair-two", 2)] {
-        let t = temp(&format!("solo-exact-answer-envelope-{case}"));
-        let mock = t.join("solo.py");
-        let state = t.join("turn-count");
-        fs::write(
-            &mock,
-            format!(
-                r#"import pathlib,sys
-state=pathlib.Path({state:?})
-turn=int(state.read_text()) if state.exists() else 0
-state.write_text(str(turn+1))
-p=sys.stdin.read()
-if turn == 0 and 'final must contain exactly the complete output requested by the question' not in p.lower():
-    raise SystemExit('missing exact FINAL contract')
-if turn < {failed_programs}:
-    print('```python\nassert False\nFINAL(\"unreachable\")\n```')
-else:
-    print('```python\nlabel=\"B\"\nassert label in [\"A\",\"B\",\"C\",\"D\"]\nFINAL(\"The correct answer is (\"+label+\")\")\n```')
-"#,
-                state = state,
-                failed_programs = failed_programs,
-            ),
-        )
-        .unwrap();
-        let cfg = config(&t, &format!("python3 {}", mock.display()), 1024, 1, 3, 4);
-        let input = t.join("input.txt");
-        fs::write(&input, "generic evidence").unwrap();
-        let output = run(
-            &t,
-            &cfg,
-            &[
-                "solo",
-                "Return exactly `The correct answer is (X)` where X is one uppercase choice label.",
-                "-f",
-                input.to_str().unwrap(),
-            ],
-            "",
-        );
-        assert!(
-            output.status.success(),
-            "case={case} stdout={} stderr={}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert_eq!(
-            output.stdout, b"The correct answer is (B)",
-            "case={case} must not add or retain a trailing newline"
-        );
-        assert_eq!(
-            fs::read_to_string(&state).unwrap(),
-            (failed_programs + 1).to_string(),
-            "case={case} did not exercise the intended success branch"
-        );
-
-        let mut child = Command::new("python3")
-            .args(["-c", checker])
-            .env(
-                "AZDAJA_PINNED_SCORE",
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("bench/longbench2/score.py"),
-            )
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(&output.stdout)
-            .unwrap();
-        let checked = child.wait_with_output().unwrap();
-        assert!(
-            checked.status.success(),
-            "case={case} pinned extractor rejected exact solo output: {}",
-            String::from_utf8_lossy(&checked.stderr)
-        );
-        fs::remove_dir_all(t).unwrap();
-    }
 }
 
 #[test]
@@ -1384,45 +1139,36 @@ if os.getenv('RLM_DEPTH') == '0':
     end = '--- END UNTRUSTED OFFSET-LABELLED STRUCTURAL SAMPLE ---'
     sample = p.split(begin, 1)[1].split(end, 1)[0].strip('\n') if begin in p and end in p else ''
     required = ('full ctx is the original raw input string',
-                'not json unless the input itself is json', 'inspect complete ctx',
-                'select the requested section from those boundaries and the question',
-                'preserve every source occurrence',
+                'not the sample encoding and not json unless the input itself is json',
+                'inspect and parse complete ctx', 'preserve source occurrences',
                 'semantic_manifest(items, task, labels) exactly once',
-                'exactly two keys, id and evidence', 'unique nonempty string or integer',
-                'complete faithful nonempty source evidence', 'never truncate or content-deduplicate',
-                'use complete observed record boundaries',
-                'only when choosing among complete containing boundaries',
-                'no larger than the generic 36000-character safety margin',
-                'without padding or truncation',
-                'hard generated-prompt envelope remains 45000 characters', 'must fail closed',
-                'for one joint k-way decision', 'exactly one item and exactly k distinct labels',
-                'not k independently classified items', 'one key and one allowed label',
-                'multiplicity-preserving reduction',
-                'never infer a semantic label by searching for label words',
-                'never call llm, llm_batch, or llm_batch_fresh directly',
+                'nonempty list of exactly two-key dicts named id and evidence',
+                'nonempty unique string', 'complete faithful nonempty item evidence',
+                'never silently truncated', 'source occurrences and weights preserved',
+                'task concisely frames', 'at least two distinct actual labels',
+                'leave conservative room below the 45000-character envelope',
+                'complete id-to-label mapping', 'two blind validated manifests',
+                'blind disagreement adjudication', 'every source item has exactly one result',
+                'reduce with preserved multiplicity',
+                'never infer semantic labels by searching evidence for label words',
+                'do not call llm, llm_batch, or llm_batch_fresh directly',
                 'os, re, json, math, collections, datetime',
                 'globals/locals/callable', 'dict.get', 'below 50 nonblank lines',
-                'hard child-call cap', 'fail closed: assert a nonempty verified answer',
+                'fail closed: assert a nonempty verified answer',
                 'exactly one unconditional top-level final(answer)',
-                'final must contain exactly the complete output requested by the question',
-                'do not add markdown or explanation unless the question requests it',
-                'never guard final', 'agent tools', 'provider-native tools',
-                'shell commands', 'filesystem actions', 'solve only through preloaded ctx',
+                'never guard final',
+                'agent tools', 'provider-native tools', 'shell commands', 'filesystem actions',
+                'solve only through preloaded ctx',
                 're helper calls do not accept flags arguments',
                 'never use credential-shaped local names',
                 'token, secret, password, credential, access, refresh, authorization, or bearer',
                 'begin the fenced program immediately',
                 'shortest correct straight-line program',
                 'do not narrate or deliberate beyond what is needed')
-    forbidden = ('use monty-safe explicit forms',
-                 'count predicates with an integer accumulator',
-                 'look up mapping scores with',
-                 'collect regex matches with a list')
     sample_ok = ('schema-canary' in sample and 'TAIL_NOT_IN_SAMPLE' in sample
                  and '[HEAD chars 0..' in sample and '[TAIL chars ' in sample
                  and len(sample.encode('utf-8')) <= 4096)
-    if (not sample_ok or not all(x in p.lower() for x in required)
-            or any(x in p.lower() for x in forbidden)): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
+    if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
     else: print('```python\nFINAL("done:" + llm("classify"))\n```')
 else: print('SUB_OK')
 "#,
@@ -1478,10 +1224,9 @@ fn solo_handles_synthetic_final_section_and_prefix_formats_without_gold() {
         r#"import os,sys
 p=sys.stdin.read()
 assert os.getenv('RLM_DEPTH') == '0'
-required = ('inspect complete ctx',
-            'derive structure only from observed boundaries',
-            'preserve every source occurrence', 'full ctx is the original raw input string',
-            '[chars 0..')
+required = ('inspect and parse complete ctx',
+            'demonstrations or multiple sections',
+            'select the requested section', 'preserve source occurrences', '[chars 0..')
 assert all(value in p.lower() for value in required), p
 if 'CASE_FWE' in p:
     code = '''qpos=ctx.rfind("\\nQuestion:")
@@ -1715,61 +1460,8 @@ else:
 }
 
 #[test]
-fn solo_repairs_one_zero_call_timeout_from_pristine_state() {
-    let t = temp("solo-timeout-repair");
-    let calls = t.join("calls");
-    let mock = t.join("timeout.py");
-    fs::write(
-        &mock,
-        r#"import pathlib, sys
-calls = pathlib.Path(sys.argv[1])
-count = len(calls.read_text().splitlines()) if calls.exists() else 0
-calls.open("a").write("root\n")
-if count:
-    prompt = sys.stdin.read()
-    assert "typed category Timeout" in prompt
-    print('```python\nassert ctx == "generic pristine context"\nFINAL("repaired-timeout")\n```')
-else:
-    print('```python\nctx = "poisoned"\nwhile True:\n    pass\n```')
-"#,
-    )
-    .unwrap();
-    let cfg = config(
-        &t,
-        &format!("python3 {} {}", mock.display(), calls.display()),
-        4096,
-        1,
-        3,
-        4,
-    );
-    let cfg_text = fs::read_to_string(&cfg)
-        .unwrap()
-        .replace("cell_timeout = 2", "cell_timeout = 1");
-    fs::write(&cfg, cfg_text).unwrap();
-    let input = t.join("input.txt");
-    fs::write(&input, "generic pristine context").unwrap();
-    let output = run(
-        &t,
-        &cfg,
-        &["solo", "generic question", "-f", input.to_str().unwrap()],
-        "",
-    );
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "repaired-timeout"
-    );
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
-    fs::remove_dir_all(t).unwrap();
-}
-
-#[test]
-fn solo_never_repairs_a_repeated_timeout_with_a_third_root() {
-    let t = temp("solo-repeated-timeout");
+fn solo_does_not_repair_monty_timeouts() {
+    let t = temp("solo-no-timeout-repair");
     let calls = t.join("calls");
     let mock = t.join("timeout.py");
     fs::write(
@@ -1801,51 +1493,12 @@ print('```python\nwhile True:\n    pass\n```')
         "",
     );
     assert_eq!(output.status.code(), Some(2));
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
-    assert!(String::from_utf8_lossy(&output.stderr).contains("TimeoutError"));
-    fs::remove_dir_all(t).unwrap();
-}
-
-#[test]
-fn solo_does_not_repair_a_timeout_after_a_child_call() {
-    let t = temp("solo-post-child-timeout");
-    let calls = t.join("calls");
-    let mock = t.join("timeout.py");
-    fs::write(
-        &mock,
-        r#"import os, pathlib, sys
-pathlib.Path(sys.argv[1]).open("a").write(os.environ.get("RLM_DEPTH", "?") + "\n")
-if os.environ.get("RLM_DEPTH") == "0":
-    print('```python\nllm("bounded child")\nwhile True:\n    pass\n```')
-else:
-    print("child result")
-"#,
-    )
-    .unwrap();
-    let cfg = config(
-        &t,
-        &format!("python3 {} {}", mock.display(), calls.display()),
-        4096,
-        1,
-        3,
-        4,
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("TimeoutError"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
-    let cfg_text = fs::read_to_string(&cfg)
-        .unwrap()
-        .replace("cell_timeout = 2", "cell_timeout = 1");
-    fs::write(&cfg, cfg_text).unwrap();
-    let input = t.join("input.txt");
-    fs::write(&input, "generic").unwrap();
-    let output = run(
-        &t,
-        &cfg,
-        &["solo", "generic question", "-f", input.to_str().unwrap()],
-        "",
-    );
-    assert_eq!(output.status.code(), Some(2));
-    let depths = fs::read_to_string(&calls).unwrap();
-    assert_eq!(depths.lines().filter(|line| *line == "0").count(), 1);
-    assert_eq!(depths.lines().filter(|line| *line == "1").count(), 1);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -2657,7 +2310,6 @@ fn jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage() {
                         })]
                     }
                     "set_reasoning_effort" => {
-                        assert_eq!(f["effort"], "low");
                         vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
                     }
                     "send_message" => {
@@ -3579,9 +3231,6 @@ fn solo_jcode_runtime_repair_reuses_one_session_and_archives_once() {
         let mut reader = BufReader::new(stream.try_clone().unwrap());
         let mut messages = Vec::new();
         let mut archives = 0;
-        let mut reasoning_efforts = Vec::new();
-        let mut model_switches = Vec::new();
-        let mut active_model = "gpt-5.4";
         loop {
             let mut line = String::new();
             if reader.read_line(&mut line).unwrap() == 0 {
@@ -3597,27 +3246,9 @@ fn solo_jcode_runtime_repair_reuses_one_session_and_archives_once() {
                     serde_json::json!({"v":1,"reply_to":id,"ev":"attached","session":{"session_id":"same","status":"idle"}}),
                 ],
                 "get_runtime_info" => vec![
-                    serde_json::json!({"v":1,"reply_to":id,"ev":"runtime_info","session_id":"same","provider":"OpenAI","model":active_model,"routes":[{"provider":"OpenAI","model":active_model,"api_method":"openai-oauth","available":true}]}),
+                    serde_json::json!({"v":1,"reply_to":id,"ev":"runtime_info","session_id":"same","provider":"OpenAI","model":"gpt-5.4","routes":[{"provider":"OpenAI","model":"gpt-5.4","api_method":"openai-oauth","available":true}]}),
                 ],
-                "set_model" => {
-                    let selected = request["model"]
-                        .as_str()
-                        .unwrap()
-                        .strip_prefix("openai-oauth:")
-                        .unwrap();
-                    assert!(matches!(selected, "gpt-5.4-mini" | "mock"));
-                    model_switches.push(selected.to_owned());
-                    active_model = if selected == "gpt-5.4-mini" {
-                        "gpt-5.4-mini"
-                    } else {
-                        "mock"
-                    };
-                    vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
-                }
-                "set_reasoning_effort" => {
-                    reasoning_efforts.push(request["effort"].as_str().unwrap().to_owned());
-                    vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})]
-                }
+                "set_reasoning_effort" => vec![serde_json::json!({"v":1,"reply_to":id,"ev":"ok"})],
                 "send_message" => {
                     let content = request["content"].as_str().unwrap();
                     if messages.is_empty() {
@@ -3630,12 +3261,11 @@ fn solo_jcode_runtime_repair_reuses_one_session_and_archives_once() {
                     let text = match messages.len() {
                         1 => "```python\nctx = \"poison\"\nassert False\n```".to_owned(),
                         2 => format!("```python\n{}\n```", "x = 1\n".repeat(51)),
-                        3 => "```python\nassert ctx == \"original\"\nFINAL(llm_batch([\"return repaired\"])[0])\n```"
+                        _ => "```python\nassert ctx == \"original\"\nFINAL(\"REPAIRED\")\n```"
                             .to_owned(),
-                        _ => "REPAIRED".to_owned(),
                     };
                     vec![
-                        serde_json::json!({"v":1,"ev":"model_info","session_id":"same","provider":"OpenAI","model":active_model}),
+                        serde_json::json!({"v":1,"ev":"model_info","session_id":"same","provider":"OpenAI","model":"gpt-5.4"}),
                         serde_json::json!({"v":1,"ev":"text_delta","session_id":"same","text":text}),
                         serde_json::json!({"v":1,"ev":"token_usage","session_id":"same","input":4,"output":1,"cache_read_input":0}),
                         serde_json::json!({"v":1,"ev":"turn_done","session_id":"same"}),
@@ -3653,7 +3283,7 @@ fn solo_jcode_runtime_repair_reuses_one_session_and_archives_once() {
                 stream.flush().unwrap();
             }
         }
-        (messages, archives, reasoning_efforts, model_switches)
+        (messages, archives)
     });
     let cfg = config(&t, "jcode-api", 4096, 1, 3, 4);
     let input = t.join("input.txt");
@@ -3683,10 +3313,8 @@ fn solo_jcode_runtime_repair_reuses_one_session_and_archives_once() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "REPAIRED");
-    let (messages, archives, reasoning_efforts, model_switches) = server.join().unwrap();
-    assert_eq!(reasoning_efforts, ["medium", "low", "low", "low"]);
-    assert_eq!(model_switches, ["gpt-5.4-mini", "mock"]);
-    assert_eq!(messages.len(), 4);
+    let (messages, archives) = server.join().unwrap();
+    assert_eq!(messages.len(), 3);
     assert!(messages[1].contains("typed category Assertion"));
     assert!(messages[2].contains("typed category LineLimit"));
     assert_eq!(archives, 1);
@@ -3695,14 +3323,12 @@ fn solo_jcode_runtime_repair_reuses_one_session_and_archives_once() {
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
-    assert_eq!(rows.len(), 4);
+    assert_eq!(rows.len(), 3);
     assert_eq!(rows[0]["session_id"], "same");
     assert_eq!(rows[1]["session_id"], "same");
     assert_eq!(rows[1]["category"], "repair");
-    assert_eq!(rows[1]["model"], "gpt-5.4-mini");
     assert_eq!(rows[2]["session_id"], "same");
     assert_eq!(rows[2]["category"], "repair");
-    assert_eq!(rows[2]["model"], "gpt-5.4-mini");
     assert!(
         rows[1]["request_id"]
             .as_str()
@@ -3715,10 +3341,6 @@ fn solo_jcode_runtime_repair_reuses_one_session_and_archives_once() {
             .unwrap()
             .ends_with("-repair-2")
     );
-    assert_eq!(rows[3]["session_id"], "same");
-    assert_eq!(rows[3]["depth"], 1);
-    assert_eq!(rows[3]["category"], "turn");
-    assert_eq!(rows[3]["model"], "mock");
     fs::remove_dir_all(t).unwrap();
 }
 

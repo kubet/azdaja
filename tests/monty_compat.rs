@@ -75,28 +75,6 @@ def outer(scale):
     def inner(x): return x * scale
     return inner
 assert sorted([3, 1, 2], key=lambda x: -x) == [3, 2, 1]
-mapping = {"low": 2, "high": 9, "middle": 4}
-assert max(mapping, key=lambda k: mapping[k]) == "high"
-matched = False
-predicate_count = 0
-for word in text.split():
-    if word == "beta=34":
-        matched = True
-    if word.startswith("alpha="):
-        predicate_count += 1
-assert matched
-assert predicate_count == 2
-bounded_matches = []
-for match in re.finditer(r"\d+", text):
-    bounded_matches.append(match.group(0))
-    if len(bounded_matches) >= 2:
-        break
-assert bounded_matches == ["12", "34"]
-ranking_words = re.findall(r"[a-z]+", "red blue red green blue red")
-ranking_counts = collections.Counter(ranking_words)
-ranking_top = ranking_counts.most_common(2)
-ranking_answer = ", ".join([item[0] for item in ranking_top])
-assert ranking_answer == "red, blue"
 assert f"v={outer(2)(4)}" == "v=8"
 # json/datetime
 obj = json.loads('{"b": 2, "a": [1, null]}')
