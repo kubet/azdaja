@@ -89,8 +89,11 @@ def _rehearsal_module():
 
 
 MODEL = SCORE.MODEL
-REASONING = SCORE.REASONING
+# Fresh V58 schedules are low; the scorer retains SCORE.REASONING (medium) as
+# the immutable historical schedule value.
+REASONING = SCORE.FRESH_REASONING
 ARMS = tuple(SCORE.ARMS)
+CANDIDATE_CHECKPOINTS = SCORE.CANDIDATE_CHECKPOINTS
 DERIVED_GATE = {
     "schema_version": 1,
     "metric": "end_to_end_official_plus_exact_bare_lf_correct",
@@ -2160,7 +2163,7 @@ def _validate_adapter_contract(module: Any) -> None:
 
 
 def _legacy_luna_only_repair_contract(
-    candidate: Path, config_text: str
+    candidate: Path, config_text: str, *, reasoning: str = REASONING
 ) -> dict[str, Any]:
     """Prove, without inference, that an old Luna candidate denies repair config.
 
@@ -2177,8 +2180,8 @@ def _legacy_luna_only_repair_contract(
         raise BenchError("legacy candidate root model is not the frozen Luna route")
     if config.get("jcode_provider") != "openai":
         raise BenchError("legacy candidate provider is not the frozen OpenAI route")
-    if config.get("jcode_reasoning") != REASONING:
-        raise BenchError("legacy candidate reasoning is not the frozen medium route")
+    if config.get("jcode_reasoning") != reasoning:
+        raise BenchError("legacy candidate reasoning differs from the schedule route")
 
     identity = candidate_identity(candidate)
     binary = candidate / "azdaja"
@@ -2261,7 +2264,8 @@ def _legacy_luna_only_repair_contract(
 
 
 def _adapter_candidate_repair_contract(
-    module: Any, candidate: Path, *, require_support: bool
+    module: Any, candidate: Path, *, require_support: bool,
+    reasoning: str = REASONING,
 ) -> dict[str, Any]:
     configure = getattr(module, "configure_azdaja_repair_model_from_skill", None)
     if configure is None:
@@ -2284,7 +2288,9 @@ def _adapter_candidate_repair_contract(
         except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
             raise BenchError(f"cannot parse candidate repair-model config: {exc}") from exc
         if "jcode_repair_model" not in config:
-            legacy_receipt = _legacy_luna_only_repair_contract(candidate, config_text)
+            legacy_receipt = _legacy_luna_only_repair_contract(
+                candidate, config_text, reasoning=reasoning
+            )
             explicit_model = MODEL
         else:
             explicit_model = config["jcode_repair_model"]
@@ -2306,10 +2312,11 @@ def _adapter_candidate_repair_contract(
 
 
 def _adapter_candidate_repair_model(
-    module: Any, candidate: Path, *, require_support: bool
+    module: Any, candidate: Path, *, require_support: bool,
+    reasoning: str = REASONING,
 ) -> str:
     return _adapter_candidate_repair_contract(
-        module, candidate, require_support=require_support
+        module, candidate, require_support=require_support, reasoning=reasoning
     )["repair_model"]
 
 
@@ -2414,7 +2421,7 @@ def _frozen_tool_invocations(module: Any, name: str, stdout: str) -> list[tuple[
 
 
 def _load_frozen_adapter(
-    paths: FrozenPaths, *, kernel_environment: Path
+    paths: FrozenPaths, *, kernel_environment: Path, reasoning: str = REASONING
 ):
     global _ADAPTER
     data, _ = _safe_source_file(paths.adapter, "frozen OOLONG adapter")
@@ -2422,7 +2429,7 @@ def _load_frozen_adapter(
     module = _load_python(name, paths.adapter)
     _validate_adapter_contract(module)
     module.MODEL = MODEL
-    module.REASONING = REASONING
+    module.REASONING = reasoning
     # OOLONG's run lifecycle calls these globals. Replace only task wording and
     # pin the treatment command/config back to the first-generation candidate
     # snapshot. The adapter still stages and audits its isolated copy, but the
@@ -2742,6 +2749,7 @@ def build_schedule(
     controller: dict[str, Any],
     executables: dict[str, Any],
     runtime_closure: dict[str, Any],
+    reasoning: str = REASONING,
     repair_model: str = MODEL,
     legacy_repair_model_capability: dict[str, Any] | None = None,
     pre_freeze_rehearsal: dict[str, Any] | None = None,
@@ -2757,25 +2765,32 @@ def build_schedule(
         }
         for item in suite.fixtures
     ]
-    rng = random.Random(seed)
-    fixture_order = list(suite.fixtures)
-    rng.shuffle(fixture_order)
+    candidate_checkpoints = (
+        copy.deepcopy(profile.candidate_checkpoints)
+        if reasoning == SCORE.FRESH_REASONING
+        else None
+    )
+    sequence = SCORE.expected_schedule_sequence(
+        [item.fixture_id for item in suite.fixtures],
+        profile.arms,
+        seed,
+        candidate_checkpoints,
+    )
+    fixture_by_id = {item.fixture_id: item for item in suite.fixtures}
     jobs: list[dict[str, Any]] = []
-    for item in fixture_order:
-        arm_order = list(profile.arms)
-        rng.shuffle(arm_order)
-        for arm in arm_order:
-            jobs.append(
-                {
-                    "ordinal": len(jobs) + 1,
-                    "fixture_id": item.fixture_id,
-                    "payload_sha256": item.entry["payload_sha256"],
-                    "domain": item.entry["domain"],
-                    "sub_domain": item.entry["sub_domain"],
-                    "repetition": 1,
-                    "arm": arm,
-                }
-            )
+    for fixture_id, arm in sequence:
+        item = fixture_by_id[fixture_id]
+        jobs.append(
+            {
+                "ordinal": len(jobs) + 1,
+                "fixture_id": item.fixture_id,
+                "payload_sha256": item.entry["payload_sha256"],
+                "domain": item.entry["domain"],
+                "sub_domain": item.entry["sub_domain"],
+                "repetition": 1,
+                "arm": arm,
+            }
+        )
     schedule: dict[str, Any] = {
         "schema_version": SCORE.SCHEMA_VERSION,
         "record_type": "lb2_frozen_schedule",
@@ -2786,12 +2801,13 @@ def build_schedule(
         },
         "configuration": {
             "model": MODEL,
-            "reasoning": REASONING,
+            "reasoning": reasoning,
             "repair_model": repair_model,
             "legacy_repair_model_capability": copy.deepcopy(
                 legacy_repair_model_capability
             ),
             "derived_gate": copy.deepcopy(profile.derived_gate),
+            "candidate_checkpoints": candidate_checkpoints,
             "arms": list(profile.arms),
             "repetitions": 1,
             "seed": seed,
@@ -2808,6 +2824,8 @@ def build_schedule(
         schedule["configuration"].pop("legacy_repair_model_capability")
     if profile.derived_gate is None:
         schedule["configuration"].pop("derived_gate")
+    if candidate_checkpoints is None:
+        schedule["configuration"].pop("candidate_checkpoints")
     if pre_freeze_rehearsal is None:
         schedule["configuration"].pop("pre_freeze_rehearsal")
     schedule_id = sha256_bytes(canonical_json_bytes(schedule))
@@ -3315,7 +3333,7 @@ def controller_failure_row(
         "arm": arm,
         "repetition": 1,
         "model": MODEL,
-        "reasoning": REASONING,
+        "reasoning": config["reasoning"],
         "candidate_sha256": config["candidate"]["sha256"],
         "controller_sha256": config["controller"]["sha256"],
         "schedule_seed": config["seed"],
@@ -3410,7 +3428,7 @@ def transform_adapter_row(
         "arm": arm,
         "repetition": 1,
         "model": MODEL,
-        "reasoning": REASONING,
+        "reasoning": config["reasoning"],
         "candidate_sha256": config["candidate"]["sha256"],
         "controller_sha256": config["controller"]["sha256"],
         "schedule_seed": config["seed"],
@@ -3733,6 +3751,8 @@ def _assert_schedule_matches_attestation(
         raise BenchError("schedule/runtime-closure snapshot binding drifted")
     if config.get("derived_gate") not in (None, DERIVED_GATE):
         raise BenchError("schedule derived gate contract drifted")
+    if config.get("candidate_checkpoints") not in (None, CANDIDATE_CHECKPOINTS):
+        raise BenchError("schedule candidate checkpoint contract drifted")
     receipt = config.get("legacy_repair_model_capability")
     if receipt is not None:
         candidate = attestation.get("candidate", {})
@@ -3910,6 +3930,48 @@ def _finish_terminal_no_gold(
     return 1 if any(not row["execution_success"] for row in final_rows) else 0
 
 
+def candidate_checkpoint_abort_summary(
+    rows: Sequence[dict[str, Any]], schedule: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Return a gold-free failure summary from committed candidate rows alone."""
+    policy = schedule["configuration"].get("candidate_checkpoints")
+    if policy is None:
+        return None
+    candidate_rows = [row for row in rows if row.get("arm") == policy["candidate_arm"]]
+    for result in SCORE.candidate_checkpoint_results(rows, schedule):
+        if result["passed"]:
+            continue
+        selected = candidate_rows[: result["candidate_rows"]]
+        taxonomy = []
+        for row in selected:
+            failure = row.get("failure")
+            taxonomy.append(
+                {
+                    "fixture_id": row.get("fixture_id"),
+                    "execution_success": row.get("execution_success") is True,
+                    "recognized": SCORE.candidate_row_recognized(row),
+                    "failure_kind": (
+                        failure.get("normalized_kind")
+                        if isinstance(failure, dict)
+                        else None
+                    ),
+                }
+            )
+        return {**result, "taxonomy": taxonomy}
+    return None
+
+
+def enforce_candidate_checkpoints(
+    rows: Sequence[dict[str, Any]], schedule: dict[str, Any]
+) -> bool:
+    """Emit the deterministic policy abort and forbid any further billed turn."""
+    summary = candidate_checkpoint_abort_summary(rows, schedule)
+    if summary is None:
+        return False
+    print(json.dumps({"checkpoint_abort": summary}, sort_keys=True), flush=True)
+    return True
+
+
 def _run_held_ceremony(
     *,
     args: argparse.Namespace,
@@ -3928,9 +3990,12 @@ def _run_held_ceremony(
     kernel_environment = Path(
         schedule["configuration"]["runtime_closure"]["kernel_environment"]["root"]
     )
+    schedule_reasoning = schedule["configuration"]["reasoning"]
     adapter = _ADAPTER or _load_frozen_adapter(
-        paths, kernel_environment=kernel_environment
+        paths, kernel_environment=kernel_environment, reasoning=schedule_reasoning
     )
+    adapter.MODEL = MODEL
+    adapter.REASONING = schedule_reasoning
     try:
         adapter.validate_skill(str(paths.candidate))
         expected_repair_model = schedule["configuration"].get("repair_model", MODEL)
@@ -3938,6 +4003,7 @@ def _run_held_ceremony(
             adapter,
             paths.candidate,
             require_support="repair_model" in schedule["configuration"],
+            reasoning=schedule_reasoning,
         )
         if configured_contract["repair_model"] != expected_repair_model:
             raise BenchError("frozen adapter/candidate repair model differs from schedule")
@@ -3952,6 +4018,7 @@ def _run_held_ceremony(
     args.executable_identities = schedule["configuration"]["executables"]
     args.seed = schedule["configuration"]["seed"]
     args.timeout = schedule["configuration"]["timeout_seconds"]
+    args.reasoning = schedule_reasoning
 
     recheck_ceremony_handles(handles)
     completed, output_state = validate_result_prefix(
@@ -3967,6 +4034,8 @@ def _run_held_ceremony(
     validate_retained_prefix_artifacts(
         work, schedule, completed, runs_fd=handles.work_runs_fd
     )
+    if enforce_candidate_checkpoints(completed, schedule):
+        return 3
     if len(completed) == len(schedule["jobs"]):
         return _finish_terminal_no_gold(
             handles=handles, suite=suite, output=output,
@@ -4042,6 +4111,8 @@ def _run_held_ceremony(
             ),
             flush=True,
         )
+        if enforce_candidate_checkpoints([*current, row], schedule):
+            return 3
 
     terminal, final_state = validate_result_prefix(
         output,
@@ -4077,11 +4148,12 @@ def fresh_source_preflight(
     )
     _validate_adapter_contract(source_adapter)
     source_adapter.MODEL = MODEL
-    source_adapter.REASONING = REASONING
+    source_adapter.REASONING = args.reasoning
     try:
         source_adapter.validate_skill(str(candidate_source))
         repair_contract = _adapter_candidate_repair_contract(
-            source_adapter, candidate_source, require_support=True
+            source_adapter, candidate_source, require_support=True,
+            reasoning=args.reasoning,
         )
     except Exception as exc:
         raise BenchError(f"source candidate preflight failed: {exc}") from exc
@@ -4251,12 +4323,13 @@ def run_suite(args: argparse.Namespace) -> int:
         )
         kernel_environment = paths.kernel_environment
         adapter = _load_frozen_adapter(
-            paths, kernel_environment=kernel_environment
+            paths, kernel_environment=kernel_environment, reasoning=args.reasoning
         )
         try:
             adapter.validate_skill(str(paths.candidate))
             frozen_repair_contract = _adapter_candidate_repair_contract(
-                adapter, paths.candidate, require_support=True
+                adapter, paths.candidate, require_support=True,
+                reasoning=args.reasoning,
             )
             if frozen_repair_contract["repair_model"] != repair_model:
                 raise BenchError("source/frozen repair model identity drifted")
@@ -4275,6 +4348,7 @@ def run_suite(args: argparse.Namespace) -> int:
             controller=attestation["controller"],
             executables=attestation["executables"],
             runtime_closure=attestation["runtime_closure"],
+            reasoning=args.reasoning,
             repair_model=repair_model,
             legacy_repair_model_capability=legacy_repair_model_capability,
             pre_freeze_rehearsal=rehearsal_binding,

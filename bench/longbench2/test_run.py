@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import copy
+import io
 import errno
 import hashlib
 import importlib.util
@@ -180,7 +182,9 @@ class RunnerTests(unittest.TestCase):
         private_json(manifest_path, manifest)
         return manifest_path, public, fixtures
 
-    def fake_schedule(self, suite, *, repair_model=RUN.MODEL):
+    def fake_schedule(
+        self, suite, *, repair_model=RUN.MODEL, reasoning=RUN.REASONING
+    ):
         candidate_components = {
             name: {"sha256": str(index) * 64, "bytes": index}
             for index, name in enumerate(RUN.CANDIDATE_ALLOWLIST, 1)
@@ -241,6 +245,7 @@ class RunnerTests(unittest.TestCase):
             controller=controller,
             executables=executables,
             runtime_closure=runtime_closure,
+            reasoning=reasoning,
             repair_model=repair_model,
         )
 
@@ -327,7 +332,7 @@ class RunnerTests(unittest.TestCase):
         config = (
             'default_model="gpt-5.6-luna"\n'
             'jcode_provider="openai"\n'
-            'jcode_reasoning="medium"\n'
+            'jcode_reasoning="low"\n'
         )
         (candidate / "config.toml").write_text(config, encoding="utf-8")
         (candidate / "SKILL.md").write_text("legacy test skill\n", encoding="utf-8")
@@ -364,11 +369,26 @@ class RunnerTests(unittest.TestCase):
             receipt["candidate_sha256"], RUN.candidate_identity(candidate)["sha256"]
         )
 
+        # Historical medium candidates use the same proof with their schedule's
+        # reasoning, rather than a fresh-low global or a hardcoded medium check.
+        (candidate / "config.toml").write_text(
+            config.replace('jcode_reasoning="low"', 'jcode_reasoning="medium"'),
+            encoding="utf-8",
+        )
+        medium_contract = RUN._adapter_candidate_repair_contract(
+            current_adapter, candidate, require_support=True, reasoning="medium"
+        )
+        self.assertEqual(medium_contract["repair_model"], RUN.MODEL)
+        with self.assertRaisesRegex(RUN.BenchError, "schedule route"):
+            RUN._adapter_candidate_repair_contract(
+                current_adapter, candidate, require_support=True, reasoning="low"
+            )
+
         binary.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         binary.chmod(0o700)
         with self.assertRaisesRegex(RUN.BenchError, "did not exit 2"):
             RUN._adapter_candidate_repair_model(
-                current_adapter, candidate, require_support=True
+                current_adapter, candidate, require_support=True, reasoning="medium"
             )
 
     def test_azdaja_skill_is_fresh_only_and_optional_on_resume(self):
@@ -439,6 +459,154 @@ class RunnerTests(unittest.TestCase):
         os.link(payload, self.root / "second-hard-link.json")
         with self.assertRaises(RUN.BenchError):
             RUN.capture_public_suite(manifest)
+
+    def test_fresh_low_cli_and_candidate_first_checkpoint_order_are_frozen(self):
+        parsed = RUN.parser().parse_args(
+            [
+                "--manifest", "/public/manifest.json", "--output", "/runs.jsonl",
+                "--work-dir", "/work", "--yes-run-inference",
+            ]
+        )
+        self.assertEqual(parsed.reasoning, "low")
+        with self.assertRaises(SystemExit):
+            RUN.parser().parse_args(
+                [
+                    "--manifest", "/public/manifest.json", "--output", "/runs.jsonl",
+                    "--work-dir", "/work", "--reasoning", "medium",
+                ]
+            )
+
+        manifest, _, _ = self.make_public()
+        suite = RUN.capture_public_suite(manifest)
+        schedule = self.fake_schedule(suite)
+        self.assertEqual(schedule["configuration"]["reasoning"], "low")
+        self.assertEqual(
+            schedule["configuration"]["candidate_checkpoints"],
+            SCORE.CANDIDATE_CHECKPOINTS,
+        )
+        jobs = schedule["jobs"]
+        self.assertEqual(len(jobs), 189)
+        self.assertTrue(all(job["arm"] == "jcode-azdaja" for job in jobs[:10]))
+        first_fixtures = {job["fixture_id"] for job in jobs[:10]}
+        self.assertEqual(
+            {job["fixture_id"] for job in jobs[10:30]}, first_fixtures
+        )
+        self.assertTrue(all(job["arm"] != "jcode-azdaja" for job in jobs[10:30]))
+        self.assertTrue(all(job["arm"] == "jcode-azdaja" for job in jobs[30:50]))
+        second_fixtures = {job["fixture_id"] for job in jobs[30:50]}
+        self.assertEqual(
+            {job["fixture_id"] for job in jobs[50:90]}, second_fixtures
+        )
+        self.assertTrue(all(job["arm"] != "jcode-azdaja" for job in jobs[50:90]))
+        self.assertTrue(all(job["arm"] == "jcode-azdaja" for job in jobs[90:123]))
+        remaining_fixtures = {job["fixture_id"] for job in jobs[90:123]}
+        self.assertEqual(
+            {job["fixture_id"] for job in jobs[123:]}, remaining_fixtures
+        )
+        self.assertTrue(all(job["arm"] != "jcode-azdaja" for job in jobs[123:]))
+
+    def test_medium_schedule_keeps_legacy_bytes_and_scorer_contract(self):
+        manifest, _, _ = self.make_public()
+        suite = RUN.capture_public_suite(manifest)
+        schedule = self.fake_schedule(suite, reasoning=SCORE.REASONING)
+        self.assertNotIn("candidate_checkpoints", schedule["configuration"])
+        rng = random.Random(RUN.DEFAULT_SEED)
+        fixture_order = [item.fixture_id for item in suite.fixtures]
+        rng.shuffle(fixture_order)
+        expected = []
+        for fixture_id in fixture_order:
+            arms = list(SCORE.ARMS)
+            rng.shuffle(arms)
+            expected.extend((fixture_id, arm) for arm in arms)
+        self.assertEqual(
+            [(job["fixture_id"], job["arm"]) for job in schedule["jobs"]], expected
+        )
+        before = SCORE.canonical_json_file_bytes(schedule)
+        SCORE.validate_schedule(
+            copy.deepcopy(schedule), manifest, suite.fixtures_by_id,
+            manifest_sha256=suite.manifest_sha256,
+        )
+        self.assertEqual(SCORE.canonical_json_file_bytes(schedule), before)
+
+    def test_gold_blind_checkpoint_counts_and_failed_resume_are_deterministic(self):
+        schedule = {
+            "configuration": {
+                "candidate_checkpoints": copy.deepcopy(SCORE.CANDIDATE_CHECKPOINTS)
+            }
+        }
+        passing_ten = [
+            {
+                "arm": "jcode-azdaja",
+                "execution_success": index < 8,
+                "response": "The correct answer is (A)" if index < 6 else "B\n",
+            }
+            for index in range(10)
+        ]
+        result = SCORE.candidate_checkpoint_results(passing_ten, schedule)
+        self.assertEqual(
+            result,
+            [{
+                "candidate_rows": 10, "execution_success_n": 8,
+                "recognized_n": 8, "passed": True,
+            }],
+        )
+        failed = copy.deepcopy(passing_ten)
+        for row in failed[7:]:
+            row["execution_success"] = False
+        failed[9]["response"] = "answer A\n"
+        with contextlib.redirect_stdout(io.StringIO()) as emitted:
+            self.assertTrue(RUN.enforce_candidate_checkpoints(failed, schedule))
+        self.assertIn('"checkpoint_abort"', emitted.getvalue())
+        # Adding completed control rows does not hide or forgive the failed checkpoint;
+        # resume reaches the same decision without a marker or a new receipt type.
+        failed_with_controls = failed + [
+            {"arm": "jcode-native", "execution_success": True, "response": "A\n"}
+        ]
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertTrue(
+                RUN.enforce_candidate_checkpoints(failed_with_controls, schedule)
+            )
+
+        passing_thirty = passing_ten + [
+            {
+                "arm": "jcode-azdaja", "execution_success": index < 16,
+                "response": "C\n" if index < 15 else "not recognized",
+            }
+            for index in range(20)
+        ]
+        results = SCORE.candidate_checkpoint_results(passing_thirty, schedule)
+        self.assertEqual(results[-1]["candidate_rows"], 30)
+        self.assertEqual(results[-1]["execution_success_n"], 24)
+        self.assertEqual(results[-1]["recognized_n"], 23)
+        self.assertTrue(results[-1]["passed"])
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertFalse(
+                RUN.enforce_candidate_checkpoints(passing_thirty, schedule)
+            )
+
+        failed_thirty = copy.deepcopy(passing_thirty)
+        failed_thirty[24]["execution_success"] = False
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertTrue(
+                RUN.enforce_candidate_checkpoints(failed_thirty, schedule)
+            )
+
+        ceremony_source = inspect.getsource(RUN._run_held_ceremony)
+        self.assertLess(
+            ceremony_source.index("if enforce_candidate_checkpoints(completed"),
+            ceremony_source.index("auth_jcode = adapter.preflight_jcode"),
+        )
+        self.assertIn(
+            "if enforce_candidate_checkpoints([*current, row], schedule):\n"
+            "            return 3",
+            ceremony_source,
+        )
+        self.assertLess(
+            ceremony_source.index("publish_job_done_at"),
+            ceremony_source.index(
+                "if enforce_candidate_checkpoints([*current, row], schedule)"
+            ),
+        )
 
     def test_schedule_is_exact_live_scorer_contract_and_recomputed_tamper_fails(self):
         manifest, _, _ = self.make_public()

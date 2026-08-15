@@ -34,7 +34,29 @@ EXPECTED_SOURCE_COUNT = 503
 EXPECTED_FIXTURES = 63
 ARMS = ("jcode-native", "jcode-azdaja", "prime-agent")
 MODEL = "gpt-5.6-luna"
+# ``medium`` is the immutable v43 schedule value.  Fresh post-v43 schedules use
+# low, while the validator/scorer continue to accept and reproduce medium runs.
 REASONING = "medium"
+FRESH_REASONING = "low"
+SCHEDULE_REASONINGS = (REASONING, FRESH_REASONING)
+CANDIDATE_CHECKPOINTS = {
+    "schema_version": 1,
+    "candidate_arm": "jcode-azdaja",
+    "ordering": "candidate_first_10_controls_candidate_to_30_controls_then_remainder_v1",
+    "recognition_extractor": "official_then_fullmatch_upper_ad_plus_one_lf_v1",
+    "checkpoints": [
+        {
+            "candidate_rows": 10,
+            "minimum_execution_success_n": 8,
+            "minimum_recognized_n": 7,
+        },
+        {
+            "candidate_rows": 30,
+            "minimum_execution_success_n": 24,
+            "minimum_recognized_n": 23,
+        },
+    ],
+}
 DERIVED_GATE = {
     "schema_version": 1,
     "metric": "end_to_end_official_plus_exact_bare_lf_correct",
@@ -148,6 +170,7 @@ class ScoreProfile:
     run_id_domain: bytes
     domain_counts: dict[str, int]
     derived_gate: dict[str, Any] | None
+    candidate_checkpoints: dict[str, Any] | None
     require_live_auth: bool
 
 
@@ -158,6 +181,7 @@ PRODUCTION_PROFILE = ScoreProfile(
     run_id_domain=RUN_ID_DOMAIN,
     domain_counts=SELECTED_DOMAIN_COUNTS,
     derived_gate=DERIVED_GATE,
+    candidate_checkpoints=CANDIDATE_CHECKPOINTS,
     require_live_auth=True,
 )
 REHEARSAL_PROFILE = ScoreProfile(
@@ -167,6 +191,7 @@ REHEARSAL_PROFILE = ScoreProfile(
     run_id_domain=b"lb2-pre-freeze-rehearsal-run-v1\0",
     domain_counts={"Synthetic": 20},
     derived_gate=None,
+    candidate_checkpoints=None,
     require_live_auth=False,
 )
 
@@ -1148,6 +1173,46 @@ def _validate_runtime_closure(value: Any) -> None:
     )
 
 
+def expected_schedule_sequence(
+    fixture_ids: Sequence[str],
+    arms: Sequence[str],
+    seed: int,
+    candidate_checkpoints: dict[str, Any] | None,
+) -> list[tuple[str, str]]:
+    """Return the exact schedule order without consulting fixture payload or gold."""
+    rng = random.Random(seed)
+    fixture_order = list(fixture_ids)
+    rng.shuffle(fixture_order)
+    if candidate_checkpoints is None:
+        sequence: list[tuple[str, str]] = []
+        for fixture_id in fixture_order:
+            arm_order = list(arms)
+            rng.shuffle(arm_order)
+            sequence.extend((fixture_id, arm) for arm in arm_order)
+        return sequence
+
+    candidate_arm = candidate_checkpoints["candidate_arm"]
+    controls = [arm for arm in arms if arm != candidate_arm]
+    sequence = []
+    start = 0
+    for checkpoint in candidate_checkpoints["checkpoints"]:
+        stop = checkpoint["candidate_rows"]
+        selected = fixture_order[start:stop]
+        sequence.extend((fixture_id, candidate_arm) for fixture_id in selected)
+        for fixture_id in selected:
+            control_order = list(controls)
+            rng.shuffle(control_order)
+            sequence.extend((fixture_id, arm) for arm in control_order)
+        start = stop
+    selected = fixture_order[start:]
+    sequence.extend((fixture_id, candidate_arm) for fixture_id in selected)
+    for fixture_id in selected:
+        control_order = list(controls)
+        rng.shuffle(control_order)
+        sequence.extend((fixture_id, arm) for arm in control_order)
+    return sequence
+
+
 def validate_schedule(
     schedule: dict[str, Any],
     manifest_path: Path,
@@ -1219,7 +1284,7 @@ def validate_schedule(
     }
     optional_config = {
         "repair_model", "legacy_repair_model_capability", "derived_gate",
-        "pre_freeze_rehearsal",
+        "pre_freeze_rehearsal", "candidate_checkpoints",
     }
     if not required_config.issubset(configuration) or not set(configuration).issubset(
         required_config | optional_config
@@ -1237,7 +1302,20 @@ def validate_schedule(
     if "pre_freeze_rehearsal" in configuration:
         _validate_pre_freeze_rehearsal_binding(configuration["pre_freeze_rehearsal"])
     _require_equal(configuration["model"], MODEL, "schedule exact model")
-    _require_equal(configuration["reasoning"], REASONING, "schedule reasoning")
+    reasoning = configuration["reasoning"]
+    if reasoning not in SCHEDULE_REASONINGS:
+        raise ScoreError("schedule reasoning is not an accepted frozen route")
+    checkpoints = configuration.get("candidate_checkpoints")
+    if profile.candidate_checkpoints is None:
+        if checkpoints is not None:
+            raise ScoreError("schedule profile does not permit candidate checkpoints")
+    elif reasoning == FRESH_REASONING:
+        _require_equal(
+            checkpoints, profile.candidate_checkpoints,
+            "schedule preregistered candidate checkpoints",
+        )
+    elif checkpoints is not None:
+        raise ScoreError("legacy medium schedule cannot add candidate checkpoints")
     repair_model = configuration.get("repair_model", MODEL)
     if (
         not isinstance(repair_model, str)
@@ -1289,16 +1367,12 @@ def validate_schedule(
     expected_grid = {(fixture_id, arm, 1) for fixture_id in fixtures for arm in profile.arms}
     observed_grid: set[tuple[str, str, int]] = set()
     run_ids: set[str] = set()
-    permutations: Counter[tuple[str, ...]] = Counter()
-    rng = random.Random(configuration["seed"])
-    expected_fixture_order = list(manifest_order)
-    rng.shuffle(expected_fixture_order)
-    expected_sequence: list[tuple[str, str]] = []
-    for fixture_id in expected_fixture_order:
-        arm_order = list(profile.arms)
-        rng.shuffle(arm_order)
-        permutations[tuple(arm_order)] += 1
-        expected_sequence.extend((fixture_id, arm) for arm in arm_order)
+    expected_sequence = expected_schedule_sequence(
+        manifest_order,
+        profile.arms,
+        configuration["seed"],
+        checkpoints,
+    )
     actual_sequence = [(job.get("fixture_id"), job.get("arm")) for job in jobs]
     _require_equal(
         actual_sequence, expected_sequence,
@@ -1333,8 +1407,6 @@ def validate_schedule(
         run_ids.add(run_id)
     if observed_grid != expected_grid:
         raise ScoreError("schedule is not the exact complete fixed profile grid")
-    if sum(permutations.values()) != profile.expected_fixtures:
-        raise ScoreError("schedule arm-order receipts are incomplete")
     return jobs, arms
 
 
@@ -2216,6 +2288,57 @@ def validate_artifact_rows(
         os.close(root_fd)
 
 
+def candidate_row_recognized(row: dict[str, Any]) -> bool:
+    """Apply only the preregistered gold-blind extractor to an executed row."""
+    return (
+        row.get("execution_success") is True
+        and derived_envelope_extract_answer(row.get("response"))[0] is not None
+    )
+
+
+def candidate_checkpoint_results(
+    rows: Sequence[dict[str, Any]], schedule: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Recompute every completed gold-blind candidate checkpoint from raw rows."""
+    policy = schedule["configuration"].get("candidate_checkpoints")
+    if policy is None:
+        return []
+    candidate_rows = [row for row in rows if row.get("arm") == policy["candidate_arm"]]
+    results: list[dict[str, Any]] = []
+    for checkpoint in policy["checkpoints"]:
+        count = checkpoint["candidate_rows"]
+        if len(candidate_rows) < count:
+            continue
+        selected = candidate_rows[:count]
+        execution_n = sum(row.get("execution_success") is True for row in selected)
+        recognized_n = sum(candidate_row_recognized(row) for row in selected)
+        results.append(
+            {
+                "candidate_rows": count,
+                "execution_success_n": execution_n,
+                "recognized_n": recognized_n,
+                "passed": (
+                    execution_n >= checkpoint["minimum_execution_success_n"]
+                    and recognized_n >= checkpoint["minimum_recognized_n"]
+                ),
+            }
+        )
+    return results
+
+
+def validate_candidate_checkpoints(
+    rows: Sequence[dict[str, Any]], schedule: dict[str, Any]
+) -> None:
+    for result in candidate_checkpoint_results(rows, schedule):
+        if not result["passed"]:
+            raise ScoreError(
+                "candidate checkpoint failed and deterministically forbids continuation "
+                f"(candidate_rows={result['candidate_rows']}, "
+                f"execution={result['execution_success_n']}, "
+                f"recognized={result['recognized_n']})"
+            )
+
+
 def validate_run_rows(
     rows: list[dict[str, Any]],
     jobs: list[dict[str, Any]],
@@ -2259,7 +2382,7 @@ def validate_run_rows(
             "arm": job["arm"],
             "repetition": 1,
             "model": MODEL,
-            "reasoning": REASONING,
+            "reasoning": configuration["reasoning"],
             "candidate_sha256": candidate_sha,
             "controller_sha256": configuration["controller"]["sha256"],
             "schedule_seed": configuration["seed"],
@@ -2449,6 +2572,7 @@ def validate_frozen_runs(
         claims_root, rows, jobs, schedule, held_root_fd=held_claims_root_fd
     )
     validate_artifact_rows(artifacts_root, rows, jobs, fixtures)
+    validate_candidate_checkpoints(rows, schedule)
     return schedule, jobs, rows, arms
 
 
@@ -3322,7 +3446,7 @@ def build_report(
         },
         "protocol": {
             "model": MODEL,
-            "reasoning": REASONING,
+            "reasoning": configuration["reasoning"],
             "arms": list(arms),
             "fixed_denominator_per_arm": EXPECTED_FIXTURES,
             "runner_artifact_contract": {
@@ -3335,7 +3459,11 @@ def build_report(
                 ],
                 "executable_names": ["jcode", "azdaja", "prime-agent"],
                 "version_command_rule": "[executable.path, '--version']",
-                "ordering": "random.Random(seed): shuffle fixtures once, then shuffle three arms per fixture",
+                "ordering": (
+                    "random.Random(seed): shuffle fixtures once, then shuffle three arms per fixture"
+                    if "candidate_checkpoints" not in configuration
+                    else configuration["candidate_checkpoints"]["ordering"]
+                ),
                 "execution_failure_kinds": sorted(EXECUTION_FAILURE_KINDS),
                 "normalized_failure_taxonomy": list(FAILURE_TAXONOMY),
                 "failure_taxonomy_precedence": list(FAILURE_TAXONOMY_PRECEDENCE),

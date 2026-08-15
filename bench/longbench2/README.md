@@ -59,8 +59,9 @@ Absence, tamper, target drift, or incomplete bundle replay is refused before
 OAuth preflight or production artifact creation. `--resume` refuses the CLI
 option and instead reopens the full receipt bound into the frozen schedule; no
 verification skip exists. The production contract remains exactly 63 fixtures,
-189 jobs, three fixed arms, and the preregistered 16-correct candidate gate.
-The receipt's path and all target source paths must therefore remain available
+189 jobs, three fixed arms, the two gold-blind candidate checkpoints, and the
+preregistered 16-correct candidate gate. The receipt's path and all target source
+paths must therefore remain available
 and byte-identical through resume.
 
 ## Frozen source
@@ -243,11 +244,15 @@ symlinks.
 
 `run.py` executes exactly 189 serial subscription-OAuth jobs: every one of the
 63 fixtures once under each of `jcode-native`, `jcode-azdaja`, and
-`prime-agent`. The model is fixed to `gpt-5.6-luna`, reasoning is fixed to
-`medium`, and repetitions are fixed to one; the CLI cannot select a subset.
+`prime-agent`. The model is fixed to `gpt-5.6-luna`, fresh reasoning is fixed to
+`low`, and repetitions are fixed to one; the CLI rejects every other reasoning
+value and cannot select a subset. The scorer continues to validate and reproduce
+immutable historical `medium` schedules without rewriting them.
 The default schedule seed is `20260813` and the default per-job timeout is 1,800
-seconds. `random.Random(seed)` shuffles the 63 fixtures once and then shuffles
-the three arms within each fixture. Independently of that deterministic order,
+seconds. `random.Random(seed)` shuffles the 63 fixtures once. The schedule then
+runs candidate rows 1-10, the two controls for those fixtures, candidate rows
+11-30, the two controls for those fixtures, the remaining candidate rows, and
+finally their controls in deterministic shuffled control order. Independently of that deterministic order,
 each arm receives the captured public payload as the sole 0444 file in a fresh
 task directory under a CSPRNG-generated 128-bit filename. That random staging
 name is not a gold-hiding mechanism.
@@ -303,7 +308,7 @@ The explicit candidate must be a non-symlink directory with exactly
 files must be singly linked, owned by the runner, and not group/other writable.
 The config must pin `sub_llm_cmd="jcode-api"`,
 `default_model="gpt-5.6-luna"`, `jcode_provider="openai"`, and
-`jcode_reasoning="medium"`.
+`jcode_reasoning="low"`.
 
 ### No-benchmark-inference preflight
 
@@ -388,7 +393,7 @@ python3 bench/longbench2/run.py \
   --output "$RUNS" \
   --work-dir "$WORK" \
   --seed 20260813 --timeout 1800 \
-  --model gpt-5.6-luna --reasoning medium \
+  --model gpt-5.6-luna --reasoning low \
   --jcode "$JCODE" \
   --prime-agent "$PRIME_AGENT" \
   --azdaja-skill "$CANDIDATE" \
@@ -402,9 +407,21 @@ with `O_CREAT|O_EXCL`, creates the canonical schedule and claim/completion files
 exclusively, and refuses any existing output/schedule/claims target. The work
 root and every per-job directory must also be newly created. Artifacts are
 owner-only; do not move, edit, truncate, replace, or add entries to them.
+After exactly 10 candidate rows, the controller counts execution successes and
+recognized raw responses without gold. Recognition applies the pinned official
+extractor and, only if that fails, `re.fullmatch(r"([A-D])\n", response)`. It
+aborts below 8/10 execution or 7/10 recognition. After exactly 30 candidate rows
+it similarly aborts below 24/30 execution or 23/30 recognition. A checkpoint is
+committed only through the ordinary row, claim, completion, and trajectory
+artifacts: no new marker or receipt type is created. Consequently an exact-prefix
+resume deterministically recomputes and refuses a completed failed checkpoint.
+A policy-aborted prefix is immutable directional evidence only: never resume,
+score, open gold for, relabel, or promote it.
+
 Exit 0 means terminal completion with no execution-failure rows; exit 1 means a
 terminal 189-row artifact containing at least one explicit execution failure;
-exit 2 is refusal/error and must not be interpreted as terminal completion.
+exit 2 is refusal/error and must not be interpreted as terminal completion; exit
+3 is the permanent gold-blind checkpoint-policy abort described above.
 
 ### Exact-prefix resume
 
@@ -418,7 +435,7 @@ python3 bench/longbench2/run.py \
   --work-dir "$WORK" \
   --resume \
   --seed 20260813 --timeout 1800 \
-  --model gpt-5.6-luna --reasoning medium \
+  --model gpt-5.6-luna --reasoning low \
   --jcode "$JCODE" \
   --prime-agent "$PRIME_AGENT" \
   --yes-run-inference

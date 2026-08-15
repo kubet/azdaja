@@ -47,7 +47,7 @@ SCORE = _load_python("azdaja_lb2_score_for_pre_freeze_rehearsal", PRODUCTION_VAL
 RUN = _load_python("azdaja_lb2_run_for_pre_freeze_rehearsal", PRODUCTION_CONTROLLER)
 ADAPTER = _load_python("azdaja_oolong_for_pre_freeze_rehearsal", PRODUCTION_ADAPTER)
 ADAPTER.MODEL = SCORE.MODEL
-ADAPTER.REASONING = SCORE.REASONING
+ADAPTER.REASONING = SCORE.FRESH_REASONING
 
 SCHEMA_VERSION = 1
 SUITE_ID = "lb2-pre-freeze-rehearsal-20x3-v1"
@@ -267,7 +267,7 @@ def production_configuration(*, seed: int, timeout: int) -> dict[str, Any]:
         "scheduled_jobs": PRODUCTION_JOB_COUNT,
         "minimum_correct_n": PRODUCTION_MINIMUM_CORRECT_N,
         "model": SCORE.MODEL,
-        "reasoning": SCORE.REASONING,
+        "reasoning": SCORE.FRESH_REASONING,
         "arms": list(SCORE.ARMS),
         "repetitions": 1,
         "seed": seed,
@@ -583,6 +583,7 @@ def build_schedule(
             controller=copy.deepcopy(target["controller"]),
             executables=copy.deepcopy(target["executables"]),
             runtime_closure=copy.deepcopy(target["runtime_closure"]),
+            reasoning=target["configuration"]["reasoning"],
             profile=SCORE.REHEARSAL_PROFILE,
         )
     except (RUN.BenchError, SCORE.ScoreError, KeyError) as exc:
