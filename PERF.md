@@ -707,3 +707,16 @@ The mandatory fixed 20x3 synthetic rehearsal exited 0 and produced terminal scor
 | Prime Agent | 57/63 | 11/63 | 11/63 | 8,700 | 36.398s |
 
 Azdaja derived taxonomy: 24 correct, 20 recognized/wrong, one extractor-unrecognized, and 18 execution failures. Official completed-only accuracy is 17/45; strict exact is 0/63. All-attempt Azdaja total-token p50 is 25,515 and recorded total is 1,818,756. The derived gate passes, but the 71.43% execution rate and 2.58x native median show why v43 is only the frozen baseline and why future candidates must clear SCOUT before any freeze. Same-binary OOLONG launched immediately after scoring.
+
+
+## Exact-v43 frozen OOLONG terminal result
+
+The same exact-v43 aggregate ran on the fixed 26-fixture / 78-row OOLONG-Synth validation campaign after LongBench authorization. Terminal report validation exited 0; output SHA-256 `6f6a9c524b69ef16ef9eb8b85b375b2caeddae6c1226d53dda9675dffcbf5bfd`, schedule SHA-256 `7970cbae26e55c62058bb431dfafd1540b64e8176ddce3e050f9d776c5ae14ef`, score rows SHA-256 `869ae46012875f3d7df8154af9af1d7572ee3dd6ffba9e1326940024b8aa090e`, report SHA-256 `80bad59b241064b6430f4c56c1f9f114c4c82fdf564483b74906c4e43c8acfec`.
+
+| Arm | Execution | Fixed-26 exact | Root input mean | Total tokens | Latency p50 |
+|---|---:|---:|---:|---:|---:|
+| Azdaja exact-v43 | 22/26 | 19/26 | 6,166 | 403,897 | 31.338s |
+| Native jcode | 26/26 | 22/26 | 30,382 | 2,802,109 | 9.691s |
+| Prime Agent | 26/26 | 20/26 | 2,278 | 437,594 | 11.985s |
+
+Azdaja's four execution failures normalize to `monty_subset_tax`; three additional completed rows failed strict scoring. Zero of 26 root transcripts leaked >=100 context characters. It missed the frozen 25/26 execution and 24/26 exact gates, so RAH is blocked. On both-correct rows Azdaja/native geometric ratios were 0.218x root tokens, 0.133x total tokens, and 1.519x latency; overall median latency was 3.23x native.

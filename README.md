@@ -146,6 +146,30 @@ terminal-invalid and unscored. It was not retried, resumed, relabeled, or used
 as score input. Neither run is an official leaderboard result, and the current
 comparison supports no superiority claim.
 
+
+### Derived OOLONG-Synth validation slice, 26 fixtures
+
+LongBench's derived gate authorized the same exact-v43 binary for the frozen
+26-fixture, three-arm OOLONG campaign. All 78 rows reached terminal validation;
+Azdaja had four retained execution failures.
+
+| Arm | Execution | Completed exact | Fixed-26 exact | Mean root tokens | Median time / item |
+|---|---:|---:|---:|---:|---:|
+| **Azdaja** | 22/26 (84.62%) | **19/22 (86.36%)** | 19/26 (73.08%) | 6,166 | 31.3s |
+| Native jcode | **26/26 (100%)** | 22/26 (84.62%) | **22/26 (84.62%)** | 30,382 | **9.7s** |
+| Prime Agent | **26/26 (100%)** | 20/26 (76.92%) | 20/26 (76.92%) | **2,278** | 12.0s |
+
+The frozen continuation gates were 25/26 execution and 24/26 fixed-denominator
+exact. Azdaja missed both at 22/26 and 19/26, with four `monty_subset_tax`
+execution failures and three incorrect completed answers. Its median was 3.23x
+native. The root-context leak hard gate passed 26/26 with zero leaks.
+
+Therefore the 199-item RAH protocol is **not authorized**. RAH would also require
+its separately stated signed preregistration, independent gold custody, locked
+runtime, containment, released scorer, and validation-derived wording. The
+OOLONG output SHA-256 is `6f6a9c524b69ef16ef9eb8b85b375b2caeddae6c1226d53dda9675dffcbf5bfd` and the validated
+report SHA-256 is `80bad59b241064b6430f4c56c1f9f114c4c82fdf564483b74906c4e43c8acfec`.
+
 ## Guarantees
 
 - Failed cells cannot publish tentative `FINAL` or `FINAL_VAR` values.
