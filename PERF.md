@@ -848,3 +848,22 @@ Capacity was restored to 11 GiB free by deleting only regenerable Cargo target t
 ### V58 target-bound pre-freeze rehearsal — PASS
 
 Fresh bundle `/private/tmp/azdaja-v58-lb2-prefreeze-shared-v1/bundle` completed and independently reopened with exit 0. Final receipt SHA-256 `b0c4b67d960e0e5479c80e715bfe0c09139223e24c7de9fe25efbc3bcd28b7aa`, receipt ID `096ee4003ed7f2ea1a2c2c798818811cfde3c4c3d7a8c7453ca1b00df773efc1`, target SHA-256 `28b14daef7daed598dd2959ebe46ee52c2ff820c2d934a90b5070a24db2a85a5`, and bundle-inventory SHA-256 `d22141bcbc2aada3a71ada4fe67cab8939b014902b9ee8eb490dd65bc4abfdb7`. The receipt binds the exact V58 aggregate, Luna/low production configuration, manifest, Jcode, controller, scorer, adapter, rehearsal code, Prime/Node/kernel closure, 189-job target, and 16/63 derived gate. Its synthetic cohort has 60 rows, 60 claims, 60 done receipts, and 60 artifact directories. It is explicitly offline, OAuth-free, inference-free, and not a benchmark result. Gold remained detached. The exact bound candidate/controller may now enter one fresh production invocation under the preregistered checkpoint policy.
+
+
+## V58 FROZEN LongBench-v2 — terminal score PASS
+
+The exact preregistered Luna/low candidate ran once at `/private/tmp/azdaja-v58-lb2-frozen-v1`. Both gold-blind checkpoints passed: 10/10 execution and recognition at candidate count 10; 26/30 execution and recognition at candidate count 30. The immutable schedule then completed with runner exit 1, meaning terminal completion with explicit failure rows rather than controller error. Independent no-gold validation accepted exactly 189 rows, 189 claims, 189 done receipts, and 189 artifact directories before the encrypted gold image was attached. The frozen scorer was invoked exactly once, exited 0, and the image was immediately detached.
+
+| Frozen Luna/low arm, fixed denominator 63 | Execution | Official correct | Derived envelope correct | All-attempt latency p50 | Total-token authority |
+|---|---:|---:|---:|---:|---|
+| V58 Azdaja | **58/63** | **17/63** | **24/63 PASS** | **18.045s** | 1,127,460 recorded across 59/63; 4 missing |
+| native Jcode | 63/63 | 34/63 | 34/63 | 14.542s | 2,440,035 unconditional |
+| Prime Agent | 57/63 | 11/63 | 11/63 | 29.261s | 1,256,632 unconditional |
+
+Against the authoritative exact-v43 Azdaja freeze, V58 preserves the exact official result (17/63) and preregistered derived result (24/63), improves execution from 45/63 to 58/63, and lowers all-attempt latency p50 from 53.670s to 18.045s (-66.38%). All 58 successful V58 outputs were recognized: 42 by the official extractor and 16 only by the exact bare-letter-plus-LF fallback. The five execution failures normalize to four `other_execution` and one `transport`; there were zero >=100-character treatment context leaks. The derived >=16/63 continuation gate passed.
+
+FROZEN aggregate token evidence is intentionally not overstated. The scorer has exact usage for only 59/63 V58 attempts, so 1,127,460 recorded tokens (-38.01% versus exact-v43's unconditional 1,818,756) is not an unconditional aggregate. Recorded p50 is 17,201 versus exact-v43's unconditional 25,515, and root-token economy is available on 62/63, but the four missing total-usage rows are not treated as zero. The preregistered full-SCOUT token gate remains independently passed at 378,572 versus 491,575 (-22.99%) on its fixed 20 rows.
+
+Integrity is terminal and immutable: schedule ID `9974d300e1d0b38312b3c4927dd0ca306320debe62effcbb69c9c88b5b7b3eac`; inference SHA-256 `61220abc079390bf8b6a5c0326fe963d08861f862f64ed0a86faef37cf5618ce`; schedule SHA-256 `45d3c4833be4a9193ee8999e475b35124e589a6179e3ce535f3eb8afc4c33102`; report SHA-256 `327e9dcf2e753f53abcb6853c56c7a51583d276058547788997ca675ea5246ed`. The report asserts terminal-before-gold validation, exact candidate/executable identity, 378 matching receipts, 62 exact valid treatment root transcripts, and zero treatment leaks.
+
+This is a private derived cohort, not an official leaderboard result or superiority claim. V58 passes its fresh LongBench gate and is the first ultra-fast candidate to preserve exact-v43's official/derived totals while materially improving execution and latency. It is not automatically merged, released, headline-published, or authorized for OOLONG/RAH; downstream promotion disposition remains separate.
