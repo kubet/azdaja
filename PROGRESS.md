@@ -8,6 +8,7 @@
 - The retained RULER effort sweep's one authorized repaired score remains low 19/20 official full coverage and 18/20 exact at 11.304s; medium 19/20 and 18/20 at 21.124s; high 17/20 and 17/20 at 33.277s. No arm is 20/20, so no speed close or effort adoption occurred.
 - Stable keyed caching and the WARM daemon lane remain hard NOs. The OAuth route omits stable cache keys; live continuation contaminates tasks; rewind/service reset clears provider-session identity and resends context. Cold fresh sessions remain authoritative. `JCODE_SESSION_FORK_API_REQUEST.md` records the upstream capability required to reopen this line.
 - LongBench boundary remains: Azdaja is about 15% faster and about 9.2x cheaper in root context with zero leaks, but 23.3pp behind native on identical holistic-MCQ rows (14/30 vs 21/30).
+- Read-only RAH failure forensics found 39 product exits plus one route assertion. Thirty-three product exits survived both repair turns; 29 ended on generated assertions. The task-family concentration and non-conclusive length trend do not establish a generic causal mechanism, so no third-repair/prompt/helper candidate was accepted. Report: `bench/results/rah199-failure-forensic.json` (`b2c9e1fe6aaae186c5b67984d831dad98459bfe376598457e245c9805efa6803`).
 - No candidate was promoted. Frozen measurements, candidate binaries, schedules, retained failures, and consumed sentinels remain preserved.
 
 ## Strict next step
