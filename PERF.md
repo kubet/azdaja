@@ -780,3 +780,21 @@ Before inference, full locked tests passed, strict clippy passed, a 16M-characte
 V55 cut median latency 62.48%, aggregate tokens 33.44%, and token p50 38.94%. All eight executed outputs were extractor-recognized. The native helper appeared in model-authored code on 9/10 rows. The two failures normalized to `monty_subset_tax`: row 7 never invoked the helper and still sent oversized evidence after both repairs; row 9 invoked it but a later repair supplied non-list labels. Zero rows leaked >=100 context characters and zero reported cleanup errors.
 
 V55 exactly met the mandatory checkpoint-10 floors (8/10 execution, 8/10 recognition), but two failures made the required 20/20 full-SCOUT execution gate mathematically unreachable. The run therefore stopped at 10 rather than spending on non-promotable rows 11-20. No controls, gold, scoring, retry, FROZEN promotion, merge to main, or publication occurred. Directional results JSONL SHA-256 is `01449dc6e41c76e54aae061e56cc55166795b9d5879f2353f637019ba8c5390c`; it is not a receipt, schedule, score, or promotion artifact.
+
+
+## SCOUT V56 mandatory native relevance — 19/20 near miss
+
+V56 retained V55's audited native helper and changed only the compiled generic root contract in response to observed failures: relevance-local semantic sources above 30,000 characters must use the helper before `semantic_manifest`, and the helper labels argument must be a Python list rather than a dictionary or set. Source commit `a0f3085fc00f2cb045cf73847286397d49e93937`; source patch SHA-256 `08752e873c726b48f551cb0b62f753b74d8f79f77c97aee41897ef4ac02e0e30`; candidate aggregate `0a1869917b6cb67fd83c2885cfd5a8a95d9f5129ba5ab9d94e0313c37c21e623`; binary `857d1f2f5991761876cd78849e1bcf2905af0c901709f0d4b13534f3091fe2b3`. Full locked tests and strict clippy passed before inference.
+
+Checkpoint 10 passed at 10/10 execution and 10/10 recognition, with 26.589s median latency (-49.62%) and 250,037 total tokens (-5.21%) against the same-10 retained medium baseline. The unchanged candidate therefore continued through the full 20-item SCOUT.
+
+| Same 20 public fixtures | Execution | Gold-blind recognition | All-attempt latency p50 | Total tokens | Token p50 |
+|---|---:|---:|---:|---:|---:|
+| exact-v43 Luna/medium retained baseline | 15/20 | 15/20 | 49.697s | 491,575 | 25,087.5 |
+| disposable V56 Luna/low mandatory relevance | **19/20** | **19/20** | **22.884s** | **446,557** | **21,603** |
+
+V56 improved median latency 53.95%, aggregate tokens 9.16%, and token p50 13.89%. All 19 executed outputs were recognized. Model-authored code referenced the native helper on 19/20 rows; the short direct-answer row also executed and was recognized. Zero rows leaked >=100 context characters and zero reported cleanup errors.
+
+The sole row-18 failure normalized to `monty_subset_tax`. The initial program correctly called the helper but requested nonexistent `view["text"]` instead of the documented `view["evidence"]`; its repair then discarded the helper result for forbidden head/tail slicing and used four independent correct/incorrect items, producing two winners and failing closed. This is an observed generic API/choice-shape instruction failure, not a provider, OAuth, helper-runtime, envelope, or cleanup failure.
+
+The required full-SCOUT gate is 20/20 execution, so 19/20 is a rejection despite clearing recognition, latency, and token gates. No retry, controls, gold, scoring, FROZEN promotion, merge, or publication occurred. Directional results JSONL SHA-256 is `baee329a45630945387a4665ef5373bbd1fb4792a555884508cbf8fa8b280f64`; it carries no receipt, schedule, score, or promotion authority.
