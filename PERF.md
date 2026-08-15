@@ -814,3 +814,19 @@ V57 improved median latency 66.91%, aggregate tokens 21.54%, and token p50 21.00
 The sole row-9 failure correctly used one item and the documented evidence key, but supplied the four full alternative texts as semantic labels. The dual-manifest provider could not reliably reproduce those long labels in the strict `ID|LABEL` wire format; the malformed primary retry failed `invalid label manifest` after semantic child calls, so conservative no-repair-after-evidence policy stopped the row. The next generic correction is to require compact stable alternative identifiers as labels while keeping full alternative text in evidence/task.
 
 Although 9/10 clears the mandatory checkpoint floor, one failure makes 20/20 unreachable, so rows 11-20 were not run. No controls, gold, scoring, retry, FROZEN promotion, merge, or publication occurred. Directional results JSONL SHA-256 is `f1fb411bc7a3d51eb825c49394f2c17760be99ccac202f30feeacea7b0771cc5`; it has no receipt, schedule, score, or promotion authority.
+
+
+## SCOUT V58 compact-choice native relevance — full 20-item PASS
+
+V58 changed only the compiled generic contract after V57's observed wire failure: a one-of-K semantic choice must use compact stable alternative identifiers as labels, while full alternative text stays in evidence/task. It retains the same audited native helper and Luna/low config. Source commit `f6e024aac58783d8a723c5a2f722037b8452fd59`; source patch SHA-256 `ab3bcdefb2bfb2339627fe4531466fbdeb51294043440272376d12e276a762c8`; candidate aggregate `0fb0c6b52e5ad22dc1ea7b12bd44ff264c728e1df55f7c5b3746f6e08283d5cf`; binary `1d1e70b4e8720792553e89726a33472825d55a2365a504744cf9a747697c3224`. Full locked tests and strict clippy passed before inference.
+
+Checkpoint 10 passed at 10/10 execution and 10/10 recognition, 17.926s latency p50 (-66.03%), and 203,971 total tokens (-22.67%) against the same-10 retained medium baseline. The unchanged candidate continued to the full 20-item SCOUT.
+
+| Same 20 public fixtures | Execution | Gold-blind recognition | All-attempt latency p50 | Total tokens | Token p50 |
+|---|---:|---:|---:|---:|---:|
+| exact-v43 Luna/medium retained baseline | 15/20 | 15/20 | 49.697s | 491,575 | 25,087.5 |
+| disposable V58 Luna/low compact relevance | **20/20 PASS** | **20/20 PASS** | **17.970s** | **378,572** | **17,681** |
+
+V58 cleared every preregistered SCOUT gate: 20/20 execution, at least 17/20 recognition, median latency -63.84%, aggregate tokens -22.99%, and token p50 -29.52%. Nineteen rows used the native helper; one short direct-answer row remained valid. Every exact raw output was recognized by official extraction or the sole fullmatch bare-letter fallback. All rows used fresh isolated sessions and the subscription-OAuth Luna/low route, with zero >=100-character root-context leaks and zero cleanup errors.
+
+This is gold-blind execution/format evidence, not correctness or benchmark superiority. No gold, scoring, controls, retry, README headline, public release, merge, or publication occurred. V58 is now SCOUT-qualified for a genuinely fresh immutable FROZEN campaign using the exact unchanged candidate; it is not yet promoted. Directional results JSONL SHA-256 is `f825a1b5265a96cbb9afdd2c180902e9e231cbec1664ceb346a193ab701cf6cf`.
