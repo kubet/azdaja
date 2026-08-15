@@ -798,3 +798,19 @@ V56 improved median latency 53.95%, aggregate tokens 9.16%, and token p50 13.89%
 The sole row-18 failure normalized to `monty_subset_tax`. The initial program correctly called the helper but requested nonexistent `view["text"]` instead of the documented `view["evidence"]`; its repair then discarded the helper result for forbidden head/tail slicing and used four independent correct/incorrect items, producing two winners and failing closed. This is an observed generic API/choice-shape instruction failure, not a provider, OAuth, helper-runtime, envelope, or cleanup failure.
 
 The required full-SCOUT gate is 20/20 execution, so 19/20 is a rejection despite clearing recognition, latency, and token gates. No retry, controls, gold, scoring, FROZEN promotion, merge, or publication occurred. Directional results JSONL SHA-256 is `baee329a45630945387a4665ef5373bbd1fb4792a555884508cbf8fa8b280f64`; it carries no receipt, schedule, score, or promotion authority.
+
+
+## SCOUT V57 pinned evidence/joint-choice contract — abort at 9/10
+
+V57 changed only the compiled generic contract after V56's observed failure: use exactly `view["evidence"]`, retain the helper result during Key repairs, forbid arbitrary head/tail replacement, and represent one choice as one semantic item rather than independent correct/incorrect items. Source commit `61c5e9fbf984a45ca1ad365dab70d5edc152a4f0`; source patch SHA-256 `ed55d405dcaa69def85f6e1216d1e5699a2725618d2867850a5fc9f9005ef324`; candidate aggregate `c7b81dc4a8dd93bf1dc5804072598e1c8ec27b6c76165dd8e07bba5f1119ca49`; binary `1ca9d3b5f71dad2c9e03edfaf66ddcf6d6273f39f2fb77cbf84c7c11f3da5944`. Full locked tests and strict clippy passed.
+
+| Same first 10 public fixtures | Execution | Gold-blind recognition | All-attempt latency p50 | Total tokens | Token p50 |
+|---|---:|---:|---:|---:|---:|
+| exact-v43 Luna/medium retained baseline | 8/10 | 8/10 | 52.775s | 263,776 | 26,422 |
+| disposable V57 Luna/low joint relevance | **9/10** | **9/10** | **17.463s** | **206,958** | **20,873.5** |
+
+V57 improved median latency 66.91%, aggregate tokens 21.54%, and token p50 21.00%. All nine executed outputs were recognized, every row called the native helper, and zero rows leaked >=100 context characters or reported cleanup errors.
+
+The sole row-9 failure correctly used one item and the documented evidence key, but supplied the four full alternative texts as semantic labels. The dual-manifest provider could not reliably reproduce those long labels in the strict `ID|LABEL` wire format; the malformed primary retry failed `invalid label manifest` after semantic child calls, so conservative no-repair-after-evidence policy stopped the row. The next generic correction is to require compact stable alternative identifiers as labels while keeping full alternative text in evidence/task.
+
+Although 9/10 clears the mandatory checkpoint floor, one failure makes 20/20 unreachable, so rows 11-20 were not run. No controls, gold, scoring, retry, FROZEN promotion, merge, or publication occurred. Directional results JSONL SHA-256 is `f1fb411bc7a3d51eb825c49394f2c17760be99ccac202f30feeacea7b0771cc5`; it has no receipt, schedule, score, or promotion authority.
