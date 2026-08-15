@@ -867,3 +867,12 @@ FROZEN aggregate token evidence is intentionally not overstated. The scorer has 
 Integrity is terminal and immutable: schedule ID `9974d300e1d0b38312b3c4927dd0ca306320debe62effcbb69c9c88b5b7b3eac`; inference SHA-256 `61220abc079390bf8b6a5c0326fe963d08861f862f64ed0a86faef37cf5618ce`; schedule SHA-256 `45d3c4833be4a9193ee8999e475b35124e589a6179e3ce535f3eb8afc4c33102`; report SHA-256 `327e9dcf2e753f53abcb6853c56c7a51583d276058547788997ca675ea5246ed`. The report asserts terminal-before-gold validation, exact candidate/executable identity, 378 matching receipts, 62 exact valid treatment root transcripts, and zero treatment leaks.
 
 This is a private derived cohort, not an official leaderboard result or superiority claim. V58 passes its fresh LongBench gate and is the first ultra-fast candidate to preserve exact-v43's official/derived totals while materially improving execution and latency. It is not automatically merged, released, headline-published, or authorized for OOLONG/RAH; downstream promotion disposition remains separate.
+
+
+## V58 private source promotion
+
+After the terminal FROZEN PASS and independent no-P0/P1 audit, private main merged the exact evaluated V58 source lineage at `a90f6fe8ab70b0effa9fc723b1e704edf0f92a43` (parents `af6b53e` and `f6e024a`). `src/lib.rs`, `src/main.rs`, `assets/SKILL.md`, and the Rust integration tests are byte-identical to the audited V58 source commit; the shipped config is the evaluated Luna/low config (`ca3f153c8a5a80c3727473fea90452ade5c556a24d026fb54084257791fd8eb8`). This intentionally replaces the rejected V49 product-source experiment while retaining its historical evidence and hardened benchmark controllers.
+
+Promotion validation passed `cargo fmt --all -- --check`, `cargo test --locked` (90 passed, one release-only test ignored), `cargo clippy --locked --all-targets -- -D warnings`, `cargo build --locked --release`, and the ignored 16M-character release stress test. The local main-worktree rebuild SHA-256 `f441ac1a41f5e5e6832102cd93188e50d5a4b4d6affcf2c90f6ae2f3abd4ff7a` is an unbound verification build, not a relabel of the frozen evaluated executable `1d1e70b4e8720792553e89726a33472825d55a2365a504744cf9a747697c3224`; the frozen candidate aggregate remains the sole benchmark identity.
+
+This is source-only private promotion. It does not authorize a public release, README headline, OOLONG/RAH inference, or a general superiority claim.
