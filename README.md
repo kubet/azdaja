@@ -114,68 +114,37 @@ its median attempt was 2.77x native, so the <=1.5x speed gate did not pass.
 
 ### Derived LongBench-v2 hard/long subset, 63 fixtures
 
-#### Latest exact-v43 refresh: terminal-invalid and unscored
-
-A new exact-v43 refresh completed all 189 scheduled inference rows and all 378
-claim/completion receipts. Execution was 48/63 for Azdaja, 63/63 for native
-jcode, and 57/63 for Prime Agent. The preregistered no-gold terminal validator
-then rejected the first Azdaja model-trace row it inspected because it required
-alphabetically sorted JSON keys while the unchanged Rust binary emitted valid duplicate-free compact
-Serde struct-field order. A retained transient turn timeout followed by a
-successful retry also exposed a second failed-row compatibility omission.
-
-The frozen predicate controls: this refresh is permanently **terminal-invalid,
-unscored, and ineligible for promotion**. Gold was not opened; its execution
-counts must not be combined with an older score; it cannot authorize OOLONG or
-RAH; and it will not be retried, resumed, replayed, or post-hoc relabeled. The
-preserved inference output has SHA-256
-`1578d7a38200f0c7631f90f17bc7b233f735af6b0ecd0792f540b1cc66fe3062`
-and its schedule has SHA-256
-`f7de7ed119347a9cea27ace3bb9cc1b7a6879e781a6e50da5f8c014ba68d4249`.
-
-Trace ordering and conservative retry handling have been corrected and
-regression-tested for future protocol work. No new freeze is authorized yet: a
-version-bound, fixed 20x3 offline synthetic-gold dress rehearsal must first pass
-independent protocol audit while exercising the real production execution,
-receipt, terminal-validation, and scoring path end to end. The current rehearsal
-implementation remains audit-only and cannot authorize inference. None of this
-work salvages the invalid run or creates a benchmark result.
-
-<details>
-<summary><strong>Last valid frozen LongBench score (expand for historical evidence)</strong></summary>
-
-The table below remains the most recent valid scored comparison for this same
-immutable candidate, but it is not the latest refresh. The pinned official
-LongBench-v2 answer extractor is the primary metric, and every scheduled failure
-is a fixed-denominator zero.
+The unchanged exact-v43 candidate completed a new version-stamped 189-row
+freeze after its required synthetic rehearsal passed. The terminal no-gold
+validator passed before gold was opened. The pinned scorer then exited 0 and
+produced the current authoritative private diagnostic below.
 
 | Arm | Execution | Completed official accuracy | Fixed-63 official accuracy | Mean root tokens | Median time / item |
 |---|---:|---:|---:|---:|---:|
-| **Azdaja** | 48/63 (76.19%) | 7/48 (14.58%) | 7/63 (11.11%) | **6,156** | 51.4s |
-| Native jcode | **63/63 (100%)** | **35/63 (55.56%)** | **35/63 (55.56%)** | 63,223 | **19.8s** |
-| Prime Agent | 56/63 (88.89%) | 12/56 (21.43%) | 12/63 (19.05%) | 9,827 | 39.4s |
+| **Azdaja** | 45/63 (71.43%) | 17/45 (37.78%) | 17/63 (26.98%) | **7,587** | 53.7s |
+| Native jcode | **63/63 (100%)** | **36/63 (57.14%)** | **36/63 (57.14%)** | 69,717 | **20.8s** |
+| Prime Agent | 57/63 (90.48%) | 11/57 (19.30%) | 11/63 (17.46%) | 8,783 | 36.4s |
 
-In that last valid run, Azdaja failed the preregistered 16/63
-fixed-denominator gate, so OOLONG and the 199-item RAH protocol remained blocked.
-Its 15 execution failures
-were 14 deterministic Monty/program, assertion, or semantic-envelope failures and
-one inner 30-second cell timeout; the frozen report conservatively normalizes all
-15 raw `process_exit` rows as `other_execution`. Prime's seven `tool_policy` rows
-are also fixed zeros. Among completed Azdaja rows, 20 outputs were not recognized
-by the official extractor, 21 were wrong, and seven were correct; the stricter
-full-string diagnostic was 0/63 because even the seven accepted canonical answers
-retained a trailing newline.
+The separately preregistered syntax-only envelope metric counts pinned official
+extraction first and then only an exact bare uppercase A-D plus one LF. Azdaja
+scored **24/63 (38.10%)**, passing its frozen **>=16/63** gate. Its fixed-63
+taxonomy is 24 correct, 20 recognized-but-wrong, one unrecognized, and 18
+execution failures. The upstream official extractor remains authoritative at
+17/63; strict full-string accuracy remains 0/63.
 
-Root-token authorities are explicit per arm and are not identical provider-signed
-receipts. The lower Azdaja root input did not offset its much lower LongBench
-accuracy or 2.59x native median latency. Across both suites, all mandatory Azdaja
-root transcripts were retained and independently scanned with zero exact loaded-
-context overlaps of 100 or more Unicode characters. The diagnostics use
-owner-only local evidence and post-hoc policy checks, not authenticated history or
-OS-level containment. LongBench is a derived public-answer-joinable subset, and
-historical development-family gold exposure prevents a blind-validation claim.
+Passing the derived gate authorized the same-binary OOLONG run, which was
+launched immediately. It does not erase the reliability and speed gaps: Azdaja
+executed fewer rows and its median was 2.58x native. The run output SHA-256 is
+`96ae71df5299d8c8a394d12531baa208f546d8b8f70e5b2d295e6424128eaa0e`;
+the schedule SHA-256 is
+`422ad89b6b59bae00068a40733e62eceef5a2bfc79a6bc8f7163f8b709a34359`;
+and the scored report SHA-256 is
+`5997a69808ab4acd8a688245d53d9b468d8bc92ff4f6c86015d63f0905eee13a`.
 
-</details>
+The earlier refresh rejected by its preregistered validator remains permanently
+terminal-invalid and unscored. It was not retried, resumed, relabeled, or used
+as score input. Neither run is an official leaderboard result, and the current
+comparison supports no superiority claim.
 
 ## Guarantees
 

@@ -694,3 +694,16 @@ Both modes use the candidate arm first within each checkpoint window so the sign
 - after 30 Azdaja rows: abort if cumulative execution is below 80% (fewer than 24/30) **or** recognition is below 75% (fewer than 23/30).
 
 An abort opens no gold. It immediately records per-row execution failure kinds plus recognized/unrecognized output taxonomy, stops unscheduled work, and returns to iteration. Correct/wrong taxonomy remains impossible until a terminal frozen validator authorizes scoring. No retry, resume, selective completion, headline result, or promotion may be derived from an aborted run.
+
+
+## Exact-v43 LongBench refresh v2 authoritative score
+
+The mandatory fixed 20x3 synthetic rehearsal exited 0 and produced terminal score evidence before the new freeze. The new exact-v43 freeze then completed exactly 189/189 inference rows and 378/378 claim/done receipts under schedule `0a7d3021442d2b449cac9c99179a60214a1239645cd000f088289d21540b144d`. Terminal no-gold validation passed; runner exit 1 is its documented successful-terminal-with-execution-failures status. Frozen output SHA-256: `96ae71df5299d8c8a394d12531baa208f546d8b8f70e5b2d295e6424128eaa0e`; schedule SHA-256: `422ad89b6b59bae00068a40733e62eceef5a2bfc79a6bc8f7163f8b709a34359`; report SHA-256: `5997a69808ab4acd8a688245d53d9b468d8bc92ff4f6c86015d63f0905eee13a`.
+
+| Arm | Execution | Official fixed-63 | Derived envelope fixed-63 | Root-token p50 | Latency p50 all attempts |
+|---|---:|---:|---:|---:|---:|
+| Azdaja exact-v43 | 45/63 | 17/63 | **24/63 (PASS >=16)** | 7,965 | 53.670s |
+| Native jcode | 63/63 | 36/63 | 36/63 | 42,141 | 20.840s |
+| Prime Agent | 57/63 | 11/63 | 11/63 | 8,700 | 36.398s |
+
+Azdaja derived taxonomy: 24 correct, 20 recognized/wrong, one extractor-unrecognized, and 18 execution failures. Official completed-only accuracy is 17/45; strict exact is 0/63. All-attempt Azdaja total-token p50 is 25,515 and recorded total is 1,818,756. The derived gate passes, but the 71.43% execution rate and 2.58x native median show why v43 is only the frozen baseline and why future candidates must clear SCOUT before any freeze. Same-binary OOLONG launched immediately after scoring.
