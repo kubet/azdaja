@@ -759,3 +759,8 @@ A second disposable candidate kept Luna/low and added one 896-character generic 
 All six executed outputs were recognized and all four failures normalized to `monty_subset_tax`: three still exceeded the semantic item envelope after repairs and one supplied invalid helper labels after repairs. Typical latency and token p50 improved 42.57% and 24.23%, respectively, but total tokens regressed 13.88%; reliability remained below both checkpoint thresholds. Zero rows leaked >=100 context characters and zero reported cleanup errors.
 
 The 8/10 execution and 7/10 recognition checkpoint again forced an immediate abort at 6/10 and 6/10. Rows 11-20, controls, gold, scoring, retry, FROZEN promotion, and publication were not attempted. Directional results JSONL SHA-256 is `b9bc67cf90b2050466fe5d38c3511fc2b303f195aa8a03ba93c60189d8b74064`; it carries no receipt, schedule, score, or promotion authority.
+
+
+### Causal erratum: SCOUT v2 guidance was not on the solo inference path
+
+Post-run trace inspection found that `azdaja solo` constructs its root request from text compiled into the binary; the staged `SKILL.md` is not interpolated into that request. None of v2's added 896 characters appears in any retained root request. Because v1 and v2 used the same binary, config, model, and effective solo prompt, v2 is only an independent stochastic Luna/low repeat, not a causal test of the proposed envelope guidance. Its 6/10 execution, 6/10 recognition, latency, token, and mandatory-abort observations remain exact directional facts, but the apparent improvement over v1 cannot be attributed to the SKILL edit. Any real retrieval/envelope mechanism must change the compiled generic solo protocol or runtime helper and receive a new candidate identity.
