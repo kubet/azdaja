@@ -2,22 +2,23 @@
 
 ## Current state
 
-- **OOLONG is 57.6923% official (15/26)** for the query-cap-512 binary at Luna/low. Execution was 23/26, canonical predictions 20/26, median latency 20.956s, and root-context leaks 0/26. The fixed report is `bench/results/oolong-current-best26-report.json` (`93c67a076ef7045c69723f89e4bd4d7e5ba6dfe5ee008faedd28969f4dc1af5b`).
-- RAH-199 inference is terminal. The immutable validation-derived schedule completed all 199 rows across all 13 length buckets with 159 execution successes, 40 retained failures, median latency 21.589s, and zero root-context leaks on 199 applicable scans. The no-gold validator passed.
-- RAH-199 terminal scoring was invoked exactly once. It created the consumed sentinel and opened scoring gold, then exited 2 on `score error: E: unsupported gold`. It created no report, so the official fixed-denominator score and equal-weight length macro are unavailable. The scorer, inference, cohort, failures, and sentinel are terminal and must never be rerun, replaced, altered, or rescored. Terminal record: `bench/results/rah199-terminal-failure.json` (`096456bc48b8d8deefdce5070a1a4aed1f87576e975f6e22c749fe13e8662382`).
-- The retained RULER effort sweep's one authorized repaired score remains low 19/20 official full coverage and 18/20 exact at 11.304s; medium 19/20 and 18/20 at 21.124s; high 17/20 and 17/20 at 33.277s. No arm is 20/20, so no speed close or effort adoption occurred.
-- Stable keyed caching and the WARM daemon lane remain hard NOs. The OAuth route omits stable cache keys; live continuation contaminates tasks; rewind/service reset clears provider-session identity and resends context. Cold fresh sessions remain authoritative. `JCODE_SESSION_FORK_API_REQUEST.md` records the upstream capability required to reopen this line.
-- LongBench boundary remains: Azdaja is about 15% faster and about 9.2x cheaper in root context with zero leaks, but 23.3pp behind native on identical holistic-MCQ rows (14/30 vs 21/30).
-- Read-only RAH failure forensics found 39 product exits plus one route assertion. Thirty-three product exits survived both repair turns; 29 ended on generated assertions. The task-family concentration and non-conclusive length trend do not establish a generic causal mechanism, so no third-repair/prompt/helper candidate was accepted. Report: `bench/results/rah199-failure-forensic.json` (`b2c9e1fe6aaae186c5b67984d831dad98459bfe376598457e245c9805efa6803`).
-- No candidate was promoted. Frozen measurements, candidate binaries, schedules, retained failures, and consumed sentinels remain preserved.
+- **RAH-199 is 28.2899% official partial credit** on the fixed validation-derived 199-row cohort (95% deterministic item-bootstrap CI **22.2927-34.4903%**). The equal-weight 13-length macro is 28.4893% (95% stratified CI 22.9423-34.1485%). This is not the official full OOLONG test score.
+- The owner explicitly voided no-rescore only for scorer failures. The old failed scorer and sentinel remain immutable. The repaired scorer implemented released OOLONG parser semantics including `datetime.date` gold, passed an end-to-end exact-format synthetic rehearsal over 199 rows and all 13 buckets with exit 0 and exact expected score, then scored retained transcripts once without altering any inference row. Report: `bench/results/rah199-repaired-score.json` (`c1f4b1f1900f0e7745b2d629d21ceb3a1c1e7ce9fbc55ce21ab316b676877adb`).
+- RAH inference remains frozen at 199/199 rows, 159 execution successes, 40 retained failures, 21.589s median, and zero root-context leaks across 199 applicable scans. No row was retried or replaced.
+- Per-bucket official scores: 1K 58.33%, 2K 50.42%, 4K 45.86%, 8K 59.52%, 16K 25.83%, 32K 27.84%, 64K 12.50%, 128K 20.00%, 256K 14.00%, 512K 12.50%, 1M 23.44%, 2M 6.79%, 4M 13.33%. Bucket score declines strongly with length (Spearman rho -0.835, p=0.000380).
+- The complete 40-failure cause x length taxonomy is committed. Counts: 29 generated assertions, 3 type errors, 2 unsupported attributes, 2 semantic-manifest parses, 2 child-call-budget overruns, 1 cell timeout, and 1 route assertion. The monotonic execution-death-vs-length hypothesis is killed at alpha 0.05 (Cochran-Armitage p=0.217; Spearman rate p=0.169); 4M is nevertheless the worst observed bucket at 5/15 deaths. No RAM/OOM cause exists.
+- OOLONG remains 57.6923% official on its separate 26-row diagnostic. The retained RULER effort sweep remains low 19/20 official at 11.304s, so its conditional speed close did not trigger.
+- No candidate is promoted. Cache-prefix/WARM daemon remains a hard NO.
 
 ## Strict next step
 
-Stop this terminal sequence and preserve its evidence. Do not repair or rerun the RAH scorer, inference, failed rows, cohort, or sentinel. Reopen product work only for a genuinely new generic mechanism with independent causal evidence, a distinct frozen candidate, fresh regression and at-least-10-row inference gates, zero leaks, a scorer prevalidated against every retained value shape/failure row before gold access, and same-commit `WORKS.md`/`FAILS.md`/`PROGRESS.md` evidence before promotion; or for a shipped provider session-fork API that proves isolated static-prefix reuse.
+Build exactly one reliability candidate #2 from the current product tree, attacking only measured top causes: document the unsupported `dict.__getitem__`/boolean-arithmetic subset hazards in the fixed root contract; raise the child-call cap from 64 to the measured headroom cap 72 (observed demand 65/66); and raise the root repair cap from two to three repairs with a fail-closed fourth total turn. Do not change evaluator memory limits because no RAM/OOM cause exists. Require focused regressions, full tests/clippy/release, and immutable candidate identity. Then run one fresh no-gold scout over the 15 frozen-public 4M fixtures with zero leaks and no retries. The candidate must beat the frozen predecessor's 5/15 death rate (at most 4/15 deaths) to continue.
+
+Only after that scout passes may the distinct candidate run a fresh RAH-199 schedule. Its scorer must first pass the same exact-format rehearsal. No separate OOLONG run is needed because RAH subsumes it. Any inference, failures, score, and final disposition must update `WORKS.md`, `FAILS.md`, and `PROGRESS.md` in the same commit.
 
 ## Blocking
 
-- No RAH score exists; the consumed one-shot attempt failed terminally.
-- RULER low effort is not 20/20 and cannot close speed.
-- Cache-prefix, WARM daemon, peek-first, and silent service-restart reuse remain ineligible on Jcode v0.75.3.
-- The RAH cohort is validation-derived rather than the official full OOLONG test split; its dataset-family exposure and exact two-window exclusion remain disclosed.
+- Reliability candidate #2 may not expand beyond the three measured changes above.
+- No memory-ceiling change: memory is absent from the failure causes.
+- No fresh RAH-199 launch before the worst-bucket death-rate scout beats 5/15 and the exact-format scorer rehearsal passes.
+- Frozen predecessor measurements, old scorer failures, sentinels, rows, and reports remain immutable.

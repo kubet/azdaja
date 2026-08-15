@@ -1032,3 +1032,27 @@ The terminal no-gold validator passed 199 rows with 159 execution successes. The
 ### Read-only RAH failure forensic
 
 The 40 frozen execution failures comprise 39 product process exits and one route assertion. Among product exits, 29 terminated on generated assertions, five on typed Python/subset errors, two on semantic-manifest parsing, two on child-call budget, and one on the cell deadline. Thirty-three of 39 survived both existing repair turns. Failure concentration is task-family-heavy (Spam timeline 20/51, Spam user 11/33, TREC counting 5/82); the exploratory failure-count trend across increasing length has Spearman rho 0.497 with p=0.084 and is not independently conclusive. This is diagnostic, not causal evidence for another provider turn or model-facing prompt/helper change. No candidate was opened. Forensic SHA-256: `b2c9e1fe6aaae186c5b67984d831dad98459bfe376598457e245c9805efa6803`.
+
+## 2026-08-15 owner-authorized RAH scorer repair and official partial-credit result
+
+The no-rescore doctrine was explicitly voided for scorer-only failures. The original failed scorer, result rows, and consumed sentinel remain untouched. A separate repaired scorer implements the pinned released OOLONG parser (`eval_helpers.py` SHA-256 `247583a3b653b91c39fb88a102460802f1493175b23d05a7217aead0d685c64c`), including `datetime.date` gold. Before retained scoring it passed a 199-row, 13-bucket exact-format synthetic rehearsal covering numeric partial credit, labels, comparison aliases, dates, invalid predictions, and fixed execution failures. The expected and observed rehearsal means matched exactly at 0.5373743718592965; scoring exited 0. Rehearsal receipt SHA-256: `5140d8e443aa808fecc6fce508d60aa6758844fef8a9b18877052ffcd910017e`.
+
+The retained fixed-denominator official mean is **28.289908%**. Its deterministic 100,000-replicate item-bootstrap 95% percentile CI is **22.292675-34.490301%**. The equal-weight 13-length macro is **28.489333%**, with stratified-bootstrap 95% CI **22.942299-34.148515%**. Report SHA-256: `c1f4b1f1900f0e7745b2d629d21ceb3a1c1e7ce9fbc55ce21ab316b676877adb`; repaired consumed sentinel SHA-256: `a649f50eed2d14ed98206d1cdcc9c266d1289180764dabfe000c778750e8f94a`.
+
+| Length | N | Exec | Official score | 95% bootstrap CI |
+|---:|---:|---:|---:|---:|
+| 1K | 15 | 13 | 58.3333% | 33.3333-81.6667% |
+| 2K | 15 | 11 | 50.4167% | 26.6667-74.1667% |
+| 4K | 15 | 12 | 45.8594% | 22.1094-69.6094% |
+| 8K | 15 | 14 | 59.5199% | 35.2262-82.3730% |
+| 16K | 16 | 14 | 25.8343% | 7.0843-50.0000% |
+| 32K | 15 | 11 | 27.8407% | 7.8689-50.0000% |
+| 64K | 16 | 14 | 12.5001% | 0.0001-31.2501% |
+| 128K | 15 | 12 | 20.0000% | 0.0000-40.0000% |
+| 256K | 15 | 11 | 14.0008% | 0.0000-34.0008% |
+| 512K | 16 | 13 | 12.5000% | 0.0000-31.2500% |
+| 1M | 16 | 13 | 23.4375% | 6.2500-43.7500% |
+| 2M | 15 | 11 | 6.7855% | 0.0000-20.2376% |
+| 4M | 15 | 10 | 13.3333% | 0.0000-33.3333% |
+
+Bucket score decreases strongly with length (Spearman rho -0.835, p=0.000380). By contrast, the cause-by-length execution-death curve does not support a monotonic length trend (Cochran-Armitage z=1.235, p=0.217; failure-rate Spearman rho=0.406, p=0.169). The 4M bucket is the worst observed execution bucket at 5/15, but accuracy degradation and execution death are distinct. The complete matrix, curve, counts, and one sample stderr per cause are in `rah199-failure-taxonomy-v2.json` (`4d5cb2bb7472140a8be353f35e3d51f673debb63e7701bab49a201de8dff3c66`). No RAM/OOM appears, so no evaluator memory-ceiling change is eligible.
