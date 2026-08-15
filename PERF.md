@@ -720,3 +720,14 @@ The same exact-v43 aggregate ran on the fixed 26-fixture / 78-row OOLONG-Synth v
 | Prime Agent | 26/26 | 20/26 | 2,278 | 437,594 | 11.985s |
 
 Azdaja's four execution failures normalize to `monty_subset_tax`; three additional completed rows failed strict scoring. Zero of 26 root transcripts leaked >=100 context characters. It missed the frozen 25/26 execution and 24/26 exact gates, so RAH is blocked. On both-correct rows Azdaja/native geometric ratios were 0.218x root tokens, 0.133x total tokens, and 1.519x latency; overall median latency was 3.23x native.
+
+
+## Ultra-fast constraint frontier after exact-v43 scoring
+
+The current best 20-item RULER smoke has total p50 21,560.276ms and initial Luna/medium root p50 21,223ms: **98.44%** of item latency. Non-provider residual plus snapshots is only 374.796ms, so deleting all product-side work projects 1.738%, not the required 10% (2,156.028ms).
+
+Across retained RULER, LongBench, and OOLONG traces, successful root latency is almost entirely provider output generation: R² 0.991/0.998/0.999 and roughly 12ms per billed output token. A compact local plan/DSL cannot clear the gate: the exact diagnostic median visible reply is 169 o200k tokens, and physically deleting every visible token projects only 2,126.426ms / 9.863%, while a usable grammar saves less and cannot remove hidden medium-reasoning tokens.
+
+Dual-flight isolated hedging is the only unchanged-Luna/medium idea whose offline order statistics project >10% latency (RULER -14.0%, LongBench -18.7%), but it can approach 2x provider tokens, repeats physical work, and selects stochastically by first success. It is rejected because the active objective requires materially better token numbers as well as latency and because conservative retry/attempt policy disallows hiding duplicate attempts.
+
+Result: no defensible generic single-trajectory >=10% mechanism remains under unchanged Luna/medium plus unmodified Jcode. The only clean frontier move is a separately authorized gold-blind SCOUT of Luna **low** root reasoning (or a faster root model), retaining the 20/20 execution, >=17/20 recognition, >=10% latency, lower-token, and early-abort gates. No such inference was launched. Evidence record SHA-256 `a2a7f082a18aa661cd7dffeb42f4c79c76ee8ceacd46e34be830546dc54d9c04`.
