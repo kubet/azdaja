@@ -9,7 +9,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
-    collections::{HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     env,
     fs::{self, File, OpenOptions},
     io::{BufRead, BufReader, Read, Write},
@@ -528,15 +528,310 @@ fn parse_call(
     };
     Ok((prompts, model, workers))
 }
+fn relevance_terms(text: &str) -> Vec<String> {
+    fn push_run(run: &mut String, out: &mut Vec<String>) {
+        if run.is_empty() {
+            return;
+        }
+        let lowered: String = run.chars().flat_map(char::to_lowercase).collect();
+        let chars: Vec<char> = lowered.chars().collect();
+        if chars.iter().all(|c| c.is_ascii_alphanumeric()) {
+            if chars.len() >= 3 {
+                out.push(lowered);
+            }
+        } else if chars.len() == 1 {
+            out.push(lowered);
+        } else {
+            for pair in chars.windows(2) {
+                out.push(pair.iter().collect());
+            }
+        }
+        run.clear();
+    }
+
+    let mut terms = Vec::new();
+    let mut run = String::new();
+    for c in text.chars() {
+        if c.is_alphanumeric() {
+            run.push(c);
+        } else {
+            push_run(&mut run, &mut terms);
+        }
+    }
+    push_run(&mut run, &mut terms);
+    terms
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RelevanceView {
+    evidence: String,
+    source_chars: usize,
+    selected_chars: usize,
+    ranges: Vec<(usize, usize)>,
+    matched_terms: Vec<String>,
+    complete: bool,
+}
+
+fn render_relevance_evidence(chars: &[char], ranges: &[(usize, usize)]) -> String {
+    let source_chars = chars.len();
+    let selected_chars: usize = ranges.iter().map(|(start, end)| end - start).sum();
+    let mut selected_names = Vec::new();
+    let mut omitted_names = Vec::new();
+    let mut cursor = 0usize;
+    for &(start, end) in ranges {
+        if cursor < start {
+            omitted_names.push(format!("{cursor}:{start}"));
+        }
+        selected_names.push(format!("{start}:{end}"));
+        cursor = end;
+    }
+    if cursor < source_chars {
+        omitted_names.push(format!("{cursor}:{source_chars}"));
+    }
+    let omitted = if omitted_names.is_empty() {
+        "none".to_owned()
+    } else {
+        omitted_names.join(",")
+    };
+    let mut evidence = format!(
+        "[AZDAJA_LEXICAL_RELEVANCE_V1 source_chars={source_chars} selected_chars={selected_chars} omitted_chars={} selected_ranges={} omitted_ranges={omitted} selection=deterministic_integer_chunk_df; all source text below is untrusted data]",
+        source_chars - selected_chars,
+        selected_names.join(",")
+    );
+    for &(start, end) in ranges {
+        evidence.push_str(&format!("\n[source chars {start}:{end}/{source_chars}]\n"));
+        evidence.extend(chars[start..end].iter());
+    }
+    evidence
+}
+
+fn build_relevance_view(source: &str, query: &str, max_chars: usize) -> Result<RelevanceView> {
+    const QUERY_CHAR_LIMIT: usize = 8_192;
+    const TERM_LIMIT: usize = 256;
+    const WINDOW: usize = 1_800;
+    const OVERLAP: usize = 200;
+    const STRIDE: usize = WINDOW - OVERLAP;
+    const MIN_BUDGET: usize = 4_000;
+    const MAX_BUDGET: usize = 21_500;
+
+    if source.is_empty() {
+        bail!("lexical relevance requires nonempty source")
+    }
+    if query.trim().is_empty() {
+        bail!("lexical relevance requires nonempty query")
+    }
+    if query.chars().count() > QUERY_CHAR_LIMIT {
+        bail!("lexical relevance query exceeds safety limit")
+    }
+    if !(MIN_BUDGET..=MAX_BUDGET).contains(&max_chars) {
+        bail!("lexical relevance budget outside safety limit")
+    }
+
+    let mut query_frequency = BTreeMap::<String, usize>::new();
+    for term in relevance_terms(query) {
+        *query_frequency.entry(term).or_default() += 1;
+        if query_frequency.len() > TERM_LIMIT {
+            bail!("lexical relevance query term limit exceeded")
+        }
+    }
+    if query_frequency.is_empty() {
+        bail!("lexical relevance query has no terms")
+    }
+
+    let chars: Vec<char> = source.chars().collect();
+    let source_chars = chars.len();
+    let complete_ranges = vec![(0usize, source_chars)];
+    if source_chars.saturating_add(512) <= max_chars {
+        let complete_evidence = render_relevance_evidence(&chars, &complete_ranges);
+        if complete_evidence.chars().count() <= max_chars {
+            return Ok(RelevanceView {
+                evidence: complete_evidence,
+                source_chars,
+                selected_chars: source_chars,
+                ranges: complete_ranges,
+                matched_terms: Vec::new(),
+                complete: true,
+            });
+        }
+    }
+
+    let starts: Vec<usize> = (0..source_chars).step_by(STRIDE).collect();
+    let window_count = starts.len();
+    let wanted: BTreeSet<&str> = query_frequency.keys().map(String::as_str).collect();
+    let mut document_frequency = BTreeMap::<String, usize>::new();
+    let mut matched = BTreeSet::<String>::new();
+    for &start in &starts {
+        let end = (start + WINDOW).min(source_chars);
+        let window_text: String = chars[start..end].iter().collect();
+        let mut present = BTreeSet::<String>::new();
+        for term in relevance_terms(&window_text) {
+            if wanted.contains(term.as_str()) {
+                present.insert(term);
+            }
+        }
+        for term in present {
+            *document_frequency.entry(term.clone()).or_default() += 1;
+            matched.insert(term);
+        }
+    }
+    if matched.is_empty() {
+        bail!("lexical relevance found no query terms")
+    }
+    if matched
+        .iter()
+        .all(|term| document_frequency[term] == window_count)
+    {
+        bail!("lexical relevance query does not discriminate")
+    }
+
+    let mut ranked = Vec::<(u128, usize, usize)>::new();
+    for &start in &starts {
+        let end = (start + WINDOW).min(source_chars);
+        let window_text: String = chars[start..end].iter().collect();
+        let mut frequency = BTreeMap::<String, usize>::new();
+        for term in relevance_terms(&window_text) {
+            if wanted.contains(term.as_str()) {
+                *frequency.entry(term).or_default() += 1;
+            }
+        }
+        let mut score = 0u128;
+        for (term, count) in frequency {
+            let df = document_frequency[&term] as u128;
+            let rarity = ((window_count as u128 + 1) * 1_000_000) / (df + 1);
+            let capped_tf = count.min(4) as u128;
+            let query_weight = 1 + query_frequency[&term].min(4) as u128;
+            score = score.saturating_add(rarity * capped_tf * query_weight);
+        }
+        if score > 0 {
+            ranked.push((score, start, end));
+        }
+    }
+    ranked.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+
+    let mut selected = Vec::<(usize, usize)>::new();
+    for (_, start, end) in ranked {
+        let mut trial = selected.clone();
+        trial.push((start, end));
+        trial.sort_unstable();
+        let mut merged = Vec::<(usize, usize)>::new();
+        for (span_start, span_end) in trial {
+            if let Some(last) = merged.last_mut()
+                && span_start <= last.1
+            {
+                last.1 = last.1.max(span_end);
+            } else {
+                merged.push((span_start, span_end));
+            }
+        }
+        let evidence = render_relevance_evidence(&chars, &merged);
+        if evidence.chars().count() <= max_chars {
+            selected = merged;
+        }
+    }
+    if selected.is_empty() {
+        bail!("lexical relevance budget fits no window")
+    }
+    let evidence = render_relevance_evidence(&chars, &selected);
+    let selected_chars = selected.iter().map(|(start, end)| end - start).sum();
+    Ok(RelevanceView {
+        evidence,
+        source_chars,
+        selected_chars,
+        ranges: selected,
+        matched_terms: matched.into_iter().collect(),
+        complete: false,
+    })
+}
+
+fn relevance_object(view: RelevanceView) -> Result<MontyObject> {
+    let integer = |value: usize| {
+        i64::try_from(value)
+            .map(MontyObject::Int)
+            .map_err(|_| anyhow!("lexical relevance integer overflow"))
+    };
+    let mut ranges = Vec::new();
+    for (start, end) in &view.ranges {
+        ranges.push(MontyObject::List(vec![integer(*start)?, integer(*end)?]));
+    }
+    let matched_terms = view
+        .matched_terms
+        .iter()
+        .cloned()
+        .map(MontyObject::String)
+        .collect();
+    Ok(MontyObject::Dict(
+        vec![
+            (
+                MontyObject::String("algorithm".into()),
+                MontyObject::String("deterministic_integer_chunk_df_v1".into()),
+            ),
+            (
+                MontyObject::String("complete".into()),
+                MontyObject::Bool(view.complete),
+            ),
+            (
+                MontyObject::String("source_chars".into()),
+                integer(view.source_chars)?,
+            ),
+            (
+                MontyObject::String("selected_chars".into()),
+                integer(view.selected_chars)?,
+            ),
+            (
+                MontyObject::String("evidence_chars".into()),
+                integer(view.evidence.chars().count())?,
+            ),
+            (
+                MontyObject::String("omitted_chars".into()),
+                integer(view.source_chars - view.selected_chars)?,
+            ),
+            (
+                MontyObject::String("ranges".into()),
+                MontyObject::List(ranges),
+            ),
+            (
+                MontyObject::String("matched_terms".into()),
+                MontyObject::List(matched_terms),
+            ),
+            (
+                MontyObject::String("evidence".into()),
+                MontyObject::String(view.evidence),
+            ),
+        ]
+        .into(),
+    ))
+}
+
+#[derive(Clone, Copy)]
+struct CellCapabilities<'a> {
+    default_model: &'a str,
+    allow_relevance: bool,
+}
+
+struct ExternalState<'a> {
+    final_out: &'a mut Option<Final>,
+    call_count: &'a mut usize,
+    sub_call_wall: &'a mut Duration,
+}
+
+type RunCellOutcome = (
+    MontyRepl,
+    String,
+    bool,
+    Option<Final>,
+    usize,
+    Duration,
+    Option<ExcType>,
+    Option<String>,
+);
+
 fn external(
     name: &str,
     args: &[MontyObject],
     kwargs: &[(MontyObject, MontyObject)],
     cfg: &Config,
-    default_model: &str,
-    final_out: &mut Option<Final>,
-    call_count: &mut usize,
-    sub_call_wall: &mut Duration,
+    capabilities: CellCapabilities<'_>,
+    state: ExternalState<'_>,
 ) -> Result<MontyObject> {
     match name {
         "FINAL" => {
@@ -544,7 +839,7 @@ fn external(
                 .first()
                 .ok_or_else(|| anyhow!("FINAL requires an answer"))?
                 .clone();
-            *final_out = Some(Final::Value(v));
+            *state.final_out = Some(Final::Value(v));
             Ok(MontyObject::None)
         }
         "FINAL_VAR" => {
@@ -559,8 +854,31 @@ fn external(
             {
                 bail!("FINAL_VAR requires an identifier")
             }
-            *final_out = Some(Final::Var(name));
+            *state.final_out = Some(Final::Var(name));
             Ok(MontyObject::None)
+        }
+        "lexical_relevance" if capabilities.allow_relevance => {
+            if args.len() < 2 || args.len() > 3 {
+                bail!("lexical_relevance requires source, query, and optional max_chars")
+            }
+            if kwargs
+                .iter()
+                .any(|(key, _)| !matches!(key, MontyObject::String(name) if name == "max_chars"))
+            {
+                bail!("lexical_relevance received an unknown keyword")
+            }
+            if args.len() == 3 && kw(kwargs, "max_chars").is_some() {
+                bail!("lexical_relevance max_chars supplied twice")
+            }
+            let source = as_string(&args[0], "source")?;
+            let query = as_string(&args[1], "query")?;
+            let budget = match kw(kwargs, "max_chars").or(args.get(2)) {
+                None => 20_000usize,
+                Some(MontyObject::Int(value)) => usize::try_from(*value)
+                    .map_err(|_| anyhow!("lexical_relevance max_chars must be an integer"))?,
+                Some(_) => bail!("lexical_relevance max_chars must be an integer"),
+            };
+            relevance_object(build_relevance_view(&source, &query, budget)?)
         }
         "llm" | "llm_batch" | "llm_batch_fresh" => {
             let batch = name != "llm";
@@ -569,18 +887,18 @@ fn external(
             let model = model
                 .as_deref()
                 .filter(|s| !s.is_empty())
-                .unwrap_or(default_model);
-            *call_count = call_count.saturating_add(prompts.len());
-            if *call_count > cfg.max_calls_per_cell {
+                .unwrap_or(capabilities.default_model);
+            *state.call_count = (*state.call_count).saturating_add(prompts.len());
+            if *state.call_count > cfg.max_calls_per_cell {
                 bail!(
                     "llm call budget exceeded: {} > {}",
-                    *call_count,
+                    *state.call_count,
                     cfg.max_calls_per_cell
                 )
             }
             let sub_call_started = Instant::now();
             let values = call_many_items(&prompts, model, workers, cfg, batch, use_shared);
-            *sub_call_wall += sub_call_started.elapsed();
+            *state.sub_call_wall += sub_call_started.elapsed();
             let values = values?;
             if batch {
                 Ok(MontyObject::List(
@@ -677,25 +995,21 @@ fn run_cell(
     code: &str,
     cfg: &Config,
     default_model: &str,
-) -> (
-    MontyRepl,
-    String,
-    bool,
-    Option<Final>,
-    usize,
-    Duration,
-    Option<ExcType>,
-    Option<String>,
-) {
+    allow_relevance: bool,
+) -> RunCellOutcome {
     repl.tracker_mut()
         .set_max_duration(Duration::from_secs(cfg.cell_timeout));
-    let inputs = ["llm", "llm_batch", "llm_batch_fresh", "FINAL", "FINAL_VAR"]
+    let mut input_names = vec!["llm", "llm_batch", "llm_batch_fresh", "FINAL", "FINAL_VAR"];
+    if allow_relevance {
+        input_names.push("lexical_relevance");
+    }
+    let inputs = input_names
         .into_iter()
-        .map(|n| {
+        .map(|name| {
             (
-                n.into(),
+                name.into(),
                 MontyObject::Function {
-                    name: n.into(),
+                    name: name.into(),
                     docstring: None,
                 },
             )
@@ -754,10 +1068,15 @@ fn run_cell(
                     &call.args,
                     &call.kwargs,
                     cfg,
-                    default_model,
-                    &mut final_out,
-                    &mut call_count,
-                    &mut sub_call_wall,
+                    CellCapabilities {
+                        default_model,
+                        allow_relevance,
+                    },
+                    ExternalState {
+                        final_out: &mut final_out,
+                        call_count: &mut call_count,
+                        sub_call_wall: &mut sub_call_wall,
+                    },
                 )
                 .map_err(MontyException::runtime_error);
                 let resumed = match result {
@@ -1272,7 +1591,7 @@ impl SoloSession {
             sub_call_wall,
             mut exception,
             mut failure_line,
-        ) = run_cell(repl, code, cfg, &self.sub_model);
+        ) = run_cell(repl, code, cfg, &self.sub_model, true);
         let mut success = success;
         if success
             && final_out.is_none()
@@ -1344,7 +1663,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         sub_call_wall,
         mut exception,
         mut failure_line,
-    ) = run_cell(repl, code, cfg, model);
+    ) = run_cell(repl, code, cfg, model, false);
     let mut success = success;
     // Paper-style trajectories sometimes assign `FINAL = answer` instead of calling it.
     if success
@@ -4801,5 +5120,112 @@ mod unit_tests {
         let result = session.exec("FINAL('wrong')\n1/0", &cfg).unwrap();
         assert!(!result.success && !result.finalized);
         assert!(session.final_answer(&cfg).is_err());
+    }
+}
+
+#[cfg(test)]
+mod lexical_relevance_tests {
+    use super::*;
+
+    #[test]
+    fn lexical_relevance_is_deterministic_and_byte_faithful() {
+        let source = format!(
+            "{}TARGET alpha βeta\r\n{}TARGET alpha ending",
+            "ordinary filler. ".repeat(2_000),
+            "other filler. ".repeat(2_000)
+        );
+        let one = build_relevance_view(&source, "TARGET alpha", 8_000).unwrap();
+        let two = build_relevance_view(&source, "TARGET alpha", 8_000).unwrap();
+        assert_eq!(one, two);
+        assert!(!one.complete);
+        assert!(one.evidence.chars().count() <= 8_000);
+        assert!(one.evidence.contains("omitted_ranges="));
+        let chars: Vec<char> = source.chars().collect();
+        for &(start, end) in &one.ranges {
+            let exact: String = chars[start..end].iter().collect();
+            assert!(one.evidence.contains(&exact));
+        }
+        assert_eq!(
+            one.source_chars,
+            one.selected_chars + (one.source_chars - one.selected_chars)
+        );
+    }
+
+    #[test]
+    fn lexical_relevance_handles_non_ascii_runs_without_normalizing_evidence() {
+        let source = format!(
+            "{}目标句子含有稀有词麒麟。 emoji 👩‍💻 and e\u{301}.{}另一个麒麟线索。",
+            "无关文本。".repeat(3_000),
+            "普通内容。".repeat(3_000)
+        );
+        let view = build_relevance_view(&source, "请查找麒麟相关目标", 8_000).unwrap();
+        assert!(view.evidence.contains("麒麟"));
+        assert!(view.evidence.contains("👩‍💻") || view.evidence.contains("另一个麒麟"));
+        assert!(view.matched_terms.iter().any(|term| term.contains('麒')));
+    }
+
+    #[test]
+    fn lexical_relevance_fails_closed_without_discriminating_matches() {
+        let no_match =
+            build_relevance_view(&"ordinary source ".repeat(2_000), "absentneedle", 8_000)
+                .unwrap_err();
+        assert!(no_match.to_string().contains("found no query terms"));
+
+        let repeated =
+            build_relevance_view(&"sameword ".repeat(10_000), "sameword", 8_000).unwrap_err();
+        assert!(repeated.to_string().contains("does not discriminate"));
+    }
+
+    #[test]
+    fn lexical_relevance_is_available_to_solo_without_provider_calls() {
+        let cfg = Config::default();
+        let mut session = SoloSession::new(&cfg, None).unwrap();
+        let result = session
+            .exec(
+                "view=lexical_relevance(('filler ' * 2000) + 'rare anchor', 'rare anchor', 8000)\nassert view['omitted_chars'] > 0\nassert view['evidence_chars'] <= 8000\nassert 'rare anchor' in view['evidence']\nFINAL('ok')",
+                &cfg,
+            )
+            .unwrap();
+        assert!(result.success);
+        assert!(result.finalized);
+        assert_eq!(result.external_calls, 0);
+        assert_eq!(session.final_answer(&cfg).unwrap(), "ok");
+    }
+
+    #[test]
+    fn lexical_relevance_is_absent_from_ordinary_cells() {
+        let cfg = Config::default();
+        let mut session = SoloSession::new(&cfg, None).unwrap();
+        let repl = session.repl.take().unwrap();
+        let (_, _, success, _, calls, _, failure, _) = run_cell(
+            repl,
+            "lexical_relevance('source', 'query', 4000)",
+            &cfg,
+            &cfg.default_model,
+            false,
+        );
+        assert!(!success);
+        assert_eq!(calls, 0);
+        assert_eq!(failure, Some(ExcType::RuntimeError));
+    }
+
+    #[test]
+    #[ignore = "release-only 16M-character stress"]
+    fn lexical_relevance_release_stress_16m() {
+        let mut source = "filler ".repeat(2_000_000);
+        source.push_str(" rareanchor ending");
+        let started = Instant::now();
+        let view = build_relevance_view(&source, "rareanchor", 20_000).unwrap();
+        assert!(view.evidence.contains("rareanchor"));
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
+    #[test]
+    fn lexical_relevance_returns_complete_small_source() {
+        let source = "small exact source";
+        let view = build_relevance_view(source, "exact", 4_000).unwrap();
+        assert!(view.complete);
+        assert_eq!(view.ranges, vec![(0, source.chars().count())]);
+        assert!(view.evidence.contains(source));
     }
 }
