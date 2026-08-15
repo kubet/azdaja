@@ -961,3 +961,27 @@ The owner-only closure record is `/private/tmp/azdaja-v58-oolong-no-launch-polic
 A fresh read-only continuation audit at private `main` `e4350da0b802cfd72535fb5b2102015d9a1d589b` returned P0=0/P1=0 and `TERMINAL_NO_NEW_CANDIDATE_OR_PERMISSIBLE_STEP_UNDER_UNCHANGED_CONSTRAINTS`. V59 reliability families affect at most 5/63 (7.94%); V60's only projected gate-clearing path is prohibited model-facing contract expansion; V61 proves that deleting the entire remaining host residual yields only 4.158%, 5.842 percentage points below the unchanged 10% projection gate, and fixed provider calls/prompts provide no token-reduction path. The product tree remains the promoted V58 tree, and OOLONG would rerun that existing candidate.
 
 The owner-only audit record is `/private/tmp/azdaja-next-version-continuation-audit-v1.json`, SHA-256 `27bf96d9d6207d5380291d28363532f6447bce8fe8a92b480c885ae58c724586`. Three passive polls found no build or benchmark. No source edit, build, candidate identity, inference, gold access, score, promotion, release, or publication occurred. Strict next action is stop and preserve all evidence until constraints change or genuinely new generic causal evidence independently clears the 10% projection gate.
+
+
+## 2026-08-15 product-mode reset: cache/config and fresh inference findings
+
+### Stable keyed prompt caching: hard-dead on the shipped OAuth route
+
+Exact Jcode v0.75.3 source `fd1ff012cd463c413d53a3de358ceb7a7b8459a2` proves two independent blockers. `ProviderConfig` has no `prompt_cache_key` or retention field. The OpenAI runtime does read `JCODE_OPENAI_PROMPT_CACHE_KEY`, but `build_response_request` adds both key and retention only under `!is_chatgpt_mode`; the subscription OAuth route is ChatGPT mode. Therefore no product or benchmark config can pin the requested key without changing Jcode/provider behavior. No keyed-cache before/after prefill split exists: it is **N/A**, not zero. A fresh candidate's streamed per-item cache-read tokens were `0, 0, 0, 1792, 0, 0, 0, 0, 0, 0`; items 2+ did not hit. This route must not be credited with stable prompt caching again. Audit SHA-256: `aca32322c12a3f9bb09b4c6e843ce8dd77383f80e74213de58b37f56dfd7c934`.
+
+### Shipped OpenAI knobs and actual request relevance
+
+| Knob | Shipped/default value | Subscription-route relevance |
+|---|---|---|
+| `openai_reasoning_effort` | `low` | Sent; requires the ordered low/medium/high RULER sweep. |
+| `openai_service_tier` | `priority` | Sent on ChatGPT mode; no alternative is adopted without inference evidence. |
+| `openai_transport` | unset / `auto` | Effective transport selection; no stable cross-task session guarantee. |
+| native compaction | `auto`, threshold 200,000 | Irrelevant below threshold; must not be credited on current smokes. |
+| preserve reasoning context | `true` | Within-session only; cross-task reuse remains forbidden. |
+| stream idle timeout | 180s | Failure bound, not a speed mechanism. |
+| `max_output_tokens` | runtime default 32,768 | Explicitly omitted in ChatGPT subscription mode, even if env-overridden; measured request relevance is none. |
+| Azdaja `output_cap` | 8,192 | Product-side retained-output bound; not the provider max-output knob. |
+
+### Fresh RULER measurements
+
+Native disposable smoke: 20/20 execution, 19/20 official/exact, median 11.446s. The sole 131K NIAH miss returned `Ready.`; native root-context leak is N/A. Query-cap inference differential on ten identical rows per product arm: predecessor 10/10 execution, p50 13.924s; cap-512 candidate 10/10, p50 12.421s; zero leaks both; exact outputs differed on two rows. This is an unscored inference differential, not accuracy or promotion evidence.

@@ -607,7 +607,11 @@ fn render_relevance_evidence(chars: &[char], ranges: &[(usize, usize)]) -> Strin
 
 fn build_relevance_view(source: &str, query: &str, max_chars: usize) -> Result<RelevanceView> {
     const QUERY_CHAR_LIMIT: usize = 8_192;
-    const TERM_LIMIT: usize = 256;
+    // The 8,192-character query envelope remains the primary safety bound. A
+    // 256-term cap rejected legitimate four-option holistic questions (299
+    // unique terms) before any semantic call; 512 admits that measured case
+    // while retaining a finite fail-closed upper bound.
+    const TERM_LIMIT: usize = 512;
     const WINDOW: usize = 1_800;
     const OVERLAP: usize = 200;
     const STRIDE: usize = WINDOW - OVERLAP;
@@ -5174,6 +5178,32 @@ mod lexical_relevance_tests {
         let repeated =
             build_relevance_view(&"sameword ".repeat(10_000), "sameword", 8_000).unwrap_err();
         assert!(repeated.to_string().contains("does not discriminate"));
+    }
+
+    #[test]
+    fn lexical_relevance_accepts_measured_holistic_query_but_keeps_a_hard_term_cap() {
+        let accepted_query = (0..299)
+            .map(|index| format!("term{index:03}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let source = format!(
+            "{} term298 decisive anchor {}",
+            "ordinary filler. ".repeat(2_000),
+            "other filler. ".repeat(2_000)
+        );
+        let view = build_relevance_view(&source, &accepted_query, 8_000).unwrap();
+        assert!(view.evidence.contains("term298 decisive anchor"));
+
+        let rejected_query = (0..513)
+            .map(|index| format!("term{index:03}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let error = build_relevance_view(&source, &rejected_query, 8_000).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("lexical relevance query term limit exceeded")
+        );
     }
 
     #[test]
