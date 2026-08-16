@@ -31,7 +31,7 @@ FINAL_VAR("variable_name")
 
 ## Install
 
-Requires Rust 1.95 and a supported harness login. From a source checkout, installation is one command:
+Requires Rust 1.95. From a source checkout, installation is one command:
 
 ```bash
 cargo install --path . --locked
@@ -40,6 +40,7 @@ cargo install --path . --locked
 That command installs `azdaja` into Cargo's binary directory. Confirm the provider-free binary capabilities with `azdaja doctor --caps`; use `azdaja doctor` only when you intend to exercise the configured live harness login.
 
 The public remote one-command path is not claimed yet: the repository has no immutable public v0.1 tag or downloadable release assets. Once that release exists, the source-independent command and supported platform matrix must be validated from a clean machine before this notice is removed.
+The exact `site/install` pipe is already exercised against local hash-bound bytes: sealed mode and a wrong digest leave a fresh home untouched, while the matching digest installs the managed harness binary without entering a provider turn. Its public URL and digest defaults intentionally remain empty until immutable release artifacts exist.
 
 To expose the managed skill to a harness after installing the binary:
 
@@ -47,7 +48,7 @@ To expose the managed skill to a harness after installing the binary:
 azdaja install --harness jcode
 ```
 
-Other install targets: `claude`, `codex`, `gemini`, `opencode`, and `all`. A customized managed `config.toml` is preserved on upgrade and may now be removed by normal uninstall; changed binaries, changed skills, and unknown files still fail closed.
+Other install targets: `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation validates local evaluator capabilities but never calls a model; a supported harness login is required only for `azdaja doctor` and product use. A customized managed `config.toml` is preserved on upgrade and may be removed by normal uninstall; changed binaries, changed skills, and unknown files still fail closed.
 
 The jcode adapter uses its stable Harness API over an owner-only Unix socket and pins `openai-oauth:<model>`. It does not fall back to a metered API key.
 
@@ -232,7 +233,7 @@ cargo build --release --locked
 python3 -m unittest discover -s bench/oolong -p 'test_*.py' -v
 ```
 
-The suite covers the three-file 50 MiB product path, lifecycle persistence, snapshot ownership, Unicode caps, transactional finalization, call budgets, batch ordering and partial recovery, Harness API framing, OAuth model pinning, streamed usage, bounded cleanup, manifest coverage, installer rollback and customized-config removal, Monty compatibility, and blind benchmark controls.
+The suite covers the three-file 50 MiB product path, the literal sealed/hash-bound site installer, provider-free managed installation, lifecycle persistence, snapshot ownership, Unicode caps, transactional finalization, call budgets, batch ordering and partial recovery, Harness API framing, OAuth model pinning, streamed usage, bounded cleanup, manifest coverage, installer rollback and customized-config removal, Monty compatibility, and blind benchmark controls.
 
 GitHub Actions is currently disabled because the account cannot start hosted jobs; local validation is authoritative until billing is enabled.
 

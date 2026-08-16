@@ -340,13 +340,7 @@ fn install_cmd(args: &[String], remove: bool) -> Result<()> {
             c.default_model = model.into();
             c.validate()?
         };
-        let model = cfg.default_model.as_str();
         capability_check(&cfg)?;
-        let reply = call_model(CANARY_PROMPT, model, &cfg, 1)
-            .with_context(|| format!("{h} adapter verification failed"))?;
-        if reply.trim() != CANARY_ANSWER {
-            bail!("{h} adapter canary mismatch")
-        }
         let parent = dst.parent().unwrap();
         fs::create_dir_all(parent)?;
         let stage = parent.join(format!(".azdaja-stage-{}", std::process::id()));

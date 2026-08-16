@@ -2035,14 +2035,23 @@ fn shipped_cleaners_strip_jcode_banners_and_ansi() {
 }
 
 #[test]
-fn install_is_verified_idempotent_and_owned() {
+fn install_is_provider_free_idempotent_and_owned() {
     let t = temp("install");
     let bin = t.join("bin");
     fs::create_dir(&bin).unwrap();
     let mock = bin.join("claude");
-    fs::write(&mock,r#"#!/bin/sh
-for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_only_its_answer) p=${a#*_at_}; p=${p%_and_return*}; cat "$p";; esac; done
-"#).unwrap();
+    let provider_called = t.join("provider-called");
+    fs::write(
+        &mock,
+        format!(
+            "#!/bin/sh
+printf called > {:?}
+exit 9
+",
+            provider_called.to_str().unwrap()
+        ),
+    )
+    .unwrap();
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -2050,7 +2059,7 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
     }
     let cfg = config(&t, "cat", 512, 1, 3, 4);
     let dst = t.join(".claude/skills/azdaja");
-    let bad = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+    let installed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
         .args(["install", "--harness", "claude"])
         .env("HOME", &t)
@@ -2062,23 +2071,15 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
         )
         .output()
         .unwrap();
-    assert!(!bad.status.success());
-    assert!(!dst.exists(), "failed verification left a partial install");
-    fs::write(&mock, "#!/bin/sh\necho AZDAJA\n").unwrap();
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_azdaja"));
-    let o = cmd
-        .env_remove("RLM_DEPTH")
-        .args(["install", "--harness", "claude"])
-        .env("HOME", &t)
-        .env("AZDAJA_HOME", t.join("state"))
-        .env("AZDAJA_CONFIG", &cfg)
-        .env(
-            "PATH",
-            format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
-        )
-        .output()
-        .unwrap();
-    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(
+        installed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&installed.stderr)
+    );
+    assert!(
+        !provider_called.exists(),
+        "install must not execute a live provider adapter"
+    );
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
     assert!(skill.contains("azdaja 0.1.0") && skill.contains(dst.join("azdaja").to_str().unwrap()));

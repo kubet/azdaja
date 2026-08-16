@@ -1,6 +1,92 @@
 #!/bin/sh
 set -eu
-printf '\n  AZDAJA // V0.1 HARDENING\n\n'
-printf '  The installer is sealed until immutable public release bytes pass the clean-machine install and 50 MiB product acceptance gates.\n'
-printf '  No binary was downloaded and no changes were made.\n\n'
-exit 1
+
+VERSION=0.1.0
+HARNESS=jcode
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --harness)
+      [ "$#" -ge 2 ] || { printf '%s\n' 'azdaja install: --harness requires a value' >&2; exit 2; }
+      HARNESS=$2
+      shift 2
+      ;;
+    *)
+      printf 'azdaja install: unknown argument: %s\n' "$1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+# Release publication replaces these empty defaults with immutable per-platform bytes and hashes.
+# Explicit overrides exist solely so the exact production script can be exercised before opening it.
+URL=${AZDAJA_INSTALL_URL:-}
+EXPECTED_SHA256=${AZDAJA_INSTALL_SHA256:-}
+if [ -z "$URL" ] || [ -z "$EXPECTED_SHA256" ]; then
+  printf '\n  AZDAJA // V0.1 HARDENING\n\n'
+  printf '  The public installer is sealed until immutable release bytes pass the clean-machine 50 MiB product gate.\n'
+  printf '  No binary was downloaded and no changes were made.\n\n'
+  exit 1
+fi
+case "$EXPECTED_SHA256" in
+  *[!0-9a-f]*|'')
+    printf '%s\n' 'azdaja install: expected SHA-256 must be 64 lowercase hexadecimal characters' >&2
+    exit 2
+    ;;
+esac
+[ "${#EXPECTED_SHA256}" -eq 64 ] || {
+  printf '%s\n' 'azdaja install: expected SHA-256 must be 64 lowercase hexadecimal characters' >&2
+  exit 2
+}
+
+TMP=${TMPDIR:-/tmp}/azdaja-install.$$
+(umask 077 && mkdir "$TMP") || { printf '%s\n' 'azdaja install: cannot create private staging directory' >&2; exit 1; }
+trap 'rm -rf "$TMP"' EXIT
+trap 'exit 1' HUP INT TERM
+BIN=$TMP/azdaja
+case "$URL" in
+  file://*) cp "${URL#file://}" "$BIN" ;;
+  https://*)
+    command -v curl >/dev/null 2>&1 || { printf '%s\n' 'azdaja install: curl is required' >&2; exit 1; }
+    curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+      --connect-timeout 15 --max-time 300 --max-filesize 67108864 \
+      "$URL" -o "$BIN"
+    ;;
+  *)
+    printf '%s\n' 'azdaja install: release URL must use https:// (file:// is accepted only for local validation)' >&2
+    exit 2
+    ;;
+esac
+SIZE=$(wc -c < "$BIN" | tr -d ' ')
+[ "$SIZE" -le 67108864 ] || {
+  printf '%s
+' 'azdaja install: release binary exceeds the 64 MiB download cap' >&2
+  exit 1
+}
+
+if command -v shasum >/dev/null 2>&1; then
+  ACTUAL_SHA256=$(shasum -a 256 "$BIN" | awk '{print $1}')
+elif command -v sha256sum >/dev/null 2>&1; then
+  ACTUAL_SHA256=$(sha256sum "$BIN" | awk '{print $1}')
+else
+  printf '%s\n' 'azdaja install: shasum or sha256sum is required' >&2
+  exit 1
+fi
+[ "$ACTUAL_SHA256" = "$EXPECTED_SHA256" ] || {
+  printf '%s\n' 'azdaja install: SHA-256 mismatch; no installation was changed' >&2
+  exit 1
+}
+chmod 755 "$BIN"
+VERSION_OUTPUT=$("$BIN" --version)
+case "$VERSION_OUTPUT" in
+  "azdaja $VERSION (monty "*) ;;
+  *) printf 'azdaja install: unexpected binary version: %s\n' "$VERSION_OUTPUT" >&2; exit 1 ;;
+esac
+CAPS=$("$BIN" doctor --caps)
+printf '%s\n' "$CAPS" | grep -F '"azdaja":"0.1.0"' >/dev/null || {
+  printf '%s\n' 'azdaja install: capability check did not confirm v0.1.0' >&2
+  exit 1
+}
+
+# install is deliberately provider-free; explicit `azdaja doctor` is the live auth check.
+"$BIN" install --harness "$HARNESS"
+printf '%s\n' 'azdaja install: complete; run the installed binary with `doctor` for a live harness check'
