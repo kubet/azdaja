@@ -1,24 +1,24 @@
-# Azdaja Speed Campaign Progress
+# Azdaja Product-First Week Progress
 
 ## Current state
 
-- **RAH-199 is 28.2899% official partial credit** on the fixed validation-derived 199-row cohort (95% deterministic item-bootstrap CI **22.2927-34.4903%**). The equal-weight 13-length macro is 28.4893% (95% stratified CI 22.9423-34.1485%). This is not the official full OOLONG test score.
-- The owner explicitly voided no-rescore only for scorer failures. The old failed scorer and sentinel remain immutable. The repaired scorer implemented released OOLONG parser semantics including `datetime.date` gold, passed an end-to-end exact-format synthetic rehearsal over 199 rows and all 13 buckets with exit 0 and exact expected score, then scored retained transcripts once without altering any inference row. Report: `bench/results/rah199-repaired-score.json` (`c1f4b1f1900f0e7745b2d629d21ceb3a1c1e7ce9fbc55ce21ab316b676877adb`).
-- RAH inference remains frozen at 199/199 rows, 159 execution successes, 40 retained failures, 21.589s median, and zero root-context leaks across 199 applicable scans. No row was retried or replaced.
-- Per-bucket official scores: 1K 58.33%, 2K 50.42%, 4K 45.86%, 8K 59.52%, 16K 25.83%, 32K 27.84%, 64K 12.50%, 128K 20.00%, 256K 14.00%, 512K 12.50%, 1M 23.44%, 2M 6.79%, 4M 13.33%. Bucket score declines strongly with length (Spearman rho -0.835, p=0.000380).
-- The complete 40-failure cause x length taxonomy is committed. Counts: 29 generated assertions, 3 type errors, 2 unsupported attributes, 2 semantic-manifest parses, 2 child-call-budget overruns, 1 cell timeout, and 1 route assertion. The monotonic execution-death-vs-length hypothesis is killed at alpha 0.05 (Cochran-Armitage p=0.217; Spearman rate p=0.169); 4M is nevertheless the worst observed bucket at 5/15 deaths. No RAM/OOM cause exists.
-- OOLONG remains 57.6923% official on its separate 26-row diagnostic. The retained RULER effort sweep remains low 19/20 official at 11.304s, so its conditional speed close did not trigger.
-- No candidate is promoted. Cache-prefix/WARM daemon remains a hard NO.
+- **The product path, not benchmark score, is the release gate.** A shippable v0.1 means a stranger can install Azdaja with one command, point it at a 50 MiB UTF-8 file, and receive a correct answer without a process death. Any defect on that path outranks benchmark work; benchmark results belong only in the README appendix.
+- The first blocking offline acceptance now exists in `tests/product_50mb.rs`. It serially generates exact 50 MiB build-log, repository-dump, and operations-transcript inputs, invokes the real `azdaja solo` CLI through a scripted local harness, and requires exact full-`ctx` answers. Each case has a 90-second outer watchdog, exactly one root call, zero child calls, one snapshot save, no snapshot load, no retained session, a private succeeded runtime trace, and a root prompt below 64 KiB with no host path or exact 100-byte source span.
+- The complete locked Rust suite passes: 92 tests passed and one release-only stress test was intentionally ignored. Strict clippy, formatting, and release build pass. A real one-command source installation (`cargo install --path . --locked`) into an empty temporary root produced `azdaja 0.1.0`, and `doctor --caps` passed without provider access.
+- A customized managed `config.toml` can now be uninstalled normally. Binary/SKILL changes and unknown files remain protected. The regression also preserves the existing customized-config upgrade behavior.
+- The website no longer advertises a working curl command while `site/install` is deliberately sealed. The README labels the benchmark section as a non-gating appendix and states the current distribution boundary truthfully.
+- The owner-authorized external RAH-199 continues independently and immutably. It does not gate v0.1 and is not rerun, retried, or used as product acceptance evidence.
 
 ## Strict next step
 
-Build exactly one reliability candidate #2 from the current product tree, attacking only measured top causes: document the unsupported `dict.__getitem__`/boolean-arithmetic subset hazards in the fixed root contract; raise the child-call cap from 64 to the measured headroom cap 72 (observed demand 65/66); and raise the root repair cap from two to three repairs with a fail-closed fourth total turn. Do not change evaluator memory limits because no RAM/OOM cause exists. Require focused regressions, full tests/clippy/release, and immutable candidate identity. Then run one fresh no-gold scout over the 15 frozen-public 4M fixtures with zero leaks and no retries. The candidate must beat the frozen predecessor's 5/15 death rate (at most 4/15 deaths) to continue.
+Close distribution, not another benchmark candidate: publish one immutable v0.1 source/tag or versioned binary set, make the repository/artifacts actually reachable to a stranger, bind the installer to those immutable bytes, and pass the literal public one-command flow from a clean supported machine. That receipt must cover version/capability checks, managed harness installation, the same three 50 MiB product cases, idempotent reinstall, customized-config uninstall, wrong-byte rejection, and cleanup after failure. Only then may the sealed website installer be opened.
 
-Only after that scout passes may the distinct candidate run a fresh RAH-199 schedule. Its scorer must first pass the same exact-format rehearsal. No separate OOLONG run is needed because RAH subsumes it. Any inference, failures, score, and final disposition must update `WORKS.md`, `FAILS.md`, and `PROGRESS.md` in the same commit.
+After offline distribution passes, run a separately authorized live-harness smoke on fresh product fixtures to test model planning and authentication. The scripted acceptance proves CLI/load/evaluator/finalization behavior but does not claim live-model semantic reliability.
 
 ## Blocking
 
-- Reliability candidate #2 may not expand beyond the three measured changes above.
-- No memory-ceiling change: memory is absent from the failure causes.
-- No fresh RAH-199 launch before the worst-bucket death-rate scout beats 5/15 and the exact-format scorer rehearsal passes.
-- Frozen predecessor measurements, old scorer failures, sentinels, rows, and reports remain immutable.
+- GitHub is currently private and has no immutable v0.1 tag, release assets, or checksums; therefore no public remote one-command installation is claimed.
+- `site/install` must remain fail-closed until real immutable release bytes and a clean-machine receipt exist.
+- The current source install requires Rust 1.95 and a checkout; it is validated but is not the stranger-facing distribution goal.
+- Hosted release automation and the supported OS/architecture matrix remain unproven.
+- No benchmark optimization, frozen-candidate rerun, provider probe, or gold access may displace these product blockers.

@@ -31,15 +31,23 @@ FINAL_VAR("variable_name")
 
 ## Install
 
-Requires Rust 1.95 and a supported harness login.
+Requires Rust 1.95 and a supported harness login. From a source checkout, installation is one command:
 
 ```bash
-cargo build --release
-./target/release/azdaja install --harness jcode
-azdaja doctor
+cargo install --path . --locked
 ```
 
-Other install targets: `claude`, `codex`, `gemini`, `opencode`, and `all`.
+That command installs `azdaja` into Cargo's binary directory. Confirm the provider-free binary capabilities with `azdaja doctor --caps`; use `azdaja doctor` only when you intend to exercise the configured live harness login.
+
+The public remote one-command path is not claimed yet: the repository has no immutable public v0.1 tag or downloadable release assets. Once that release exists, the source-independent command and supported platform matrix must be validated from a clean machine before this notice is removed.
+
+To expose the managed skill to a harness after installing the binary:
+
+```bash
+azdaja install --harness jcode
+```
+
+Other install targets: `claude`, `codex`, `gemini`, `opencode`, and `all`. A customized managed `config.toml` is preserved on upgrade and may now be removed by normal uninstall; changed binaries, changed skills, and unknown files still fail closed.
 
 The jcode adapter uses its stable Harness API over an owner-only Unix socket and pins `openai-oauth:<model>`. It does not fall back to a metered API key.
 
@@ -48,7 +56,8 @@ The jcode adapter uses its stable Harness API over an owner-only Unix socket and
 ### Direct product loop
 
 ```bash
-azdaja solo "question about this input" -f ./large.txt   --model gpt-5.6-luna --sub-model gpt-5.6-luna
+azdaja solo "question about this input" -f ./large.txt \
+  --model gpt-5.6-luna --sub-model gpt-5.6-luna
 ```
 
 ### Persistent evaluator
@@ -74,7 +83,15 @@ Core commands:
 start  load  exec  final  list  kill  solo  doctor  install  uninstall
 ```
 
-## Current benchmark
+### Blocking 50 MiB product path
+
+`tests/product_50mb.rs` serially exercises the real `solo` CLI on three exact 50 MiB UTF-8 inputs: a build log, repository dump, and operational transcript. A local scripted harness supplies only a short `ctx`-dependent program—never the expected answer—and every case must produce its exact answer before a 90-second outer watchdog, use one root turn and zero child calls, retain no session, and keep the root prompt below 64 KiB. The captured provider prompt must contain neither the host input path nor any exact 100-byte source span; the documented bounded escaped structural sample is still intentionally visible. This is an offline CLI/runtime acceptance test, not evidence of installed-artifact packaging or live-model planning quality.
+
+```bash
+cargo test --test product_50mb -- --test-threads=1
+```
+
+## Appendix: benchmark diagnostics (not a product gate)
 
 One immutable current Azdaja candidate is shown against both controls. Historical
 candidate versions are intentionally omitted from these headline tables. When a
@@ -209,13 +226,13 @@ clean_patterns = []
 ## Validate
 
 ```bash
-cargo test --all -- --test-threads=1
+cargo test --all --locked -- --test-threads=1
 cargo clippy --all-targets --all-features -- -D warnings
-cargo build --release
+cargo build --release --locked
 python3 -m unittest discover -s bench/oolong -p 'test_*.py' -v
 ```
 
-The suite covers lifecycle persistence, snapshot ownership, Unicode caps, transactional finalization, call budgets, batch ordering and partial recovery, Harness API framing, OAuth model pinning, streamed usage, bounded cleanup, manifest coverage, installer rollback, Monty compatibility, and blind benchmark controls.
+The suite covers the three-file 50 MiB product path, lifecycle persistence, snapshot ownership, Unicode caps, transactional finalization, call budgets, batch ordering and partial recovery, Harness API framing, OAuth model pinning, streamed usage, bounded cleanup, manifest coverage, installer rollback and customized-config removal, Monty compatibility, and blind benchmark controls.
 
 GitHub Actions is currently disabled because the account cannot start hosted jobs; local validation is authoritative until billing is enabled.
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-printf '\n  AZDAJA // PRIVATE PREVIEW\n\n'
-printf '  The installer is sealed until repeated benchmark evidence is public.\n'
+printf '\n  AZDAJA // V0.1 HARDENING\n\n'
+printf '  The installer is sealed until immutable public release bytes pass the clean-machine install and 50 MiB product acceptance gates.\n'
 printf '  No binary was downloaded and no changes were made.\n\n'
 exit 1

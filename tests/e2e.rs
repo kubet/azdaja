@@ -2097,6 +2097,43 @@ for a in "$@"; do case "$a" in Read_the_complete_UTF-8_prompt_at_*_and_return_on
         &format!("sub_llm_cmd = {:?}", mock.to_str().unwrap()),
     );
     fs::write(dst.join("config.toml"), &edited_config).unwrap();
+
+    // A user-editable config must not make the managed installation impossible to remove.
+    let removed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .args(["uninstall", "--harness", "claude"])
+        .env("HOME", &t)
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .output()
+        .unwrap();
+    assert!(
+        removed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&removed.stderr)
+    );
+    assert!(!dst.exists());
+
+    let reinstalled = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .args(["install", "--harness", "claude"])
+        .env("HOME", &t)
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env(
+            "PATH",
+            format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+        )
+        .output()
+        .unwrap();
+    assert!(
+        reinstalled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reinstalled.stderr)
+    );
+    fs::write(dst.join("config.toml"), &edited_config).unwrap();
+
+    // Upgrade remains idempotent and re-hashes the preserved customized config.
     let o = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
         .args(["install", "--harness", "claude"])

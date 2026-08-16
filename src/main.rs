@@ -316,7 +316,9 @@ fn install_cmd(args: &[String], remove: bool) -> Result<()> {
     let home = home()?;
     if remove {
         for h in hs {
-            uninstall(&target(&home, h), false)?
+            // Configuration is the one managed file users are explicitly allowed to customize.
+            // Uninstall must still reject changed binaries, changed skills, or unknown files.
+            uninstall(&target(&home, h), true)?
         }
         return Ok(());
     }
