@@ -87,7 +87,10 @@ max_calls_per_cell = 1
 }
 
 fn run(home: &Path, cfg: &Path, trace: &Path, args: &[&str]) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+    let binary = std::env::var_os("AZDAJA_PRODUCT_BINARY")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_azdaja")));
+    let mut child = Command::new(binary)
         .env_remove("RLM_DEPTH")
         .env("AZDAJA_HOME", home.join("state"))
         .env("AZDAJA_CONFIG", cfg)

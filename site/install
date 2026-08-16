@@ -17,14 +17,43 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-# Release publication replaces these empty defaults with immutable per-platform bytes and hashes.
-# Explicit overrides exist solely so the exact production script can be exercised before opening it.
-URL=${AZDAJA_INSTALL_URL:-}
-EXPECTED_SHA256=${AZDAJA_INSTALL_SHA256:-}
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64)
+    DEFAULT_URL=https://github.com/kubet/azdaja/releases/download/v0.1.0/azdaja-v0.1.0-darwin-arm64
+    DEFAULT_SHA256=6b50716382ac35e4f2bc9fc3c1cc3db9ee059edde783b78dba21273bf626762a
+    ;;
+  *)
+    DEFAULT_URL=
+    DEFAULT_SHA256=
+    ;;
+esac
+
+# Validation overrides are unavailable in ordinary installs and cannot replace public bindings.
+case "${AZDAJA_INSTALL_TEST_MODE:-}" in
+  '')
+    [ -z "${AZDAJA_INSTALL_URL:-}${AZDAJA_INSTALL_SHA256:-}" ] || {
+      printf '%s\n' 'azdaja install: validation overrides require AZDAJA_INSTALL_TEST_MODE=local' >&2
+      exit 2
+    }
+    URL=$DEFAULT_URL
+    EXPECTED_SHA256=$DEFAULT_SHA256
+    ;;
+  local)
+    URL=${AZDAJA_INSTALL_URL:-}
+    EXPECTED_SHA256=${AZDAJA_INSTALL_SHA256:-}
+    ;;
+  sealed)
+    URL=
+    EXPECTED_SHA256=
+    ;;
+  *)
+    printf '%s\n' 'azdaja install: invalid AZDAJA_INSTALL_TEST_MODE' >&2
+    exit 2
+    ;;
+esac
 if [ -z "$URL" ] || [ -z "$EXPECTED_SHA256" ]; then
-  printf '\n  AZDAJA // V0.1 HARDENING\n\n'
-  printf '  The public installer is sealed until immutable release bytes pass the clean-machine 50 MiB product gate.\n'
-  printf '  No binary was downloaded and no changes were made.\n\n'
+  printf '\n  AZDAJA // V0.1\n\n'
+  printf '  This platform has no published v0.1 binary. No download or installation was attempted.\n\n'
   exit 1
 fi
 case "$EXPECTED_SHA256" in
@@ -58,8 +87,7 @@ case "$URL" in
 esac
 SIZE=$(wc -c < "$BIN" | tr -d ' ')
 [ "$SIZE" -le 67108864 ] || {
-  printf '%s
-' 'azdaja install: release binary exceeds the 64 MiB download cap' >&2
+  printf '%s\n' 'azdaja install: release binary exceeds the 64 MiB download cap' >&2
   exit 1
 }
 

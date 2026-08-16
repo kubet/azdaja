@@ -6,7 +6,7 @@
 
 Azdaja keeps the full input inside a persistent, sandboxed Monty/Python evaluator. A root model writes compact analysis code; semantic work is delegated through `llm` and `llm_batch`; deterministic reduction happens locally.
 
-> Private and unreleased. The CLI is functional and end-to-end tested. Benchmark results below are diagnostics, not a superiority claim.
+> v0.1.0 prerelease. The CLI and initial Apple Silicon macOS install path are end-to-end tested. Benchmark results below are diagnostics, not a product gate or superiority claim.
 
 ## Why
 
@@ -31,26 +31,28 @@ FINAL_VAR("variable_name")
 
 ## Install
 
-Requires Rust 1.95. From a source checkout, installation is one command:
+The v0.1.0 prerelease provides one-command installation for Apple Silicon macOS:
 
 ```bash
-cargo install --path . --locked
+curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/v0.1.0/site/install | sh
 ```
 
-That command installs `azdaja` into Cargo's binary directory. Confirm the provider-free binary capabilities with `azdaja doctor --caps`; use `azdaja doctor` only when you intend to exercise the configured live harness login.
-
-The public remote one-command path is not claimed yet: the repository has no immutable public v0.1 tag or downloadable release assets. Once that release exists, the source-independent command and supported platform matrix must be validated from a clean machine before this notice is removed.
-The exact `site/install` pipe is already exercised against local hash-bound bytes: sealed mode and a wrong digest leave a fresh home untouched, while the matching digest installs the managed harness binary without entering a provider turn. Its public URL and digest defaults intentionally remain empty until immutable release artifacts exist.
-
-To expose the managed skill to a harness after installing the binary:
+The versioned installer downloads only the immutable `azdaja-v0.1.0-darwin-arm64` release asset, requires SHA-256 `6b50716382ac35e4f2bc9fc3c1cc3db9ee059edde783b78dba21273bf626762a`, validates version and local evaluator capabilities, and installs the managed Jcode skill without calling a model. Then run the explicit live login check:
 
 ```bash
-azdaja install --harness jcode
+AZ="$HOME/.jcode/skills/azdaja/azdaja"
+"$AZ" doctor
 ```
 
-Other install targets: `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation validates local evaluator capabilities but never calls a model; a supported harness login is required only for `azdaja doctor` and product use. A customized managed `config.toml` is preserved on upgrade and may be removed by normal uninstall; changed binaries, changed skills, and unknown files still fail closed.
+Choose another managed target with `sh -s -- --harness claude` (also `codex`, `gemini`, `opencode`, or `all`). A supported harness login is required for `doctor` and product use, not installation. A customized managed `config.toml` is preserved on upgrade and may be removed by normal uninstall; changed binaries, changed skills, and unknown files still fail closed.
 
-The jcode adapter uses its stable Harness API over an owner-only Unix socket and pins `openai-oauth:<model>`. It does not fall back to a metered API key.
+Other platforms remain source-only and require Rust 1.95:
+
+```bash
+cargo install --git https://github.com/kubet/azdaja --tag v0.1.0 --locked
+```
+
+The Jcode adapter uses its stable Harness API over an owner-only Unix socket and pins `openai-oauth:<model>`. It does not fall back to a metered API key.
 
 ## Use
 

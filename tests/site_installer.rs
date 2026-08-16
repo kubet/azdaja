@@ -65,6 +65,10 @@ fn run_installer(
         .env_remove("RLM_DEPTH")
         .env_remove("AZDAJA_INSTALL_URL")
         .env_remove("AZDAJA_INSTALL_SHA256")
+        .env(
+            "AZDAJA_INSTALL_TEST_MODE",
+            if url.is_some() { "local" } else { "sealed" },
+        )
         .stdin(Stdio::from(File::open(script).unwrap()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
