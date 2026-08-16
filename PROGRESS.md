@@ -10,15 +10,15 @@
 - A clean locked release build produced the initial Apple Silicon macOS asset `azdaja-v0.1.0-darwin-arm64`: 6,434,288 bytes, SHA-256 `6b50716382ac35e4f2bc9fc3c1cc3db9ee059edde783b78dba21273bf626762a`, exact version/capability checks passing. The installer is now bound to that versioned GitHub release URL and digest; validation overrides require an explicit local test mode and cannot silently replace public bindings.
 - The owner-authorized external RAH-199 continues independently and immutably. It does not gate v0.1 and is not rerun, retried, or used as product acceptance evidence.
 
+- Repository, tag, prerelease, asset, and installer are public. Tag `v0.1.0` binds commit `021b79e76e5951dd6142b4c76e564ae41adb9504`; the public literal curl completed in a fresh HOME and installed the exact bound digest. The installed release binary then passed all three 50 MiB product cases in 31.19 seconds total, followed by idempotent reinstall, customized-config uninstall, and clean reinstall. Receipt `release/v0.1.0/public-receipt.json` SHA-256 `99989d2019db132c63e1d23c294c6b3d20af16762f97d0dc7394e90dccbc346b`.
+
 ## Strict next step
 
-Close distribution, not another benchmark candidate: publish the prepared commit as immutable tag `v0.1.0`, upload the bound Darwin-arm64 asset plus `SHA256SUMS`, make the repository/artifacts reachable to a stranger, and pass the literal public one-command flow from a clean Apple Silicon macOS HOME. That receipt must cover version/capability checks, managed harness installation, the same three 50 MiB product cases, idempotent reinstall, customized-config uninstall, wrong-byte rejection, and cleanup after failure. Only then may the sealed website installer be opened.
-
-After offline distribution passes, run a separately authorized live-harness smoke on fresh product fixtures to test model planning and authentication. The scripted acceptance proves CLI/load/evaluator/finalization behavior but does not claim live-model semantic reliability.
+Run one separately authorized live-harness smoke on fresh non-benchmark product fixtures to test authentication and natural-language planning through the public installed binary. It must not reuse any frozen benchmark row or open benchmark gold. After that, expand immutable binary coverage beyond Apple Silicon macOS only when each platform passes the same public install receipt.
 
 ## Blocking
 
-- GitHub is still private and the prepared tag/assets are not published yet; the remote command is not usable until that external publication completes.
-- Initial binary support is Apple Silicon macOS only. Other platforms remain source-install only until separately built and validated immutable assets exist.
-- Hosted release automation and broader OS/architecture coverage remain unproven.
-- No benchmark optimization, frozen-candidate rerun, provider probe, or gold access may displace these product blockers.
+- The public scripted acceptance proves distribution, CLI, evaluator, exact computation, and cleanup; it does not prove live-model planning or harness authentication.
+- Initial binary support is Apple Silicon macOS only. Other platforms use the locked Rust source install until separate immutable assets pass.
+- Peak RSS is reported as a limitation rather than gated, and hosted release automation remains unproven.
+- No benchmark optimization, frozen-candidate rerun, provider probe, or gold access may displace these product follow-ups.
