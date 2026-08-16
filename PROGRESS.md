@@ -12,13 +12,15 @@
 
 - Repository, tag, prerelease, asset, and installer are public. Tag `v0.1.0` binds commit `021b79e76e5951dd6142b4c76e564ae41adb9504`; the public literal curl completed in a fresh HOME and installed the exact bound digest. The installed release binary then passed all three 50 MiB product cases in 31.19 seconds total, followed by idempotent reinstall, customized-config uninstall, and clean reinstall. Receipt `release/v0.1.0/public-receipt.json` SHA-256 `99989d2019db132c63e1d23c294c6b3d20af16762f97d0dc7394e90dccbc346b`.
 
+- The separately authorized public live-harness smoke is complete: fresh non-benchmark 50 MiB build log, Jcode OpenAI OAuth, Luna/low, expected and observed `Answer: 37`, 8.980 seconds, one entered root turn, zero child calls, no repair, zero raw 100-byte overlap/path leak, and full private-process cleanup. Receipt SHA-256 `c3c0dbb15c612d35a6d3f053896a81a867bd0f346ae70ef6d0e6471955fadd4b`.
+
 ## Strict next step
 
-Run one separately authorized live-harness smoke on fresh non-benchmark product fixtures to test authentication and natural-language planning through the public installed binary. It must not reuse any frozen benchmark row or open benchmark gold. After that, expand immutable binary coverage beyond Apple Silicon macOS only when each platform passes the same public install receipt.
+Collect first-use feedback on the public Apple Silicon macOS prerelease and fix any defect on the install/50 MiB path before benchmark work. In parallel, add the next immutable binary platform only when it passes the same public curl, byte identity, provider-free install, live doctor, three-file 50 MiB, config preservation, uninstall, and cleanup receipt.
 
 ## Blocking
 
-- The public scripted acceptance proves distribution, CLI, evaluator, exact computation, and cleanup; it does not prove live-model planning or harness authentication.
+- One fresh live smoke proves authentication and planning for one exact task, not general model accuracy or reliability.
 - Initial binary support is Apple Silicon macOS only. Other platforms use the locked Rust source install until separate immutable assets pass.
 - Peak RSS is reported as a limitation rather than gated, and hosted release automation remains unproven.
 - No benchmark optimization, frozen-candidate rerun, provider probe, or gold access may displace these product follow-ups.
