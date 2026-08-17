@@ -25,9 +25,11 @@
 - Fixed a feedback-collection defect: both forms previously required `azdaja --version` even when installation failed before any binary existed. Version is now explicitly optional for that path while install method, OS/architecture, outcome/defect details, routing, and the privacy confirmation remain enforced; the repository regression locks the behavior. Receipt SHA-256 `4cb96f46678385a6aa45079c5ff5809dc0e32df291f609803463232e899227c0`.
 - Fixed the remaining pre-workload first-use path: `Installation failed` and `Doctor failed` outcomes previously still required a fabricated input class and size. The form now supplies an exact `Not reached — installation or doctor failed` workload and `not reached` size guidance while keeping an explicit status required; the regression locks both fields. Receipt SHA-256 `51d400a410f455ba94019f6839b72b7350b9e093d69b7a32a7965625d352cb33`.
 
+- The guarded collection path is ready: an independent walkthrough found P0=0/P1=0 across install failure before binary, doctor failure before workload, death/timeout, wrong answer, config/uninstall, and successful first use. Public issues remain zero, so no submitted actionable product-defect report exists to reproduce. Readiness receipt SHA-256 `d1458674a641f149175267a01cb7ce77a3832fcef30c4fc10fa30dbf994368ab`.
+
 ## Strict next step
 
-Watch the structured Apple Silicon feedback channel and reproduce any reported installation, death, timeout, wrong-answer, config, or uninstall defect only with synthetic/sanitized inputs; fix it before benchmark work. Keep both hosted candidates `UNVALIDATED_NOT_FOR_PUBLICATION`. Linux promotion remains blocked without explicit owner authorization, an immutable public asset/checksum, literal clean-HOME public curl receipt, and live OAuth doctor on an actual target Linux host. Never replace the published macOS v0.1.0 bytes with the different candidate hash.
+Enter an external-signal wait. Resume product work only for a privacy-reviewed `first-use`/`product-defect` report, a private vulnerability report, or explicit owner authorization for another platform. Reproduce reports only with synthetic/sanitized inputs and fix product defects before benchmark work. Do not manufacture additional provider, benchmark, frozen-candidate, gold, or release activity while no trigger exists. Keep hosted candidates `UNVALIDATED_NOT_FOR_PUBLICATION`; never replace the published macOS v0.1.0 bytes.
 
 ## Blocking
 
