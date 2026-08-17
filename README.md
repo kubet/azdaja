@@ -135,8 +135,32 @@ official leaderboard results or superiority claims.
 > This is a preregistered validation-derived RAH slice, not official full OOLONG
 > or a leaderboard result, and has no paired-control or superiority claim.
 > Receipt SHA-256: `2847722dbe3d4ca9cc527b103c481036cabc65dfac868e55bc13fdefd72c70e1`.
-> The completed `99f8ee7` run remains frozen; the broader campaign is active only
-> for separately frozen candidates and never mutates or reruns these 199 rows.
+> The completed `99f8ee7` run remains frozen; the broader campaign may proceed
+> only with separately frozen candidates, is currently owner-decision blocked,
+> and never mutates or reruns these 199 rows.
+>
+> **Successor campaign status — 2026-08-17, in required order:**
+>
+> 1. **Score provenance:** confirmed above; the 199 rows, score, and consumed gold
+>    custody remain terminal and immutable.
+> 2. **MINI-RAH:** `NO_GO_NO_CANDIDATE`. The 15 watchdog deaths were imposed by
+>    the runner-owned 600-second row wall, which call-count-scaled cell/sub-call
+>    timeouts cannot extend; the other 23 deaths are outside that clock scope.
+>    No candidate or MINI row was created. Evidence commit
+>    [`5e66618`](https://github.com/kubet/azdaja/commit/5e66618388ab60f2209ddf1f2e4f07827f5a8aa4).
+> 3. **Agent transport:** the exact successor scout is a terminal invalid abort,
+>    not a score. Eight of 20 arm rows were retained as zero-valued controller
+>    failures; an unretained ninth row attempt was interrupted with provider
+>    entry unknown. The offered agent was never used, and no scorer or gold
+>    access occurred. This schedule/root is permanently never resumed, retried,
+>    revised, replaced, scored, or relaunched; any future scout needs fresh
+>    authorization plus a new schedule/root. [Receipt](bench/results/agent-transport-disease10-invalid-abort.json)
+>    SHA-256 `c19d3b7333d16467d6d8ba450f144a0b358d6c325fdaf4ea04997bd26cb2dcda`.
+> 4. **Product:** published Apple Silicon v0.1.0 bytes remain immutable. Linux
+>    publication is blocked before the first public binding because v0.1.0 has
+>    neither a Linux release asset nor a Linux `SHA256SUMS` entry; a new
+>    owner-selected immutable version/tag path is required. No actionable public
+>    first-use issue or private advisory is open.
 >
 > Candidate labels are experiment serials, not releases or monotonic upgrades.
 > A newer experiment never retrofits results from a different candidate or
@@ -162,9 +186,15 @@ No other gold access occurred. Exact public-safe artifacts are
 `bench/results/rah199-99f-score.json`, `rah199-99f-completion.json`,
 `rah199-99f-gold-consumed.json`, and `rah199-99f-terminal-receipt.json`.
 
-The standing agent-transport paired scout was N/A rather than zero accuracy:
-0/10 pairs executed because the frozen binary lacked the required per-model,
-file-backed-`ctx` treatment interface. No substitute arm was fabricated.
+The historical standing agent-transport paired scout was N/A rather than zero
+accuracy: 0/10 pairs executed because the frozen binary lacked the required
+per-model, file-backed-`ctx` treatment interface. No substitute arm was
+fabricated. A separately authorized successor attempt later retained 8/20
+zero-valued controller-failure rows before an invalid abort; it never reached a
+complete paired result, scorer, or gold access and is likewise not an accuracy
+estimate. Its public-safe terminal receipt is
+[`agent-transport-disease10-invalid-abort.json`](bench/results/agent-transport-disease10-invalid-abort.json)
+(SHA-256 `c19d3b7333d16467d6d8ba450f144a0b358d6c325fdaf4ea04997bd26cb2dcda`).
 
 ### Derived RULER, 90 fixtures
 

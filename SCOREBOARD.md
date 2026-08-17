@@ -13,3 +13,13 @@ Binary SHA-256: `4ecb1e2178143b45e1bba8c30669b68adce68f30e8cf905d0bd500b28cb6422
 Protocol citation: released OOLONG scoring/parser semantics at [`abertsch72/oolong@0bb7eab`](https://github.com/abertsch72/oolong/blob/0bb7eabe839218fee7fe8d007f41cfc2fd3ae24c/src/eval/eval_helpers.py), with the frozen schedule and scoring custody recorded in [`bench/results/rah199-99f-terminal-receipt.json`](bench/results/rah199-99f-terminal-receipt.json).
 
 This is a preregistered validation-derived RAH slice, not official full OOLONG or a leaderboard result. The `99f8ee7` run is immutable and will not be retried, resumed, replaced, or rescored. The broader candidate campaign may continue only with separately frozen artifacts and schedules.
+
+## Successor dispositions (not scores)
+
+| Workstream | Disposition | Evidence boundary |
+|---|---|---|
+| MINI-RAH timeout-only successor | `NO_GO_NO_CANDIDATE` | The external 600-second row watchdog is not controlled by cell/sub-call timeouts; no candidate or MINI row exists. Commit [`5e66618`](https://github.com/kubet/azdaja/commit/5e66618388ab60f2209ddf1f2e4f07827f5a8aa4). |
+| Agent-transport disease-10 scout | `INVALID_ABORT`, N/A | 8/20 zero-valued controller-failure rows retained, one unretained ninth row attempt interrupted with provider entry unknown, 0 agent-class calls, 0 score/gold invocations. [Receipt](bench/results/agent-transport-disease10-invalid-abort.json), SHA-256 `c19d3b7333d16467d6d8ba450f144a0b358d6c325fdaf4ea04997bd26cb2dcda`. |
+| Linux x86_64 public binary | blocked before public artifact/checksum binding | Immutable v0.1.0 has no Linux release asset or checksum entry; requires a new owner-selected version/tag path. |
+
+None of these rows changes, confirms, or extends the defining 61.452662890467536% result.
