@@ -48,6 +48,22 @@ fn sha256(path: &Path) -> String {
     panic!("no SHA-256 utility available");
 }
 
+fn local_install_candidate(scratch: &Path, built_binary: &Path) -> PathBuf {
+    const DOWNLOAD_CAP: u64 = 64 * 1024 * 1024;
+    let candidate = scratch.join("validation-candidate-azdaja");
+    fs::copy(built_binary, &candidate).unwrap();
+    fs::set_permissions(&candidate, fs::Permissions::from_mode(0o755)).unwrap();
+    if fs::metadata(&candidate).unwrap().len() > DOWNLOAD_CAP {
+        let stripped = Command::new("strip").arg(&candidate).status().unwrap();
+        assert!(stripped.success(), "strip failed for oversized test binary");
+    }
+    assert!(
+        fs::metadata(&candidate).unwrap().len() <= DOWNLOAD_CAP,
+        "real validation candidate still exceeds installer download cap"
+    );
+    candidate
+}
+
 fn run_installer(
     script: &Path,
     home: &Path,
@@ -85,8 +101,9 @@ fn run_installer(
 fn literal_site_installer_is_sealed_or_installs_verified_bytes_without_provider_calls() {
     let scratch = Scratch::new();
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install");
-    let binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
-    let digest = sha256(binary);
+    let built_binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
+    let binary = local_install_candidate(&scratch.0, built_binary);
+    let digest = sha256(&binary);
     let url = format!("file://{}", binary.display());
 
     let tools = scratch.0.join("tools");

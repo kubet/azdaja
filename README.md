@@ -263,7 +263,7 @@ python3 -m unittest discover -s bench/oolong -p 'test_*.py' -v
 
 The suite covers the three-file 50 MiB product path, the literal sealed/hash-bound site installer, provider-free managed installation, lifecycle persistence, snapshot ownership, Unicode caps, transactional finalization, call budgets, batch ordering and partial recovery, Harness API framing, OAuth model pinning, streamed usage, bounded cleanup, manifest coverage, installer rollback and customized-config removal, Monty compatibility, and blind benchmark controls.
 
-The GitHub Actions workflow is enabled. Hosted run `31986195653` passed the complete macOS-14 job; Ubuntu passed through the 50 MiB product gate but failed the final bad-hash site-installer assertion. Linux remains blocked until that failure is reproduced with full diagnostics, fixed without opening public Linux distribution, and a clean same-commit hosted receipt exists.
+The GitHub Actions workflow is enabled. macOS-14 passes. Diagnostic run `31986703880` showed Ubuntu passed the three-file 50 MiB gate, then correctly rejected an oversized debug validation binary at the public 64 MiB installer cap before reaching the bad-hash assertion. The test now strips only its private scratch copy when a real debug binary exceeds that cap; the public cap and installer behavior are unchanged. Linux remains blocked until a clean same-commit hosted receipt exists.
 
 ## License
 
