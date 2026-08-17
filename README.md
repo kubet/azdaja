@@ -263,7 +263,7 @@ python3 -m unittest discover -s bench/oolong -p 'test_*.py' -v
 
 The suite covers the three-file 50 MiB product path, the literal sealed/hash-bound site installer, provider-free managed installation, lifecycle persistence, snapshot ownership, Unicode caps, transactional finalization, call budgets, batch ordering and partial recovery, Harness API framing, OAuth model pinning, streamed usage, bounded cleanup, manifest coverage, installer rollback and customized-config removal, Monty compatibility, and blind benchmark controls.
 
-GitHub Actions is currently disabled because the account cannot start hosted jobs; local validation is authoritative until billing is enabled.
+The GitHub Actions workflow definition is enabled, but hosted jobs remain account-blocked: retained Linux and macOS annotations report that zero steps started because recent payments failed or the spending limit must be increased. Local validation is authoritative until that billing/spending gate is resolved and a clean hosted receipt exists.
 
 ## License
 

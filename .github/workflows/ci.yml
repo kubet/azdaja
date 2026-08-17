@@ -2,9 +2,14 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -14,15 +19,88 @@ jobs:
         os: [ubuntu-latest, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
+          toolchain: 1.95.0
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo fmt --all --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test -- --test-threads=1
-      - run: cargo build --release
+      - run: cargo clippy --all-targets --all-features --locked -- -D warnings
+      - run: cargo test --all --locked -- --test-threads=1
+      - run: cargo build --release --locked
+      - run: target/release/azdaja --version
       - run: target/release/azdaja doctor --caps
       - if: runner.os == 'Linux'
         run: python3 bench/perf.py --binary target/release/azdaja --sizes-mb 1 --repeats 3
+
+      # Manual runs retain exact candidate bytes for later platform validation.
+      # These artifacts are not releases and may not be bound into site/install.
+      - name: Package unvalidated candidate
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          AZDAJA_COMMIT: ${{ github.sha }}
+          AZDAJA_RUN_ID: ${{ github.run_id }}
+          AZDAJA_RUN_ATTEMPT: ${{ github.run_attempt }}
+          AZDAJA_RUNNER_OS: ${{ runner.os }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import shutil
+          import subprocess
+          import tarfile
+
+          source = pathlib.Path("target/release/azdaja")
+          host = subprocess.check_output(["rustc", "-vV"], text=True)
+          host = next(line.split(": ", 1)[1] for line in host.splitlines() if line.startswith("host: "))
+          name = f"azdaja-{os.environ['AZDAJA_COMMIT']}-{host}"
+          dist = pathlib.Path("dist")
+          payload = pathlib.Path("candidate-payload")
+          dist.mkdir(exist_ok=False)
+          payload.mkdir(exist_ok=False)
+          target = payload / name
+          shutil.copy2(source, target)
+          digest = hashlib.sha256(target.read_bytes()).hexdigest()
+          (payload / "SHA256SUMS").write_text(f"{digest}  {name}\n")
+          receipt = {
+              "schema_version": 1,
+              "record_type": "azdaja_unvalidated_release_candidate",
+              "status": "UNVALIDATED_NOT_FOR_PUBLICATION",
+              "commit": os.environ["AZDAJA_COMMIT"],
+              "host": host,
+              "runner_os": os.environ["AZDAJA_RUNNER_OS"],
+              "github_run_id": os.environ["AZDAJA_RUN_ID"],
+              "github_run_attempt": os.environ["AZDAJA_RUN_ATTEMPT"],
+              "binary": {"name": name, "bytes": target.stat().st_size, "sha256": digest},
+              "version": subprocess.check_output([str(target), "--version"], text=True).strip(),
+              "checks": ["fmt", "clippy", "locked-tests", "locked-release-build", "doctor-caps"],
+              "publication_authorized": False,
+              "limitations": [
+                  "no public installer receipt",
+                  "no live OAuth doctor",
+                  "no platform-specific three-file installed-binary receipt",
+              ],
+          }
+          (payload / "candidate-receipt.json").write_text(
+              json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
+          )
+          archive = dist / f"{name}.tar.gz"
+          with tarfile.open(archive, "w:gz") as bundle:
+              for item in sorted(payload.iterdir()):
+                  bundle.add(item, arcname=item.name)
+          archive_digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+          (dist / "ARCHIVE_SHA256").write_text(f"{archive_digest}  {archive.name}\n")
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: azdaja-candidate-${{ runner.os }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: dist/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
