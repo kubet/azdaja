@@ -1,0 +1,78 @@
+name: Public source install
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-source-install-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-install:
+    name: source install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Install Rust 1.95.0
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.95.0
+      - name: Install public v0.1.0 source command in isolation
+        shell: bash
+        env:
+          EXPECTED_TAG_COMMIT: 021b79e76e5951dd6142b4c76e564ae41adb9504
+          EXPECTED_VERSION: azdaja 0.1.0 (monty 0.0.21)
+        run: |
+          set -euo pipefail
+          actual="$(git ls-remote https://github.com/kubet/azdaja.git 'refs/tags/v0.1.0^{}' | awk '{print $1}')"
+          test "$actual" = "$EXPECTED_TAG_COMMIT"
+
+          scratch="$(mktemp -d)"
+          trap 'rm -rf "$scratch"' EXIT
+          root="$scratch/install-root"
+          home="$scratch/fresh-home"
+          guard="$scratch/provider-guard"
+          cargo_home="$scratch/cargo-home"
+          mkdir -p "$root" "$home" "$guard" "$cargo_home"
+          marker="$scratch/provider-called"
+          for tool in jcode claude codex gemini opencode; do
+            cat > "$guard/$tool" <<EOF
+          #!/bin/sh
+          printf called > "$marker"
+          exit 93
+          EOF
+            chmod 755 "$guard/$tool"
+          done
+
+          CARGO_HOME="$cargo_home" CARGO_TARGET_DIR="$scratch/cargo-target" cargo install --git https://github.com/kubet/azdaja --tag v0.1.0 --locked --root "$root"
+          checkout_git="$(find "$cargo_home/git/checkouts" -name .git -prune -print)"
+          test -n "$checkout_git"
+          test "$(printf '%s\n' "$checkout_git" | grep -c .)" = "1"
+          checkout="$(dirname "$checkout_git")"
+          test "$(git -C "$checkout" rev-parse HEAD)" = "$EXPECTED_TAG_COMMIT"
+          actual_after="$(git ls-remote https://github.com/kubet/azdaja.git 'refs/tags/v0.1.0^{}' | awk '{print $1}')"
+          test "$actual_after" = "$EXPECTED_TAG_COMMIT"
+
+          binary="$root/bin/azdaja"
+          test -x "$binary"
+          test "$("$binary" --version)" = "$EXPECTED_VERSION"
+          caps="$(HOME="$home" PATH="$guard:$PATH" "$binary" doctor --caps)"
+          python3 - "$caps" <<'PY'
+          import json
+          import sys
+          caps = json.loads(sys.argv[1])
+          assert caps["azdaja"] == "0.1.0", caps
+          assert caps["monty"] == "0.0.21", caps
+          assert caps["dump_version"] == 5, caps
+          assert "persistent-repl" in caps["capabilities"], caps
+          assert "monty-os-calls-denied" in caps["capabilities"], caps
+          PY
+          test ! -e "$marker"
+          test -z "$(find "$home" -mindepth 1 -print -quit)"

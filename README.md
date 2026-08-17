@@ -52,6 +52,8 @@ Other platforms remain source-only and require Rust 1.95:
 cargo install --git https://github.com/kubet/azdaja --tag v0.1.0 --locked
 ```
 
+The manual read-only `Public source install` workflow replays the documented public git/tag/locked install on Ubuntu and Apple Silicon macOS with an isolation-only `--root`, verifies both the fetched checkout and pre/post remote annotated-tag target, exact version and evaluator capabilities, and fails if `doctor --caps` enters a configured provider or mutates a fresh HOME. It uploads no binary and does not expand supported public platforms.
+
 The Jcode adapter uses its stable Harness API over an owner-only Unix socket and pins `openai-oauth:<model>`. It does not fall back to a metered API key.
 
 ## Use
