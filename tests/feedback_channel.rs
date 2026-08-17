@@ -157,6 +157,48 @@ fn public_feedback_paths_enforce_the_privacy_boundary() {
             path.display()
         );
 
+        if name == "first-use-feedback.yml" {
+            let workload_items: Vec<_> = items
+                .iter()
+                .filter(|item| item.contains(&"    id: workload"))
+                .collect();
+            assert_eq!(
+                workload_items.len(),
+                1,
+                "first-use form must have one workload item"
+            );
+            let workload = workload_items[0];
+            assert_eq!(workload.first().copied(), Some("  - type: dropdown"));
+            assert!(
+                workload.contains(&"        - Not reached — installation or doctor failed"),
+                "pre-workload failures need a truthful input-class option"
+            );
+            assert!(
+                workload.contains(&"      required: true"),
+                "workload or explicit not-reached status must remain required"
+            );
+
+            let size_items: Vec<_> = items
+                .iter()
+                .filter(|item| item.contains(&"    id: size"))
+                .collect();
+            assert_eq!(
+                size_items.len(),
+                1,
+                "first-use form must have one input-size item"
+            );
+            let size = size_items[0];
+            assert_eq!(size.first().copied(), Some("  - type: input"));
+            assert!(size.contains(&"      label: Approximate input size, if reached"));
+            assert!(size.contains(
+                &"      description: Enter `not reached` if installation or doctor failed before processing."
+            ));
+            assert!(
+                size.contains(&"      required: true"),
+                "first-use size or explicit not-reached status must remain required"
+            );
+        }
+
         let privacy_items: Vec<_> = items
             .iter()
             .filter(|item| item.contains(&"    id: privacy"))

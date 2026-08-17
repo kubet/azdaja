@@ -36,6 +36,7 @@ body:
     attributes:
       label: Input class
       options:
+        - Not reached — installation or doctor failed
         - Build log
         - Repository dump
         - Transcript
@@ -45,8 +46,9 @@ body:
   - type: input
     id: size
     attributes:
-      label: Approximate input size
-      placeholder: 50 MiB
+      label: Approximate input size, if reached
+      description: Enter `not reached` if installation or doctor failed before processing.
+      placeholder: 50 MiB or not reached
     validations:
       required: true
   - type: dropdown
