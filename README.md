@@ -122,12 +122,21 @@ schedule did not run paired controls; it cannot be combined with or used to
 replace those comparative tables. These are single-run private diagnostics, not
 official leaderboard results or superiority claims.
 
-> **Latest campaign status:** the separately owner-authorized immutable RAH-199
-> completed 199/199 rows and its authorized scorer ran exactly once. Candidate
-> commit `99f8ee7`, binary SHA-256 `4ecb1e2178143b45e1bba8c30669b68adce68f30e8cf905d0bd500b28cb64225`,
-> scored **61.4527%** on the fixed denominator with 161/199 execution successes.
-> It is a validation-derived slice, not official full OOLONG, and has no paired
-> control or superiority claim. Receipt SHA-256: `2847722dbe3d4ca9cc527b103c481036cabc65dfac868e55bc13fdefd72c70e1`.
+> **Defining campaign result — 2026-08-17:** the separately owner-authorized,
+> immutable RAH-199 run completed **199/199** rows and its authorized scorer ran
+> exactly once. Candidate commit `99f8ee755f91a6fa2179c52903474db0cfd7d093`,
+> binary SHA-256 `4ecb1e2178143b45e1bba8c30669b68adce68f30e8cf905d0bd500b28cb64225`,
+> used **Sol as the root model** and scored **61.452662890467536%** on the fixed
+> denominator. **161 completions averaging ~76% official; 38 deaths scored zero.**
+> Protocol: fixed schedule `6fcbff4547b16472131c5d246929fd62aec5dd02407d6fa3812c3e1ab8093d20`,
+> released OOLONG parser semantics at
+> [`0bb7eab/eval_helpers.py`](https://github.com/abertsch72/oolong/blob/0bb7eabe839218fee7fe8d007f41cfc2fd3ae24c/src/eval/eval_helpers.py),
+> and the public-safe [terminal receipt](bench/results/rah199-99f-terminal-receipt.json).
+> This is a preregistered validation-derived RAH slice, not official full OOLONG
+> or a leaderboard result, and has no paired-control or superiority claim.
+> Receipt SHA-256: `2847722dbe3d4ca9cc527b103c481036cabc65dfac868e55bc13fdefd72c70e1`.
+> The completed `99f8ee7` run remains frozen; the broader campaign is active only
+> for separately frozen candidates and never mutates or reruns these 199 rows.
 >
 > Candidate labels are experiment serials, not releases or monotonic upgrades.
 > A newer experiment never retrofits results from a different candidate or
@@ -141,8 +150,10 @@ official leaderboard results or superiority claims.
 | Native jcode | not run | not run | N/A | N/A |
 | Prime Agent | not run | not run | N/A | N/A |
 
-All 38 execution failures remained fixed-denominator zeroes. Root-context leak
-and cleanup checks passed 199/199. The equal-weight 13-length-bucket macro was
+**161 completions averaging ~76% official; 38 deaths scored zero.** The exact
+completed-row average is 75.9570%; the fixed-denominator result is 61.4527%.
+Root-context leak and cleanup checks passed 199/199. The equal-weight
+13-length-bucket macro was
 61.4577%. The post-run no-gold validator was invoked once, returned its
 pre-inference guard `already entered inference`, and was not retried. With 199
 rows plus `completion.json` and no scoring sentinels, the separately authorized
