@@ -114,8 +114,14 @@ fn literal_site_installer_is_sealed_or_installs_verified_bytes_without_provider_
     fs::create_dir(&bad_home).unwrap();
     let bad = run_installer(&script, &bad_home, &path, Some(&url), Some(&"0".repeat(64)));
     assert_eq!(bad.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&bad.stderr).contains("SHA-256 mismatch"));
     assert!(fs::read_dir(&bad_home).unwrap().next().is_none());
+    assert!(
+        String::from_utf8_lossy(&bad.stderr).contains("SHA-256 mismatch"),
+        "unexpected bad-hash result: status={} stdout={} stderr={}",
+        bad.status,
+        String::from_utf8_lossy(&bad.stdout),
+        String::from_utf8_lossy(&bad.stderr)
+    );
 
     let good_home = scratch.0.join("good-home");
     fs::create_dir(&good_home).unwrap();

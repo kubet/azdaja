@@ -263,7 +263,7 @@ python3 -m unittest discover -s bench/oolong -p 'test_*.py' -v
 
 The suite covers the three-file 50 MiB product path, the literal sealed/hash-bound site installer, provider-free managed installation, lifecycle persistence, snapshot ownership, Unicode caps, transactional finalization, call budgets, batch ordering and partial recovery, Harness API framing, OAuth model pinning, streamed usage, bounded cleanup, manifest coverage, installer rollback and customized-config removal, Monty compatibility, and blind benchmark controls.
 
-The GitHub Actions workflow definition is enabled, but hosted jobs remain account-blocked: retained Linux and macOS annotations report that zero steps started because recent payments failed or the spending limit must be increased. Local validation is authoritative until that billing/spending gate is resolved and a clean hosted receipt exists.
+The GitHub Actions workflow is enabled. Hosted run `31986195653` passed the complete macOS-14 job; Ubuntu passed through the 50 MiB product gate but failed the final bad-hash site-installer assertion. Linux remains blocked until that failure is reproduced with full diagnostics, fixed without opening public Linux distribution, and a clean same-commit hosted receipt exists.
 
 ## License
 
