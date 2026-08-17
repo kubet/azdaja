@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560" role="img" aria-labelledby="title desc">
+  <title id="title">Illustrative whole-input and bounded-root prompt crossover</title>
+  <desc id="desc">Log-log plot. A hypothetical prompt containing the whole UTF-8 input crosses a constant 64 KiB root-prompt envelope at 0.0625 MiB under a four bytes per token assumption. Exact Azdaja acceptance evidence exists only for three synthetic 50 MiB cases. This is not a total token, price, or savings measurement.</desc>
+  <rect width="960" height="560" fill="#ffffff"/>
+  <text x="480" y="34" text-anchor="middle" font-family="system-ui, sans-serif" font-size="22" font-weight="700" fill="#17202a">Prompt-envelope crossover (illustrative)</text>
+  <text x="480" y="58" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="#52606d">Log scales; 4 UTF-8 bytes/token assumed for both lines</text>
+  <line x1="105" y1="385.00" x2="920" y2="385.00" stroke="#dfe3e8" stroke-width="1"/>
+  <text x="93" y="389.00" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">10k</text>
+  <line x1="105" y1="292.00" x2="920" y2="292.00" stroke="#dfe3e8" stroke-width="1"/>
+  <text x="93" y="296.00" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">100k</text>
+  <line x1="105" y1="199.00" x2="920" y2="199.00" stroke="#dfe3e8" stroke-width="1"/>
+  <text x="93" y="203.00" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">1M</text>
+  <line x1="105" y1="106.00" x2="920" y2="106.00" stroke="#dfe3e8" stroke-width="1"/>
+  <text x="93" y="110.00" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">10M</text>
+  <line x1="105.00" y1="78" x2="105.00" y2="450" stroke="#eef0f2" stroke-width="1"/>
+  <text x="105.00" y="472" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">0.01</text>
+  <line x1="280.36" y1="78" x2="280.36" y2="450" stroke="#eef0f2" stroke-width="1"/>
+  <text x="280.36" y="472" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">0.0625</text>
+  <line x1="325.33" y1="78" x2="325.33" y2="450" stroke="#eef0f2" stroke-width="1"/>
+  <text x="325.33" y="472" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">0.1</text>
+  <line x1="545.66" y1="78" x2="545.66" y2="450" stroke="#eef0f2" stroke-width="1"/>
+  <text x="545.66" y="472" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">1</text>
+  <line x1="765.99" y1="78" x2="765.99" y2="450" stroke="#eef0f2" stroke-width="1"/>
+  <text x="765.99" y="472" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">10</text>
+  <line x1="920.00" y1="78" x2="920.00" y2="450" stroke="#eef0f2" stroke-width="1"/>
+  <text x="920.00" y="472" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">50</text>
+  <line x1="105" y1="450" x2="920" y2="450" stroke="#17202a" stroke-width="1.5"/>
+  <line x1="105" y1="78" x2="105" y2="450" stroke="#17202a" stroke-width="1.5"/>
+  <text x="512.5" y="502" text-anchor="middle" font-family="system-ui, sans-serif" font-size="14" fill="#17202a">UTF-8 input size (MiB)</text>
+  <text x="28" y="264.0" text-anchor="middle" transform="rotate(-90 28 264.0)" font-family="system-ui, sans-serif" font-size="14" fill="#17202a">Estimated prompt tokens</text>
+  <polyline points="105.00,439.07 171.33,411.08 237.65,383.08 280.36,365.05 325.33,346.07 413.01,309.06 479.34,281.07 545.66,253.07 611.99,225.08 699.67,188.07 765.99,160.07 832.32,132.08 920.00,95.07" fill="none" stroke="#b33a3a" stroke-width="4"/>
+  <line x1="105" y1="365.05" x2="920" y2="365.05" stroke="#1967a3" stroke-width="4" stroke-dasharray="9 6"/>
+  <circle cx="280.36" cy="365.05" r="6" fill="#ffffff" stroke="#17202a" stroke-width="2"/>
+  <line x1="280.36" y1="372.05" x2="280.36" y2="450" stroke="#7b8794" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text x="290.36" y="353.05" font-family="system-ui, sans-serif" font-size="12" fill="#17202a">assumed crossover: 0.0625 MiB (64 KiB)</text>
+  <circle cx="920.00" cy="95.07" r="5" fill="#b33a3a"/>
+  <circle cx="920.00" cy="365.05" r="5" fill="#1967a3"/>
+  <text x="912.00" y="114.07" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#8f2e2e">50 MiB whole-input estimate: 13,107,200</text>
+  <text x="912.00" y="385.05" text-anchor="end" font-family="system-ui, sans-serif" font-size="12" fill="#155680">64 KiB envelope estimate: 16,384</text>
+  <line x1="126" y1="96" x2="164" y2="96" stroke="#b33a3a" stroke-width="4"/>
+  <text x="174" y="101" font-family="system-ui, sans-serif" font-size="12" fill="#17202a">hypothetical whole input in one prompt</text>
+  <line x1="126" y1="119" x2="164" y2="119" stroke="#1967a3" stroke-width="4" stroke-dasharray="9 6"/>
+  <text x="174" y="124" font-family="system-ui, sans-serif" font-size="12" fill="#17202a">assumed constant 64 KiB Azdaja root envelope</text>
+  <text x="480" y="525" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">Exact evidence: three synthetic 50 MiB cases had root prompts below 64 KiB. No continuum was measured.</text>
+  <text x="480" y="545" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#52606d">Excludes child, repair, output, caching, tokenizer, and pricing effects; no total-token or savings claim.</text>
+</svg>

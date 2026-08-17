@@ -2,7 +2,9 @@
 
 ## Current state
 
+- decided: keep the v0.1.1 launch post nonpublished and make the same docs commit evidence-bounded: exact 50 MiB handling and bounded context, not a token-savings or adoption claim
 - decided: freeze public v0.1.1 as one tag with two binaries plus SHA256SUMS because both supported platform product gates passed
+- The private docs branch reduces README.md to a 93-line product surface: one-sentence product, three-step rationale, authenticated source install, use, exact 50 MiB acceptance, one current RAH table, and boundaries. Historical candidate tables, timings, feedback receipts, CI receipts, and stale publication prose stay out of the README and remain linked through SCOREBOARD/receipts. The reproducible crossover SVG uses only the public 50 MiB / root-prompt-below-64-KiB aggregate and explicit assumptions; `python3 tools/check_docs.py` locks the 80–120-line budget, private-install language, links, evidence boundaries, and asset freshness.
 - Public annotated tag `v0.1.1` object `b0f62e178a6434c498d1509c104be88697ebd0c8` peels to reviewed source commit `b57cc6356dc8b3de95f7e4466501d5551ee4d4f5`. GitHub release `371697592` is public, non-draft, and reported as non-prerelease with exactly three assets.
 - Downloaded public bytes, GitHub digest metadata, the release `SHA256SUMS`, and the raw-tag manifest agree exactly: Darwin arm64 is 6,414,864 bytes / `b58975de462e823adcf901e331acfd4e70c9e72b5db014de265c04e371d31883`; Linux x86_64 is 7,935,072 bytes / `b18775f0d3572b20804ff3c3af880ffc5fa3131017c566dc941c1dd743c00247`; the 186-byte manifest is `339c08051f69d2492306890035d81afac603de0532b36e315db13e19d667e7c2`.
 - Native Darwin arm64 and isolated Ubuntu 24.04 amd64 each fetched the literal public raw-tag installer into a clean HOME, performed an ordinary no-override provider-free install, matched installed bytes to the public asset and manifest, passed explicit Jcode v0.75.3 OpenAI OAuth `doctor`, passed exact installed-binary build-log/repository-dump/transcript 50 MiB cases 3/3, preserved customized managed configuration on public reinstall, uninstalled, and removed the isolated HOME/container and all gate descendants.
@@ -44,6 +46,7 @@
 2. Preserve the invalid agent-transport root and both private terminal receipts. Do not resume, retry, revise, replace, score, or relaunch it. A future scout needs fresh explicit authorization and a new independently closed schedule/root.
 3. Freeze the public v0.1.1 annotated tag, release assets, checksum manifest, and versioned installer. Postpublication evidence remains external to the tag; never rewrite history or add a same-commit claim after publication.
 4. Resume product work immediately on a privacy-reviewed actionable first-use defect or private advisory. Reproduce only with synthetic or sanitized material.
+5. Keep `drafts/v0.1.1-launch.md` nonpublished. Any external use needs separate owner authorization plus a fresh anonymous repository, installer, tag, asset, and support-availability check; this branch does not claim adoption.
 
 ## Blocking
 
