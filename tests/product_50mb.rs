@@ -86,7 +86,27 @@ max_calls_per_cell = 1
     path
 }
 
-fn run(home: &Path, cfg: &Path, trace: &Path, args: &[&str]) -> Output {
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn reaped_child_high_water_rss_bytes() -> Option<u64> {
+    let mut usage = std::mem::MaybeUninit::<libc::rusage>::zeroed();
+    // SAFETY: getrusage initializes the provided rusage on success.
+    if unsafe { libc::getrusage(libc::RUSAGE_CHILDREN, usage.as_mut_ptr()) } != 0 {
+        return None;
+    }
+    // SAFETY: the successful getrusage call initialized usage.
+    let raw = u64::try_from(unsafe { usage.assume_init() }.ru_maxrss).ok()?;
+    #[cfg(target_os = "linux")]
+    return Some(raw.saturating_mul(1024));
+    #[cfg(target_os = "macos")]
+    return Some(raw);
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn reaped_child_high_water_rss_bytes() -> Option<u64> {
+    None
+}
+
+fn run(home: &Path, cfg: &Path, trace: &Path, args: &[&str]) -> (Output, Option<u64>) {
     let binary = std::env::var_os("AZDAJA_PRODUCT_BINARY")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_azdaja")));
@@ -104,13 +124,15 @@ fn run(home: &Path, cfg: &Path, trace: &Path, args: &[&str]) -> Output {
     let deadline = Instant::now() + Duration::from_secs(90);
     loop {
         if child.try_wait().unwrap().is_some() {
-            return child.wait_with_output().unwrap();
+            let output = child.wait_with_output().unwrap();
+            return (output, reaped_child_high_water_rss_bytes());
         }
         if Instant::now() >= deadline {
             child.kill().unwrap();
             let output = child.wait_with_output().unwrap();
+            let rss = reaped_child_high_water_rss_bytes();
             panic!(
-                "50 MiB product path exceeded its 90-second outer deadline: stdout={} stderr={}",
+                "50 MiB product path exceeded its 90-second outer deadline: reaped_child_high_water_rss_bytes={rss:?} stdout={} stderr={}",
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
@@ -310,15 +332,24 @@ print("```python\n" + program + "\n```")
         ),
     ];
 
+    let mut rss_high_water = Vec::new();
     for (input, question, expected, scenario) in cases {
         let name = input.file_name().unwrap().to_string_lossy();
         let trace = scratch.0.join(format!("{scenario}.trace"));
-        let output = run(
+        let (output, rss) = run(
             &scratch.0,
             &cfg,
             &trace,
             &["solo", question, "-f", input.to_str().unwrap()],
         );
+        if let Some(bytes) = rss {
+            assert!(
+                bytes > 0,
+                "{name} reported a zero child RSS high-water mark"
+            );
+            eprintln!("product_50mb_rss scenario={scenario} reaped_child_high_water_bytes={bytes}");
+            rss_high_water.push((scenario, bytes));
+        }
         assert!(
             output.status.success(),
             "{name} died: status={:?} stdout={} stderr={}",
@@ -356,6 +387,21 @@ print("```python\n" + program + "\n```")
         );
         assert_runtime_trace(&trace);
         fs::remove_file(input).unwrap();
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        assert_eq!(
+            rss_high_water.len(),
+            3,
+            "every product case must report the process-lifetime reaped-child RSS high-water mark"
+        );
+        let peak = rss_high_water
+            .iter()
+            .map(|(_, bytes)| *bytes)
+            .max()
+            .unwrap();
+        eprintln!("product_50mb_rss maximum_reaped_child_high_water_bytes={peak}");
     }
 
     let surviving_sessions = fs::read_dir(scratch.0.join("state"))

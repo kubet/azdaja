@@ -94,6 +94,8 @@ start  load  exec  final  list  kill  solo  doctor  install  uninstall
 cargo test --test product_50mb -- --test-threads=1
 ```
 
+On Linux and macOS, the test also records `getrusage(RUSAGE_CHILDREN).ru_maxrss` as a byte-normalized, process-lifetime reaped-child high-water diagnostic; add `--nocapture` to display it. This is cumulative rather than independent per-case attribution, excludes un-reaped or non-child process-tree memory, and is neither a memory ceiling nor a claim about the published release binary unless that exact binary is selected with `AZDAJA_PRODUCT_BINARY`.
+
 A separate public-release smoke used the hash-bound installed binary with Jcode subscription OAuth on one fresh, non-benchmark 50 MiB build log. `doctor` passed, then Luna/low returned the exact generated count `Answer: 37` in 8.980 seconds with one root turn, zero child calls, no repair, no retained session, no host path, and no exact 100-byte raw-source overlap in the provider trace. Receipt: `release/v0.1.0/live-harness-smoke.json` (`c3c0dbb15c612d35a6d3f053896a81a867bd0f346ae70ef6d0e6471955fadd4b`). This single smoke validates authentication and natural-language planning for that case; it is not a general accuracy estimate.
 
 ## First-use feedback
