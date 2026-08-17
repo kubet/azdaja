@@ -162,5 +162,53 @@ fn literal_site_installer_is_sealed_or_installs_verified_bytes_without_provider_
     );
     let version = Command::new(&managed).arg("--version").output().unwrap();
     assert!(version.status.success());
-    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.0 "));
+    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.1 "));
+}
+
+#[test]
+fn v011_installer_binds_exact_two_platform_assets_and_rejects_ordinary_overrides() {
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install");
+    let text = fs::read_to_string(&script).unwrap();
+    let darwin_url =
+        "https://github.com/kubet/azdaja/releases/download/v0.1.1/azdaja-v0.1.1-darwin-arm64";
+    let linux_url =
+        "https://github.com/kubet/azdaja/releases/download/v0.1.1/azdaja-v0.1.1-linux-x86_64";
+    let darwin_sha = "b58975de462e823adcf901e331acfd4e70c9e72b5db014de265c04e371d31883";
+    let linux_sha = "b18775f0d3572b20804ff3c3af880ffc5fa3131017c566dc941c1dd743c00247";
+    assert_eq!(text.matches(darwin_url).count(), 1);
+    assert_eq!(text.matches(linux_url).count(), 1);
+    assert_eq!(text.matches(darwin_sha).count(), 1);
+    assert_eq!(text.matches(linux_sha).count(), 1);
+    assert_eq!(text.matches("Darwin-arm64)").count(), 1);
+    assert_eq!(text.matches("Linux-x86_64)").count(), 1);
+    for unsupported in [
+        "Darwin-x86_64)",
+        "Linux-aarch64)",
+        "Linux-arm64)",
+        "Linux-amd64)",
+    ] {
+        assert!(
+            !text.contains(unsupported),
+            "unexpected platform arm: {unsupported}"
+        );
+    }
+    assert!(text.contains("This platform has no published v0.1.1 binary"));
+
+    let scratch = Scratch::new();
+    let home = scratch.0.join("ordinary-override-home");
+    fs::create_dir(&home).unwrap();
+    let output = Command::new("sh")
+        .arg(&script)
+        .env("HOME", &home)
+        .env("AZDAJA_INSTALL_URL", "https://example.invalid/azdaja")
+        .env("AZDAJA_INSTALL_SHA256", "0".repeat(64))
+        .env_remove("AZDAJA_INSTALL_TEST_MODE")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("validation overrides require AZDAJA_INSTALL_TEST_MODE=local")
+    );
+    assert!(fs::read_dir(home).unwrap().next().is_none());
 }

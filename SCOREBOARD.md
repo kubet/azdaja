@@ -20,6 +20,6 @@ This is a preregistered validation-derived RAH slice, not official full OOLONG o
 |---|---|---|
 | MINI-RAH timeout-only successor | `NO_GO_NO_CANDIDATE` | The external 600-second row watchdog is not controlled by cell/sub-call timeouts; no candidate or MINI row exists. Commit [`5e66618`](https://github.com/kubet/azdaja/commit/5e66618388ab60f2209ddf1f2e4f07827f5a8aa4). |
 | Agent-transport disease-10 scout | `INVALID_ABORT`, N/A | 8/20 zero-valued controller-failure rows retained, one unretained ninth row attempt interrupted with provider entry unknown, 0 agent-class calls, 0 score/gold invocations. [Receipt](bench/results/agent-transport-disease10-invalid-abort.json), SHA-256 `c19d3b7333d16467d6d8ba450f144a0b358d6c325fdaf4ea04997bd26cb2dcda`. |
-| Linux x86_64 public binary | blocked before public artifact/checksum binding | Immutable v0.1.0 has no Linux release asset or checksum entry; requires a new owner-selected version/tag path. |
+| v0.1.1 two-platform public binary release | prepublication candidate, not a score | Exact Darwin arm64/Linux x86_64 candidate bytes and checksum plan exist; public tag/assets/curl remain blocked on reviewed GO. Immutable v0.1.0 is untouched. |
 
 None of these rows changes, confirms, or extends the defining 61.452662890467536% result.

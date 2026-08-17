@@ -2082,7 +2082,7 @@ exit 9
     );
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
-    assert!(skill.contains("azdaja 0.1.0") && skill.contains(dst.join("azdaja").to_str().unwrap()));
+    assert!(skill.contains("azdaja 0.1.1") && skill.contains(dst.join("azdaja").to_str().unwrap()));
     assert!(skill.contains("Each source occurrence is an aggregation unit"));
     assert!(skill.contains("retaining every source ID or an integer multiplicity"));
     assert!(skill.contains("actual rendered character length"));

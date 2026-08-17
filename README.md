@@ -6,7 +6,7 @@
 
 Azdaja keeps the full input inside a persistent, sandboxed Monty/Python evaluator. A root model writes compact analysis code; semantic work is delegated through `llm` and `llm_batch`; deterministic reduction happens locally.
 
-> v0.1.0 prerelease. The CLI and initial Apple Silicon macOS install path are end-to-end tested. Benchmark results below are diagnostics, not a product gate or superiority claim.
+> v0.1.1 release candidate. The CLI and exact Darwin arm64/Linux x86_64 bytes have local prepublication evidence; the tag, release, and public URL gates remain pending until reviewed publication. Benchmark results below are diagnostics, not a product gate or superiority claim.
 
 ## Why
 
@@ -31,32 +31,55 @@ FINAL_VAR("variable_name")
 
 ## Install
 
-The v0.1.0 prerelease provides one-command installation for Apple Silicon macOS:
+The reviewed v0.1.1 tag will provide one-command installation on the two exact
+binary platforms `Darwin-arm64` and `Linux-x86_64`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/v0.1.0/site/install | sh
+curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/v0.1.1/site/install | sh
 ```
 
-The versioned installer downloads only the immutable `azdaja-v0.1.0-darwin-arm64` release asset, requires SHA-256 `6b50716382ac35e4f2bc9fc3c1cc3db9ee059edde783b78dba21273bf626762a`, validates version and local evaluator capabilities, and installs the managed Jcode skill without calling a model. The manual read-only `Public release integrity` workflow checks the peeled tag, GitHub release ID/state, exact asset names/sizes/GitHub digests, and exact versioned installer bytes/bindings without downloading or executing the binary asset. Hosted run `31997061278` passed with zero artifacts and left release download counters unchanged. Receipt: `release/v0.1.0/public-release-integrity-receipt.json` (`8cb2cefe2d4d0f925e9a869820ae5bbd6b5c65dc867525025a38170cb1216c9e`).
+Until `v0.1.1` is actually tagged and published, that public command is a plan,
+not a completed installation claim. The candidate installer binds exactly
+`azdaja-v0.1.1-darwin-arm64` (6,414,864 bytes, SHA-256
+`b58975de462e823adcf901e331acfd4e70c9e72b5db014de265c04e371d31883`) and
+`azdaja-v0.1.1-linux-x86_64` (7,935,072 bytes, SHA-256
+`b18775f0d3572b20804ff3c3af880ffc5fa3131017c566dc941c1dd743c00247`). Unsupported platform pairs fail before download. Ordinary
+URL/digest environment overrides are rejected; only the explicit local
+validation mode can substitute hash-bound bytes during prepublication tests.
+Installation validates the version and local evaluator capabilities and installs
+the managed Jcode skill without calling a model.
 
-Then run the explicit live login check:
+After installation, run the explicit live login check:
 
 ```bash
 AZ="$HOME/.jcode/skills/azdaja/azdaja"
 "$AZ" doctor
 ```
 
-Choose another managed target with `sh -s -- --harness claude` (also `codex`, `gemini`, `opencode`, or `all`). A supported harness login is required for `doctor` and product use, not installation. A customized managed `config.toml` is preserved on upgrade and may be removed by normal uninstall; changed binaries, changed skills, and unknown files still fail closed.
+Choose another managed target with `sh -s -- --harness claude` (also `codex`,
+`gemini`, `opencode`, or `all`). A supported harness login is required for
+`doctor` and product use, not installation. A customized managed `config.toml`
+is preserved on upgrade and may be removed by normal uninstall; changed
+binaries, changed skills, and unknown files still fail closed.
 
-Other platforms remain source-only and require Rust 1.95:
+Other platforms remain source-only and require Rust 1.95 after publication:
 
 ```bash
-cargo install --git https://github.com/kubet/azdaja --tag v0.1.0 --locked
+cargo install --git https://github.com/kubet/azdaja --tag v0.1.1 --locked
 ```
 
-The manual read-only `Public source install` workflow replays the documented public git/tag/locked install on Ubuntu and Apple Silicon macOS with an isolation-only `--root`, verifies both the fetched checkout and pre/post remote annotated-tag target, exact version and evaluator capabilities, and fails if `doctor --caps` enters a configured provider or mutates a fresh HOME. It uploads no binary and does not expand supported public platforms. Hosted run `31993870431` passed both jobs and retained zero artifacts. Receipt: `release/v0.1.0/public-source-install-receipt.json` (`7394e15602cff76ca7b3cabe19d3adb2aeda154861d10943a7001569a82db816`). The strengthened gate also routes that exact installed source binary through the tag's build-log, repository-dump, and transcript 50 MiB acceptance cases before cleanup; hosted run `31995419472` passed both jobs with zero artifacts. Receipt: `release/v0.1.0/public-source-installed-50mb-receipt.json` (`00b442e7f7a38357477ebe17ec0e9d4f310b1640b753c50f41ca6f885f9bb1b3`).
+The v0.1.1 prepublication plan, exact checksums, notes, and evidence boundary are
+under `release/v0.1.1/`. No workflow has write permission or mutates a GitHub
+release. Public tag, asset download, and literal public curl checks remain
+pending until reviewed publication.
 
-The Jcode adapter uses its stable Harness API over an owner-only Unix socket and pins `openai-oauth:<model>`. It does not fall back to a metered API key.
+The immutable v0.1.0 release remains unchanged. Its manual read-only integrity
+workflow passed hosted run `31997061278`; its public source-install workflow
+passed Ubuntu/macOS run `31993870431`, and its installed-source 50 MiB gate
+passed run `31995419472`. Receipts remain under `release/v0.1.0/`.
+
+The Jcode adapter uses its stable Harness API over an owner-only Unix socket and
+pins `openai-oauth:<model>`. It does not fall back to a metered API key.
 
 ## Use
 
@@ -156,11 +179,11 @@ official leaderboard results or superiority claims.
 >    revised, replaced, scored, or relaunched; any future scout needs fresh
 >    authorization plus a new schedule/root. [Receipt](bench/results/agent-transport-disease10-invalid-abort.json)
 >    SHA-256 `c19d3b7333d16467d6d8ba450f144a0b358d6c325fdaf4ea04997bd26cb2dcda`.
-> 4. **Product:** published Apple Silicon v0.1.0 bytes remain immutable. Linux
->    publication is blocked before the first public binding because v0.1.0 has
->    neither a Linux release asset nor a Linux `SHA256SUMS` entry; a new
->    owner-selected immutable version/tag path is required. No actionable public
->    first-use issue or private advisory is open.
+> 4. **Product:** published Apple Silicon v0.1.0 bytes remain immutable. The
+>    owner-selected v0.1.1 one-tag/two-binary candidate is prepared separately;
+>    its public tag, release assets, literal curl, and hosted platform receipts
+>    remain blocked on reviewed publication GO. No actionable public first-use
+>    issue or private advisory is open.
 >
 > Candidate labels are experiment serials, not releases or monotonic upgrades.
 > A newer experiment never retrofits results from a different candidate or

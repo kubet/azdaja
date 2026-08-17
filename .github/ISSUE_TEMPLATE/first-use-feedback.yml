@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for trying Azdaja. The published v0.1.0 binary supports Apple Silicon macOS; other platforms are source-only.
+        Thanks for trying Azdaja. The v0.1.1 binary installer supports Apple Silicon macOS and Linux x86_64; other platforms are source-only.
 
         Do not paste or attach raw build logs, repository content, transcripts, traces, config files, host paths, OAuth material, tokens, or secrets. Synthetic or sanitized reproductions only.
   - type: dropdown
@@ -14,7 +14,7 @@ body:
     attributes:
       label: Installation path
       options:
-        - Published v0.1.0 Apple Silicon macOS installer
+        - v0.1.1 macOS arm64 or Linux x86_64 installer
         - Locked source installation on another platform
     validations:
       required: true
@@ -23,12 +23,12 @@ body:
     attributes:
       label: Azdaja version, if available
       description: Output of `azdaja --version` only. If installation failed before a binary existed, leave this blank.
-      placeholder: azdaja 0.1.0 (monty 0.0.21)
+      placeholder: azdaja 0.1.1 (monty 0.0.21)
   - type: input
     id: architecture
     attributes:
       label: Operating system and architecture
-      placeholder: macOS Apple Silicon (arm64)
+      placeholder: macOS arm64 or Linux x86_64
     validations:
       required: true
   - type: dropdown
