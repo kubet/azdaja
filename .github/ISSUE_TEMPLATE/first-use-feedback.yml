@@ -1,6 +1,7 @@
 name: First-use feedback
 description: Report a successful or unsuccessful first Azdaja product use without sharing private input.
 title: "[first use] "
+labels: ["first-use"]
 body:
   - type: markdown
     attributes:

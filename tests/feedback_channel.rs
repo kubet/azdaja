@@ -103,7 +103,26 @@ fn public_feedback_paths_enforce_the_privacy_boundary() {
             continue;
         }
 
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("UTF-8 issue form name");
+        let expected_label = match name {
+            "first-use-feedback.yml" => r#"labels: ["first-use"]"#,
+            "product-defect.yml" => r#"labels: ["product-defect"]"#,
+            _ => panic!("unreviewed public issue form: {}", path.display()),
+        };
         let text = fs::read_to_string(&path).expect("read issue form");
+        let label_settings: Vec<_> = text
+            .lines()
+            .filter(|line| line.starts_with("labels:"))
+            .collect();
+        assert_eq!(
+            label_settings,
+            [expected_label],
+            "issue form must own its exact top-level routing label: {}",
+            path.display()
+        );
         let items = canonical_body_items(&text, &path);
         let privacy_items: Vec<_> = items
             .iter()
@@ -162,12 +181,7 @@ fn public_feedback_paths_enforce_the_privacy_boundary() {
             path.display()
         );
 
-        forms.push(
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .expect("UTF-8 issue form name")
-                .to_owned(),
-        );
+        forms.push(name.to_owned());
     }
 
     forms.sort();

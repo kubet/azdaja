@@ -1,6 +1,7 @@
 name: Product defect
 description: Report an installation, authentication, death, timeout, or correctness defect safely.
 title: "[product defect] "
+labels: ["product-defect"]
 body:
   - type: markdown
     attributes:
