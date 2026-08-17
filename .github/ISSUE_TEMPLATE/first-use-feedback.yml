@@ -1,0 +1,84 @@
+name: First-use feedback
+description: Report a successful or unsuccessful first Azdaja product use without sharing private input.
+title: "[first use] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying Azdaja. The published v0.1.0 binary supports Apple Silicon macOS; other platforms are source-only.
+
+        Do not paste or attach raw build logs, repository content, transcripts, traces, config files, host paths, OAuth material, tokens, or secrets. Synthetic or sanitized reproductions only.
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installation path
+      options:
+        - Published v0.1.0 Apple Silicon macOS installer
+        - Locked source installation on another platform
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Azdaja version
+      description: Output of `azdaja --version` only.
+      placeholder: azdaja 0.1.0 (monty 0.0.21)
+    validations:
+      required: true
+  - type: input
+    id: architecture
+    attributes:
+      label: Operating system and architecture
+      placeholder: macOS Apple Silicon (arm64)
+    validations:
+      required: true
+  - type: dropdown
+    id: workload
+    attributes:
+      label: Input class
+      options:
+        - Build log
+        - Repository dump
+        - Transcript
+        - Other synthetic or sanitized text
+    validations:
+      required: true
+  - type: input
+    id: size
+    attributes:
+      label: Approximate input size
+      placeholder: 50 MiB
+    validations:
+      required: true
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Outcome
+      options:
+        - Installed and completed successfully
+        - Installation failed
+        - Doctor failed
+        - Process died or timed out
+        - Completed with an incorrect answer
+        - Other product defect
+    validations:
+      required: true
+  - type: textarea
+    id: experience
+    attributes:
+      label: What happened?
+      description: Describe behavior and timing without quoting private input or traces.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Synthetic or sanitized reproduction
+      description: Optional. Include only a minimal reproduction that contains no private or secret material.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I removed raw input, traces, config, host paths, OAuth material, tokens, and secrets from this report.
+          required: true

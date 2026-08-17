@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Privately report a security vulnerability
+    url: https://github.com/kubet/azdaja/security/advisories/new
+    about: Do not disclose vulnerabilities, tokens, traces, private inputs, or OAuth material in a public issue.

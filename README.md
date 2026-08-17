@@ -96,6 +96,12 @@ cargo test --test product_50mb -- --test-threads=1
 
 A separate public-release smoke used the hash-bound installed binary with Jcode subscription OAuth on one fresh, non-benchmark 50 MiB build log. `doctor` passed, then Luna/low returned the exact generated count `Answer: 37` in 8.980 seconds with one root turn, zero child calls, no repair, no retained session, no host path, and no exact 100-byte raw-source overlap in the provider trace. Receipt: `release/v0.1.0/live-harness-smoke.json` (`c3c0dbb15c612d35a6d3f053896a81a867bd0f346ae70ef6d0e6471955fadd4b`). This single smoke validates authentication and natural-language planning for that case; it is not a general accuracy estimate.
 
+## First-use feedback
+
+The initial published binary supports Apple Silicon macOS only. Report a [first-use result](https://github.com/kubet/azdaja/issues/new?template=first-use-feedback.yml) or a [product defect](https://github.com/kubet/azdaja/issues/new?template=product-defect.yml); installation failures, deaths, timeouts, wrong answers, config loss, and uninstall failures outrank benchmark work. Use synthetic or sanitized reproductions only—never post raw build logs, repository content, transcripts, traces, config files, host paths, OAuth material, tokens, or secrets. Security vulnerabilities belong in a [private advisory](https://github.com/kubet/azdaja/security/advisories/new), not a public issue.
+
+The first public checkpoint found no submitted issues; release download counters were 2 for the binary and 1 for `SHA256SUMS`. Those mutable, non-unique counters may include maintainer validation and are not evidence of independent adoption or defect-free use. Receipt: `release/v0.1.0/first-use-feedback-checkpoint.json` (`313f5126ee99b9a7d213ac2800d689ec0f7348ea673381f2f3ddde461305c4fc`).
+
 ## Appendix: benchmark diagnostics (not a product gate)
 
 The three-arm headline tables below retain one immutable comparative candidate,
