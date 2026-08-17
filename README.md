@@ -263,7 +263,7 @@ python3 -m unittest discover -s bench/oolong -p 'test_*.py' -v
 
 The suite covers the three-file 50 MiB product path, the literal sealed/hash-bound site installer, provider-free managed installation, lifecycle persistence, snapshot ownership, Unicode caps, transactional finalization, call budgets, batch ordering and partial recovery, Harness API framing, OAuth model pinning, streamed usage, bounded cleanup, manifest coverage, installer rollback and customized-config removal, Monty compatibility, and blind benchmark controls.
 
-The GitHub Actions workflow is enabled. macOS-14 passes. Diagnostic run `31986703880` showed Ubuntu passed the three-file 50 MiB gate, then correctly rejected an oversized debug validation binary at the public 64 MiB installer cap before reaching the bad-hash assertion. The test now strips only its private scratch copy when a real debug binary exceeds that cap; the public cap and installer behavior are unchanged. Linux remains blocked until a clean same-commit hosted receipt exists.
+GitHub Actions push run `31987166018` passes on macOS and Ubuntu for commit `a20952f`. A same-commit manual run produced downloaded, digest-verified Linux x86_64 and macOS arm64 candidate archives with mode-preserving tar containers. They remain `UNVALIDATED_NOT_FOR_PUBLICATION`: neither hash is a public installer binding, Linux has no live OAuth receipt, and the macOS candidate must not replace the published v0.1.0 bytes. Hosted receipt: `release/candidates/a20952f/hosted-receipt.json` (`7744b45923801b19f360ad81faf9bbc399ea276d6c225cb956baf2b572abb106`).
 
 ## License
 

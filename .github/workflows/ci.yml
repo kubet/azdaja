@@ -34,8 +34,32 @@ jobs:
       - if: runner.os == 'Linux'
         run: python3 bench/perf.py --binary target/release/azdaja --sizes-mb 1 --repeats 3
 
-      # Manual runs retain exact candidate bytes for later platform validation.
+      # Manual runs validate and retain exact candidate bytes for later platform validation.
       # These artifacts are not releases and may not be bound into site/install.
+      - name: Validate release candidate install and 50 MiB path
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="$PWD/target/release/azdaja"
+          digest="$(python3 - "$candidate" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+          print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())
+          PY
+          )"
+          home="$(mktemp -d)"
+          trap 'rm -rf "$home"' EXIT
+          HOME="$home"             AZDAJA_INSTALL_TEST_MODE=local             AZDAJA_INSTALL_URL="file://$candidate"             AZDAJA_INSTALL_SHA256="$digest"             sh site/install --harness claude
+          installed="$home/.claude/skills/azdaja/azdaja"
+          cmp "$candidate" "$installed"
+          AZDAJA_PRODUCT_BINARY="$installed"             cargo test --test product_50mb --locked -- --test-threads=1
+          printf '\n# candidate-receipt-custom\n' >>             "$home/.claude/skills/azdaja/config.toml"
+          HOME="$home"             AZDAJA_INSTALL_TEST_MODE=local             AZDAJA_INSTALL_URL="file://$candidate"             AZDAJA_INSTALL_SHA256="$digest"             sh site/install --harness claude
+          grep -F '# candidate-receipt-custom'             "$home/.claude/skills/azdaja/config.toml"
+          HOME="$home" "$installed" uninstall --harness claude
+          test ! -e "$home/.claude/skills/azdaja"
       - name: Package unvalidated candidate
         if: github.event_name == 'workflow_dispatch'
         shell: bash
@@ -78,12 +102,22 @@ jobs:
               "github_run_attempt": os.environ["AZDAJA_RUN_ATTEMPT"],
               "binary": {"name": name, "bytes": target.stat().st_size, "sha256": digest},
               "version": subprocess.check_output([str(target), "--version"], text=True).strip(),
-              "checks": ["fmt", "clippy", "locked-tests", "locked-release-build", "doctor-caps"],
+              "checks": [
+                  "fmt",
+                  "clippy",
+                  "locked-tests",
+                  "locked-release-build",
+                  "doctor-caps",
+                  "hash-bound-local-site-install",
+                  "installed-release-binary-three-file-50MiB",
+                  "custom-config-preserved-on-reinstall",
+                  "managed-uninstall-cleanup",
+              ],
               "publication_authorized": False,
               "limitations": [
                   "no public installer receipt",
                   "no live OAuth doctor",
-                  "no platform-specific three-file installed-binary receipt",
+                  "scripted installed-binary cases do not prove live-model planning",
               ],
           }
           (payload / "candidate-receipt.json").write_text(
