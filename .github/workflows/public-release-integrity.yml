@@ -1,0 +1,72 @@
+name: Public release integrity
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-release-integrity-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  integrity:
+    name: immutable v0.1.0 metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify tag, release metadata, and versioned installer
+        shell: bash
+        env:
+          EXPECTED_TAG_COMMIT: 021b79e76e5951dd6142b4c76e564ae41adb9504
+          EXPECTED_RELEASE_ID: '371453462'
+          EXPECTED_BINARY_SHA256: 6b50716382ac35e4f2bc9fc3c1cc3db9ee059edde783b78dba21273bf626762a
+          EXPECTED_BINARY_BYTES: '6434288'
+          EXPECTED_SUMS_SHA256: 9545e40ad71baa9bc942fb3e1e75787aa08e4250befc29794b085de83902fc90
+          EXPECTED_INSTALLER_SHA256: 002d17725830e5668822cd1b6c99264826563f6a0eb8ed0668a9f3631dc949ab
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          remote_tag() {
+            git ls-remote https://github.com/kubet/azdaja.git 'refs/tags/v0.1.0^{}' | awk '{print $1}'
+          }
+          test "$(remote_tag)" = "$EXPECTED_TAG_COMMIT"
+
+          scratch="$(mktemp -d)"
+          trap 'rm -rf "$scratch"' EXIT
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --header "Authorization: Bearer $GITHUB_TOKEN" --header "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/kubet/azdaja/releases/tags/v0.1.0 -o "$scratch/release.json"
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2             https://raw.githubusercontent.com/kubet/azdaja/v0.1.0/site/install             -o "$scratch/install"
+
+          python3 - "$scratch/release.json" "$scratch/install" <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import sys
+
+          release = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          installer = pathlib.Path(sys.argv[2]).read_bytes()
+          assert release["id"] == int(os.environ["EXPECTED_RELEASE_ID"]), release["id"]
+          assert release["tag_name"] == "v0.1.0", release["tag_name"]
+          assert release["prerelease"] is True and release["draft"] is False
+          assets = {asset["name"]: asset for asset in release["assets"]}
+          assert set(assets) == {"azdaja-v0.1.0-darwin-arm64", "SHA256SUMS"}, assets
+          binary = assets["azdaja-v0.1.0-darwin-arm64"]
+          assert binary["size"] == int(os.environ["EXPECTED_BINARY_BYTES"]), binary
+          assert binary["digest"] == "sha256:" + os.environ["EXPECTED_BINARY_SHA256"], binary
+          sums = assets["SHA256SUMS"]
+          assert sums["size"] == 93, sums
+          assert sums["digest"] == "sha256:" + os.environ["EXPECTED_SUMS_SHA256"], sums
+          assert hashlib.sha256(installer).hexdigest() == os.environ["EXPECTED_INSTALLER_SHA256"]
+          text = installer.decode()
+          asset_url = "https://github.com/kubet/azdaja/releases/download/v0.1.0/azdaja-v0.1.0-darwin-arm64"
+          assert text.count(asset_url) == 1
+          assert text.count(os.environ["EXPECTED_BINARY_SHA256"]) == 1
+          assert 'case "$(uname -s)-$(uname -m)"' in text
+          assert "Darwin-arm64)" in text
+          assert "This platform has no published v0.1 binary" in text
+          assert "validation overrides require AZDAJA_INSTALL_TEST_MODE=local" in text
+          PY
+
+          test "$(remote_tag)" = "$EXPECTED_TAG_COMMIT"

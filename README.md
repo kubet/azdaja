@@ -37,7 +37,9 @@ The v0.1.0 prerelease provides one-command installation for Apple Silicon macOS:
 curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/v0.1.0/site/install | sh
 ```
 
-The versioned installer downloads only the immutable `azdaja-v0.1.0-darwin-arm64` release asset, requires SHA-256 `6b50716382ac35e4f2bc9fc3c1cc3db9ee059edde783b78dba21273bf626762a`, validates version and local evaluator capabilities, and installs the managed Jcode skill without calling a model. Then run the explicit live login check:
+The versioned installer downloads only the immutable `azdaja-v0.1.0-darwin-arm64` release asset, requires SHA-256 `6b50716382ac35e4f2bc9fc3c1cc3db9ee059edde783b78dba21273bf626762a`, validates version and local evaluator capabilities, and installs the managed Jcode skill without calling a model. The manual read-only `Public release integrity` workflow checks the peeled tag, GitHub release ID/state, exact asset names/sizes/GitHub digests, and exact versioned installer bytes/bindings without downloading or executing the binary asset.
+
+Then run the explicit live login check:
 
 ```bash
 AZ="$HOME/.jcode/skills/azdaja/azdaja"
