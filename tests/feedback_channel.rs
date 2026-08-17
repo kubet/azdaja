@@ -124,6 +124,39 @@ fn public_feedback_paths_enforce_the_privacy_boundary() {
             path.display()
         );
         let items = canonical_body_items(&text, &path);
+        let version_items: Vec<_> = items
+            .iter()
+            .filter(|item| item.contains(&"    id: version"))
+            .collect();
+        assert_eq!(
+            version_items.len(),
+            1,
+            "issue form must have one version body item: {}",
+            path.display()
+        );
+        let version = version_items[0];
+        assert_eq!(
+            version.first().copied(),
+            Some("  - type: input"),
+            "version must be an input body item: {}",
+            path.display()
+        );
+        assert!(
+            version.contains(&"      label: Azdaja version, if available"),
+            "version must be optional for pre-binary install failures: {}",
+            path.display()
+        );
+        assert!(
+            version.contains(&"      description: Output of `azdaja --version` only. If installation failed before a binary existed, leave this blank."),
+            "version guidance must admit a pre-binary install failure: {}",
+            path.display()
+        );
+        assert!(
+            !version.contains(&"      required: true"),
+            "version cannot be required when installation produced no binary: {}",
+            path.display()
+        );
+
         let privacy_items: Vec<_> = items
             .iter()
             .filter(|item| item.contains(&"    id: privacy"))

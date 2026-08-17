@@ -21,11 +21,9 @@ body:
   - type: input
     id: version
     attributes:
-      label: Azdaja version
-      description: Output of `azdaja --version` only.
+      label: Azdaja version, if available
+      description: Output of `azdaja --version` only. If installation failed before a binary existed, leave this blank.
       placeholder: azdaja 0.1.0 (monty 0.0.21)
-    validations:
-      required: true
   - type: input
     id: architecture
     attributes:

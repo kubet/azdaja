@@ -35,10 +35,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: Azdaja version
-      description: Output of `azdaja --version` only.
-    validations:
-      required: true
+      label: Azdaja version, if available
+      description: Output of `azdaja --version` only. If installation failed before a binary existed, leave this blank.
   - type: input
     id: architecture
     attributes:
