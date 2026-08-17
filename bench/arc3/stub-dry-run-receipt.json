@@ -1,0 +1,125 @@
+{
+  "authority": "local shadow only; no absolute ARC score or leaderboard claim",
+  "driver_sha256": "d7ae27ef0e025fedefc286c7c5c8540bc8a94304a3fc0950e0b21f9726058112",
+  "experiment_id": "ARC3-MINI-PAIRED-JCODE-AZDAJA-V1",
+  "game_ids": [
+    "ls20"
+  ],
+  "manifest_sha256": "32451563a5fcaee20ef357473b8bf5b12b6229c534195df8a393f1b4549fdef9",
+  "mode": "offline_stub_dry_run",
+  "paired_deltas": [
+    {
+      "action_delta_treatment_minus_control": -22,
+      "game_id": "ls20",
+      "shadow_rhae_delta_treatment_minus_control": 0.015500845308537615,
+      "wasted_action_deltas_treatment_minus_control": {
+        "repeated_known_controls": -22,
+        "revisited_states": -22
+      }
+    }
+  ],
+  "proof": {
+    "action_history_tool_rhae_cleanup_complete": true,
+    "arc_live_requests": 0,
+    "exactly_one_public_game_stubbed": true,
+    "history_workspaces_removed": true,
+    "live_tokens_spent": 0,
+    "provider_model_inferences": 0,
+    "stub_model_decisions": 30
+  },
+  "rows": [
+    {
+      "action_cap": 3880,
+      "actions": 26,
+      "actions_by_name": {
+        "ACTION3": 24,
+        "ACTION4": 2
+      },
+      "agent_actions_per_completed_level": [
+        26
+      ],
+      "arm": "jcode-native",
+      "common_model_config_sha256": "94aa6c7968cc99a7f4028caec1de91be46963d97d5b2096ec4411cc34ae4670a",
+      "completed_levels": 1,
+      "game_adapter": "arcade-api-game-stub-v1",
+      "game_id": "ls20",
+      "history": {
+        "bytes": 8959,
+        "owner_only_mode_asserted": true,
+        "records": 27,
+        "sha256": "e5ac413a86344a9b72997a62d719633cc4acfdef2b720d89e30a5c3fa4500688",
+        "single_link_asserted": true
+      },
+      "level_action_caps": [
+        110,
+        615,
+        365,
+        420,
+        480,
+        960,
+        930
+      ],
+      "model_adapter": "deterministic-stub-v1",
+      "model_calls": 26,
+      "shadow_rhae_fraction": 0.025570583262890956,
+      "skill_adapter": null,
+      "skill_input_contract_asserted": true,
+      "skill_input_history_sha256": null,
+      "skill_invocations": 0,
+      "status": "complete",
+      "termination_reason": "GAME_WIN",
+      "trajectory_sha256": "742e2e05babdfb0313b3545aeab998a507de34b2b5dcadb92ba45e842dcc86c4",
+      "wasted_actions": {
+        "repeated_known_controls": 23,
+        "revisited_states": 24
+      }
+    },
+    {
+      "action_cap": 3880,
+      "actions": 4,
+      "actions_by_name": {
+        "ACTION3": 2,
+        "ACTION4": 2
+      },
+      "agent_actions_per_completed_level": [
+        4
+      ],
+      "arm": "jcode-azdaja",
+      "common_model_config_sha256": "94aa6c7968cc99a7f4028caec1de91be46963d97d5b2096ec4411cc34ae4670a",
+      "completed_levels": 1,
+      "game_adapter": "arcade-api-game-stub-v1",
+      "game_id": "ls20",
+      "history": {
+        "bytes": 1528,
+        "owner_only_mode_asserted": true,
+        "records": 5,
+        "sha256": "335632c920a7b2df76596a59ba5bb77f2d20f50486f735f74b14c94ace8bba15",
+        "single_link_asserted": true
+      },
+      "level_action_caps": [
+        110,
+        615,
+        365,
+        420,
+        480,
+        960,
+        930
+      ],
+      "model_adapter": "deterministic-stub-v1",
+      "model_calls": 4,
+      "shadow_rhae_fraction": 0.04107142857142857,
+      "skill_adapter": "deterministic-stub-v1",
+      "skill_input_contract_asserted": true,
+      "skill_input_history_sha256": "6283c8577b6a5ed039e70fb38776859239fe349884b0a5d67d43637680b8c8f5",
+      "skill_invocations": 1,
+      "status": "complete",
+      "termination_reason": "GAME_WIN",
+      "trajectory_sha256": "b1c5900b4858c9a1cdca15b670308caee29f5e120625c16f8e162cb5f98c8178",
+      "wasted_actions": {
+        "repeated_known_controls": 1,
+        "revisited_states": 2
+      }
+    }
+  ],
+  "schema_version": 1
+}

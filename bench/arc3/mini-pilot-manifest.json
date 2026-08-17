@@ -1,0 +1,243 @@
+{
+  "action_budget_semantics": {
+    "authority_commit": "86d72170ce3155551712a9fafd290bab471d6eee",
+    "authority_file": "benchmarking/agent.py",
+    "authority_file_sha256": "a9b4bc228a54ff5d028fa727dda231df02e6538527a6aa926edbbd2e9f97a64e",
+    "authority_repository": "https://github.com/arcprize/arc-agi-3-benchmarking.git",
+    "derivation": "level_action_caps=[ceil(baseline*5.0)]; max_actions=sum(level_action_caps)",
+    "forced_reset_states": [
+      "GAME_OVER",
+      "NOT_PLAYED"
+    ],
+    "multiplier": 5.0
+  },
+  "claim_boundary": "paired deltas only; per-game RHAE is shadow telemetry, never an absolute benchmark or leaderboard claim",
+  "common_live_model_config": {
+    "fresh_session_per_action": true,
+    "jcode_api": "openai-codex-responses",
+    "jcode_binary_sha256": "f01c442265d22e9dead7f227b2ec115ab99164e876ff354a72988a9311bf3c4f",
+    "jcode_source_commit": "fd1ff012cd463c413d53a3de358ceb7a7b8459a2",
+    "jcode_version": "0.75.3",
+    "model": "gpt-5.6-luna",
+    "provider": "openai",
+    "reasoning_effort": "low",
+    "telemetry": false,
+    "temperature": null,
+    "tool_profile": "minimal",
+    "tools": [
+      "read"
+    ],
+    "update_checks": false
+  },
+  "experiment_id": "ARC3-MINI-PAIRED-JCODE-AZDAJA-V1",
+  "games": [
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": true,
+      "game_id": "ls20",
+      "game_version": "9607627b",
+      "human_level_baseline_actions": [
+        22,
+        123,
+        73,
+        84,
+        96,
+        192,
+        186
+      ],
+      "level_action_caps": [
+        110,
+        615,
+        365,
+        420,
+        480,
+        960,
+        930
+      ],
+      "max_actions": 3880,
+      "mechanics_stratum": "agent reasoning / navigation",
+      "official_human_actions_total": 776,
+      "selection_basis": "official docs label plus seven-level action profile"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "ft09",
+      "game_version": "0d8bbf25",
+      "human_level_baseline_actions": [
+        43,
+        12,
+        23,
+        28,
+        65,
+        37
+      ],
+      "level_action_caps": [
+        215,
+        60,
+        115,
+        140,
+        325,
+        185
+      ],
+      "max_actions": 1040,
+      "mechanics_stratum": "elementary logic",
+      "official_human_actions_total": 208,
+      "selection_basis": "official docs label; six-level short-horizon profile"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "vc33",
+      "game_version": "467a4e69",
+      "human_level_baseline_actions": [
+        7,
+        18,
+        44,
+        61,
+        131,
+        34,
+        152
+      ],
+      "level_action_caps": [
+        35,
+        90,
+        220,
+        305,
+        655,
+        170,
+        760
+      ],
+      "max_actions": 2235,
+      "mechanics_stratum": "orchestration",
+      "official_human_actions_total": 447,
+      "selection_basis": "official docs label; seven-level coordination profile"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "ar25",
+      "game_version": "e3c63847",
+      "human_level_baseline_actions": [
+        32,
+        50,
+        75,
+        37,
+        89,
+        159,
+        233,
+        73
+      ],
+      "level_action_caps": [
+        160,
+        250,
+        375,
+        185,
+        445,
+        795,
+        1165,
+        365
+      ],
+      "max_actions": 3740,
+      "mechanics_stratum": "eight-level control",
+      "official_human_actions_total": 748,
+      "selection_basis": "public baseline profile; semantic mechanic must be rechecked at authorized preflight"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "wa30",
+      "game_version": "ee6fef47",
+      "human_level_baseline_actions": [
+        71,
+        119,
+        183,
+        98,
+        368,
+        68,
+        79,
+        442,
+        415
+      ],
+      "level_action_caps": [
+        355,
+        595,
+        915,
+        490,
+        1840,
+        340,
+        395,
+        2210,
+        2075
+      ],
+      "max_actions": 9215,
+      "mechanics_stratum": "long-horizon nine-level control",
+      "official_human_actions_total": 1843,
+      "selection_basis": "public baseline profile; semantic mechanic must be rechecked at authorized preflight"
+    }
+  ],
+  "human_baseline_authority": {
+    "derivation": "official_human_actions_total=sum(actionsDelta); each level_action_cap=ceil(level_baseline*5.0); max_actions=sum(level_action_caps)",
+    "etag": "W/\"7bd570fcd026c0f4fd83c9db69c15380\"",
+    "field": "actionsDelta",
+    "last_modified": "Thu, 13 Aug 2026 23:45:58 GMT",
+    "sha256": "a219eb932acf22be56f993e703b59eef2d3526f7cae2472e4358800c697a3d6f",
+    "source": "official ARC Prize task-page static bundle",
+    "url": "https://arcprize.org/_next/static/chunks/app/tasks/%5Bname%5D/page-a3cf8338ae433d6b.js"
+  },
+  "launch_gate": {
+    "arc_live_owner_authorized": false,
+    "key_handling": "bind from process environment only; never print, persist, copy, hash, or include in artifacts",
+    "registration": "interactive owner action required at https://arcprize.org/platform using Google or GitHub login; no identity was invented",
+    "requires_arc_api_key_environment": "ARC_API_KEY",
+    "requires_owner_authorization_file": true,
+    "track1_full_199_confirmed": false
+  },
+  "schema_version": 1,
+  "shadow_scoring": {
+    "method": "RHAE per official documentation pinned in toolkit-lock.json",
+    "paired_delta": "jcode-azdaja minus jcode-native within the same game",
+    "per_game": "level-index-weighted completed-level sum divided by all-level weight sum",
+    "per_level": "min((human_baseline_actions / agent_actions)^2, 1.15)",
+    "wasted_actions": [
+      "post-action state already visited",
+      "same control repeated from the same known pre-state"
+    ]
+  },
+  "status": "FROZEN_PREP_ONLY_DO_NOT_LAUNCH",
+  "suite": {
+    "game_order": [
+      "ls20",
+      "ft09",
+      "vc33",
+      "ar25",
+      "wa30"
+    ],
+    "name": "MINI-PILOT",
+    "pair_order": [
+      "jcode-native",
+      "jcode-azdaja"
+    ],
+    "public_games": 5,
+    "seed": 0
+  },
+  "treatment_only": {
+    "azdaja_binary_sha256": {
+      "darwin-arm64": "b58975de462e823adcf901e331acfd4e70c9e72b5db014de265c04e371d31883",
+      "linux-x86_64": "b18775f0d3572b20804ff3c3af880ffc5fa3131017c566dc941c1dd743c00247"
+    },
+    "azdaja_release": "v0.1.1",
+    "azdaja_source_commit": "b57cc6356dc8b3de95f7e4466501d5551ee4d4f5",
+    "managed_skill_components_sha256": {
+      "SKILL.md": "c4990d75786c2c9a822abeb4d905fdc70ee129dcaf39df444568d77792015c0d",
+      "config.toml": "ca3f153c8a5a80c3727473fea90452ade5c556a24d026fb54084257791fd8eb8"
+    },
+    "max_skill_invocations_per_game": 1,
+    "root_model": "gpt-5.6-luna",
+    "skill": "azdaja",
+    "skill_input_contract": "the sole -f input is the accumulated owner-only turn-history JSONL file",
+    "skill_question": "Analyze the accumulated ARC-AGI-3 turn history. Return concise evidence-bound next-control advice; do not invent unseen state.",
+    "sub_model": "gpt-5.6-luna",
+    "trigger_completed_turns": 2
+  }
+}

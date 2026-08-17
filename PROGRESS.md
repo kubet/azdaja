@@ -40,6 +40,8 @@
 
 - The guarded collection path is ready: an independent walkthrough found P0=0/P1=0 across install failure before binary, doctor failure before workload, death/timeout, wrong answer, config/uninstall, and successful first use. Public issues remain zero, so no submitted actionable product-defect report exists to reproduce. Readiness receipt SHA-256 `d1458674a641f149175267a01cb7ce77a3832fcef30c4fc10fa30dbf994368ab`.
 
+- ARC-AGI-3 Track 2 preparation is frozen `PREP_READY_LIVE_BLOCKED`: official MIT `ARC-AGI-3-Agents@4743e7d` plus `arc-agi-3-benchmarking@86d7217` are pinned, the five-public-game MINI-PILOT manifest is SHA-256 `32451563a5fcaee20ef357473b8bf5b12b6229c534195df8a393f1b4549fdef9`, and every per-level/total cap is exactly 5x the official human baseline. The sole full-loop dry run used exactly one `ls20` StubArcade/game with the shared deterministic model and treatment-only history-file skill; it made 0 ARC requests, 0 provider inferences, and spent 0 live tokens while proving action/history/tool/shadow-RHAE/wasted-action/cleanup paths. Receipt SHA-256 `8b0e2c1a58fd74ad20776afa88edc4c99839fe84a8967bafb319369f4e0772f1`; driver SHA-256 `d7ae27ef0e025fedefc286c7c5c8540bc8a94304a3fc0950e0b21f9726058112`. No absolute score is claimed.
+
 ## Strict next step
 
 1. Preserve the completed `99f8ee7` run, score, sentinel, and all published release bytes unchanged. MINI-RAH remains blocked unless the owner explicitly authorizes a distinct schedule/controller row-wall policy delta or redefines the objective as earlier clean failure; call-count timeout scaling alone is closed.
@@ -47,9 +49,11 @@
 3. Freeze the public v0.1.1 annotated tag, release assets, checksum manifest, and versioned installer. Postpublication evidence remains external to the tag; never rewrite history or add a same-commit claim after publication.
 4. Resume product work immediately on a privacy-reviewed actionable first-use defect or private advisory. Reproduce only with synthetic or sanitized material.
 5. Keep `drafts/v0.1.1-launch.md` nonpublished. Any external use needs separate owner authorization plus a fresh anonymous repository, installer, tag, asset, and support-availability check; this branch does not claim adoption.
+6. Keep `ARC3-MINI-PAIRED-JCODE-AZDAJA-V1` frozen and do not run its live mode. Resume only after the parent confirms Track 1 full-199 completion and the owner explicitly authorizes ARC live; then bind `ARC_API_KEY` from the process environment without persisting it and create a new hash-bound owner-only authorization receipt.
 
 ## Blocking
 
+- ARC-AGI-3 MINI-PILOT live execution is blocked on parent-confirmed Track 1 full-199 completion, explicit owner ARC-live authorization, and an environment-only owner API key. Preparation does not satisfy any of those gates.
 - No v0.1.1 publication or supported-platform product gate remains blocked; both public platform paths passed.
 - Timeout/MINI needs an explicit row-wall policy or changed objective; no causally valid singular candidate exists.
 - Agent transport needs fresh authorization after a terminal invalid abort; the failed root has no score or salvage path.

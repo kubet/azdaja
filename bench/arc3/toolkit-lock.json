@@ -1,0 +1,41 @@
+{
+  "authoritative_repositories": {
+    "agent_quickstart": {
+      "commit": "4743e7d0aaae0ded0d98a89a7e282e63564cd58b",
+      "license": "MIT",
+      "license_sha256": "75c4276c506fd93082b38ad39f67ee97aa859574401ef978e701710c7a40af04",
+      "name": "ARC-AGI-3-Agents",
+      "readme_sha256": "a19475e046a4bbc2ca3b4d7933b9c88db5df42dc8354a5ad442418fdb29d6fae",
+      "repository": "https://github.com/arcprize/ARC-AGI-3-Agents.git"
+    },
+    "benchmarking_semantics": {
+      "agent_py_sha256": "a9b4bc228a54ff5d028fa727dda231df02e6538527a6aa926edbbd2e9f97a64e",
+      "base_py_sha256": "4f9df70dec7d96b5a553d384b1788013367009105cc74e372a763dbf66da32dd",
+      "commit": "86d72170ce3155551712a9fafd290bab471d6eee",
+      "license": "MIT",
+      "license_sha256": "75c4276c506fd93082b38ad39f67ee97aa859574401ef978e701710c7a40af04",
+      "model_configs_sha256": "6c5c79111e015f49bfc75df0f7daa238eefd8b1ac7ab10c4f2eccf7ae23f62fb",
+      "name": "ARC-AGI-3 Benchmarking",
+      "readme_sha256": "dda4ec5c4c800fdabd32e94565ea3830c2f2d3691acf1c306b7630462de5cdd4",
+      "repository": "https://github.com/arcprize/arc-agi-3-benchmarking.git"
+    }
+  },
+  "clone_state": "cloned privately for preparation; upstream checkouts are gitignored and not vendored",
+  "official_documentation": {
+    "api_keys_sha256": "a67ffbfa482486b9cb4e15a29c9051c16fa15ee94fc5064a3d38b0ae7d33e1f0",
+    "available_games_sha256": "3d89f684f0749263fe2183d5e322c04d3ef371c26b9573b3b75d44c6e7f2aaf2",
+    "commit": "a5dfc0b64c625fb4a19cf074af845ebe0bb88ff8",
+    "methodology_sha256": "309c4577448cd39b8990f1ea60ad07725f92c1786791dcdcfa5fc6e79f52d691",
+    "repository": "https://github.com/arcprize/docs.git"
+  },
+  "recorded_at_utc": "2026-08-17T12:00:00Z",
+  "schema_version": 1,
+  "transitive_runtime_reference": {
+    "commit": "f12822c4d550121c35a275008d964afbbed47d2f",
+    "license": "MIT",
+    "license_sha256": "0a7b46075e23b129b4e33ddadc6734d68c17136da5db98ec54f39f726625c6fb",
+    "name": "ARC-AGI Toolkit",
+    "repository": "https://github.com/arcprize/ARC-AGI.git",
+    "version": "0.9.9"
+  }
+}

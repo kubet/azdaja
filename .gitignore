@@ -6,3 +6,4 @@
 /bench/results/*-artifacts/
 __pycache__/
 *.pyc
+/.private-upstream/
