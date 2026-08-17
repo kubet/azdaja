@@ -98,25 +98,47 @@ A separate public-release smoke used the hash-bound installed binary with Jcode 
 
 ## Appendix: benchmark diagnostics (not a product gate)
 
-One immutable current Azdaja candidate is shown against both controls. Historical
-candidate versions are intentionally omitted from these headline tables. When a
-newer candidate is terminally validated and improves the preregistered gate set
-without regression, its identity and every suite table are replaced together;
-unscored, rejected, or diagnostic-only candidates never displace the current one.
-The candidate is private commit `6588c06`, binary SHA-256
-`6be5b9ff567eca6d1a5c2315dfb0c12fb5bd847b58daef0b3b8191151e45b509`.
-These are single-run private diagnostics, not official leaderboard results or a
-superiority claim.
+The three-arm headline tables below retain one immutable comparative candidate,
+private commit `6588c06` with binary SHA-256
+`6be5b9ff567eca6d1a5c2315dfb0c12fb5bd847b58daef0b3b8191151e45b509`,
+against both controls. Historical candidate versions are never mixed within a
+table. The newer single-arm RAH-199 candidate is reported separately because its
+schedule did not run paired controls; it cannot be combined with or used to
+replace those comparative tables. These are single-run private diagnostics, not
+official leaderboard results or superiority claims.
 
-> **Latest campaign status:** the completed exact-v43 LongBench refresh is
-> terminal-invalid and unscored. It produced no new authoritative accuracy,
-> token, or latency result. The visible RULER table remains the current valid
-> baseline; the older valid LongBench score is collapsed below for provenance.
+> **Latest campaign status:** the separately owner-authorized immutable RAH-199
+> completed 199/199 rows and its authorized scorer ran exactly once. Candidate
+> commit `99f8ee7`, binary SHA-256 `4ecb1e2178143b45e1bba8c30669b68adce68f30e8cf905d0bd500b28cb64225`,
+> scored **61.4527%** on the fixed denominator with 161/199 execution successes.
+> It is a validation-derived slice, not official full OOLONG, and has no paired
+> control or superiority claim. Receipt SHA-256: `2847722dbe3d4ca9cc527b103c481036cabc65dfac868e55bc13fdefd72c70e1`.
 >
 > Candidate labels are experiment serials, not releases or monotonic upgrades.
-> V45-V48 were slower than v43, V49 completed only 18/20 smoke executions,
-> and V50 was an offline feasibility NO-GO with no candidate binary or inference.
-> A higher experiment number does not replace the last promoted candidate.
+> A newer experiment never retrofits results from a different candidate or
+> schedule into an existing comparison.
+
+### Latest RAH-199 validation-derived slice, 199 fixed fixtures
+
+| Arm | Execution | Valid prediction | Fixed-199 official-semantics score | 95% bootstrap CI |
+|---|---:|---:|---:|---:|
+| **Azdaja `99f8ee7`** | **161/199 (80.90%)** | **161/199 (80.90%)** | **61.4527%** | **[54.8815%, 67.8713%]** |
+| Native jcode | not run | not run | N/A | N/A |
+| Prime Agent | not run | not run | N/A | N/A |
+
+All 38 execution failures remained fixed-denominator zeroes. Root-context leak
+and cleanup checks passed 199/199. The equal-weight 13-length-bucket macro was
+61.4577%. The post-run no-gold validator was invoked once, returned its
+pre-inference guard `already entered inference`, and was not retried. With 199
+rows plus `completion.json` and no scoring sentinels, the separately authorized
+scorer then ran once, created `gold.consumed` before opening gold, and exited 0.
+No other gold access occurred. Exact public-safe artifacts are
+`bench/results/rah199-99f-score.json`, `rah199-99f-completion.json`,
+`rah199-99f-gold-consumed.json`, and `rah199-99f-terminal-receipt.json`.
+
+The standing agent-transport paired scout was N/A rather than zero accuracy:
+0/10 pairs executed because the frozen binary lacked the required per-model,
+file-backed-`ctx` treatment interface. No substitute arm was fabricated.
 
 ### Derived RULER, 90 fixtures
 
@@ -186,10 +208,12 @@ exact. Azdaja missed both at 22/26 and 19/26, with four `monty_subset_tax`
 execution failures and three incorrect completed answers. Its median was 3.23x
 native. The root-context leak hard gate passed 26/26 with zero leaks.
 
-Therefore the 199-item RAH protocol is **not authorized**. RAH would also require
-its separately stated signed preregistration, independent gold custody, locked
-runtime, containment, released scorer, and validation-derived wording. The
-OOLONG output SHA-256 is `6f6a9c524b69ef16ef9eb8b85b375b2caeddae6c1226d53dda9675dffcbf5bfd` and the validated
+Therefore this historical exact-v43 candidate did **not** authorize an RAH
+continuation under its frozen gates and was never resumed or relabeled. The
+newer RAH result above belongs to a separately owner-authorized candidate,
+schedule, locked runtime, custody chain, and one-shot scorer; the two candidates
+are not combined. The historical OOLONG output SHA-256 is
+`6f6a9c524b69ef16ef9eb8b85b375b2caeddae6c1226d53dda9675dffcbf5bfd` and its validated
 report SHA-256 is `80bad59b241064b6430f4c56c1f9f114c4c82fdf564483b74906c4e43c8acfec`.
 
 ## Guarantees
