@@ -76,3 +76,8 @@ jobs:
           PY
           test ! -e "$marker"
           test -z "$(find "$home" -mindepth 1 -print -quit)"
+
+          (
+            cd "$checkout"
+            env CARGO_HOME="$cargo_home" CARGO_TARGET_DIR="$scratch/cargo-target" AZDAJA_PRODUCT_BINARY="$binary" cargo test --test product_50mb --locked -- --test-threads=1
+          )
