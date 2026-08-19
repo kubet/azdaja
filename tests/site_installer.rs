@@ -211,13 +211,25 @@ fn installed_output(binary: &Path, home: &Path, path: &str, args: &[&str]) -> Ou
         .env("HOME", home)
         .env("PATH", path)
         .env("AZDAJA_HOME", home.join("state"))
-        .env_remove("AZDAJA_CONFIG")
+        .env(
+            "AZDAJA_CONFIG",
+            binary.parent().unwrap().join("azdaja-config.toml"),
+        )
         .env_remove("RLM_DEPTH")
         .output()
         .unwrap()
 }
 
+fn assert_owned_adjacent_config(bin: &Path) {
+    assert!(bin.join("azdaja-config.toml").is_file());
+    assert_eq!(
+        fs::read(bin.join("azdaja-config.toml.managed")).unwrap(),
+        b"azdaja-installer-owned-config-v1\n"
+    );
+}
+
 fn assert_alias_identity_and_local_caps(home: &Path, bin: &Path, path: &str) {
+    assert_owned_adjacent_config(bin);
     let long = bin.join("azdaja");
     let short = bin.join("az");
     assert_eq!(fs::read_link(&short).unwrap(), PathBuf::from("azdaja"));
@@ -254,8 +266,12 @@ fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
     assert!(!text.contains("v0.1.1"));
     assert!(text.contains("mv -f \"$STAGED\" \"$DEST\""));
     assert!(text.contains("ln -s azdaja \"$ALIAS\""));
-    assert!(text.contains("refusing to overwrite foreign symlink"));
+    assert!(text.contains("PATH_AZ=$PATH_ENTRY/az"));
+    assert!(text.contains("short alias skipped"));
+    assert!(text.contains("azdaja-config.toml.managed"));
+    assert!(!text.contains("\"$BIN_DIR/config.toml\""));
     assert!(text.contains("run az doctor"));
+    assert!(text.contains("run azdaja doctor"));
 }
 
 #[test]
@@ -291,7 +307,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         assert!(stdout.contains(asset));
         assert!(stdout.contains("add ") && stdout.contains(" to PATH"));
         assert_eq!(sha256(&bin.join("azdaja")), digest);
-        let active = fs::read_to_string(bin.join("config.toml")).unwrap();
+        let active = fs::read_to_string(bin.join("azdaja-config.toml")).unwrap();
         assert!(active.contains("claude -p --model {model}"));
         assert!(target(&home, "claude").join("azdaja").is_file());
         assert!(stdout.contains("azdaja ->") && stdout.contains("az ->"));
@@ -362,7 +378,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     assert!(stdout.lines().last().unwrap().contains("az doctor"));
     assert_alias_identity_and_local_caps(&home, &path_bin, &path);
     assert!(
-        fs::read_to_string(path_bin.join("config.toml"))
+        fs::read_to_string(path_bin.join("azdaja-config.toml"))
             .unwrap()
             .contains("claude -p --model {model}")
     );
@@ -371,7 +387,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         .env("HOME", &home)
         .env("PATH", &path)
         .env("AZDAJA_HOME", home.join("state"))
-        .env_remove("AZDAJA_CONFIG")
+        .env("AZDAJA_CONFIG", path_bin.join("azdaja-config.toml"))
         .env_remove("RLM_DEPTH")
         .output()
         .unwrap();
@@ -415,7 +431,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             assert!(stdout.lines().last().unwrap().contains("az doctor"));
             assert!(target(&home, harness).join("azdaja").is_file());
             assert_eq!(
-                fs::read(bin.join("config.toml")).unwrap(),
+                fs::read(bin.join("azdaja-config.toml")).unwrap(),
                 fs::read(target(&home, harness).join("config.toml")).unwrap(),
                 "PATH binary must bind the selected {harness} route"
             );
@@ -441,7 +457,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             assert!(target(&home, harness).join("azdaja").is_file());
         }
         assert!(
-            fs::read_to_string(bin.join("config.toml"))
+            fs::read_to_string(bin.join("azdaja-config.toml"))
                 .unwrap()
                 .contains("jcode-api")
         );
@@ -571,11 +587,20 @@ fn alias_safety_failures_leave_home_and_foreign_paths_unchanged() {
             bin_dir: Some(&bin),
             path: system_path,
         });
-        assert_eq!(output.status.code(), Some(1));
-        assert!(String::from_utf8_lossy(&output.stderr).contains("refusing to overwrite foreign"));
-        assert!(!bin.join("azdaja").exists());
-        assert!(!bin.join("config.toml").exists());
-        assert_eq!(fs::read_dir(&bin).unwrap().count(), 1);
+        let stdout = assert_success(&output);
+        assert_eq!(stdout.lines().count(), 3, "{stdout}");
+        assert!(
+            stdout
+                .lines()
+                .nth(1)
+                .unwrap()
+                .contains("short alias skipped")
+        );
+        assert!(stdout.lines().last().unwrap().contains("azdaja doctor"));
+        assert!(!stdout.contains("; az ->"));
+        assert!(bin.join("azdaja").is_file());
+        assert_owned_adjacent_config(&bin);
+        assert_eq!(fs::read_dir(&bin).unwrap().count(), 4);
         if kind == "regular" {
             assert_eq!(fs::read(&alias).unwrap(), b"foreign-command");
         } else {
@@ -585,6 +610,237 @@ fn alias_safety_failures_leave_home_and_foreign_paths_unchanged() {
             );
         }
     }
+}
+
+#[test]
+fn foreign_az_anywhere_on_path_skips_alias_without_changing_resolution() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+
+    for position in ["earlier", "later"] {
+        let home = scratch.0.join(format!("foreign-path-{position}"));
+        let bin = home.join("bin");
+        let foreign = home.join("azure-cli/bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::create_dir_all(&foreign).unwrap();
+        if position == "later" {
+            std::os::unix::fs::symlink("azdaja", bin.join("az")).unwrap();
+        }
+        let foreign_az = foreign.join("az");
+        fs::write(&foreign_az, "#!/bin/sh\nprintf 'FOREIGN_AZ\\n'\n").unwrap();
+        fs::set_permissions(&foreign_az, fs::Permissions::from_mode(0o755)).unwrap();
+        let path = if position == "earlier" {
+            format!("{}:{}:/usr/bin:/bin", foreign.display(), bin.display())
+        } else {
+            format!("{}:{}:/usr/bin:/bin", bin.display(), foreign.display())
+        };
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &format!("{}/good", server.base),
+            os: "Darwin",
+            arch: "arm64",
+            harness: Some("claude"),
+            bin_dir: Some(&bin),
+            path: &path,
+        });
+        let stdout = assert_success(&output);
+        assert_eq!(stdout.lines().count(), 3, "{stdout}");
+        let written = stdout.lines().nth(1).unwrap();
+        assert!(written.contains("short alias skipped"), "{written}");
+        assert!(!written.contains("; az ->"), "{written}");
+        assert!(stdout.lines().last().unwrap().contains("azdaja doctor"));
+        assert!(!bin.join("az").exists());
+        assert_owned_adjacent_config(&bin);
+
+        let resolved = Command::new("sh")
+            .args(["-c", "command -v az; az; command -v azdaja"])
+            .env("PATH", &path)
+            .output()
+            .unwrap();
+        let resolved = assert_success(&resolved);
+        assert_eq!(
+            resolved,
+            format!(
+                "{}\nFOREIGN_AZ\n{}\n",
+                foreign_az.display(),
+                bin.join("azdaja").display()
+            )
+        );
+    }
+}
+
+#[test]
+fn adjacent_config_ownership_preserves_custom_state_and_generic_config() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let home = scratch.0.join("owned-config-home");
+    let bin = home.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    fs::write(bin.join("config.toml"), b"unrelated = 'keep-me'\n").unwrap();
+    let run = || {
+        run_installer(InstallRun {
+            home: &home,
+            base: &format!("{}/good", server.base),
+            os: "Linux",
+            arch: "x86_64",
+            harness: Some("claude"),
+            bin_dir: Some(&bin),
+            path: "/usr/bin:/bin",
+        })
+    };
+
+    assert_success(&run());
+    assert_owned_adjacent_config(&bin);
+    assert_eq!(
+        fs::read(bin.join("config.toml")).unwrap(),
+        b"unrelated = 'keep-me'\n"
+    );
+    let custom = format!(
+        "# user-owned customization\n{}",
+        fs::read_to_string(bin.join("azdaja-config.toml")).unwrap()
+    );
+    fs::write(bin.join("azdaja-config.toml"), custom.as_bytes()).unwrap();
+    let stdout = assert_success(&run());
+    assert!(
+        stdout
+            .lines()
+            .nth(1)
+            .unwrap()
+            .contains("config preserved ->")
+    );
+    assert_eq!(
+        fs::read(bin.join("azdaja-config.toml")).unwrap(),
+        custom.as_bytes()
+    );
+    assert_eq!(
+        fs::read(bin.join("config.toml")).unwrap(),
+        b"unrelated = 'keep-me'\n"
+    );
+    assert_alias_identity_and_local_caps(&home, &bin, "/usr/bin:/bin");
+}
+
+#[test]
+fn ambiguous_adjacent_config_states_refuse_before_install_mutation() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+
+    for scenario in [
+        "config-only",
+        "marker-only",
+        "unknown-marker",
+        "config-symlink",
+        "marker-symlink",
+    ] {
+        let home = scratch.0.join(format!("config-collision-{scenario}"));
+        let bin = home.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let config = bin.join("azdaja-config.toml");
+        let marker = bin.join("azdaja-config.toml.managed");
+        match scenario {
+            "config-only" => fs::write(&config, b"foreign\n").unwrap(),
+            "marker-only" => fs::write(&marker, b"azdaja-installer-owned-config-v1\n").unwrap(),
+            "unknown-marker" => {
+                fs::write(&config, b"foreign\n").unwrap();
+                fs::write(&marker, b"some-other-owner\n").unwrap();
+            }
+            "config-symlink" => {
+                std::os::unix::fs::symlink("foreign-config", &config).unwrap();
+                fs::write(&marker, b"azdaja-installer-owned-config-v1\n").unwrap();
+            }
+            _ => {
+                fs::write(&config, b"foreign\n").unwrap();
+                std::os::unix::fs::symlink("foreign-owner", &marker).unwrap();
+            }
+        }
+        let before_config = fs::symlink_metadata(&config).ok().map(|m| m.file_type());
+        let before_marker = fs::symlink_metadata(&marker).ok().map(|m| m.file_type());
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &format!("{}/good", server.base),
+            os: "Linux",
+            arch: "x86_64",
+            harness: Some("claude"),
+            bin_dir: Some(&bin),
+            path: "/usr/bin:/bin",
+        });
+        assert_eq!(output.status.code(), Some(1), "scenario={scenario}");
+        assert!(output.stdout.is_empty(), "scenario={scenario}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("refusing"),
+            "scenario={scenario} stderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!bin.join("azdaja").exists());
+        assert!(!bin.join("az").exists());
+        assert!(!target(&home, "claude").exists());
+        assert_eq!(
+            fs::symlink_metadata(&config).ok().map(|m| m.file_type()),
+            before_config,
+            "scenario={scenario}"
+        );
+        assert_eq!(
+            fs::symlink_metadata(&marker).ok().map(|m| m.file_type()),
+            before_marker,
+            "scenario={scenario}"
+        );
+    }
+}
+
+#[test]
+fn late_harness_refusal_rolls_back_binary_and_keeps_managed_alias() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let home = scratch.0.join("rollback-home");
+    let bin = home.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    fs::write(bin.join("azdaja"), b"old-binary-must-return").unwrap();
+    std::os::unix::fs::symlink("azdaja", bin.join("az")).unwrap();
+    let harness = target(&home, "claude");
+    fs::create_dir_all(&harness).unwrap();
+    fs::write(harness.join("foreign"), b"unowned-harness").unwrap();
+
+    let output = run_installer(InstallRun {
+        home: &home,
+        base: &format!("{}/good", server.base),
+        os: "Darwin",
+        arch: "arm64",
+        harness: Some("claude"),
+        bin_dir: Some(&bin),
+        path: "/usr/bin:/bin",
+    });
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        fs::read(bin.join("azdaja")).unwrap(),
+        b"old-binary-must-return"
+    );
+    assert_eq!(
+        fs::read_link(bin.join("az")).unwrap(),
+        PathBuf::from("azdaja")
+    );
+    assert_eq!(
+        fs::read(harness.join("foreign")).unwrap(),
+        b"unowned-harness"
+    );
+    assert!(!bin.join("azdaja-config.toml").exists());
+    assert!(!bin.join("azdaja-config.toml.managed").exists());
+    assert_eq!(fs::read_dir(&bin).unwrap().count(), 2);
 }
 
 #[test]

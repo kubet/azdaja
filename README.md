@@ -49,13 +49,13 @@ The [crossover figure](docs/token-context-crossover.svg) is illustrative: it ass
 
 ## Install
 
-One command on Apple Silicon macOS or Linux x86-64. It detects installed harnesses without reading their configuration contents, verifies the v0.1.2 asset against `SHA256SUMS`, atomically writes the `azdaja` binary, and safely adds the short `az` PATH alias without replacing a foreign path:
+One command on Apple Silicon macOS or Linux x86-64. It detects installed harnesses without reading their configuration contents, verifies the v0.1.2 asset against `SHA256SUMS`, and atomically writes the `azdaja` binary. Before adding the optional short `az` alias, it scans every PATH entry: if Azure CLI or any other foreign `az` file or symlink exists, the install succeeds without an alias and reports `short alias skipped`. Standalone route configuration uses owned `azdaja-config.toml` plus `azdaja-config.toml.managed`; an unrelated adjacent `config.toml` is never overwritten:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh
 ```
 
-Detected harness setup runs automatically. To reconfigure explicitly, use `az install --harness all` (or a named harness), then verify the selected route with `az doctor`. `az` and `azdaja` run the same executable. A bare invocation prints an indexed 16-row truecolor half-block banner above the five-line help only on an interactive color terminal; non-TTY output, `NO_COLOR`, and `TERM=dumb` emit only the same exact five-line text through either name.
+Detected harness setup runs automatically. When the installer reports the alias, use `az install --harness all` (or a named harness) and `az doctor`; when it reports `short alias skipped`, use `azdaja install --harness all` and `azdaja doctor`. If installed, `az` and `azdaja` run the same executable. A bare invocation prints an indexed 16-row truecolor half-block banner above the five-line help only on an interactive color terminal; non-TTY output, `NO_COLOR`, and `TERM=dumb` emit only the same exact five-line text through either name.
 
 Manual alternative with Rust 1.95:
 
@@ -65,13 +65,13 @@ azdaja install --harness all
 azdaja doctor
 ```
 
-The Cargo path keeps `azdaja` available and does not create `az`; the short alias is installed by the one-line installer. Uninstall the managed harness copies; if the one-command installer wrote PATH entries, also remove the exact `azdaja`, `az`, and adjacent `config.toml` paths it reported:
+The Cargo path keeps `azdaja` available and does not create `az`; the one-line installer creates the short alias only when no foreign `az` exists anywhere on PATH. Uninstall the managed harness copies; if the one-command installer wrote PATH entries, also remove the exact `azdaja`, optional `az`, `azdaja-config.toml`, and `azdaja-config.toml.managed` paths it reported:
 
 ```bash
 azdaja uninstall
 ```
 
-Supported harness targets are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation makes no provider call. A passing `doctor` proves only that the configured harness route answered its fixed canary. The provider-free [short-alias delta receipt](bench/results/install-alias-delta-v0.1.2-public.json) covers 16 local-fixture cells across both supported platform selectors, every detected harness, `all`, no-harness refusal, and already-installed update; it is not a native cross-platform or provider validation. The [readiness supersession receipt](bench/results/v0.1.2-candidate-readiness-superseded-public.json) marks the retained v0.1.2 binaries and their earlier matrix stale after the help/alias source change: new native assets and a fresh release matrix are required before release readiness. The historical [matrix](bench/results/install-matrix-v0.1.2-final-public.json) and [real-adapter receipt](bench/results/install-real-adapters-v0.1.2-final-public.json) remain evidence for their old bytes only, not the current source.
+Supported harness targets are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation makes no provider call. A passing `doctor` proves only that the configured harness route answered its fixed canary. The provider-free [short-alias delta receipt](bench/results/install-alias-delta-v0.1.2-public.json) retains the 16 local-fixture cells across both supported platform selectors, every detected harness, `all`, no-harness refusal, and already-installed update, with focused earlier/later foreign-PATH, configuration-ownership, and rollback coverage; it is not a native cross-platform or provider validation. The [readiness supersession receipt](bench/results/v0.1.2-candidate-readiness-superseded-public.json) marks the retained v0.1.2 binaries and their earlier matrix stale after the help/alias and installer-ownership changes. `Config::load` integration for adjacent `azdaja-config.toml`, new native assets, and a fresh release matrix are required before release readiness. The historical [matrix](bench/results/install-matrix-v0.1.2-final-public.json) and [real-adapter receipt](bench/results/install-real-adapters-v0.1.2-final-public.json) remain evidence for their old bytes only, not the current source.
 
 ## Use
 

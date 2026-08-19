@@ -130,14 +130,89 @@ if [ -z "$BIN_DIR" ]; then
 fi
 BIN_DIR=${BIN_DIR:-$HOME/.local/bin}
 
+harness_target() {
+  case "$1" in
+    jcode) printf '%s' "$HOME/.jcode/skills/azdaja" ;;
+    claude) printf '%s' "$HOME/.claude/skills/azdaja" ;;
+    codex) printf '%s' "$HOME/.agents/skills/azdaja" ;;
+    gemini) printf '%s' "$HOME/.gemini/skills/azdaja" ;;
+    opencode) printf '%s' "$CONFIG_ROOT/opencode/skills/azdaja" ;;
+  esac
+}
+
 # Stage and verify entirely outside HOME. Failure before verification must not
 # create the binary directory, managed harness files, configuration, or alias.
 TMP=${TMPDIR:-/tmp}/azdaja-install.$$
 STAGED=
+STAGED_EXTRA=
+TRANSACTION_ACTIVE=false
+BIN_DIR_CREATED=false
+DEST_MUTATED=false
+DEST_HAD_OLD=false
+DEST_BACKUP_CREATED=false
+HARNESS_PHASE_STARTED=false
+DEST_BACKUP=
+CONFIG_CREATED=false
+OWNER_CREATED=false
+ALIAS_CREATED=false
+ALIAS_REMOVED=false
+DEST=
+ALIAS=
+CONFIG_PATH=
+CONFIG_OWNER=
 (umask 077 && mkdir "$TMP") || fail 'cannot create private staging directory'
+
+rollback() {
+  set +e
+  if [ "$ALIAS_CREATED" = true ] && [ -L "$ALIAS" ] && [ "$(readlink "$ALIAS" 2>/dev/null)" = azdaja ]; then
+    rm -f "$ALIAS"
+  fi
+  if [ "$ALIAS_REMOVED" = true ] && [ ! -e "$ALIAS" ] && [ ! -L "$ALIAS" ]; then
+    ln -s azdaja "$ALIAS"
+  fi
+  [ "$OWNER_CREATED" = false ] || rm -f "$CONFIG_OWNER"
+  [ "$CONFIG_CREATED" = false ] || rm -f "$CONFIG_PATH"
+  if [ "$HARNESS_PHASE_STARTED" = true ]; then
+    for harness in $INSTALL_NAMES; do
+      TARGET=$(harness_target "$harness")
+      rm -rf "$TARGET"
+      if [ -f "$TMP/harness-$harness.present" ]; then
+        cp -pPR "$TMP/harness-$harness" "$TARGET"
+      fi
+      level=1
+      while [ -f "$TMP/harness-$harness-parent-$level" ]; do
+        IFS= read -r PARENT < "$TMP/harness-$harness-parent-$level"
+        rmdir "$PARENT" 2>/dev/null || :
+        level=$((level + 1))
+      done
+    done
+  fi
+  if [ "$DEST_MUTATED" = true ]; then
+    rm -rf "$DEST"
+    if [ "$DEST_HAD_OLD" = true ] && [ -n "$DEST_BACKUP" ]; then
+      mv -f "$DEST_BACKUP" "$DEST"
+      DEST_BACKUP_CREATED=false
+    fi
+  fi
+  if [ "$DEST_BACKUP_CREATED" = true ] && [ -n "$DEST_BACKUP" ]; then
+    rm -rf "$DEST_BACKUP"
+  fi
+  if [ "$BIN_DIR_CREATED" = true ]; then
+    rmdir "$BIN_DIR" 2>/dev/null || :
+  fi
+  set -e
+}
+
 cleanup() {
-  rm -rf "$TMP"
+  status=$?
+  trap - 0
+  if [ "$TRANSACTION_ACTIVE" = true ]; then
+    rollback
+  fi
   [ -z "$STAGED" ] || rm -f "$STAGED"
+  [ -z "$STAGED_EXTRA" ] || rm -f "$STAGED_EXTRA"
+  rm -rf "$TMP"
+  exit "$status"
 }
 trap cleanup 0
 trap 'exit 1' HUP INT TERM
@@ -188,39 +263,137 @@ esac
 
 DEST=$BIN_DIR/azdaja
 ALIAS=$BIN_DIR/az
-ALIAS_CREATE=true
+CONFIG_PATH=$BIN_DIR/azdaja-config.toml
+CONFIG_OWNER=$BIN_DIR/azdaja-config.toml.managed
+OWNER_MAGIC=azdaja-installer-owned-config-v1
+printf '%s\n' "$OWNER_MAGIC" > "$TMP/config-owner.expected"
+
+# Refuse ambiguous adjacent configuration before the binary, harnesses, or
+# alias can be changed. A matching owner manifest permits user customization:
+# an owned config is deliberately preserved byte-for-byte on reinstall.
+CONFIG_STATE=fresh
+if [ -L "$CONFIG_PATH" ] || [ -L "$CONFIG_OWNER" ]; then
+  fail "refusing ambiguous Azdaja config symlink or owner marker in $BIN_DIR"
+fi
+if [ -e "$CONFIG_PATH" ] || [ -e "$CONFIG_OWNER" ]; then
+  if [ -f "$CONFIG_PATH" ] && [ -f "$CONFIG_OWNER" ] && \
+     cmp -s "$CONFIG_OWNER" "$TMP/config-owner.expected"; then
+    CONFIG_STATE=owned
+  else
+    fail "refusing unowned or incomplete Azdaja config state in $BIN_DIR"
+  fi
+fi
+
+# The alias is managed only when it is this exact relative link. A foreign
+# path in BIN_DIR is preserved and causes the optional alias to be skipped.
+ALIAS_MANAGED=false
+ALIAS_SKIP=false
+FOREIGN_AZ=
 if [ -L "$ALIAS" ]; then
   command -v readlink >/dev/null 2>&1 || fail 'readlink is required to validate the existing az alias'
   ALIAS_TARGET=$(readlink "$ALIAS") || fail "cannot inspect existing az alias: $ALIAS"
-  [ "$ALIAS_TARGET" = azdaja ] || fail "refusing to overwrite foreign symlink: $ALIAS"
-  ALIAS_CREATE=false
+  if [ "$ALIAS_TARGET" = azdaja ]; then
+    ALIAS_MANAGED=true
+  else
+    ALIAS_SKIP=true
+    FOREIGN_AZ=$ALIAS
+  fi
 elif [ -e "$ALIAS" ]; then
-  fail "refusing to overwrite foreign path: $ALIAS"
+  ALIAS_SKIP=true
+  FOREIGN_AZ=$ALIAS
 fi
 
-(umask 077 && mkdir -p "$BIN_DIR") || fail "cannot create binary directory $BIN_DIR"
-[ -d "$BIN_DIR" ] && [ -w "$BIN_DIR" ] || fail "binary directory is not writable: $BIN_DIR"
-[ ! -d "$DEST" ] || fail "refusing to replace directory: $DEST"
+# Scan every PATH component, including non-executable files, dangling links,
+# later entries, and empty components (the current directory). command -v is
+# intentionally insufficient because an installed alias must not shadow Azure
+# CLI or any other foreign az path that happens to resolve later.
+START_DIR=$(pwd -P)
+path_dir_key() {
+  path_dir=$1
+  [ -n "$path_dir" ] || path_dir=$START_DIR
+  if [ -d "$path_dir" ]; then
+    (CDPATH= cd -P "$path_dir" 2>/dev/null && pwd -P)
+  else
+    case "$path_dir" in
+      /*) printf '%s\n' "${path_dir%/}" ;;
+      *) printf '%s\n' "$START_DIR/${path_dir%/}" ;;
+    esac
+  fi
+}
+BIN_DIR_KEY=$(path_dir_key "$BIN_DIR")
+PATH_REST=${PATH:-}
+while :; do
+  case "$PATH_REST" in
+    *:*) PATH_ENTRY=${PATH_REST%%:*}; PATH_REST=${PATH_REST#*:}; PATH_LAST=false ;;
+    *) PATH_ENTRY=$PATH_REST; PATH_REST=; PATH_LAST=true ;;
+  esac
+  [ -n "$PATH_ENTRY" ] || PATH_ENTRY=.
+  PATH_AZ=$PATH_ENTRY/az
+  if [ -e "$PATH_AZ" ] || [ -L "$PATH_AZ" ]; then
+    PATH_ENTRY_KEY=$(path_dir_key "$PATH_ENTRY")
+    if [ "$PATH_ENTRY_KEY" != "$BIN_DIR_KEY" ] || [ "$ALIAS_MANAGED" != true ]; then
+      ALIAS_SKIP=true
+      [ -n "$FOREIGN_AZ" ] || FOREIGN_AZ=$PATH_AZ
+    fi
+  fi
+  [ "$PATH_LAST" = false ] || break
+done
 
+[ ! -d "$DEST" ] || fail "refusing to replace directory: $DEST"
+DEST_BACKUP=$BIN_DIR/.azdaja-previous.$$
+[ ! -e "$DEST_BACKUP" ] && [ ! -L "$DEST_BACKUP" ] || \
+  fail "temporary binary backup path already exists: $DEST_BACKUP"
+
+# Snapshot each selected managed target. The Rust installer validates ownership
+# and atomically replaces one target at a time; these snapshots let this outer
+# multi-target transaction restore earlier targets if a later target refuses.
+snapshot_harness() {
+  harness=$1
+  TARGET=$(harness_target "$harness")
+  if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
+    cp -pPR "$TARGET" "$TMP/harness-$harness" || \
+      fail "cannot snapshot existing $harness harness target"
+    : > "$TMP/harness-$harness.present"
+  fi
+  PARENT=$(dirname "$TARGET")
+  level=1
+  while [ ! -e "$PARENT" ] && [ ! -L "$PARENT" ]; do
+    printf '%s\n' "$PARENT" > "$TMP/harness-$harness-parent-$level"
+    [ "$PARENT" != / ] || break
+    PARENT=$(dirname "$PARENT")
+    level=$((level + 1))
+  done
+}
+for harness in $INSTALL_NAMES; do
+  snapshot_harness "$harness"
+done
+
+BIN_DIR_WAS_DIR=false
+[ ! -d "$BIN_DIR" ] || BIN_DIR_WAS_DIR=true
+TRANSACTION_ACTIVE=true
+(umask 077 && mkdir -p "$BIN_DIR") || fail "cannot create binary directory $BIN_DIR"
+if [ "$BIN_DIR_WAS_DIR" = false ]; then
+  BIN_DIR_CREATED=true
+fi
+[ -d "$BIN_DIR" ] && [ -w "$BIN_DIR" ] || fail "binary directory is not writable: $BIN_DIR"
+
+if [ -e "$DEST" ] || [ -L "$DEST" ]; then
+  DEST_BACKUP_CREATED=true
+  cp -pPR "$DEST" "$DEST_BACKUP" || fail 'cannot snapshot the existing azdaja binary'
+  DEST_HAD_OLD=true
+fi
 STAGED=$BIN_DIR/.azdaja-install.$$
-[ ! -e "$STAGED" ] || fail "temporary install path already exists: $STAGED"
+[ ! -e "$STAGED" ] && [ ! -L "$STAGED" ] || fail "temporary install path already exists: $STAGED"
 (umask 077 && set -C && : > "$STAGED") 2>/dev/null || fail 'cannot create atomic install file'
 cat "$TMP/azdaja" > "$STAGED"
 chmod 755 "$STAGED"
+DEST_MUTATED=true
 mv -f "$STAGED" "$DEST"
 STAGED=
 
-harness_target() {
-  case "$1" in
-    jcode) printf '%s' "$HOME/.jcode/skills/azdaja" ;;
-    claude) printf '%s' "$HOME/.claude/skills/azdaja" ;;
-    codex) printf '%s' "$HOME/.agents/skills/azdaja" ;;
-    gemini) printf '%s' "$HOME/.gemini/skills/azdaja" ;;
-    opencode) printf '%s' "$CONFIG_ROOT/opencode/skills/azdaja" ;;
-  esac
-}
-WRITTEN="azdaja -> $DEST ($ASSET); az -> $ALIAS (alias to azdaja)"
+WRITTEN="azdaja -> $DEST ($ASSET)"
 PRIMARY_TARGET=
+HARNESS_PHASE_STARTED=true
 for harness in $INSTALL_NAMES; do
   "$DEST" install --harness "$harness" >/dev/null
   TARGET=$(harness_target "$harness")
@@ -228,36 +401,96 @@ for harness in $INSTALL_NAMES; do
   [ -n "$PRIMARY_TARGET" ] || PRIMARY_TARGET=$TARGET
 done
 
-# Bind the PATH binary to the first selected harness without reading credentials.
-CONFIG_STAGE=$BIN_DIR/.azdaja-config.$$
-[ ! -e "$CONFIG_STAGE" ] || fail "temporary config path already exists: $CONFIG_STAGE"
-STAGED=$CONFIG_STAGE
-(umask 077 && set -C && : > "$STAGED") 2>/dev/null || fail 'cannot create atomic config file'
-cat "$PRIMARY_TARGET/config.toml" > "$STAGED"
-chmod 600 "$STAGED"
-mv -f "$STAGED" "$BIN_DIR/config.toml"
-STAGED=
-
-# A direct symlink creation is atomic and refuses any path that appeared after
-# the preflight. Managed aliases always use this exact relative target, so an
-# update replaces only azdaja while an existing az link remains valid.
-if [ "$ALIAS_CREATE" = true ]; then
-  ln -s azdaja "$ALIAS" || fail "cannot create az alias without overwriting an existing path: $ALIAS"
+# Bind the standalone PATH binary to the first selected harness. The generic
+# adjacent config.toml name is never written: Config::load support for this
+# Azdaja-specific path is integrated separately.
+if [ "$CONFIG_STATE" = fresh ]; then
+  CONFIG_STAGE=$BIN_DIR/.azdaja-config.$$
+  OWNER_STAGE=$BIN_DIR/.azdaja-config-owner.$$
+  [ ! -e "$CONFIG_STAGE" ] && [ ! -L "$CONFIG_STAGE" ] || \
+    fail "temporary config path already exists: $CONFIG_STAGE"
+  [ ! -e "$OWNER_STAGE" ] && [ ! -L "$OWNER_STAGE" ] || \
+    fail "temporary config owner path already exists: $OWNER_STAGE"
+  STAGED=$CONFIG_STAGE
+  STAGED_EXTRA=$OWNER_STAGE
+  (umask 077 && set -C && : > "$CONFIG_STAGE") 2>/dev/null || \
+    fail 'cannot create atomic config file'
+  cat "$PRIMARY_TARGET/config.toml" > "$CONFIG_STAGE"
+  chmod 600 "$CONFIG_STAGE"
+  (umask 077 && set -C && : > "$OWNER_STAGE") 2>/dev/null || \
+    fail 'cannot create atomic config owner file'
+  printf '%s\n' "$OWNER_MAGIC" > "$OWNER_STAGE"
+  chmod 600 "$OWNER_STAGE"
+  if ! ln "$CONFIG_STAGE" "$CONFIG_PATH"; then
+    fail "cannot create Azdaja config without overwriting an existing path: $CONFIG_PATH"
+  fi
+  CONFIG_CREATED=true
+  if ! ln "$OWNER_STAGE" "$CONFIG_OWNER"; then
+    rm -f "$CONFIG_PATH"
+    CONFIG_CREATED=false
+    fail "cannot create Azdaja config owner without overwriting an existing path: $CONFIG_OWNER"
+  fi
+  OWNER_CREATED=true
+  rm -f "$CONFIG_STAGE" "$OWNER_STAGE"
+  STAGED=
+  STAGED_EXTRA=
+  WRITTEN="$WRITTEN; config -> $CONFIG_PATH; config owner -> $CONFIG_OWNER"
+else
+  WRITTEN="$WRITTEN; config preserved -> $CONFIG_PATH; config owner -> $CONFIG_OWNER"
 fi
 
-ON_PATH=false
-OLD_IFS=$IFS
-IFS=:
-for candidate in ${PATH:-}; do
-  if [ "$candidate" = "$BIN_DIR" ]; then
-    ON_PATH=true
-    break
+# A direct relative symlink creation is atomic. If a foreign az exists anywhere
+# on PATH, remove only an exact previously-managed local alias so it cannot
+# shadow that command; all foreign paths themselves remain untouched.
+if [ "$ALIAS_SKIP" = true ]; then
+  if [ "$ALIAS_MANAGED" = true ]; then
+    [ -L "$ALIAS" ] && [ "$(readlink "$ALIAS")" = azdaja ] || \
+      fail "az alias changed during installation: $ALIAS"
+    rm -f "$ALIAS" || fail "cannot remove managed az alias after foreign PATH collision: $ALIAS"
+    ALIAS_REMOVED=true
   fi
+  WRITTEN="$WRITTEN; short alias skipped (foreign az: $FOREIGN_AZ)"
+else
+  if [ "$ALIAS_MANAGED" = true ]; then
+    [ -L "$ALIAS" ] && [ "$(readlink "$ALIAS")" = azdaja ] || \
+      fail "az alias changed during installation: $ALIAS"
+  else
+    ln -s azdaja "$ALIAS" || \
+      fail "cannot create az alias without overwriting an existing path: $ALIAS"
+    ALIAS_CREATED=true
+  fi
+  WRITTEN="$WRITTEN; az -> $ALIAS (alias to azdaja)"
+fi
+
+# Only discard rollback material after every install surface is committed.
+if [ "$DEST_BACKUP_CREATED" = true ]; then
+  rm -rf "$DEST_BACKUP"
+  DEST_BACKUP_CREATED=false
+fi
+TRANSACTION_ACTIVE=false
+
+ON_PATH=false
+PATH_REST=${PATH:-}
+while :; do
+  case "$PATH_REST" in
+    *:*) PATH_ENTRY=${PATH_REST%%:*}; PATH_REST=${PATH_REST#*:}; PATH_LAST=false ;;
+    *) PATH_ENTRY=$PATH_REST; PATH_REST=; PATH_LAST=true ;;
+  esac
+  [ -n "$PATH_ENTRY" ] || PATH_ENTRY=.
+  if [ "$(path_dir_key "$PATH_ENTRY")" = "$BIN_DIR_KEY" ]; then
+    ON_PATH=true
+  fi
+  [ "$PATH_LAST" = false ] || break
 done
-IFS=$OLD_IFS
 printf 'Detected: %s\n' "$DETECTION_REPORT"
 printf 'Written: %s\n' "$WRITTEN"
-if [ "$ON_PATH" = true ]; then
+if [ "$ALIAS_SKIP" = true ]; then
+  if [ "$ON_PATH" = true ]; then
+    printf 'Next: run azdaja doctor (%s is on PATH; short alias skipped)\n' "$BIN_DIR"
+  else
+    printf 'Next: add %s to PATH, then run azdaja doctor (short alias skipped)\n' "$BIN_DIR"
+  fi
+elif [ "$ON_PATH" = true ]; then
   printf 'Next: run az doctor (%s is on PATH)\n' "$BIN_DIR"
 else
   printf 'Next: add %s to PATH, then run az doctor\n' "$BIN_DIR"

@@ -1,5 +1,5 @@
 {
-  "base_commit": "94362aadb712150c31093329d398e2afadbcbda3",
+  "base_commit": "4b12e1aa3fb2774c5aebcf1ce079de7ccdbcd4e9",
   "completed_local_source_validation": {
     "arc_calls_performed": false,
     "arc_offline_unit_tests": {
@@ -17,12 +17,15 @@
     "full_locked_rust_suite": {
       "failed": 0,
       "ignored": 1,
-      "passed": 108,
+      "passed": 112,
       "status": "PASS"
     },
     "interactive_banner_unit_contract": "PASS_32X26_INDEXED_16_RENDERED_ROWS_TRUECOLOR_RESET_AND_COLOR_GATE",
+    "late_installer_rollback_check": "PASS_BINARY_HARNESS_ALIAS_RESTORED",
+    "path_wide_foreign_az_collision_checks": "PASS_EARLIER_AND_LATER_WITH_COMMAND_RESOLUTION",
     "provider_calls_performed": false,
-    "provider_free_alias_fixture_matrix": "PASS_16_OF_16_GREEN_14_POSITIVE_2_EXPECTED_REFUSALS"
+    "provider_free_alias_fixture_matrix": "PASS_16_OF_16_GREEN_14_POSITIVE_2_EXPECTED_REFUSALS_PLUS_FOCUSED_OWNERSHIP_COLLISION_ROLLBACK_TESTS",
+    "standalone_config_ownership_checks": "PASS_COLLISIONS_REFUSE_OWNED_CUSTOM_PRESERVED_GENERIC_UNTOUCHED"
   },
   "publication": {
     "release_created": false,
@@ -32,9 +35,10 @@
   },
   "record_type": "azdaja_v0_1_2_candidate_readiness_supersession_receipt",
   "required_before_release_readiness": [
-    "build new Darwin arm64 and Linux x86-64 assets from the final source commit",
+    "integrate Config::load compatibility for adjacent azdaja-config.toml without restoring generic adjacent config.toml writes",
+    "build new Darwin arm64 and Linux x86-64 assets from the final integrated source commit",
     "write a new SHA256SUMS and bind the new bytes",
-    "rerun native platform install and exact five-line help checks through both az and azdaja",
+    "rerun native platform install, foreign-az collision, config-ownership, and exact five-line help checks through every installed command name",
     "rerun the provider and already-installed/no-harness matrix required by the release gate",
     "replace stale release-plan bindings only after those checks pass"
   ],
@@ -60,9 +64,14 @@
   "trigger": {
     "bare_cli_output_changed": true,
     "compatibility_command": "azdaja",
+    "config_load_integration_pending": true,
+    "generic_adjacent_config_write_removed": true,
     "interactive_truecolor_banner_added": true,
     "one_line_installer_alias_added": true,
+    "path_wide_foreign_az_collision_guard_added": true,
     "primary_documented_command": "az",
-    "required_exact_lines": 5
+    "required_exact_lines": 5,
+    "standalone_config_filename": "azdaja-config.toml",
+    "standalone_config_owner_marker": "azdaja-config.toml.managed"
   }
 }

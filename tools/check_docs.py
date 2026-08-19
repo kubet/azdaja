@@ -72,6 +72,11 @@ def check_claim_contract() -> list[str]:
         "non-TTY output, `NO_COLOR`, and `TERM=dumb`",
         "same exact five-line text through either name",
         "The Cargo path keeps `azdaja` available and does not create `az`",
+        "scans every PATH entry",
+        "`short alias skipped`",
+        "`azdaja-config.toml` plus `azdaja-config.toml.managed`",
+        "an unrelated adjacent `config.toml` is never overwritten",
+        "`Config::load` integration for adjacent `azdaja-config.toml`",
         "A passing `doctor` proves only",
         "0.0 Ember-minus-baseline **local shadow RHAE** difference",
         "**+8; +1.24% relative to the baseline raw count**",
@@ -91,7 +96,7 @@ def check_claim_contract() -> list[str]:
         "readiness supersession receipt",
         "bench/results/v0.1.2-candidate-readiness-superseded-public.json",
         "marks the retained v0.1.2 binaries and their earlier matrix stale",
-        "new native assets and a fresh release matrix are required",
+        "new native assets, and a fresh release matrix are required",
         "evidence for their old bytes only, not the current source",
         "bench/results/install-matrix-v0.1.2-final-public.json",
         "bench/results/install-real-adapters-v0.1.2-final-public.json",
@@ -527,9 +532,9 @@ def check_alias_delta_receipt() -> list[str]:
     }
     hashes = receipt.get("hashes", {})
     if (
-        receipt.get("schema_version") != 1
+        receipt.get("schema_version") != 2
         or receipt.get("record_type") != "azdaja_install_alias_delta_local_fixture_public_receipt"
-        or receipt.get("base_commit") != "94362aadb712150c31093329d398e2afadbcbda3"
+        or receipt.get("base_commit") != "4b12e1aa3fb2774c5aebcf1ce079de7ccdbcd4e9"
         or receipt.get("result") != expected_result
         or len(cells) != 16
         or identities != expected_identities
@@ -558,6 +563,23 @@ def check_alias_delta_receipt() -> list[str]:
     ]
     if receipt.get("positive_contract", {}).get("bare_exact_five_line_help") != expected_help:
         errors.append("alias delta receipt: exact five-line help contract changed")
+    collision = receipt.get("foreign_az_collision_contract", {})
+    ownership = receipt.get("config_ownership_contract", {})
+    rollback = receipt.get("rollback_contract", {})
+    if (
+        collision.get("earlier_path_command_resolution_preserved") is not True
+        or collision.get("later_path_command_resolution_preserved") is not True
+        or collision.get("preexisting_managed_alias_removed_to_avoid_shadowing") is not True
+        or collision.get("installer_stdout_lines") != 3
+        or collision.get("stdout_line_2_contains") != "short alias skipped"
+        or collision.get("stdout_line_3_uses") != "azdaja doctor"
+        or ownership.get("standalone_config") != "azdaja-config.toml"
+        or ownership.get("owner_marker") != "azdaja-config.toml.managed"
+        or ownership.get("generic_config_toml_written") is not False
+        or ownership.get("owned_custom_config_preserved") is not True
+        or rollback.get("late_harness_refusal_restores_prior_state") is not True
+    ):
+        errors.append("alias delta receipt: collision, ownership, or rollback contract changed")
     for private_prefix in ("/Users/", "/private/tmp/", "C:\\Users\\"):
         if private_prefix in path.read_text(encoding="utf-8"):
             errors.append(f"alias delta receipt: private host path leaked: {private_prefix}")
@@ -574,15 +596,20 @@ def check_candidate_readiness_supersession() -> list[str]:
     supersession = receipt.get("supersession", {})
     publication = receipt.get("publication", {})
     local_validation = receipt.get("completed_local_source_validation", {})
+    trigger = receipt.get("trigger", {})
     if (
         receipt.get("schema_version") != 1
         or receipt.get("record_type") != "azdaja_v0_1_2_candidate_readiness_supersession_receipt"
+        or receipt.get("base_commit") != "4b12e1aa3fb2774c5aebcf1ce079de7ccdbcd4e9"
         or receipt.get("status") != "REBUILD_AND_CROSS_PLATFORM_RETEST_REQUIRED"
         or supersession.get("retained_v0_1_2_candidate_is_final") is not False
         or supersession.get("previous_final_matrix_valid_for_current_source") is not False
         or supersession.get("previous_receipts_remain_historical_evidence") is not True
         or supersession.get("old_binary_hashes_are_final_bindings") is not False
         or not str(local_validation.get("provider_free_alias_fixture_matrix", "")).startswith("PASS_")
+        or local_validation.get("path_wide_foreign_az_collision_checks") != "PASS_EARLIER_AND_LATER_WITH_COMMAND_RESOLUTION"
+        or local_validation.get("standalone_config_ownership_checks") != "PASS_COLLISIONS_REFUSE_OWNED_CUSTOM_PRESERVED_GENERIC_UNTOUCHED"
+        or local_validation.get("late_installer_rollback_check") != "PASS_BINARY_HARNESS_ALIAS_RESTORED"
         or local_validation.get("exact_five_line_non_tty_help_and_alias_parity") != "PASS"
         or local_validation.get("interactive_banner_unit_contract", "").startswith("PASS_") is not True
         or local_validation.get("full_locked_rust_suite", {}).get("failed") != 0
@@ -590,6 +617,11 @@ def check_candidate_readiness_supersession() -> list[str]:
         or local_validation.get("arc_offline_unit_tests", {}).get("passed") != 55
         or local_validation.get("provider_calls_performed") is not False
         or local_validation.get("arc_calls_performed") is not False
+        or trigger.get("standalone_config_filename") != "azdaja-config.toml"
+        or trigger.get("standalone_config_owner_marker") != "azdaja-config.toml.managed"
+        or trigger.get("generic_adjacent_config_write_removed") is not True
+        or trigger.get("config_load_integration_pending") is not True
+        or trigger.get("path_wide_foreign_az_collision_guard_added") is not True
         or any(publication.values())
     ):
         errors.append("candidate readiness supersession: stale/nonpublication boundary changed")

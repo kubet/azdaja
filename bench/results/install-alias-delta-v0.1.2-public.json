@@ -1,5 +1,5 @@
 {
-  "base_commit": "94362aadb712150c31093329d398e2afadbcbda3",
+  "base_commit": "4b12e1aa3fb2774c5aebcf1ce079de7ccdbcd4e9",
   "cells": [
     {
       "green": true,
@@ -99,31 +99,56 @@
     }
   ],
   "change_boundary": {
-    "cargo_manifest_changed": true,
+    "cargo_manifest_changed": false,
+    "installer_changed": true,
     "managed_binary_name": "azdaja",
     "old_binary_hashes_bound_as_final": false,
     "package_publish_disabled": true,
     "pre_change_release_candidate_status": "stale_rebuild_required",
     "release_asset_name_changed": false,
-    "rust_source_changed": true
+    "rust_source_changed": false,
+    "tests_and_docs_changed": true
+  },
+  "config_ownership_contract": {
+    "config_load_compatibility_integration": "pending_separate_branch",
+    "fresh_pair_created_atomically_without_clobber": true,
+    "generic_config_toml_preserved": true,
+    "generic_config_toml_written": false,
+    "managed_harness_config_filename_unchanged": "config.toml",
+    "owned_custom_config_preserved": true,
+    "owner_marker": "azdaja-config.toml.managed",
+    "standalone_config": "azdaja-config.toml",
+    "unknown_incomplete_or_symlink_state_refuses_before_install_mutation": true
   },
   "failure_contract": {
     "alias_created_on_failure": false,
     "checksum_mismatch_home_unchanged": true,
-    "foreign_regular_file_unchanged": true,
-    "foreign_symlink_unchanged": true,
+    "config_or_marker_collision_refuses_before_install_mutation": true,
+    "foreign_bin_dir_regular_file_unchanged_alias_skipped": true,
+    "foreign_bin_dir_symlink_unchanged_alias_skipped": true,
     "no_harness_home_unchanged_and_no_download": true,
     "unsupported_platform_home_unchanged_and_no_download": true
+  },
+  "foreign_az_collision_contract": {
+    "all_path_entries_scanned_before_install_mutation": true,
+    "earlier_path_command_resolution_preserved": true,
+    "foreign_files_and_symlinks_preserved": true,
+    "installer_stdout_lines": 3,
+    "installer_succeeds_without_alias": true,
+    "later_path_command_resolution_preserved": true,
+    "preexisting_managed_alias_removed_to_avoid_shadowing": true,
+    "stdout_line_2_contains": "short alias skipped",
+    "stdout_line_3_uses": "azdaja doctor"
   },
   "hashes": {
     ".gitignore": "78f3a3211035abc61620600167071b7767bb483253c60db3153dfafb251fdcb5",
     "Cargo.toml": "2925561c94a507aa2ebae852e3773981ae2cfc05ed66da495297731163fd9ac8",
-    "install.sh": "892a762b7ce199567c8acb2f42ac3dc62b73abee365de23fd4135d68b1cc1853",
-    "site/install": "892a762b7ce199567c8acb2f42ac3dc62b73abee365de23fd4135d68b1cc1853",
+    "install.sh": "ae50243f6fe9354e010c4e6c56eea81e291708890d5b5b947bdcf6ea71c9bb2d",
+    "site/install": "ae50243f6fe9354e010c4e6c56eea81e291708890d5b5b947bdcf6ea71c9bb2d",
     "src/banner.rs": "dec4128eea89db1c339ebc6b19f68433f6b7c7986c5f0105f334542720137f79",
     "src/main.rs": "898abd67f90eee1a5a4902bf629e0c6010483ad1f691c0de268f9843735a1877",
     "tests/cli_ux.rs": "f38264104329f3a80ec72e124f0fd058624951bca09406442607fe04e22bff61",
-    "tests/site_installer.rs": "ac06b9784155261092b0a7cc48a9963430de0d224d53f574eaa6bbb9bc4de2b5"
+    "tests/site_installer.rs": "9d8d6114fcc0ff3a30de3f874e77bd2796de048c27fefe8ca5fcbf374ae07390"
   },
   "positive_contract": {
     "alias_path_component": "az",
@@ -142,6 +167,8 @@
     "installer_stdout_lines": 3,
     "managed_alias_second_install_idempotent": true,
     "provider_free_solo_output_byte_identical_through_alias": true,
+    "standalone_config_owner_path_component": "azdaja-config.toml.managed",
+    "standalone_config_path_component": "azdaja-config.toml",
     "stdout_line_3_uses": "az doctor",
     "stdout_reports_commands": [
       "azdaja",
@@ -157,16 +184,23 @@
     "status": "PASS",
     "total_cells": 16
   },
+  "rollback_contract": {
+    "foreign_harness_target_unchanged": true,
+    "late_harness_refusal_restores_prior_state": true,
+    "managed_alias_restored": true,
+    "prior_binary_restored": true,
+    "standalone_config_not_left_partial": true
+  },
   "sanitization": {
     "credentials_retained": false,
     "host_paths_retained": false,
     "model_io_retained": false,
     "raw_logs_retained": false
   },
-  "schema_version": 1,
+  "schema_version": 2,
   "scope": {
     "arc_calls_performed": false,
-    "boundary": "Both asset-selection branches and installer behavior were exercised locally; this delta receipt is not a native Linux binary or provider validation.",
+    "boundary": "Both asset-selection branches and installer behavior were exercised locally; focused collision/ownership tests are provider-free and this receipt is not a native Linux binary or provider validation.",
     "fixture": "loopback HTTP release fixture with a locally built current-source Azdaja candidate",
     "native_cross_platform_claim": false,
     "platform_selectors": [
@@ -187,11 +221,17 @@
   },
   "validation": {
     "command": "cargo test --locked --test site_installer -- --test-threads=1",
+    "foreign_path_test": "foreign_az_anywhere_on_path_skips_alias_without_changing_resolution",
     "matrix_test": "local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states",
+    "ownership_tests": [
+      "adjacent_config_ownership_preserves_custom_state_and_generic_config",
+      "ambiguous_adjacent_config_states_refuse_before_install_mutation"
+    ],
+    "rollback_test": "late_harness_refusal_rolls_back_binary_and_keeps_managed_alias",
     "safety_test": "alias_safety_failures_leave_home_and_foreign_paths_unchanged",
     "solo_test": "installed_alias_matches_solo_through_a_provider_free_fixture",
     "tests_failed": 0,
-    "tests_passed": 6
+    "tests_passed": 10
   },
   "version": "0.1.2"
 }
