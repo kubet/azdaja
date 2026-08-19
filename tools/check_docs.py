@@ -35,20 +35,17 @@ def check_claim_contract() -> list[str]:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     draft = (ROOT / "drafts" / "v0.1.1-launch.md").read_text(encoding="utf-8")
     required_readme = [
-        "61.452662890467536%",
-        "75.95701810685118%",
-        "RAH scheduled rows | 199",
-        "Valid completions | 161/199",
-        "Completed-row mean **75.957%**",
-        "Retained deaths | 38",
-        "Validation-derived",
-        "not a leaderboard result",
+        "All 199 scheduled rows reached terminal accounting",
+        "not an official leaderboard result",
+        "64.38%",
+        "71.75%",
+        "81.36%",
         "52,428,800",
         "65,536",
         "not a token or cost-savings claim",
         "docs/token-context-crossover.svg",
-        "The repository is private",
-        "Do not publish or claim anonymous reachability",
+        "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/v0.1.1/site/install | sh",
+        "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.1 --locked",
     ]
     required_draft = [
         "NONPUBLISHED DRAFT",
@@ -63,8 +60,8 @@ def check_claim_contract() -> list[str]:
         "No cost or token",
     ]
     readme_lines = len(readme.splitlines())
-    if not 80 <= readme_lines <= 120:
-        errors.append(f"README.md: expected 80-120 lines, found {readme_lines}")
+    if not 100 <= readme_lines <= 140:
+        errors.append(f"README.md: expected 100-140 lines, found {readme_lines}")
     stale_readme = [
         "## First-use feedback",
         "### Derived RULER",
@@ -73,22 +70,50 @@ def check_claim_contract() -> list[str]:
         "release candidate",
         "GitHub Actions push run",
         "prepublication plan",
-        "raw.githubusercontent.com",
+        "The repository is private",
+        "authenticated owner",
+        "ssh://git@",
+        "Do not publish or claim anonymous reachability",
     ]
     for needle in stale_readme:
         if needle in readme:
-            errors.append(f"README.md: stale or nonprivate claim remains: {needle}")
+            errors.append(f"README.md: stale or nonpublic claim remains: {needle}")
     for needle in required_readme:
         if needle not in readme:
-            errors.append(f"README.md: missing required evidence phrase: {needle}")
+            errors.append(f"README.md: missing required evidence or install phrase: {needle}")
     for needle in required_draft:
         if needle not in draft:
             errors.append(f"drafts/v0.1.1-launch.md: missing required boundary phrase: {needle}")
-    for doc, text in (("README.md", readme), ("drafts/v0.1.1-launch.md", draft)):
-        if re.search(r"(?:~|≈)\s*72(?:\.0+)?%?", text):
+
+    marker = "ENDGAME-FIXED199-SUBSTITUTION-POINT"
+    if readme.count(marker) != 1:
+        errors.append(f"README.md: expected exactly one {marker} marker")
+    candidate_row = re.compile(
+        r"^\| \*\*Azdaja — current terminal candidate\*\* "
+        r"\| (\d+)/199 \((\d+\.\d+)%\) "
+        r"\| (\d+\.\d+)% \| \*\*(\d+\.\d+)%\*\* "
+        r"\| Not reported \| Not reported \|$",
+        re.MULTILINE,
+    )
+    rows = candidate_row.findall(readme)
+    if len(rows) != 1:
+        errors.append("README.md: expected exactly one well-formed terminal Azdaja row")
+    else:
+        completed_text, execution_rate_text, completed_mean_text, fixed_score_text = rows[0]
+        completed = int(completed_text)
+        execution_rate = float(execution_rate_text)
+        completed_mean = float(completed_mean_text)
+        fixed_score = float(fixed_score_text)
+        if completed > 199 or abs(execution_rate - 100 * completed / 199) > 0.005:
+            errors.append("README.md: Azdaja execution count/rate is inconsistent")
+        if abs(fixed_score - completed_mean * completed / 199) > 1e-12:
+            errors.append("README.md: completed-row mean does not decompose to fixed-199 score")
+
+    for doc, doc_text in (("README.md", readme), ("drafts/v0.1.1-launch.md", draft)):
+        if re.search(r"(?:~|≈)\s*72(?:\.0+)?%?", doc_text):
             errors.append(f"{doc}: forbidden approximate-72 result claim")
         for private_prefix in ("/Users/", "/private/tmp/", "C:\\Users\\"):
-            if private_prefix in text:
+            if private_prefix in doc_text:
                 errors.append(f"{doc}: private host path leaked: {private_prefix}")
     return errors
 

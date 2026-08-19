@@ -22,26 +22,63 @@ The [crossover figure](docs/token-context-crossover.svg) is deliberately illustr
 
 ## Current evidence
 
-| Measure | Immutable result | Boundary |
-|---|---:|---|
-| RAH scheduled rows | 199 | Fixed denominator |
-| Valid completions | 161/199 | Completed-row mean **75.957%** (exact aggregate 75.95701810685118%) |
-| Retained deaths | 38 | Each contributes zero |
-| Fixed-199 score | **61.452662890467536%** | Validation-derived RAH slice |
+One current Azdaja candidate is shown as a sanitized public aggregate. Historical
+candidates, failed campaigns, and incident detail are intentionally excluded. This is
+single-arm diagnostic evidence—not an official leaderboard result, a paired
+comparison, or a superiority claim.
 
-For class context: the RAH paper (arXiv 2606.13643, same 199-row, 13-bucket protocol, GPT-5 backbone) reports **64.38%** for this same bare RLM configuration, 71.75% for a coding agent, and 81.36% for recursive harnesses. Shown for orientation only; our number is a single-arm, validation-derived slice, not a leaderboard result, with no paired control and no superiority claim. The run is frozen and never rerun or rescored. See [`SCOREBOARD.md`](SCOREBOARD.md), the [score provenance](bench/results/rah199-99f-provenance.json), and the [terminal receipt](bench/results/rah199-99f-terminal-receipt.json).
+### Fixed-199 validation slice
+
+The Azdaja row is the current exact endgame value. It is provisional only because
+the frozen plan permits one possible successor run; if that run becomes terminal,
+replace this row, and otherwise treat the current row as final.
+
+<!-- ENDGAME-FIXED199-SUBSTITUTION-POINT: If and only if the sole authorized successor fixed-199 run becomes terminal, replace the single Azdaja row immediately below. Otherwise remove this comment at launch freeze. -->
+| Candidate | Execution / valid predictions | Completed-row Oolong mean | Fixed-199 Oolong Score | Root tokens | Latency |
+|---|---:|---:|---:|---:|---:|
+| **Azdaja — current terminal candidate** | 185/199 (92.96%) | 73.83615290965021% | **68.64164968987583%** | Not reported | Not reported |
+
+All 199 scheduled rows reached terminal accounting; retained execution failures
+contribute zero to the fixed denominator. Complete, comparable token and latency
+aggregates are not available, so neither is estimated and no efficiency claim is
+made. The frozen run is never rerun, resumed, or rescored.
+
+### Published class ladder
+
+For orientation, the RAH paper ([arXiv:2606.13643](https://arxiv.org/abs/2606.13643))
+reports these Oolong-Synthetic results for its 199-sample, 13-bucket protocol with
+a GPT-5 backbone:
+
+| Paper label | System class | Paper-reported Oolong Score |
+|---|---|---:|
+| RLM | Model recursion without agent tools | **64.38%** |
+| Codex, No Retriever | Coding agent | **71.75%** |
+| RAH, GPT-5 | Recursive Agent Harness | **81.36%** |
+
+These literature values are reference points, not controls rerun by us. Protocol
+alignment does not make this a controlled head-to-head comparison or establish
+superiority, equivalence, or general capability.
 
 ## Install
 
-The repository is private. An authenticated owner with Rust 1.95 can install the reviewed tag from source:
+Requires Rust 1.95. On macOS Apple Silicon or Linux x86-64, install the immutable
+v0.1.1 release with the versioned installer:
 
 ```bash
-cargo install --git ssh://git@github.com/kubet/azdaja.git \
-  --tag v0.1.1 --locked
+curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/v0.1.1/site/install | sh
 azdaja install --harness jcode
 ```
 
-`azdaja install` validates evaluator capabilities and installs the managed skill without calling a model. Other targets: `claude`, `codex`, `gemini`, `opencode`, `all`. The immutable tag installer in [`site/install`](site/install) is bound to the exact v0.1.1 `Darwin-arm64` and `Linux-x86_64` assets and is for authenticated internal handling only while the repository is private. Do not publish or claim anonymous reachability.
+For other systems, build the same reviewed tag from the public HTTPS source:
+
+```bash
+cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.1 --locked
+azdaja install --harness jcode
+```
+
+`azdaja install` validates evaluator capabilities and installs the managed skill
+without calling a model. Other targets: `claude`, `codex`, `gemini`, `opencode`,
+`all`.
 
 Authentication is a separate, explicit check:
 
@@ -49,7 +86,8 @@ Authentication is a separate, explicit check:
 azdaja doctor
 ```
 
-A passing `doctor` proves only that the configured harness route answered its fixed canary.
+A passing `doctor` proves only that the configured harness route answered its fixed
+canary.
 
 ## Use
 
@@ -75,7 +113,7 @@ Core commands: `start`, `load`, `exec`, `final`, `list`, `kill`, `solo`, `doctor
 - The CLI reads only paths the user supplies; selected context can be sent to the configured provider.
 - Native harnesses retain the user's host permissions. Strong containment requires a separate trusted inference broker.
 - Monty 0.0.21 is experimental and snapshot-format-bound. Snapshots are unencrypted owner-only files; there is no evaluator memory ceiling.
-- Use synthetic or sanitized issue reproductions only. Never post raw inputs, traces, configuration, host paths, OAuth material, tokens, or secrets.
+- Use synthetic or sanitized issue reproductions only. Never post raw inputs, traces, configuration, host paths, or credentials.
 - Benchmark diagnostics do not determine release readiness or demonstrate adoption.
 
 ## Validate
