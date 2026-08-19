@@ -65,10 +65,10 @@ azdaja doctor
 Uninstall the managed harness copies; if the one-command installer wrote a standalone binary, also remove the exact binary and adjacent `config.toml` path it reported:
 
 ```bash
-azdaja uninstall --harness all
+azdaja uninstall
 ```
 
-Supported harness targets are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation makes no provider call. A passing `doctor` proves only that the configured harness route answered its fixed canary.
+Supported harness targets are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation makes no provider call. A passing `doctor` proves only that the configured harness route answered its fixed canary. The [pre-release install matrix](bench/results/install-matrix-v0.1.2-public.json) passed all 16 Darwin arm64 and Ubuntu x86-64 cells, including 14 genuine-provider 50 MiB solos and two expected graceful no-harness refusals.
 
 ## Use
 
@@ -94,7 +94,9 @@ A five-game paired pilot on the same Claude Sonnet lane, with and without Azdaja
 
 A retrieval-only follow-up found that all ten closed scorecards returned HTTP 404 from the official detail endpoint despite its pinned open-or-closed contract; the HTML results route exposed no detail. Absolute results for that five-game pilot therefore cannot be recovered, and its paired null cannot distinguish zero-level play from equal nonzero results, so the memory-efficiency hypothesis remains open.
 
-A later bounded `vc33` smoke captured absolutes locally: both baseline and Ember scored 0.0 shadow RHAE, completed zero levels, took 35 actions with per-level counts `[35, 0, 0, 0, 0, 0, 0]`, recorded zero wasted actions under the predefined split, emitted 36 journal records, and terminated at `ACTION_BUDGET`; the paired delta was 0.0. This establishes a true played zero-level null for that smoke only. The full five-game rerun remains on hold.
+A later bounded `vc33` smoke captured absolutes locally: both baseline and Ember scored 0.0 shadow RHAE, completed zero levels, took 35 actions with per-level counts `[35, 0, 0, 0, 0, 0, 0]`, recorded zero wasted actions under the predefined split, emitted 36 journal records, and terminated at `ACTION_BUDGET`; the paired delta was 0.0. This establishes a true played zero-level null for that smoke only. The full five-game rerun remains on hold; it is the first post-launch update, never
+before the public flip, and its execution is handled by an owner-only package
+without an invented public command.
 
 See the [sanitized pilot receipt](bench/results/arc3-ember-five-public-v9-result.json), [retrieval receipt](bench/results/arc3-scorecard-interrogation-public-v1.json), [sanitized `vc33` smoke receipt](bench/results/arc3-vc33-smoke-v2-public.json), and [full evidence boundary](docs/launch-saga.md#the-five-game-second-act).
 

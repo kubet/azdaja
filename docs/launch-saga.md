@@ -113,12 +113,19 @@ absolute per-arm RHAE, levels completed, or total actions for these scorecards.
 The [sanitized interrogation receipt](../bench/results/arc3-scorecard-interrogation-public-v1.json)
 contains no scorecard identifiers, credential, host path, or raw log.
 
-This makes the paired null honest but underdetermined: zero-level play and equal
-nonzero arm results cannot be distinguished, so the memory-efficiency hypothesis
-remains open. In particular, vc33's 0/0 wasted-action row is not evidence of zero
-levels or zero total actions. Retained stdout lifecycle metadata proves only that
-two vc33 scorecards were created, reset, and closed; total actions and degeneracy
-remain unresolved.
+That leaves the original five-game paired null honest but underdetermined: zero-level
+play and equal nonzero arm results cannot be distinguished from its retained data.
+We therefore patched the driver to journal complete action streams and absolute
+scores locally during play, then ran exactly one fresh `vc33` smoke pair. Baseline
+and Ember each issued 35 actions, completed zero levels, scored 0.0 shadow RHAE,
+recorded zero wasted actions in both retained waste categories, and stopped at the
+first-level action budget. The paired delta was again 0.0. This is a true played
+zero-level null for that fresh smoke; it does not retroactively reconstruct the
+original scorecards or resolve the other four games. The memory-efficiency
+hypothesis remains open. The full five-game rerun is the first post-launch update:
+it cannot run before the public flip, and execution remains in an owner-only package
+rather than an invented public command. The [sanitized smoke receipt](../bench/results/arc3-vc33-smoke-v2-public.json)
+binds the two 36-record private journals without publishing their streams.
 
 The separate transport scout's 0.00/0.00 tie came from 20 pre-inference setup
 failures, with zero successful provider turns and zero agent-class calls. It
@@ -126,6 +133,33 @@ observed no root choice, so it is neither genuine disuse nor a discoverability
 measurement. A repaired activation study is post-launch v0.2 roadmap material
 only; it is not authorized here. The
 [sanitized post-mortem](transport-flip-postmortem.md) records that boundary.
+
+## The first run became a benchmark
+
+The first public command is part of the product. The older v0.1.1 release remains
+immutable, so the install and CLI work ships as v0.1.2 rather than pretending new
+source was present in old assets. The one-line installer detects Apple Silicon
+macOS or glibc Linux x86-64, downloads the matching binary and `SHA256SUMS`, verifies
+the exact asset, writes the binary atomically onto a user path, and installs the
+managed skill for detected Jcode, Claude, Codex, Gemini, or OpenCode roots. A clean
+machine with no supported harness refuses before download and prints one actionable
+message instead of manufacturing a default.
+
+We treated that path like a benchmark. Sixteen isolated cells covered Darwin arm64
+and Ubuntu 24.04 x86-64 across each harness, all five together, no harness, and an
+already-installed binary. All 16 reached their expected outcome. The 14 positive
+cells each completed install, three explicit `doctor` checks, and one genuine
+provider-backed answer over an exactly 52,428,800-byte input. The two no-harness
+cells failed before any fixture request, without mutating HOME or emitting a stack
+trace. Reinstallation replaced the executable atomically and left no staging or
+backup remnant. The [sanitized matrix receipt](../bench/results/install-matrix-v0.1.2-public.json)
+records the platforms, asset hashes, assertions, and retention boundary; raw input,
+prompts, responses, traces, credentials, and host paths were not retained.
+
+The CLI now says what a first-time user needs. `install` reports detection, writes,
+and the next step in three lines. `doctor` emits one PASS or FAIL per check and a
+fix on every failure. Bare `azdaja` prints five usage lines with a copy-pasteable
+example. No new subcommand was added.
 
 ## Why a dragon
 

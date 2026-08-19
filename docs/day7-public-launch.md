@@ -1,19 +1,18 @@
 # Day-7 public launch runbook
 
-Status: **private staging only**. Do not run the launch block before
-`2026-08-26T00:20:29.359377+00:00`. Preparing, reviewing, and pushing the
-private assembly branch is allowed before then; changing repository visibility
-or publishing the saga is not.
+Status: **private staging only**. Nothing in this assembly authorizes a visibility
+flip, tag, release, asset upload, email, provider call, or ARC run.
+
+The former calendar gate is superseded and is not an active launch gate. The
+only launch gate is explicit owner approval: set `AZDAJA_OWNER_APPROVAL=GO` only
+after the owner has reviewed the complete saga, complete README, and complete
+private author email, and has confirmed the 16/16 install matrix is green. The
+launch block refuses every other value, including an unset variable.
 
 This branch owns the reviewed public-flip runbook, sanitized receipts, launch
 saga, ARC results presentation, transport post-mortem, and final README evidence
-pass. It does not own a visibility change, publication, benchmark run, ARC run,
-or provider call.
-
-After the private merge, the mechanical public order is: **public flip, anonymous
-saga verification, then the queued RAH author email**. The email follows the
-flip and verified saga; it is not sent during staging and does not depend on an
-invented canonical repository.
+pass. It does not perform launch actions. Do not open a PR and do not run any
+publication step while assembling or reviewing this branch.
 
 ## Bound launch statement
 
@@ -25,243 +24,422 @@ Both preregistered levers are terminal FAIL. Neither authorized a successor
 fixed-199 run, so this is the permanent launch result. The score block is frozen;
 no substitution, rerun, resume, or rescore is authorized.
 
-## Bound paired ARC statement
+## Bound ARC and install evidence
 
-The five-game result is terminal and public-safe:
+The original five-game public-safe result remains:
 
 > same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)
 
-All five Ember-minus-baseline paired RHAE deltas are 0.0. Baseline/Ember wasted
-actions are ls20 92/103, ft09 186/208, vc33 0/0, ar25 137/110, and wa30
-231/233, totaling 646/654. Both arms used fresh sessions on the same Claude
-Sonnet lane via the direct Claude CLI. The obsolete bridge/helper was bypassed,
-so no helper anomaly was observed. Version 9 retained neither arm's absolute
-RHAE nor the revisited-state/repeated-control split; only paired deltas and the
-predefined unchanged-official-feedback aggregate are evidenced.
+All five Ember-minus-baseline paired RHAE deltas are 0.0 and the retained
+baseline/Ember wasted-action totals are 646/654. The retrieval-only follow-up
+recovered no absolute results from the ten closed scorecards.
 
-The owner-directed retrieval-only interrogation made no new game or provider
-request. All ten closed scorecard detail requests returned HTTP 404 despite the
-pinned open-or-closed retrieval contract, and the HTML result exposed no detail.
-With close responses discarded, absolute per-arm RHAE, levels completed, and
-total actions are unrecoverable. Zero-level and equal nonzero arm results cannot
-be distinguished, so the memory-efficiency hypothesis remains open. The vc33
-stdout proves two create/reset/close lifecycles, not zero actions or levels;
-degeneracy is unresolved.
+The later local-custody `vc33` smoke establishes, for both baseline and Ember,
+0.0 shadow RHAE, zero levels, 35 total actions, per-level action counts
+`[35, 0, 0, 0, 0, 0, 0]`, zero official-feedback waste, zero revisited states,
+zero repeated known controls, 36 journal records, and `ACTION_BUDGET`
+termination. The public ARC-v2 receipt binds those facts without publishing the
+private streams.
 
-## Pre-Day-7 private assembly
+The full five-game rerun is the **first post-launch update**. It must not run
+before the public flip. Execution is handled by the owner-only package; this
+public runbook deliberately does not invent or expose a command.
 
-The initial documentation-only README input was source commit
-`0ed643e31a93cc060cf7a4917108224f13553ee5`; it changed only `README.md` and
-`tools/check_docs.py` and is already in this assembly's ancestry. The reviewed
-second-act pass now lives on this assembly branch; do not replay the source
-commit over it or merge the README branch's benchmark ancestry. To validate and
-push the private assembly, use:
+The sanitized v0.1.2 install receipt binds the implementation commit, 16/16
+green cells, 14 genuine-provider positive cells, two expected graceful
+no-harness refusals, two binary digests, the exact `SHA256SUMS` digest, and the
+owner aggregate receipt digest. It retains no private paths, prompts, responses,
+traces, credentials, or raw input.
+
+## Private assembly review
+
+The intentional README, saga, and sanitized install-matrix changes are part of
+the assembly. Never reset or replay older README/saga commits over them. Review
+and push the private branch with:
 
 ```bash
 set -euo pipefail
 REPO=kubet/azdaja
 ASSEMBLY=launch/day7-public-assembly
-README_COMMIT=0ed643e31a93cc060cf7a4917108224f13553ee5
 
 git fetch origin --prune --tags
 git switch "$ASSEMBLY"
-git show --stat --oneline "$README_COMMIT"
-# Ancestry check only: never replay README_COMMIT over this reviewed final pass.
-git merge-base --is-ancestor "$README_COMMIT" HEAD
+git diff origin/main...HEAD -- README.md docs/launch-saga.md \
+  docs/day7-public-launch.md release/day7-public-launch.json \
+  bench/results/install-matrix-v0.1.2-public.json tools/check_docs.py
 python3 tools/check_docs.py
+cargo fmt --all --check
+cargo test --all --locked -- --test-threads=1
+cargo clippy --all-targets --all-features --locked -- -D warnings
 git diff --check
-test -z "$(git status --porcelain --untracked-files=no)"
+test -z "$(git status --porcelain)"
 git push --set-upstream origin "$ASSEMBLY"
 test "$(gh repo view "$REPO" --json visibility --jq .visibility)" = PRIVATE
 ```
 
-The README launch freeze is complete: the substitution marker and provisional
-sentence are absent, and the checker binds the permanent score arithmetic. The
-Day-7 block below refuses to publish either stale phrase.
+Do not set the approval variable merely because those mechanical checks pass.
+The owner must separately complete the full saga, README, and private email
+review and confirm the green matrix.
 
-## Day-7 launch block — exact commands
+## Approval-gated private merge, build, tag, and release
 
-Run from a fresh directory. This block gates the exact hard timestamp, merges
-and pushes the reviewed private assembly while the repository is still private,
-removes every non-`main` remote head so private experiment branches do not
-become public, flips visibility, and verifies anonymous source reachability.
-It does not request release assets.
+Run the following only after the owner has deliberately supplied the gate. It
+merges the assembly into `main` while private, validates the complete receipt
+set and locked source, builds fresh v0.1.2 assets from final `main` with Rust
+1.95, creates the exact checksums file, creates a new annotated tag and GitHub
+release while private, verifies release-object metadata without downloading an
+asset, removes non-`main` heads, and only then flips visibility.
+
+The v0.1.1 tag and release are immutable and untouched. v0.1.2 must be new; any
+pre-existing local tag, remote tag, or GitHub release is a hard stop.
 
 ```bash
 set -euo pipefail
+if [ "${AZDAJA_OWNER_APPROVAL:-}" != GO ]; then
+  printf '%s\n' 'refusing launch: AZDAJA_OWNER_APPROVAL must equal GO' >&2
+  exit 1
+fi
+export AZDAJA_OWNER_APPROVAL
+
 REPO=kubet/azdaja
 ASSEMBLY=launch/day7-public-assembly
-DEADLINE=2026-08-26T00:20:29.359377+00:00
+TAG=v0.1.2
+IMPLEMENTATION_COMMIT=a06a5acacf32c20dc19855bae54a013312b34597
+EXPECTED_DARWIN=4fdb907c0af87be49d82ec82849848ca340eae99aeb02d7e18691f19fa39b6b7
+EXPECTED_LINUX=8ab01cc6c14c6d02e3a0cc2cbfbf12c28c4a7ab662bb9d892bffaf1b567c4e4b
+EXPECTED_SUMS=80fbdebeb6587552f6d04062427d3a699b67c1680b1857d35c30c86c588acb5b
+EXPECTED_MATRIX=9170d7527c52d2d7ec7972639c8c3f1df776dfb5c2722b71f5102f79b74ffbf7
+EXPECTED_OWNER_AGGREGATE=d7413c826f3efc9124c757705c1fffa7b3099102497193f2a436b9e7a230290b
+EXPECTED_ARC_V2=002deda1f7d6740b0aeffc277ea9f7bab87939960fd6644b6852f6e747f97551
 EXPECTED_SCORE='68.64164968987583%'
 EXPECTED_LINE='> **Launch result:** **68.64164968987583%** on a fixed 199-row, validation-derived RAH slice, with 185 execution successes (valid predictions) and 14 retained failures counted as zero.'
 EXPECTED_ARC_LINE='> same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)'
 
-python3 - "$DEADLINE" <<'PY'
-from datetime import datetime, timezone
-import sys
-
-deadline = datetime.fromisoformat(sys.argv[1])
-now = datetime.now(timezone.utc)
-if now < deadline:
-    raise SystemExit(f"refusing public launch before {deadline.isoformat()}; now={now.isoformat()}")
-PY
-
 test "$(gh repo view "$REPO" --json visibility --jq .visibility)" = PRIVATE
 test "$(gh api "repos/$REPO" --jq .private)" = true
 
+# This SSH URL is only for the authenticated owner's internal private clone.
 git clone "git@github.com:${REPO}.git" azdaja-day7-ship
 cd azdaja-day7-ship
 git fetch origin --prune --tags
 git switch -c day7-ship origin/main
 git merge --no-ff --no-edit "origin/$ASSEMBLY"
 
+# Validate public text, every JSON receipt, exact receipt bindings, and source.
 test -f docs/launch-saga.md
 test -f docs/transport-flip-postmortem.md
 test -f bench/results/gpt-rah199-mortality-v3-terminal-public.json
 test -f bench/results/endgame-agent-transport-v2-disease10-terminal.json
 test -f bench/results/arc3-ember-five-public-v9-result.json
 test -f bench/results/arc3-scorecard-interrogation-public-v1.json
+test -f bench/results/arc3-vc33-smoke-v2-public.json
+test -f bench/results/install-matrix-v0.1.2-public.json
 test "$(grep -Fxc "$EXPECTED_LINE" docs/launch-saga.md)" -eq 1
 test "$(grep -Fxc "$EXPECTED_ARC_LINE" docs/launch-saga.md)" -eq 1
 test "$(grep -Fc "$EXPECTED_SCORE" docs/launch-saga.md)" -eq 1
 ! grep -Fq 'SCORE_SUBSTITUTION_POINT' docs/launch-saga.md
 ! grep -Fq 'ENDGAME-FIXED199-SUBSTITUTION-POINT' README.md
 ! grep -Fq 'provisional only because' README.md
+
+python3 - "$IMPLEMENTATION_COMMIT" "$EXPECTED_MATRIX" \
+  "$EXPECTED_OWNER_AGGREGATE" "$EXPECTED_ARC_V2" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+implementation, matrix_sha, owner_aggregate_sha, arc_v2_sha = sys.argv[1:]
+for root in (Path("bench/results"), Path("release")):
+    for path in sorted(root.glob("*.json")):
+        json.loads(path.read_text())
+
+receipt_path = Path("release/day7-public-launch.json")
+receipt = json.loads(receipt_path.read_text())
+assert receipt["schema_version"] == 2
+assert receipt["superseded_calendar_gate"]["active"] is False
+assert receipt["superseded_calendar_gate"]["status"] == "superseded_by_explicit_owner_approval_and_green_install_matrix"
+gate = receipt["approval_gate"]
+assert gate["environment_variable"] == "AZDAJA_OWNER_APPROVAL"
+assert gate["required_value"] == "GO"
+assert gate["satisfied_at_staging"] is False
+assert all(gate["required_reviews"].values())
+assert gate["install_matrix_requirement"]["result"] == "PASS"
+assert gate["install_matrix_requirement"]["green_cells"] == 16
+assert gate["install_matrix_requirement"]["total_cells"] == 16
+
+score = receipt["authorized_launch_score"]
+assert score["percent"] == 68.64164968987583
+assert score["fixed_denominator"] == 199
+assert score["execution_successes"] == 185
+assert score["retained_failure_zeros"] == 14
+assert score["status"] == "permanent_final_no_successor_authorized"
+assert score["successor_fixed_199_authorized"] is False
+
+plan = receipt["release_plan"]
+assert plan["version"] == "0.1.2"
+assert plan["tag"] == "v0.1.2"
+assert plan["implementation_commit"] == implementation
+assert plan["rust_version"] == "1.95.0"
+assert plan["v0_1_1_immutable"] is True
+assert plan["release_assets_published_at_staging"] is False
+
+matrix_path = Path("bench/results/install-matrix-v0.1.2-public.json")
+assert hashlib.sha256(matrix_path.read_bytes()).hexdigest() == matrix_sha
+matrix = json.loads(matrix_path.read_text())
+assert matrix["schema"] == "azdaja-install-matrix-public-v1"
+assert matrix["version"] == "0.1.2"
+assert matrix["implementation_commit"] == implementation
+assert matrix["result"] == "PASS"
+assert matrix["cells"] == {"expected_no_harness_failures": 2, "green": 16, "positive": 14, "total": 16}
+assert matrix["owner_aggregate_receipt_sha256"] == owner_aggregate_sha
+assert matrix["assets"] == plan["expected_assets"]
+assert matrix["release_assets_published"] is False
+
+arc_v2_path = Path("bench/results/arc3-vc33-smoke-v2-public.json")
+assert hashlib.sha256(arc_v2_path.read_bytes()).hexdigest() == arc_v2_sha
+arc_v2 = json.loads(arc_v2_path.read_text())
+for arm in ("baseline", "ember"):
+    observed = arc_v2["arms"][arm]
+    assert observed["shadow_rhae"] == 0.0
+    assert observed["levels_completed"] == 0
+    assert observed["total_actions"] == 35
+    assert observed["per_level_action_counts"] == [35, 0, 0, 0, 0, 0, 0]
+    assert observed["wasted_actions"] == {
+        "official_feedback_wasted_actions": 0,
+        "revisited_states": 0,
+        "repeated_known_controls": 0,
+    }
+    assert observed["journal"]["record_count"] == 36
+    assert observed["termination"] == "ACTION_BUDGET"
+assert arc_v2["paired"]["ember_minus_baseline_shadow_rhae_delta"] == 0.0
+assert arc_v2["full_five_game_rerun"]["status"] == "HOLD"
+
+full_five = receipt["second_act"]["arc"]["full_five_game_rerun"]
+assert full_five == {
+    "execution": "owner_only_package",
+    "launch_order": "first_post_launch_update",
+    "public_command": None,
+    "status": "HOLD_UNTIL_AFTER_PUBLIC_FLIP",
+}
+
+def sha256(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+def git_blob(path):
+    data = path.read_bytes()
+    return hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+
+saga_path = Path("docs/launch-saga.md")
+assert receipt["saga"]["sha256"] == sha256(saga_path)
+assert receipt["saga"]["git_blob"] == git_blob(saga_path)
+assert receipt["evidence"]["install_matrix_public_receipt_sha256"] == matrix_sha
+assert receipt["evidence"]["install_matrix_owner_aggregate_receipt_sha256"] == owner_aggregate_sha
+assert receipt["evidence"]["arc_v2_public_receipt_sha256"] == arc_v2_sha
+assert receipt["release_asset_requests_performed"] is False
+PY
+
+python3 tools/check_docs.py
+cargo fmt --all --check
+cargo test --all --locked -- --test-threads=1
+cargo clippy --all-targets --all-features --locked -- -D warnings
+git diff --check
+test -z "$(git status --porcelain)"
+
+# Finalize private main before building. All assets are built from this exact main.
+git push origin HEAD:main
+MAIN_HEAD="$(git rev-parse HEAD)"
+test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$MAIN_HEAD"
+git fetch origin main
+git switch --detach origin/main
+test "$(git rev-parse HEAD)" = "$MAIN_HEAD"
+test -z "$(git status --porcelain)"
+
+# Matrix hashes remain mandatory because release-affecting source is unchanged.
+if ! git diff --quiet "$IMPLEMENTATION_COMMIT" HEAD -- Cargo.toml Cargo.lock src; then
+  printf '%s\n' 'refusing launch: release-affecting source changed after the green install matrix' >&2
+  exit 1
+fi
+
+test "$(uname -s)" = Darwin
+test "$(uname -m)" = arm64
+test "$(rustup run 1.95.0 rustc --version | awk '{print $2}')" = 1.95.0
+DIST="$(mktemp -d)"
+trap 'rm -rf "$DIST"' EXIT
+mkdir "$DIST/assets"
+
+CARGO_TARGET_DIR="$DIST/target-darwin" \
+  rustup run 1.95.0 cargo build --release --locked
+cp "$DIST/target-darwin/release/azdaja" \
+  "$DIST/assets/azdaja-v0.1.2-darwin-arm64"
+
+docker run --rm --platform linux/amd64 \
+  -v "$PWD:/src:ro" -v "$DIST:/out" -w /src \
+  rust:1.95.0-bookworm \
+  cargo build --release --locked --target-dir /out/target-linux
+cp "$DIST/target-linux/release/azdaja" \
+  "$DIST/assets/azdaja-v0.1.2-linux-x86_64"
+
+test "$("$DIST/assets/azdaja-v0.1.2-darwin-arm64" --version | awk '{print $2}')" = 0.1.2
+docker run --rm --platform linux/amd64 -v "$DIST/assets:/assets:ro" \
+  debian:bookworm-slim /assets/azdaja-v0.1.2-linux-x86_64 --version | \
+  grep -Fx 'azdaja 0.1.2 (monty 0.0.21)'
+
+DARWIN_SHA="$(shasum -a 256 "$DIST/assets/azdaja-v0.1.2-darwin-arm64" | awk '{print $1}')"
+LINUX_SHA="$(shasum -a 256 "$DIST/assets/azdaja-v0.1.2-linux-x86_64" | awk '{print $1}')"
+test "$DARWIN_SHA" = "$EXPECTED_DARWIN"
+test "$LINUX_SHA" = "$EXPECTED_LINUX"
+printf '%s  %s\n%s  %s\n' \
+  "$EXPECTED_DARWIN" azdaja-v0.1.2-darwin-arm64 \
+  "$EXPECTED_LINUX" azdaja-v0.1.2-linux-x86_64 \
+  > "$DIST/assets/SHA256SUMS"
+test "$(shasum -a 256 "$DIST/assets/SHA256SUMS" | awk '{print $1}')" = "$EXPECTED_SUMS"
+(
+  cd "$DIST/assets"
+  shasum -a 256 -c SHA256SUMS
+)
+
+# v0.1.2 must be a brand-new immutable annotated tag and release.
+test "$(gh repo view "$REPO" --json visibility --jq .visibility)" = PRIVATE
+test "$(gh api "repos/$REPO" --jq .private)" = true
+! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null
+! git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1
+! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1
+git tag -a "$TAG" -m 'azdaja v0.1.2' "$MAIN_HEAD"
+git push origin "refs/tags/$TAG"
+test "$(git ls-remote origin "refs/tags/$TAG^{}" | awk '{print $1}')" = "$MAIN_HEAD"
+
+gh release create "$TAG" \
+  "$DIST/assets/azdaja-v0.1.2-darwin-arm64" \
+  "$DIST/assets/azdaja-v0.1.2-linux-x86_64" \
+  "$DIST/assets/SHA256SUMS" \
+  --repo "$REPO" --verify-tag --title 'azdaja v0.1.2' \
+  --notes 'First-run install UX for Darwin arm64 and glibc Linux x86-64.'
+
+# Query the release object only. Never request an asset API/browser URL.
+gh api "repos/$REPO/releases/tags/$TAG" > "$DIST/release-metadata.json"
+python3 - "$DIST/release-metadata.json" "$TAG" "$EXPECTED_DARWIN" \
+  "$EXPECTED_LINUX" "$EXPECTED_SUMS" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+path, tag, darwin, linux, sums = sys.argv[1:]
+release = json.loads(Path(path).read_text())
+assert release["tag_name"] == tag
+assert release["draft"] is False
+assert release["prerelease"] is False
+assert release["name"] == "azdaja v0.1.2"
+assets = {asset["name"]: asset for asset in release["assets"]}
+assert set(assets) == {
+    "azdaja-v0.1.2-darwin-arm64",
+    "azdaja-v0.1.2-linux-x86_64",
+    "SHA256SUMS",
+}
+assert assets["azdaja-v0.1.2-darwin-arm64"]["digest"] == f"sha256:{darwin}"
+assert assets["azdaja-v0.1.2-linux-x86_64"]["digest"] == f"sha256:{linux}"
+assert assets["SHA256SUMS"]["digest"] == f"sha256:{sums}"
+assert all(asset["state"] == "uploaded" for asset in assets.values())
+PY
+
+# A public repository exposes every branch. Delete all non-main remote heads.
+branches_file="$DIST/branches"
+git ls-remote --heads origin | awk '{sub("refs/heads/", "", $2); print $2}' > "$branches_file"
+while IFS= read -r branch; do
+  if [ "$branch" != main ]; then
+    git push origin --delete "$branch"
+  fi
+done < "$branches_file"
+test "$(git ls-remote --heads origin | awk '{sub("refs/heads/", "", $2); print $2}')" = main
+
+# Only now perform the visibility flip.
+test "$(gh repo view "$REPO" --json visibility --jq .visibility)" = PRIVATE
+test "$(gh api "repos/$REPO" --jq .private)" = true
+gh repo edit "$REPO" --visibility public --accept-visibility-change-consequences
+```
+
+## Anonymous public verification
+
+After the flip, verify public source plus the exact saga, README, installer
+source, and sanitized install receipt. Fetching raw source files is permitted.
+Do **not** execute `site/install` in this verification because that would fetch
+release assets.
+
+Release asset `GET` and `HEAD` requests are forbidden in verification. Do not
+use `gh release download`, an asset API URL, a browser-download URL, `curl -I`,
+or any equivalent asset request. The release-object metadata and digests were
+already checked while private.
+
+```bash
+set -euo pipefail
+REPO=kubet/azdaja
+MAIN_HEAD="$(git ls-remote https://github.com/kubet/azdaja.git refs/heads/main | awk '{print $1}')"
+test -n "$MAIN_HEAD"
+test "$(gh repo view "$REPO" --json visibility --jq .visibility)" = PUBLIC
+test "$(gh api "repos/$REPO" --jq .private)" = false
+
+anon_home="$(mktemp -d)"
+trap 'rm -rf "$anon_home"' EXIT
+HOME="$anon_home" GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 \
+  git -c credential.helper= clone --depth 1 \
+  https://github.com/kubet/azdaja.git public-check
+cd public-check
+test "$(git rev-parse HEAD)" = "$MAIN_HEAD"
+
+base=https://raw.githubusercontent.com/kubet/azdaja/main
+curl -fsS "$base/README.md" -o "$anon_home/README.md"
+curl -fsS "$base/docs/launch-saga.md" -o "$anon_home/launch-saga.md"
+curl -fsS "$base/site/install" -o "$anon_home/install"
+curl -fsS "$base/bench/results/install-matrix-v0.1.2-public.json" \
+  -o "$anon_home/install-matrix.json"
+cmp README.md "$anon_home/README.md"
+cmp docs/launch-saga.md "$anon_home/launch-saga.md"
+cmp site/install "$anon_home/install"
+cmp bench/results/install-matrix-v0.1.2-public.json \
+  "$anon_home/install-matrix.json"
+
+python3 tools/check_docs.py
 python3 - <<'PY'
 import hashlib
 import json
 from pathlib import Path
 
 receipt = json.loads(Path("release/day7-public-launch.json").read_text())
-score = receipt["authorized_launch_score"]
-assert receipt["hard_public_launch_not_before"] == "2026-08-26T00:20:29.359377+00:00"
-assert score["percent"] == 68.64164968987583
-assert score["fixed_denominator"] == 199
-assert score["execution_successes"] == 185
-assert score["retained_failure_zeros"] == 14
-assert score["status"] == "permanent_final_no_successor_authorized"
-assert receipt["release_asset_requests_performed"] is False
-
-public_path = Path("bench/results/gpt-rah199-mortality-v3-terminal-public.json")
-public = json.loads(public_path.read_text())
-assert public["score"]["fixed_199_score_percent"] == score["percent"]
-assert public["score"]["execution_successes"] == score["execution_successes"]
-assert public["root_usage"]["measured_rows"] == 198
-assert public["root_usage"]["missing_rows"] == 1
-assert public["root_usage"]["measured_total_tokens"] == 1069865
-assert public["root_usage"]["complete_fixed_199_aggregate"] is False
-assert receipt["evidence"]["sanitized_terminal_receipt_sha256"] == hashlib.sha256(public_path.read_bytes()).hexdigest()
-
-transport_path = Path("bench/results/endgame-agent-transport-v2-disease10-terminal.json")
-transport = json.loads(transport_path.read_text())
-assert transport["terminal_status"] == "FAIL"
-assert transport["execution"]["successful_provider_turns"] == 0
-assert transport["execution"]["agent_class_calls"] == 0
-assert transport["execution"]["control_failures"] == 10
-assert transport["execution"]["treatment_failures"] == 10
-assert receipt["evidence"]["transport_terminal_receipt_sha256"] == hashlib.sha256(transport_path.read_bytes()).hexdigest()
-
-arc_path = Path("bench/results/arc3-ember-five-public-v9-result.json")
-arc = json.loads(arc_path.read_text())
-expected_arc = {
-    "arms": ["baseline", "ember"],
-    "games": [
-        {"baseline_wasted_actions": 92, "ember_minus_baseline_rhae_delta": 0.0, "ember_wasted_actions": 103, "game_id": "ls20"},
-        {"baseline_wasted_actions": 186, "ember_minus_baseline_rhae_delta": 0.0, "ember_wasted_actions": 208, "game_id": "ft09"},
-        {"baseline_wasted_actions": 0, "ember_minus_baseline_rhae_delta": 0.0, "ember_wasted_actions": 0, "game_id": "vc33"},
-        {"baseline_wasted_actions": 137, "ember_minus_baseline_rhae_delta": 0.0, "ember_wasted_actions": 110, "game_id": "ar25"},
-        {"baseline_wasted_actions": 231, "ember_minus_baseline_rhae_delta": 0.0, "ember_wasted_actions": 233, "game_id": "wa30"},
-    ],
-    "identity": "Ember",
+checks = {
+    "docs/launch-saga.md": receipt["saga"]["sha256"],
+    "site/install": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636",
+    "bench/results/install-matrix-v0.1.2-public.json": "9170d7527c52d2d7ec7972639c8c3f1df776dfb5c2722b71f5102f79b74ffbf7",
+    "bench/results/arc3-vc33-smoke-v2-public.json": "002deda1f7d6740b0aeffc277ea9f7bab87939960fd6644b6852f6e747f97551",
 }
-assert arc == expected_arc
-assert hashlib.sha256(arc_path.read_bytes()).hexdigest() == "f6a518df0183f9d4791e99f58bdc0e91c198056ffa67b9013b8f97ff8fc27c21"
-assert sum(game["baseline_wasted_actions"] for game in arc["games"]) == 646
-assert sum(game["ember_wasted_actions"] for game in arc["games"]) == 654
-assert all(game["ember_minus_baseline_rhae_delta"] == 0.0 for game in arc["games"])
-assert receipt["evidence"]["arc_terminal_receipt_path"] == str(arc_path)
-assert receipt["evidence"]["arc_terminal_receipt_sha256"] == hashlib.sha256(arc_path.read_bytes()).hexdigest()
-
-interrogation_path = Path("bench/results/arc3-scorecard-interrogation-public-v1.json")
-interrogation = json.loads(interrogation_path.read_text())
-assert hashlib.sha256(interrogation_path.read_bytes()).hexdigest() == "17de6893eee9cafafdd164965a91fe08b72aecc69d1f2e41044c0b7d4cbc210c"
-assert interrogation["scope"]["closed_scorecards_queried"] == 10
-assert interrogation["scope"]["new_experiment"] is False
-assert interrogation["scope"]["game_requests_performed"] is False
-assert interrogation["scope"]["provider_requests_performed"] is False
-assert interrogation["official_scorecard_retrieval"]["observed_http_status"] == 404
-assert interrogation["official_scorecard_retrieval"]["observed_count"] == 10
-assert interrogation["retention_boundary"]["zero_level_vs_equal_nonzero_distinguishable"] is False
-assert interrogation["retention_boundary"]["memory_efficiency_hypothesis_status"] == "open"
-assert interrogation["vc33"]["scorecard_lifecycles_created_reset_closed"] == 2
-assert interrogation["vc33"]["total_actions_established"] is False
-assert interrogation["vc33"]["degeneracy_status"] == "unresolved"
-assert receipt["evidence"]["arc_interrogation_receipt_path"] == str(interrogation_path)
-assert receipt["evidence"]["arc_interrogation_receipt_sha256"] == hashlib.sha256(interrogation_path.read_bytes()).hexdigest()
-
-private_prefixes = ("/" + "private/tmp/", "/" + "Users/")
-for path in (public_path, transport_path, arc_path, interrogation_path, Path("docs/transport-flip-postmortem.md")):
-    text = path.read_text()
-    assert not any(prefix in text for prefix in private_prefixes)
+for name, expected in checks.items():
+    assert hashlib.sha256(Path(name).read_bytes()).hexdigest() == expected
+readme = Path("README.md").read_text()
+assert "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh" in readme
+assert "pre-release install matrix" in readme
+assert "bench/results/install-matrix-v0.1.2-public.json" in readme
+assert "```bash\nazdaja uninstall\n```" in readme
 PY
-
-python3 tools/check_docs.py
-git diff --check
-cargo test --all --locked -- --test-threads=1
-cargo clippy --all-targets --all-features -- -D warnings
-test -z "$(git status --porcelain)"
-
-# Prestage the assembly on main while still private; the saga becomes public only at the flip.
-git push origin HEAD:main
-MAIN_HEAD="$(git rev-parse HEAD)"
-test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$MAIN_HEAD"
-test "$(git show HEAD:docs/launch-saga.md | grep -Fxc "$EXPECTED_LINE")" -eq 1
-
-# A public repository exposes every remaining branch. Delete all non-main heads.
-branches_file="$(mktemp)"
-trap 'rm -f "$branches_file"; if [ -n "${anon_home:-}" ]; then rm -rf "$anon_home"; fi' EXIT
-git ls-remote --heads origin | awk '{sub("refs/heads/", "", $2); print $2}' > "$branches_file"
-while IFS= read -r branch; do
-    if [ "$branch" != main; then
-        git push origin --delete "$branch"
-    fi
-done < "$branches_file"
-test "$(git ls-remote --heads origin | awk '{sub("refs/heads/", "", $2); print $2}')" = main
-
-# Public step 1: mandatory visibility flip. Never run this command before DEADLINE.
-gh repo edit kubet/azdaja --visibility public --accept-visibility-change-consequences
-
-# Public step 2: ship the saga by authenticated and anonymous verification; source only, no release assets.
-test "$(gh repo view kubet/azdaja --json visibility --jq .visibility)" = PUBLIC
-test "$(gh api repos/kubet/azdaja --jq .private)" = false
-anon_home="$(mktemp -d)"
-PUBLIC_HEAD="$(HOME="$anon_home" GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 \
-  git -c credential.helper= ls-remote https://github.com/kubet/azdaja.git refs/heads/main | awk '{print $1}')"
-test "$PUBLIC_HEAD" = "$MAIN_HEAD"
-HOME="$anon_home" GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 \
-  git -c credential.helper= clone --depth 1 https://github.com/kubet/azdaja.git public-check
-cd public-check
-test "$(grep -Fxc "$EXPECTED_LINE" docs/launch-saga.md)" -eq 1
-test "$(grep -Fxc "$EXPECTED_ARC_LINE" docs/launch-saga.md)" -eq 1
-test "$(git rev-parse HEAD)" = "$MAIN_HEAD"
 ```
 
-## RAH author email — mechanical third step
+Stop immediately on any mismatch. Do not force-push, move or rewrite a tag,
+replace a release, or retry around a failed invariant.
+
+## Private author email — final launch step
 
 The owner resolved the missing-canonical-repository question by converting the
-prepared PR into a short author email. Send it only after both the public flip
-and anonymous saga verification above succeed. The owner-only staging package
-contains the queued message, its exact Day-7 Mail command, and a syntax-tested
-send script; this public runbook intentionally omits local staging locations and
-recipient addresses.
+prepared PR into a short author email. Send it only after the public flip and
+all anonymous verification above succeed. The owner-only staging package
+contains the reviewed message and its syntax-tested send script; this public
+runbook intentionally omits local staging locations and recipient addresses.
 
-Before invoking that private command, verify that its two recipients still
-match the paper-published addresses, its public README/receipt/saga links resolve,
-and it has no Cc or Bcc. The script refuses pre-deadline execution and requires an
-explicit send confirmation. Do not open a PR and do not send the email during
-pre-Day-7 staging.
+The email script uses the same approval environment: preserve
+`AZDAJA_OWNER_APPROVAL=GO` when invoking the exact owner-only command. Do not
+invent a command here. Before sending, recheck that the reviewed recipients
+still match the paper-published addresses, that the public README, receipt, and
+saga links resolve, and that the message has no Cc or Bcc.
 
-Stop immediately on any launch mismatch. Do not force-push, rewrite tags,
-create a new release, upload/download release assets, or use release asset `GET`/`HEAD`
-requests as part of this launch. The existing v0.1.0 and v0.1.1 tags/releases
-remain immutable.
+Mechanical launch order is therefore: **owner GO after full saga/README/email
+review and green matrix; private merge and validation; fresh private v0.1.2
+build/tag/release; metadata-only release verification; delete non-main heads;
+public flip; anonymous source/text/receipt verification; private author email**.
+The full-five ARC rerun remains the first post-launch update and cannot precede
+the flip.

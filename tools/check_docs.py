@@ -75,6 +75,13 @@ def check_claim_contract() -> list[str]:
         "emitted 36 journal records",
         "terminated at `ACTION_BUDGET`",
         "full five-game rerun remains on hold",
+        "first post-launch update",
+        "owner-only package",
+        "pre-release install matrix",
+        "passed all 16 Darwin arm64 and Ubuntu x86-64 cells",
+        "14 genuine-provider 50 MiB solos",
+        "two expected graceful no-harness refusals",
+        "bench/results/install-matrix-v0.1.2-public.json",
         "bench/results/arc3-vc33-smoke-v2-public.json",
     ]
     required_draft = [
@@ -135,7 +142,18 @@ def check_claim_contract() -> list[str]:
         "all ten closed scorecard detail requests returned HTTP 404",
         "zero-level play and equal nonzero arm results cannot be distinguished",
         "memory-efficiency hypothesis remains open",
-        "total actions and degeneracy remain unresolved",
+        "each issued 35 actions, completed zero levels, scored 0.0 shadow RHAE",
+        "zero wasted actions in both retained waste categories",
+        "first post-launch update",
+        "cannot run before the public flip",
+        "execution remains in an owner-only package",
+        "two 36-record private journals",
+        "Sixteen isolated cells covered Darwin arm64 and Ubuntu 24.04 x86-64",
+        "All 16 reached their expected outcome",
+        "14 positive cells",
+        "two no-harness cells failed before any fixture request",
+        "arc3-vc33-smoke-v2-public.json",
+        "install-matrix-v0.1.2-public.json",
         "arc3-scorecard-interrogation-public-v1.json",
         "post-launch v0.2 roadmap material only",
     ]
@@ -150,15 +168,31 @@ def check_claim_contract() -> list[str]:
     ]
     required_runbook = [
         "private staging only",
+        "former calendar gate is superseded and is not an active launch gate",
+        "AZDAJA_OWNER_APPROVAL=GO",
+        "complete saga, complete README, and complete private author email",
+        "16/16 install matrix is green",
+        "refusing launch: AZDAJA_OWNER_APPROVAL must equal GO",
         "transport-flip-postmortem.md",
         "gpt-rah199-mortality-v3-terminal-public.json",
         "arc3-ember-five-public-v9-result.json",
         "arc3-scorecard-interrogation-public-v1.json",
-        "public flip, anonymous saga verification, then the queued RAH author email",
-        "The owner resolved the missing-canonical-repository question",
+        "arc3-vc33-smoke-v2-public.json",
+        "install-matrix-v0.1.2-public.json",
+        "fresh v0.1.2 assets from final `main` with Rust 1.95",
+        "rust:1.95.0-bookworm",
+        "v0.1.1 tag and release are immutable and untouched",
+        "brand-new immutable annotated tag and release",
+        "Query the release object only",
+        "Release asset `GET` and `HEAD` requests are forbidden",
+        "Only now perform the visibility flip",
+        "Anonymous public verification",
         "public runbook intentionally omits local staging locations and recipient addresses",
+        "email script uses the same approval environment",
+        "first post-launch update",
+        "must not run before the public flip",
+        "owner-only package",
         "Do not open a PR",
-        "release asset `GET`/`HEAD`",
     ]
     for name, text, required in (
         ("docs/launch-saga.md", saga, required_saga),
@@ -201,10 +235,20 @@ def check_claim_contract() -> list[str]:
         if claim.casefold() in readme.casefold():
             errors.append(f"README.md: unsupported owner-draft claim remains: {claim}")
     install_section = readme.split("## Install", 1)[1].split("## Use", 1)[0]
-    if install_section.count("```bash") != 3:
+    install_blocks = re.findall(r"```bash\n(.*?)\n```", install_section, flags=re.DOTALL)
+    if len(install_blocks) != 3:
         errors.append("README.md: Install section must contain exactly three bash blocks")
+    else:
+        if install_blocks[0] != "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh":
+            errors.append("README.md: first Install bash block must be the exact HTTPS installer command")
+        if "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked" not in install_blocks[1]:
+            errors.append("README.md: second Install bash block must retain the HTTPS cargo fallback")
+        if install_blocks[2] != "azdaja uninstall":
+            errors.append("README.md: third Install bash block must be exactly `azdaja uninstall`")
     if "v0.1.1" in install_section:
         errors.append("README.md: Install section still references immutable v0.1.1 assets")
+    if "git@github.com" in readme or "ssh://git@" in readme:
+        errors.append("README.md: public examples must use HTTPS, not SSH")
 
     for doc in DOCS:
         doc_text = doc.read_text(encoding="utf-8")
@@ -235,6 +279,7 @@ def check_launch_receipts() -> list[str]:
     arc_path = ROOT / "bench" / "results" / "arc3-ember-five-public-v9-result.json"
     interrogation_path = ROOT / "bench" / "results" / "arc3-scorecard-interrogation-public-v1.json"
     vc33_smoke_path = ROOT / "bench" / "results" / "arc3-vc33-smoke-v2-public.json"
+    install_matrix_path = ROOT / "bench" / "results" / "install-matrix-v0.1.2-public.json"
     postmortem_path = ROOT / "docs" / "transport-flip-postmortem.md"
     saga_path = ROOT / "docs" / "launch-saga.md"
     try:
@@ -244,6 +289,7 @@ def check_launch_receipts() -> list[str]:
         arc = json.loads(arc_path.read_text(encoding="utf-8"))
         interrogation = json.loads(interrogation_path.read_text(encoding="utf-8"))
         vc33_smoke = json.loads(vc33_smoke_path.read_text(encoding="utf-8"))
+        install_matrix = json.loads(install_matrix_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return [f"launch receipt read failed: {exc}"]
 
@@ -251,6 +297,100 @@ def check_launch_receipts() -> list[str]:
     public_score = public.get("score", {})
     root_usage = public.get("root_usage", {})
     evidence = release.get("evidence", {})
+
+    if release.get("schema_version") != 2:
+        errors.append("day7 receipt: expected approval-gated schema version 2")
+    obsolete_calendar_key = "_".join(("hard", "public", "launch", "not", "before"))
+    if obsolete_calendar_key in release:
+        errors.append("day7 receipt: superseded calendar field remains active")
+    if release.get("superseded_calendar_gate") != {
+        "active": False,
+        "former_not_before": "2026-08-26T00:20:29.359377+00:00",
+        "status": "superseded_by_explicit_owner_approval_and_green_install_matrix",
+    }:
+        errors.append("day7 receipt: superseded calendar-gate record changed")
+    expected_gate = {
+        "active_gate": "explicit_owner_go_after_complete_public_text_and_email_review_and_green_install_matrix",
+        "environment_variable": "AZDAJA_OWNER_APPROVAL",
+        "required_value": "GO",
+        "satisfied_at_staging": False,
+        "required_reviews": {
+            "launch_saga_complete": True,
+            "readme_complete": True,
+            "private_author_email_complete": True,
+        },
+        "install_matrix_requirement": {
+            "path": "bench/results/install-matrix-v0.1.2-public.json",
+            "result": "PASS",
+            "green_cells": 16,
+            "total_cells": 16,
+            "public_receipt_sha256": "9170d7527c52d2d7ec7972639c8c3f1df776dfb5c2722b71f5102f79b74ffbf7",
+        },
+    }
+    if release.get("approval_gate") != expected_gate:
+        errors.append("day7 receipt: explicit owner-GO review/matrix gate changed")
+
+    expected_assets = {
+        "SHA256SUMS": "80fbdebeb6587552f6d04062427d3a699b67c1680b1857d35c30c86c588acb5b",
+        "azdaja-v0.1.2-darwin-arm64": "4fdb907c0af87be49d82ec82849848ca340eae99aeb02d7e18691f19fa39b6b7",
+        "azdaja-v0.1.2-linux-x86_64": "8ab01cc6c14c6d02e3a0cc2cbfbf12c28c4a7ab662bb9d892bffaf1b567c4e4b",
+    }
+    expected_release_plan = {
+        "version": "0.1.2",
+        "tag": "v0.1.2",
+        "implementation_commit": "a06a5acacf32c20dc19855bae54a013312b34597",
+        "rust_version": "1.95.0",
+        "v0_1_1_immutable": True,
+        "release_assets_published_at_staging": False,
+        "expected_assets": expected_assets,
+    }
+    if release.get("release_plan") != expected_release_plan:
+        errors.append("day7 receipt: v0.1.2 implementation or expected release bytes changed")
+    if release.get("assembly", {}).get("v0_1_2_implementation_commit") != "a06a5acacf32c20dc19855bae54a013312b34597":
+        errors.append("day7 receipt: assembly implementation commit changed")
+
+    expected_install_matrix = {
+        "assets": expected_assets,
+        "cells": {"expected_no_harness_failures": 2, "green": 16, "positive": 14, "total": 16},
+        "implementation_commit": "a06a5acacf32c20dc19855bae54a013312b34597",
+        "installer_sha256": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636",
+        "no_harness_contract": {
+            "before_download": True,
+            "doctor_and_solo": "not_run_impossible",
+            "graceful_nonzero": True,
+            "home_unchanged": True,
+            "stack_trace": False,
+        },
+        "owner_aggregate_receipt_sha256": "d7413c826f3efc9124c757705c1fffa7b3099102497193f2a436b9e7a230290b",
+        "platforms": ["Darwin/arm64", "Ubuntu-24.04-glibc/x86_64"],
+        "positive_cell_contract": {
+            "binary_checksum_match": True,
+            "doctor_three_pass_lines": True,
+            "exact_answer": "ORCHID-9472-A06A5AC",
+            "genuine_provider_solo": True,
+            "input_bytes": 52428800,
+            "input_sha256": "a3c974d7669791eddea1332453302457d5e8de8622781568f760ea97c874171a",
+            "installer_exact_three_lines": True,
+            "passed": 14,
+        },
+        "provider_evidence": {
+            "calls_succeeded": 28,
+            "credentials_entered_linux_containers": False,
+            "fake_provider_used": False,
+            "route": "OpenAI gpt-5.4-mini through an owner-only local Jcode subscription relay",
+        },
+        "release_assets_published": False,
+        "result": "PASS",
+        "retention": {"host_paths": False, "prompts": False, "raw_input": False, "responses": False, "secrets": False, "traces": False},
+        "scenarios": ["jcode", "claude", "codex", "gemini", "opencode", "all-five", "no-harness", "binary-already-installed"],
+        "schema": "azdaja-install-matrix-public-v1",
+        "version": "0.1.2",
+    }
+    if install_matrix != expected_install_matrix:
+        errors.append("install matrix: exact public-safe schema or values changed")
+    if _sha256(install_matrix_path) != "9170d7527c52d2d7ec7972639c8c3f1df776dfb5c2722b71f5102f79b74ffbf7":
+        errors.append("install matrix: canonical public byte hash changed")
+
     if score.get("percent") != 68.64164968987583 or public_score.get("fixed_199_score_percent") != 68.64164968987583:
         errors.append("launch receipts: frozen exact score mismatch")
     if public_score.get("execution_successes") != 185 or public_score.get("retained_failure_zeros") != 14:
@@ -406,46 +546,58 @@ def check_launch_receipts() -> list[str]:
     if _sha256(vc33_smoke_path) != "002deda1f7d6740b0aeffc277ea9f7bab87939960fd6644b6852f6e747f97551":
         errors.append("ARC-v2 vc33 smoke receipt: canonical byte hash changed")
 
-    expected_second_act_arc = {
-        "absolute_arm_rhae_retained": False,
-        "all_paired_rhae_deltas": 0.0,
-        "arms": ["baseline", "ember"],
-        "games": 5,
-        "identity": "Ember",
-        "method": {
-            "fresh_sessions": True,
-            "helper_anomaly_observed": False,
-            "model_lane": "Claude Sonnet",
-            "obsolete_bridge_helper_bypassed": True,
-            "transport": "direct Claude CLI",
-        },
-        "result_framing": "same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)",
-        "revisited_state_repeated_control_split_retained": False,
-        "wasted_actions": {
-            "baseline": 646,
-            "ember": 654,
-            "baseline_minus_ember_percent_of_baseline": -1.238390092879257,
-        },
-        "levels_completed_retained": False,
-        "total_actions_retained": False,
-        "scorecard_interrogation": {
-            "absolute_arm_rhae_recovered": False,
-            "closed_scorecards_queried": 10,
-            "game_or_provider_requests_performed": False,
-            "html_result": "redirected_to_generic_arc_agi_3_page",
-            "observed_http_status": 404,
-            "pinned_contract": "open_or_closed_scorecard_retrieval",
-        },
-        "paired_null_interpretation": "zero_level_vs_equal_nonzero_not_distinguishable",
-        "memory_efficiency_hypothesis": "open",
-        "vc33": {
-            "scorecard_lifecycles_created_reset_closed": 2,
-            "total_actions_established": False,
-            "levels_completed_established": False,
-            "degeneracy": "unresolved",
-        },
-    }
-
+    expected_second_act_arc = {'absolute_arm_rhae_retained': False,
+     'all_paired_rhae_deltas': 0.0,
+     'arms': ['baseline', 'ember'],
+     'full_five_game_rerun': {'execution': 'owner_only_package',
+                              'launch_order': 'first_post_launch_update',
+                              'public_command': None,
+                              'status': 'HOLD_UNTIL_AFTER_PUBLIC_FLIP'},
+     'games': 5,
+     'identity': 'Ember',
+     'levels_completed_retained': False,
+     'memory_efficiency_hypothesis': 'open',
+     'method': {'fresh_sessions': True,
+                'helper_anomaly_observed': False,
+                'model_lane': 'Claude Sonnet',
+                'obsolete_bridge_helper_bypassed': True,
+                'transport': 'direct Claude CLI'},
+     'paired_null_interpretation': 'zero_level_vs_equal_nonzero_not_distinguishable',
+     'result_framing': 'same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)',
+     'revisited_state_repeated_control_split_retained': False,
+     'scorecard_interrogation': {'absolute_arm_rhae_recovered': False,
+                                 'closed_scorecards_queried': 10,
+                                 'game_or_provider_requests_performed': False,
+                                 'html_result': 'redirected_to_generic_arc_agi_3_page',
+                                 'observed_http_status': 404,
+                                 'pinned_contract': 'open_or_closed_scorecard_retrieval'},
+     'total_actions_retained': False,
+     'vc33': {'baseline': {'journal_records': 36,
+                           'levels_completed': 0,
+                           'per_level_action_counts': [35, 0, 0, 0, 0, 0, 0],
+                           'shadow_rhae': 0.0,
+                           'termination': 'ACTION_BUDGET',
+                           'total_actions': 35,
+                           'wasted_actions': {'official_feedback_wasted_actions': 0,
+                                              'repeated_known_controls': 0,
+                                              'revisited_states': 0}},
+              'custody': 'local_owner_only',
+              'ember': {'journal_records': 36,
+                        'levels_completed': 0,
+                        'per_level_action_counts': [35, 0, 0, 0, 0, 0, 0],
+                        'shadow_rhae': 0.0,
+                        'termination': 'ACTION_BUDGET',
+                        'total_actions': 35,
+                        'wasted_actions': {'official_feedback_wasted_actions': 0,
+                                           'repeated_known_controls': 0,
+                                           'revisited_states': 0}},
+              'game': 'vc33',
+              'paired_shadow_rhae_delta': 0.0,
+              'public_receipt_path': 'bench/results/arc3-vc33-smoke-v2-public.json',
+              'public_receipt_sha256': '002deda1f7d6740b0aeffc277ea9f7bab87939960fd6644b6852f6e747f97551'},
+     'wasted_actions': {'baseline': 646,
+                        'baseline_minus_ember_percent_of_baseline': -1.238390092879257,
+                        'ember': 654}}
     if release.get("second_act", {}).get("arc") != expected_second_act_arc:
         errors.append("day7 receipt: ARC method or evidence boundary changed")
 
@@ -455,6 +607,9 @@ def check_launch_receipts() -> list[str]:
         "transport_postmortem_sha256": _sha256(postmortem_path),
         "arc_terminal_receipt_sha256": _sha256(arc_path),
         "arc_interrogation_receipt_sha256": _sha256(interrogation_path),
+        "arc_v2_public_receipt_sha256": _sha256(vc33_smoke_path),
+        "install_matrix_public_receipt_sha256": _sha256(install_matrix_path),
+        "install_matrix_owner_aggregate_receipt_sha256": "d7413c826f3efc9124c757705c1fffa7b3099102497193f2a436b9e7a230290b",
     }
     for key, value in expected_hashes.items():
         if evidence.get(key) != value:
@@ -463,6 +618,10 @@ def check_launch_receipts() -> list[str]:
         errors.append("day7 receipt: stale ARC public receipt path")
     if evidence.get("arc_interrogation_receipt_path") != "bench/results/arc3-scorecard-interrogation-public-v1.json":
         errors.append("day7 receipt: stale ARC interrogation receipt path")
+    if evidence.get("arc_v2_public_receipt_path") != "bench/results/arc3-vc33-smoke-v2-public.json":
+        errors.append("day7 receipt: stale ARC-v2 public receipt path")
+    if evidence.get("install_matrix_public_receipt_path") != "bench/results/install-matrix-v0.1.2-public.json":
+        errors.append("day7 receipt: stale install-matrix public receipt path")
     if score.get("terminal_receipt_path") is not None or score.get("terminal_receipt_retained_private") is not True:
         errors.append("day7 receipt: missing private-terminal path boundary")
     if score.get("terminal_receipt_sha256") != "27bbb4da02bf75ff5c3c6b73697bf8518e33566a55f3b9fc8d7012ee5b648e74":
@@ -480,6 +639,7 @@ def check_launch_receipts() -> list[str]:
         arc_path,
         interrogation_path,
         vc33_smoke_path,
+        install_matrix_path,
         postmortem_path,
     ):
         text = path.read_text(encoding="utf-8")
