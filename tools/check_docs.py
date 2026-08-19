@@ -48,35 +48,34 @@ def check_claim_contract() -> list[str]:
     runbook = (ROOT / "docs" / "day7-public-launch.md").read_text(encoding="utf-8")
     required_readme = [
         "All 199 rows reached terminal accounting",
-        "permanent fixed-denominator score is\n"
-        "**68.64164968987583%**",
         "not an official leaderboard result",
         "185/199 (92.96%)",
-        "5,403.36",
-        "not an exact 6K",
+        "5,403.36 provider-authoritative mean across 198 measured rows; one row is not imputed",
         "4.26164968987583 percentage points",
         "**+4.3 points**",
-        "highest bare-RLM number shown",
-        "not an exhaustive literature review",
+        "highest bare-RLM number shown in this non-exhaustive ladder",
         "64.38%",
         "71.75%",
         "81.36%",
-        "docs/transport-flip-postmortem.md",
         "52,428,800",
         "65,536",
         "not a token or cost-savings claim",
         "docs/token-context-crossover.svg",
-        "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/v0.1.1/site/install | sh",
-        "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.1 --locked",
-        "launch kit is **68.64%**",
-        "**+4.26 points**",
-        "same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)",
+        "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh",
+        "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked",
+        "A passing `doctor` proves only",
+        "**-1.24% fewer wasted actions (1.24% more)**",
         "bench/results/arc3-ember-five-public-v9-result.json",
         "bench/results/arc3-scorecard-interrogation-public-v1.json",
         "not absolute arm scores",
-        "revisited-state/repeated-control",
-        "memory-efficiency\nhypothesis remains open",
-        "degeneracy remain\nunresolved",
+        "revisited-state/repeated-control split",
+        "memory-efficiency hypothesis remains open",
+        "both baseline and Ember scored 0.0 shadow RHAE",
+        "took 35 actions",
+        "emitted 36 journal records",
+        "terminated at `ACTION_BUDGET`",
+        "full five-game rerun remains on hold",
+        "bench/results/arc3-vc33-smoke-v2-public.json",
     ]
     required_draft = [
         "NONPUBLISHED DRAFT",
@@ -179,30 +178,33 @@ def check_claim_contract() -> list[str]:
     marker = "ENDGAME-FIXED199-SUBSTITUTION-POINT"
     if marker in readme:
         errors.append(f"README.md: frozen launch still contains {marker}")
-    candidate_row = re.compile(
-        r"^\| \*\*Azdaja — final terminal candidate\*\* "
-        r"\| (\d+)/199 \((\d+\.\d+)%\) "
-        r"\| (\d+\.\d+)% \| \*\*(\d+\.\d+)%\*\* "
-        r"\| ~5\.4K mean \(198/199 measured\) \| Not reported \|$",
-        re.MULTILINE,
-    )
-    rows = candidate_row.findall(readme)
-    if len(rows) != 1:
-        errors.append("README.md: expected exactly one well-formed terminal Azdaja row")
-    else:
-        completed_text, execution_rate_text, completed_mean_text, fixed_score_text = rows[0]
-        completed = int(completed_text)
-        execution_rate = float(execution_rate_text)
-        completed_mean = float(completed_mean_text)
-        fixed_score = float(fixed_score_text)
-        if completed_text != "185" or completed_mean_text != "73.83615290965021":
-            errors.append("README.md: frozen completion arithmetic changed")
-        if fixed_score_text != "68.64164968987583":
-            errors.append("README.md: frozen final fixed-199 score changed")
-        if completed > 199 or abs(execution_rate - 100 * completed / 199) > 0.005:
-            errors.append("README.md: Azdaja execution count/rate is inconsistent")
-        if abs(fixed_score - completed_mean * completed / 199) > 1e-12:
-            errors.append("README.md: completed-row mean does not decompose to fixed-199 score")
+    expected_result_rows = [
+        "| RAH-protocol Oolong, fixed 199 rows | **68.64%** |",
+        "| Execution / valid predictions | 185/199 (92.96%) |",
+        "| Mean root tokens per item | ~5.4K |",
+        "| Captured root-prompt source-span leaks in the scripted 50 MiB gate | 0 |",
+    ]
+    for row_start in expected_result_rows:
+        if readme.count(row_start) != 1:
+            errors.append(f"README.md: expected one current result row beginning {row_start}")
+    unsupported_readme_claims = [
+        "Cheapest configuration in its table",
+        "convergence is the claim",
+        "~90%",
+        "global best",
+        "all runs, all time",
+        "O(1) root",
+        "cost of asking does not grow",
+        "Model-agnostic, proven",
+    ]
+    for claim in unsupported_readme_claims:
+        if claim.casefold() in readme.casefold():
+            errors.append(f"README.md: unsupported owner-draft claim remains: {claim}")
+    install_section = readme.split("## Install", 1)[1].split("## Use", 1)[0]
+    if install_section.count("```bash") != 3:
+        errors.append("README.md: Install section must contain exactly three bash blocks")
+    if "v0.1.1" in install_section:
+        errors.append("README.md: Install section still references immutable v0.1.1 assets")
 
     for doc in DOCS:
         doc_text = doc.read_text(encoding="utf-8")
@@ -232,6 +234,7 @@ def check_launch_receipts() -> list[str]:
     transport_path = ROOT / "bench" / "results" / "endgame-agent-transport-v2-disease10-terminal.json"
     arc_path = ROOT / "bench" / "results" / "arc3-ember-five-public-v9-result.json"
     interrogation_path = ROOT / "bench" / "results" / "arc3-scorecard-interrogation-public-v1.json"
+    vc33_smoke_path = ROOT / "bench" / "results" / "arc3-vc33-smoke-v2-public.json"
     postmortem_path = ROOT / "docs" / "transport-flip-postmortem.md"
     saga_path = ROOT / "docs" / "launch-saga.md"
     try:
@@ -240,6 +243,7 @@ def check_launch_receipts() -> list[str]:
         transport = json.loads(transport_path.read_text(encoding="utf-8"))
         arc = json.loads(arc_path.read_text(encoding="utf-8"))
         interrogation = json.loads(interrogation_path.read_text(encoding="utf-8"))
+        vc33_smoke = json.loads(vc33_smoke_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return [f"launch receipt read failed: {exc}"]
 
@@ -367,6 +371,41 @@ def check_launch_receipts() -> list[str]:
     if _sha256(interrogation_path) != "17de6893eee9cafafdd164965a91fe08b72aecc69d1f2e41044c0b7d4cbc210c":
         errors.append("ARC interrogation receipt: canonical byte hash changed")
 
+    expected_vc33_smoke = {'schema_version': 1,
+ 'package': {'commit': '1d500edd8eaf651364cfdd8e29638ee540db6062',
+             'manifest_sha256': 'ef56236950ba4e44f901dff79342145f944c79bb3c7236d64da06f6265e86ab1'},
+ 'game': 'vc33',
+ 'arms': {'baseline': {'shadow_rhae': 0.0,
+                       'levels_completed': 0,
+                       'total_actions': 35,
+                       'per_level_action_counts': [35, 0, 0, 0, 0, 0, 0],
+                       'wasted_actions': {'official_feedback_wasted_actions': 0,
+                                          'revisited_states': 0,
+                                          'repeated_known_controls': 0},
+                       'termination': 'ACTION_BUDGET',
+                       'journal': {'record_count': 36,
+                                   'sha256': '18ddb74e409521a6666845ceab6283d8f227b5571c292d1a4d005828c0718e28'},
+                       'terminal_receipt_sha256': '4ff55203bdbc6d61874a817b9059df850fe64e82f17b684b43d899d2ad11cac2'},
+          'ember': {'shadow_rhae': 0.0,
+                    'levels_completed': 0,
+                    'total_actions': 35,
+                    'per_level_action_counts': [35, 0, 0, 0, 0, 0, 0],
+                    'wasted_actions': {'official_feedback_wasted_actions': 0,
+                                       'revisited_states': 0,
+                                       'repeated_known_controls': 0},
+                    'termination': 'ACTION_BUDGET',
+                    'journal': {'record_count': 36,
+                                'sha256': '28ab0ade89e4d5d0996733b7d6fb26ee727e754fb6eac77315874da1f46eb55f'},
+                    'terminal_receipt_sha256': 'bbc17cb9af387defc9ad3338353a44259ed63fba558c57e7cf6549bc88361a35'}},
+ 'paired': {'ember_minus_baseline_shadow_rhae_delta': 0.0,
+            'receipt_sha256': 'a2f732483d707df9ce0de871243efef5e4e491fd7d34140e3af05765b51daed6'},
+ 'full_five_game_rerun': {'status': 'HOLD',
+                          'release_condition': 'post-public flip and explicit owner authorization'}}
+    if vc33_smoke != expected_vc33_smoke:
+        errors.append("ARC-v2 vc33 smoke receipt: exact sanitized schema or values changed")
+    if _sha256(vc33_smoke_path) != "002deda1f7d6740b0aeffc277ea9f7bab87939960fd6644b6852f6e747f97551":
+        errors.append("ARC-v2 vc33 smoke receipt: canonical byte hash changed")
+
     expected_second_act_arc = {
         "absolute_arm_rhae_retained": False,
         "all_paired_rhae_deltas": 0.0,
@@ -434,7 +473,15 @@ def check_launch_receipts() -> list[str]:
     if saga.get("authorized_score_occurrences") != 1 or release.get("release_asset_requests_performed") is not False:
         errors.append("day7 receipt: publication or score-occurrence boundary changed")
 
-    for path in (release_path, public_path, transport_path, arc_path, interrogation_path, postmortem_path):
+    for path in (
+        release_path,
+        public_path,
+        transport_path,
+        arc_path,
+        interrogation_path,
+        vc33_smoke_path,
+        postmortem_path,
+    ):
         text = path.read_text(encoding="utf-8")
         for private_prefix in ("/Users/", "/private/tmp/", "C:\\Users\\"):
             if private_prefix in text:

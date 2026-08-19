@@ -1,15 +1,15 @@
 #![cfg(unix)]
 
 use std::{
-    fs::{self, File},
+    fs,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::{Command, Output, Stdio},
-    time::{SystemTime, UNIX_EPOCH},
+    process::{Child, Command, Output, Stdio},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 struct Scratch(PathBuf);
-
 impl Scratch {
     fn new() -> Self {
         let nonce = SystemTime::now()
@@ -24,10 +24,70 @@ impl Scratch {
         Self(path)
     }
 }
-
 impl Drop for Scratch {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+struct FixtureServer {
+    child: Child,
+    base: String,
+    log: PathBuf,
+}
+impl FixtureServer {
+    fn start(scratch: &Path, root: &Path) -> Self {
+        let script = scratch.join("fixture-server.py");
+        let port_file = scratch.join("fixture-port");
+        let log = scratch.join("fixture-http.log");
+        fs::write(
+            &script,
+            r#"import functools
+import http.server
+import pathlib
+import sys
+
+root, port_file, log_file = map(pathlib.Path, sys.argv[1:])
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        with log_file.open("a", encoding="utf-8") as stream:
+            stream.write(self.path + "\n")
+handler = functools.partial(Handler, directory=str(root))
+server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+port_file.write_text(str(server.server_address[1]), encoding="ascii")
+server.serve_forever()
+"#,
+        )
+        .unwrap();
+        let mut child = Command::new("python3")
+            .arg(&script)
+            .arg(root)
+            .arg(&port_file)
+            .arg(&log)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        for _ in 0..200 {
+            if let Ok(port) = fs::read_to_string(&port_file) {
+                return Self {
+                    child,
+                    base: format!("http://127.0.0.1:{}", port.trim()),
+                    log,
+                };
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+        panic!("fixture HTTP server did not start")
+    }
+}
+impl Drop for FixtureServer {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
 
@@ -48,160 +108,324 @@ fn sha256(path: &Path) -> String {
     panic!("no SHA-256 utility available");
 }
 
-fn local_install_candidate(scratch: &Path, built_binary: &Path) -> PathBuf {
+fn local_candidate(scratch: &Path) -> PathBuf {
     const DOWNLOAD_CAP: u64 = 64 * 1024 * 1024;
-    let candidate = scratch.join("validation-candidate-azdaja");
-    fs::copy(built_binary, &candidate).unwrap();
+    let candidate = scratch.join("fixture-azdaja");
+    fs::copy(env!("CARGO_BIN_EXE_azdaja"), &candidate).unwrap();
     fs::set_permissions(&candidate, fs::Permissions::from_mode(0o755)).unwrap();
     if fs::metadata(&candidate).unwrap().len() > DOWNLOAD_CAP {
-        let stripped = Command::new("strip").arg(&candidate).status().unwrap();
-        assert!(stripped.success(), "strip failed for oversized test binary");
+        let status = Command::new("strip").arg(&candidate).status().unwrap();
+        assert!(
+            status.success(),
+            "strip failed for oversized fixture binary"
+        );
     }
-    assert!(
-        fs::metadata(&candidate).unwrap().len() <= DOWNLOAD_CAP,
-        "real validation candidate still exceeds installer download cap"
-    );
+    assert!(fs::metadata(&candidate).unwrap().len() <= DOWNLOAD_CAP);
     candidate
 }
 
-fn run_installer(
-    script: &Path,
-    home: &Path,
-    path: &str,
-    url: Option<&str>,
-    digest: Option<&str>,
-) -> Output {
+fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
+    let release = root.join(name);
+    fs::create_dir_all(&release).unwrap();
+    for asset in ["azdaja-v0.1.2-darwin-arm64", "azdaja-v0.1.2-linux-x86_64"] {
+        fs::copy(candidate, release.join(asset)).unwrap();
+    }
+    fs::write(
+        release.join("SHA256SUMS"),
+        format!("{digest}  azdaja-v0.1.2-darwin-arm64\n{digest}  azdaja-v0.1.2-linux-x86_64\n"),
+    )
+    .unwrap();
+}
+
+struct InstallRun<'a> {
+    home: &'a Path,
+    base: &'a str,
+    os: &'a str,
+    arch: &'a str,
+    harness: Option<&'a str>,
+    bin_dir: Option<&'a Path>,
+    path: &'a str,
+}
+fn run_installer(run: InstallRun<'_>) -> Output {
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install");
     let mut command = Command::new("sh");
     command
-        .args(["-s", "--", "--harness", "claude"])
-        .env("HOME", home)
-        .env("PATH", path)
+        .arg(script)
+        .env("HOME", run.home)
+        .env("XDG_CONFIG_HOME", run.home.join(".config"))
+        .env("PATH", run.path)
+        .env("AZDAJA_INSTALL_TEST_MODE", "local")
+        .env("AZDAJA_INSTALL_BASE_URL", run.base)
+        .env("AZDAJA_INSTALL_OS", run.os)
+        .env("AZDAJA_INSTALL_ARCH", run.arch)
         .env_remove("AZDAJA_CONFIG")
         .env_remove("AZDAJA_HOME")
         .env_remove("RLM_DEPTH")
-        .env_remove("AZDAJA_INSTALL_URL")
-        .env_remove("AZDAJA_INSTALL_SHA256")
-        .env(
-            "AZDAJA_INSTALL_TEST_MODE",
-            if url.is_some() { "local" } else { "sealed" },
-        )
-        .stdin(Stdio::from(File::open(script).unwrap()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    if let Some(url) = url {
-        command.env("AZDAJA_INSTALL_URL", url);
+    if let Some(harness) = run.harness {
+        command.args(["--harness", harness]);
     }
-    if let Some(digest) = digest {
-        command.env("AZDAJA_INSTALL_SHA256", digest);
+    if let Some(bin_dir) = run.bin_dir {
+        command.arg("--bin-dir").arg(bin_dir);
     }
     command.output().unwrap()
 }
-
-#[test]
-fn literal_site_installer_is_sealed_or_installs_verified_bytes_without_provider_calls() {
-    let scratch = Scratch::new();
-    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install");
-    let built_binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
-    let binary = local_install_candidate(&scratch.0, built_binary);
-    let digest = sha256(&binary);
-    let url = format!("file://{}", binary.display());
-
-    let tools = scratch.0.join("tools");
-    fs::create_dir(&tools).unwrap();
-    let provider_called = scratch.0.join("provider-called");
-    let claude = tools.join("claude");
-    fs::write(
-        &claude,
-        format!(
-            "#!/bin/sh\nprintf called > {:?}\nexit 9\n",
-            provider_called.to_str().unwrap()
-        ),
-    )
-    .unwrap();
-    fs::set_permissions(&claude, fs::Permissions::from_mode(0o755)).unwrap();
-    let path = format!("{}:{}", tools.display(), std::env::var("PATH").unwrap());
-
-    let sealed_home = scratch.0.join("sealed-home");
-    fs::create_dir(&sealed_home).unwrap();
-    let sealed = run_installer(&script, &sealed_home, &path, None, None);
-    assert_eq!(sealed.status.code(), Some(1));
-    assert!(fs::read_dir(&sealed_home).unwrap().next().is_none());
-
-    let bad_home = scratch.0.join("bad-home");
-    fs::create_dir(&bad_home).unwrap();
-    let bad = run_installer(&script, &bad_home, &path, Some(&url), Some(&"0".repeat(64)));
-    assert_eq!(bad.status.code(), Some(1));
-    assert!(fs::read_dir(&bad_home).unwrap().next().is_none());
+fn assert_success(output: &Output) -> String {
     assert!(
-        String::from_utf8_lossy(&bad.stderr).contains("SHA-256 mismatch"),
-        "unexpected bad-hash result: status={} stdout={} stderr={}",
-        bad.status,
-        String::from_utf8_lossy(&bad.stdout),
-        String::from_utf8_lossy(&bad.stderr)
+        output.status.success(),
+        "status={} stdout={} stderr={}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
-
-    let good_home = scratch.0.join("good-home");
-    fs::create_dir(&good_home).unwrap();
-    let installed = run_installer(&script, &good_home, &path, Some(&url), Some(&digest));
-    assert!(
-        installed.status.success(),
-        "stdout={} stderr={}",
-        String::from_utf8_lossy(&installed.stdout),
-        String::from_utf8_lossy(&installed.stderr)
-    );
-    assert!(
-        !provider_called.exists(),
-        "installer entered a provider turn"
-    );
-    let managed = good_home.join(".claude/skills/azdaja/azdaja");
-    assert!(managed.is_file());
-    assert_eq!(
-        sha256(&managed),
-        digest,
-        "installed bytes changed after verification"
-    );
-    let version = Command::new(&managed).arg("--version").output().unwrap();
-    assert!(version.status.success());
-    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.1 "));
+    assert!(output.stderr.is_empty());
+    String::from_utf8(output.stdout.clone()).unwrap()
+}
+fn target(home: &Path, harness: &str) -> PathBuf {
+    match harness {
+        "jcode" => home.join(".jcode/skills/azdaja"),
+        "claude" => home.join(".claude/skills/azdaja"),
+        "codex" => home.join(".agents/skills/azdaja"),
+        "gemini" => home.join(".gemini/skills/azdaja"),
+        _ => home.join(".config/opencode/skills/azdaja"),
+    }
+}
+fn mark_detected(home: &Path, harness: &str) {
+    let path = match harness {
+        "jcode" => home.join(".jcode"),
+        "claude" => home.join(".claude"),
+        "codex" => home.join(".codex"),
+        "gemini" => home.join(".gemini"),
+        _ => home.join(".config/opencode"),
+    };
+    fs::create_dir_all(path).unwrap();
 }
 
 #[test]
-fn v011_installer_binds_exact_two_platform_assets_and_rejects_ordinary_overrides() {
-    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install");
-    let text = fs::read_to_string(&script).unwrap();
-    let darwin_url =
-        "https://github.com/kubet/azdaja/releases/download/v0.1.1/azdaja-v0.1.1-darwin-arm64";
-    let linux_url =
-        "https://github.com/kubet/azdaja/releases/download/v0.1.1/azdaja-v0.1.1-linux-x86_64";
-    let darwin_sha = "b58975de462e823adcf901e331acfd4e70c9e72b5db014de265c04e371d31883";
-    let linux_sha = "b18775f0d3572b20804ff3c3af880ffc5fa3131017c566dc941c1dd743c00247";
-    assert_eq!(text.matches(darwin_url).count(), 1);
-    assert_eq!(text.matches(linux_url).count(), 1);
-    assert_eq!(text.matches(darwin_sha).count(), 1);
-    assert_eq!(text.matches(linux_sha).count(), 1);
-    assert_eq!(text.matches("Darwin-arm64)").count(), 1);
-    assert_eq!(text.matches("Linux-x86_64)").count(), 1);
-    for unsupported in [
-        "Darwin-x86_64)",
-        "Linux-aarch64)",
-        "Linux-arm64)",
-        "Linux-amd64)",
+fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let site = fs::read(root.join("site/install")).unwrap();
+    let top = fs::read(root.join("install.sh")).unwrap();
+    assert_eq!(top, site);
+    let text = String::from_utf8(site).unwrap();
+    assert_eq!(text.matches("VERSION=0.1.2").count(), 1);
+    assert!(text.contains("$BASE_URL/SHA256SUMS"));
+    assert!(text.contains("azdaja-v$VERSION-darwin-arm64"));
+    assert!(text.contains("azdaja-v$VERSION-linux-x86_64"));
+    assert!(text.contains("Darwin-arm64)"));
+    assert!(text.contains("Linux-x86_64)"));
+    assert!(!text.contains("v0.1.1"));
+    assert!(text.contains("mv -f \"$STAGED\" \"$DEST\""));
+}
+
+#[test]
+fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    let digest = sha256(&candidate);
+    write_release(&fixture_root, "good", &candidate, &digest);
+    write_release(&fixture_root, "bad", &candidate, &"0".repeat(64));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let system_path = "/usr/bin:/bin";
+
+    for (os, arch, asset) in [
+        ("Darwin", "arm64", "azdaja-v0.1.2-darwin-arm64"),
+        ("Linux", "x86_64", "azdaja-v0.1.2-linux-x86_64"),
     ] {
-        assert!(
-            !text.contains(unsupported),
-            "unexpected platform arm: {unsupported}"
+        let home = scratch.0.join(format!("platform-{os}"));
+        let bin = home.join("bin");
+        fs::create_dir_all(&home).unwrap();
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &format!("{}/good", server.base),
+            os,
+            arch,
+            harness: Some("claude"),
+            bin_dir: Some(&bin),
+            path: system_path,
+        });
+        let stdout = assert_success(&output);
+        assert_eq!(stdout.lines().count(), 3, "{stdout}");
+        assert!(stdout.contains(asset));
+        assert!(stdout.contains("add ") && stdout.contains(" to PATH"));
+        assert_eq!(sha256(&bin.join("azdaja")), digest);
+        let active = fs::read_to_string(bin.join("config.toml")).unwrap();
+        assert!(active.contains("claude -p --model {model}"));
+        assert!(target(&home, "claude").join("azdaja").is_file());
+    }
+    let requests = fs::read_to_string(&server.log).unwrap();
+    assert!(requests.contains("/good/SHA256SUMS"));
+    assert!(requests.contains("/good/azdaja-v0.1.2-darwin-arm64"));
+    assert!(requests.contains("/good/azdaja-v0.1.2-linux-x86_64"));
+
+    let home = scratch.0.join("atomic-home");
+    let bin = home.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let existing = bin.join("azdaja");
+    fs::write(&existing, b"existing-install-must-survive").unwrap();
+    let bad = run_installer(InstallRun {
+        home: &home,
+        base: &format!("{}/bad", server.base),
+        os: "Darwin",
+        arch: "arm64",
+        harness: Some("claude"),
+        bin_dir: Some(&bin),
+        path: system_path,
+    });
+    assert_eq!(bad.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("SHA-256 mismatch"));
+    assert_eq!(
+        fs::read(&existing).unwrap(),
+        b"existing-install-must-survive"
+    );
+
+    let good = run_installer(InstallRun {
+        home: &home,
+        base: &format!("{}/good", server.base),
+        os: "Darwin",
+        arch: "arm64",
+        harness: Some("claude"),
+        bin_dir: Some(&bin),
+        path: system_path,
+    });
+    assert_success(&good);
+    let version = Command::new(&existing).arg("--version").output().unwrap();
+    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.2 "));
+
+    let home = scratch.0.join("path-home");
+    let path_bin = home.join("path-bin");
+    let tools = home.join("tools");
+    fs::create_dir_all(&path_bin).unwrap();
+    fs::create_dir_all(&tools).unwrap();
+    let claude = tools.join("claude");
+    fs::write(&claude, "#!/bin/sh\ncat >/dev/null\nprintf 'AZDAJA\\n'\n").unwrap();
+    fs::set_permissions(&claude, fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!("{}:{}:{system_path}", path_bin.display(), tools.display());
+    let good = run_installer(InstallRun {
+        home: &home,
+        base: &format!("{}/good", server.base),
+        os: "Darwin",
+        arch: "arm64",
+        harness: Some("claude"),
+        bin_dir: None,
+        path: &path,
+    });
+    let stdout = assert_success(&good);
+    assert!(path_bin.join("azdaja").is_file());
+    assert!(stdout.contains("is on PATH"));
+    assert!(
+        fs::read_to_string(path_bin.join("config.toml"))
+            .unwrap()
+            .contains("claude -p --model {model}")
+    );
+    let doctor = Command::new(path_bin.join("azdaja"))
+        .arg("doctor")
+        .env("HOME", &home)
+        .env("PATH", &path)
+        .env("AZDAJA_HOME", home.join("state"))
+        .env_remove("AZDAJA_CONFIG")
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    let stdout = assert_success(&doctor);
+    assert_eq!(stdout.lines().count(), 3, "{stdout}");
+    assert!(stdout.lines().all(|line| line.starts_with("PASS ")));
+}
+
+#[test]
+fn local_http_fixture_covers_each_detection_target_all_and_no_harness() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let base = format!("{}/good", server.base);
+    let system_path = "/usr/bin:/bin";
+
+    for harness in ["jcode", "claude", "codex", "gemini", "opencode"] {
+        let home = scratch.0.join(format!("detected-{harness}"));
+        let bin = home.join("bin");
+        fs::create_dir_all(&home).unwrap();
+        mark_detected(&home, harness);
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &base,
+            os: "Darwin",
+            arch: "arm64",
+            harness: None,
+            bin_dir: Some(&bin),
+            path: system_path,
+        });
+        let stdout = assert_success(&output);
+        assert_eq!(stdout.lines().count(), 3, "{stdout}");
+        assert!(stdout.lines().next().unwrap().contains(harness));
+        assert!(target(&home, harness).join("azdaja").is_file());
+        assert_eq!(
+            fs::read(bin.join("config.toml")).unwrap(),
+            fs::read(target(&home, harness).join("config.toml")).unwrap(),
+            "PATH binary must bind the selected {harness} route"
         );
     }
-    assert!(text.contains("This platform has no published v0.1.1 binary"));
 
+    let home = scratch.0.join("all");
+    let bin = home.join("bin");
+    fs::create_dir_all(&home).unwrap();
+    let output = run_installer(InstallRun {
+        home: &home,
+        base: &base,
+        os: "Darwin",
+        arch: "arm64",
+        harness: Some("all"),
+        bin_dir: Some(&bin),
+        path: system_path,
+    });
+    let stdout = assert_success(&output);
+    assert_eq!(stdout.lines().count(), 3);
+    for harness in ["jcode", "claude", "codex", "gemini", "opencode"] {
+        assert!(target(&home, harness).join("azdaja").is_file());
+    }
+    assert!(
+        fs::read_to_string(bin.join("config.toml"))
+            .unwrap()
+            .contains("jcode-api")
+    );
+
+    let before = fs::read_to_string(&server.log).unwrap_or_default();
+    let home = scratch.0.join("none");
+    fs::create_dir(&home).unwrap();
+    let output = run_installer(InstallRun {
+        home: &home,
+        base: &base,
+        os: "Darwin",
+        arch: "arm64",
+        harness: None,
+        bin_dir: Some(&home.join("bin")),
+        path: system_path,
+    });
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("no supported harness found"));
+    assert!(!stderr.contains("stack"));
+    assert!(fs::read_dir(&home).unwrap().next().is_none());
+    assert_eq!(fs::read_to_string(&server.log).unwrap_or_default(), before);
+}
+
+#[test]
+fn ordinary_installs_reject_validation_overrides_before_mutation() {
     let scratch = Scratch::new();
-    let home = scratch.0.join("ordinary-override-home");
+    let home = scratch.0.join("home");
     fs::create_dir(&home).unwrap();
     let output = Command::new("sh")
-        .arg(&script)
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("install.sh"))
+        .args(["--harness", "claude"])
         .env("HOME", &home)
-        .env("AZDAJA_INSTALL_URL", "https://example.invalid/azdaja")
-        .env("AZDAJA_INSTALL_SHA256", "0".repeat(64))
+        .env("PATH", "/usr/bin:/bin")
+        .env("AZDAJA_INSTALL_BASE_URL", "http://127.0.0.1:9")
         .env_remove("AZDAJA_INSTALL_TEST_MODE")
         .output()
         .unwrap();

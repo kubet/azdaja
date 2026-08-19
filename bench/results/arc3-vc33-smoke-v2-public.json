@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "package": {
+    "commit": "1d500edd8eaf651364cfdd8e29638ee540db6062",
+    "manifest_sha256": "ef56236950ba4e44f901dff79342145f944c79bb3c7236d64da06f6265e86ab1"
+  },
+  "game": "vc33",
+  "arms": {
+    "baseline": {
+      "shadow_rhae": 0.0,
+      "levels_completed": 0,
+      "total_actions": 35,
+      "per_level_action_counts": [
+        35,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "wasted_actions": {
+        "official_feedback_wasted_actions": 0,
+        "revisited_states": 0,
+        "repeated_known_controls": 0
+      },
+      "termination": "ACTION_BUDGET",
+      "journal": {
+        "record_count": 36,
+        "sha256": "18ddb74e409521a6666845ceab6283d8f227b5571c292d1a4d005828c0718e28"
+      },
+      "terminal_receipt_sha256": "4ff55203bdbc6d61874a817b9059df850fe64e82f17b684b43d899d2ad11cac2"
+    },
+    "ember": {
+      "shadow_rhae": 0.0,
+      "levels_completed": 0,
+      "total_actions": 35,
+      "per_level_action_counts": [
+        35,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "wasted_actions": {
+        "official_feedback_wasted_actions": 0,
+        "revisited_states": 0,
+        "repeated_known_controls": 0
+      },
+      "termination": "ACTION_BUDGET",
+      "journal": {
+        "record_count": 36,
+        "sha256": "28ab0ade89e4d5d0996733b7d6fb26ee727e754fb6eac77315874da1f46eb55f"
+      },
+      "terminal_receipt_sha256": "bbc17cb9af387defc9ad3338353a44259ed63fba558c57e7cf6549bc88361a35"
+    }
+  },
+  "paired": {
+    "ember_minus_baseline_shadow_rhae_delta": 0.0,
+    "receipt_sha256": "a2f732483d707df9ce0de871243efef5e4e491fd7d34140e3af05765b51daed6"
+  },
+  "full_five_game_rerun": {
+    "status": "HOLD",
+    "release_condition": "post-public flip and explicit owner authorization"
+  }
+}

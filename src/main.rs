@@ -146,7 +146,7 @@ fn preflight_repair_solo_trace(
 
 fn help() {
     println!(
-        "azdaja {VERSION}\n\nUSAGE:\n  azdaja start\n  azdaja load <sid> <path> <var>\n  azdaja exec <sid>             # Python on stdin\n  azdaja final <sid>\n  azdaja list | kill <sid>\n  azdaja solo <question> -f <file> [--model X] [--sub-model Y]\n  azdaja install [--harness jcode|claude|codex|gemini|opencode|all]\n  azdaja doctor [--caps]\n  azdaja uninstall [--harness ...]"
+        "azdaja {VERSION} — bounded-context CLI\nUsage: azdaja <command> [options]\nCommands: start load exec final list kill solo install doctor uninstall\nInstall: azdaja install [--harness jcode|claude|codex|gemini|opencode|all]\nExample: azdaja solo \"summarize this file\" -f ./document.txt"
     );
 }
 fn main() -> ExitCode {
@@ -209,7 +209,7 @@ fn run() -> Result<bool> {
             kill(&args[1])?;
             println!("killed {}", args[1])
         }
-        "doctor" => doctor(&args)?,
+        "doctor" => return doctor(&args),
         "install" => install_cmd(&args, false)?,
         "uninstall" => install_cmd(&args, true)?,
         "solo" => solo(&args, &Config::load()?)?,
@@ -223,54 +223,137 @@ fn exact(args: &[String], n: usize) -> Result<()> {
     }
     Ok(())
 }
-fn doctor(args: &[String]) -> Result<()> {
+fn doctor(args: &[String]) -> Result<bool> {
     if args.get(1).is_some_and(|s| s == "--caps") {
         exact(args, 2)?;
         println!(
             "{}",
             serde_json::json!({"azdaja":VERSION,"monty":MONTY_VERSION,"dump_version":monty::DUMP_VERSION,"capabilities":["persistent-repl","snapshots","external-functions","re","json","datetime","monty-os-calls-denied"]})
         );
-        return Ok(());
+        return Ok(true);
     }
     exact(args, 1)?;
-    let cfg = Config::load()?;
-    capability_check(&cfg)?;
-    let reply = call_model(CANARY_PROMPT, &cfg.default_model, &cfg, 1)?;
-    if reply.trim() != CANARY_ANSWER {
-        bail!("sub_llm_cmd canary mismatch: {reply}")
+    let cfg = match Config::load() {
+        Ok(cfg) => {
+            println!("PASS config: configuration loaded");
+            cfg
+        }
+        Err(_) => {
+            println!(
+                "FAIL config: configuration could not be loaded; Fix: repair AZDAJA_CONFIG or the managed config.toml"
+            );
+            println!(
+                "FAIL evaluator: not checked because configuration failed; Fix: repair the configuration, then rerun azdaja doctor"
+            );
+            println!(
+                "FAIL harness: not checked because configuration failed; Fix: repair the configuration, then rerun azdaja doctor"
+            );
+            return Ok(false);
+        }
+    };
+    if capability_check(&cfg).is_err() {
+        println!(
+            "FAIL evaluator: local capability check failed; Fix: reinstall azdaja and ensure its state directory is writable"
+        );
+        println!(
+            "FAIL harness: not checked because the evaluator failed; Fix: repair the evaluator, then rerun azdaja doctor"
+        );
+        return Ok(false);
     }
-    println!("ok: azdaja {VERSION}, monty {MONTY_VERSION}, sub-LLM reachable");
-    Ok(())
+    println!("PASS evaluator: local Monty capability check passed");
+    match call_model(CANARY_PROMPT, &cfg.default_model, &cfg, 1) {
+        Ok(reply) if reply.trim() == CANARY_ANSWER => {
+            println!("PASS harness: model canary returned the expected answer");
+            Ok(true)
+        }
+        Ok(_) => {
+            println!(
+                "FAIL harness: model canary returned an unexpected answer; Fix: verify the configured model and rerun azdaja doctor"
+            );
+            Ok(false)
+        }
+        Err(error) => {
+            let category = model_transport_error_category(&error);
+            println!(
+                "FAIL harness: model connection failed ({category:?}); Fix: log in to the configured harness and verify sub_llm_cmd"
+            );
+            Ok(false)
+        }
+    }
 }
 
-fn harness_arg(args: &[String]) -> Result<String> {
+const ALL_HARNESSES: [&str; 5] = ["jcode", "claude", "codex", "gemini", "opencode"];
+
+fn harness_arg(args: &[String]) -> Result<Option<&str>> {
     match args {
-        [_] => Ok("detected".into()),
-        [_, flag, h] if flag == "--harness" => Ok(h.clone()),
+        [_] => Ok(None),
+        [_, flag, harness] if flag == "--harness" => Ok(Some(harness)),
         _ => bail!("usage: {} [--harness NAME]", args[0]),
     }
 }
-fn harnesses(which: &str) -> Result<Vec<&'static str>> {
-    let all = ["jcode", "claude", "codex", "gemini", "opencode"];
-    if which == "all" {
-        return Ok(all.into());
+fn command_exists(name: &str) -> bool {
+    env::var_os("PATH").is_some_and(|path| {
+        env::split_paths(&path).any(|dir| {
+            let candidate = dir.join(name);
+            candidate.is_file() || cfg!(windows) && dir.join(format!("{name}.exe")).is_file()
+        })
+    })
+}
+fn detection_reasons(home: &Path, harness: &str) -> Vec<&'static str> {
+    let config_found = match harness {
+        "jcode" => home.join(".jcode").is_dir(),
+        "claude" => home.join(".claude").is_dir(),
+        "codex" => home.join(".codex").is_dir() || home.join(".agents/skills").is_dir(),
+        "gemini" => home.join(".gemini").is_dir(),
+        _ => env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".config"))
+            .join("opencode")
+            .is_dir(),
+    };
+    let cli_found = match harness {
+        "jcode" => command_exists("jcode") || command_exists("jcode-api"),
+        other => command_exists(other),
+    };
+    let mut reasons = Vec::new();
+    if config_found {
+        reasons.push("directory");
     }
-    if which == "detected" {
-        let home = home()?;
-        let v = all
+    if cli_found {
+        reasons.push("CLI");
+    }
+    reasons
+}
+fn harnesses(which: Option<&str>) -> Result<(Vec<&'static str>, String)> {
+    if let Some("all") = which {
+        return Ok((
+            ALL_HARNESSES.into(),
+            format!("{} (selected by --harness all)", ALL_HARNESSES.join(", ")),
+        ));
+    }
+    if let Some(which) = which {
+        return ALL_HARNESSES
             .into_iter()
-            .filter(|h| target(&home, h).parent().is_some_and(Path::exists))
-            .collect::<Vec<_>>();
-        return if v.is_empty() {
-            Ok(vec!["jcode"])
-        } else {
-            Ok(v)
-        };
+            .find(|harness| *harness == which)
+            .map(|harness| (vec![harness], format!("{harness} (selected by --harness)")))
+            .ok_or_else(|| anyhow!("unknown harness '{which}'"));
     }
-    all.into_iter()
-        .find(|h| *h == which)
-        .map(|h| vec![h])
-        .ok_or_else(|| anyhow!("unknown harness '{which}'"))
+    let home = home()?;
+    let mut detected = Vec::new();
+    let mut report = Vec::new();
+    for harness in ALL_HARNESSES {
+        let reasons = detection_reasons(&home, harness);
+        if !reasons.is_empty() {
+            detected.push(harness);
+            report.push(format!("{harness} ({})", reasons.join(" + ")));
+        }
+    }
+    if detected.is_empty() {
+        bail!(
+            "no supported harness found; install jcode, claude, codex, gemini, or opencode, or rerun with --harness NAME"
+        )
+    }
+    Ok((detected, report.join(", ")))
 }
 fn home() -> Result<PathBuf> {
     env::var_os("HOME")
@@ -284,7 +367,10 @@ fn target(home: &Path, h: &str) -> PathBuf {
         "claude" => home.join(".claude/skills/azdaja"),
         "codex" => home.join(".agents/skills/azdaja"),
         "gemini" => home.join(".gemini/skills/azdaja"),
-        _ => home.join(".config/opencode/skills/azdaja"),
+        _ => env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".config"))
+            .join("opencode/skills/azdaja"),
     }
 }
 fn adapter(h: &str) -> (&'static str, &'static str) {
@@ -312,20 +398,22 @@ fn hash(b: &[u8]) -> u64 {
     h
 }
 fn install_cmd(args: &[String], remove: bool) -> Result<()> {
-    let hs = harnesses(&harness_arg(args)?)?;
+    let (harnesses, detection_report) = harnesses(harness_arg(args)?)?;
     let home = home()?;
     if remove {
-        for h in hs {
+        for harness in harnesses {
             // Configuration is the one managed file users are explicitly allowed to customize.
             // Uninstall must still reject changed binaries, changed skills, or unknown files.
-            uninstall(&target(&home, h), true)?
+            uninstall(&target(&home, harness), true)?
         }
         return Ok(());
     }
     let exe = env::current_exe()?.canonicalize()?;
-    for h in hs {
-        let dst = target(&home, h);
-        let (cmd, model) = adapter(h);
+    let mut written = Vec::new();
+    let mut doctor = None;
+    for harness in harnesses {
+        let dst = target(&home, harness);
+        let (cmd, model) = adapter(harness);
         let preserved = if dst.exists() {
             validate_install(&dst, true)?;
             Some(fs::read(dst.join("config.toml"))?)
@@ -335,10 +423,10 @@ fn install_cmd(args: &[String], remove: bool) -> Result<()> {
         let cfg = if let Some(bytes) = &preserved {
             toml::from_str::<Config>(&String::from_utf8(bytes.clone())?)?.validate()?
         } else {
-            let mut c: Config = toml::from_str(DEFAULT_CONFIG)?;
-            c.sub_llm_cmd = cmd.into();
-            c.default_model = model.into();
-            c.validate()?
+            let mut config: Config = toml::from_str(DEFAULT_CONFIG)?;
+            config.sub_llm_cmd = cmd.into();
+            config.default_model = model.into();
+            config.validate()?
         };
         capability_check(&cfg)?;
         let parent = dst.parent().unwrap();
@@ -372,7 +460,12 @@ fn install_cmd(args: &[String], remove: bool) -> Result<()> {
         let manifest = Manifest {
             files: files
                 .iter()
-                .map(|n| (n.clone(), hash(&fs::read(stage.join(n)).unwrap())))
+                .map(|name| {
+                    (
+                        name.clone(),
+                        hash(&fs::read(stage.join(name)).expect("staged managed file")),
+                    )
+                })
                 .collect(),
         };
         fs::write(
@@ -385,16 +478,23 @@ fn install_cmd(args: &[String], remove: bool) -> Result<()> {
                 fs::remove_dir_all(&backup)?
             }
             fs::rename(&dst, &backup)?;
-            if let Err(e) = fs::rename(&stage, &dst) {
+            if let Err(error) = fs::rename(&stage, &dst) {
                 let _ = fs::rename(&backup, &dst);
-                return Err(e.into());
+                return Err(error.into());
             }
             fs::remove_dir_all(backup)?
         } else {
             fs::rename(&stage, &dst)?
         }
-        println!("installed {h}: {}", dst.display());
+        written.push(format!("{harness} -> {}", dst.display()));
+        doctor.get_or_insert(final_bin);
     }
+    println!("Detected: {detection_report}");
+    println!("Written: {}", written.join("; "));
+    println!(
+        "Next: run {} doctor",
+        doctor.expect("at least one selected harness").display()
+    );
     Ok(())
 }
 #[cfg(unix)]
@@ -416,12 +516,14 @@ fn validate_install(dst: &Path, allow_config_change: bool) -> Result<()> {
         &fs::read(dst.join(".azdaja-managed"))
             .context("refusing to modify unowned skill directory")?,
     )?;
-    for (n, want) in &manifest.files {
-        let p = dst.join(n);
-        let got =
-            hash(&fs::read(&p).with_context(|| format!("managed file missing: {}", p.display()))?);
-        if got != *want && !(allow_config_change && n == "config.toml") {
-            bail!("refusing to modify changed file: {}", p.display())
+    for (name, want) in &manifest.files {
+        let path = dst.join(name);
+        let got = hash(
+            &fs::read(&path)
+                .with_context(|| format!("managed file missing: {}", path.display()))?,
+        );
+        if got != *want && !(allow_config_change && name == "config.toml") {
+            bail!("refusing to modify changed file: {}", path.display())
         }
     }
     if fs::read_dir(dst)?.count() != manifest.files.len() + 1 {

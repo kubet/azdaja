@@ -3,7 +3,7 @@ use std::{fs, path::Path};
 #[test]
 fn v011_release_plan_is_exact_and_v010_receipts_remain_immutable() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    assert_eq!(env!("CARGO_PKG_VERSION"), "0.1.1");
+    assert_eq!(env!("CARGO_PKG_VERSION"), "0.1.2");
     let normalizer = fs::read_to_string(root.join("release/v0.1.1/normalize-darwin.py")).unwrap();
     assert!(normalizer.contains("dev.kubet.azdaja"));
     assert!(normalizer.contains("hashlib.sha256(ASSET_NAME.encode()).digest()[:16]"));
@@ -64,7 +64,7 @@ fn v011_release_plan_is_exact_and_v010_receipts_remain_immutable() {
     assert!(names.contains(&serde_json::json!("azdaja-v0.1.1-linux-x86_64")));
 
     let site = fs::read_to_string(root.join("site/index.html")).unwrap();
-    assert_eq!(site.matches("/v0.1.1/site/install").count(), 1);
+    assert_eq!(site.matches("/main/site/install").count(), 1);
 }
 
 #[test]
