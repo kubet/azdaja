@@ -56,6 +56,30 @@ A fresh 40-row mini gate then completed all rows with 37 execution successes. It
 
 Different schedules are not a paired causal experiment, so we do not credit every recovered row to the workspace fix. We can claim the narrower facts: the observed collision was reproduced, the specific mechanism was removed, and the retry path exercised successfully. The launch result is printed above.
 
+## The ridge after launch
+
+Against the paper's 64.38 bare-RLM reference, the launch number is
+**+4.3 percentage points** after rounding. It is the highest bare-RLM number in
+the class ladder we print, not proof of a global best-published result: our run
+is a private, single-arm diagnostic, the literature values were not rerun as
+controls, and no superiority follows. Codex at 71.75 is the visible next summit,
+not a result we claim to have reached.
+
+The token story has a missing row too. Provider receipts cover root usage for
+198 of 199 rows: 5,403.36 mean total root tokens and a 4,723 median. We do not
+impute the missing row or relabel that as an exact 6K, complete-campaign, cost,
+or efficiency result. The [sanitized terminal receipt](../bench/results/gpt-rah199-mortality-v3-terminal-public.json)
+binds those aggregates to the retained private evidence.
+
+The second act is paired evidence. A future authorized ARC pilot should report
+only within-game treatment-minus-control deltas, never an absolute ARC or
+leaderboard score. The transport scout's 0.00/0.00 tie came from 20
+pre-inference setup failures, with zero successful provider turns and zero
+agent-class calls. It observed no root choice, so it is neither genuine disuse
+nor a discoverability measurement. A repaired activation study is post-launch
+v0.2 roadmap material only; it is not authorized here. The
+[sanitized post-mortem](transport-flip-postmortem.md) records that boundary.
+
 ## Why a dragon
 
 Aždaja is a dragon in Serbian folklore. For this project, the image is also an architecture diagram: one persistent body holds the context; a root writes compact analysis code; multiple model-call heads handle bounded semantic questions; deterministic code joins their answers.

@@ -22,9 +22,8 @@ The [crossover figure](docs/token-context-crossover.svg) is deliberately illustr
 
 ## Current evidence
 
-One current Azdaja candidate is shown as a sanitized public aggregate. Historical
-candidates, failed campaigns, and incident detail are intentionally excluded. This is
-single-arm diagnostic evidence—not an official leaderboard result, a paired
+One current Azdaja candidate is shown as a sanitized public aggregate. This is a
+private, single-arm diagnostic—not an official leaderboard result, a paired
 comparison, or a superiority claim.
 
 ### Fixed-199 validation slice
@@ -35,12 +34,14 @@ successor fixed-199 run, so the permanent fixed-denominator score is
 
 | Candidate | Execution / valid predictions | Completed-row Oolong mean | Fixed-199 Oolong Score | Root tokens | Latency |
 |---|---:|---:|---:|---:|---:|
-| **Azdaja — final terminal candidate** | 185/199 (92.96%) | 73.83615290965021% | **68.64164968987583%** | Not reported | Not reported |
+| **Azdaja — final terminal candidate** | 185/199 (92.96%) | 73.83615290965021% | **68.64164968987583%** | ~5.4K mean (198/199 measured) | Not reported |
 
-All 199 scheduled rows reached terminal accounting; retained execution failures
-contribute zero to the fixed denominator. Complete, comparable token and latency
-aggregates are not available, so neither is estimated and no efficiency claim is
-made. The frozen run is never rerun, resumed, or rescored.
+All 199 rows reached terminal accounting; 14 retained execution failures
+contribute zero. Provider-authoritative root usage exists for 198 rows: mean
+total root usage was 5,403.36 tokens and the median was 4,723. The missing row is
+not imputed, so this is not an exact 6K or complete fixed-199 token claim and no
+efficiency claim is made. The frozen run is never rerun, resumed, or rescored.
+See the [sanitized terminal receipt](bench/results/gpt-rah199-mortality-v3-terminal-public.json).
 
 ### Published class ladder
 
@@ -54,9 +55,19 @@ a GPT-5 backbone:
 | Codex, No Retriever | Coding agent | **71.75%** |
 | RAH, GPT-5 | Recursive Agent Harness | **81.36%** |
 
-These literature values are reference points, not controls rerun by us. Protocol
-alignment does not make this a controlled head-to-head comparison or establish
-superiority, equivalence, or general capability.
+The Azdaja diagnostic is 4.26164968987583 percentage points above the 64.38 RLM
+reference (**+4.3 points**, rounded), making it the highest bare-RLM number shown
+in this ladder. The ladder is not an exhaustive literature review or evidence of
+best-published status. Its values are not controls rerun by us; protocol alignment
+does not establish superiority, equivalence, or general capability. The visible
+next class step is Codex at 71.75%, not a result Azdaja has reached.
+
+### Post-launch second act
+
+Future evidence should be within-game paired ARC deltas, never an absolute ARC
+score. The transport flip remains v0.2 roadmap material: its +0.00 scout failed
+before inference and observed no root choice, so it is not genuine disuse and is
+non-diagnostic for discoverability. See the [sanitized post-mortem](docs/transport-flip-postmortem.md).
 
 ## Install
 

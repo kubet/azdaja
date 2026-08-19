@@ -5,10 +5,9 @@ Status: **private staging only**. Do not run the launch block before
 private assembly branch is allowed before then; changing repository visibility
 or publishing the saga is not.
 
-This branch owns only the public-flip runbook, its sanitized receipt, and the
-launch-saga assembly. README work is intentionally owned by the separate
-`docs/endgame-readme-evidence-v1` branch and must be cherry-picked as a
-single documentation-only commit before the launch block is used.
+This branch owns the reviewed public-flip runbook, sanitized receipts, launch
+saga, transport post-mortem, and final README evidence pass. It does not own a
+visibility change, publication, benchmark run, ARC run, or provider call.
 
 ## Bound launch statement
 
@@ -22,11 +21,12 @@ no substitution, rerun, resume, or rescore is authorized.
 
 ## Pre-Day-7 private assembly
 
-The documentation-only README input is source commit
-`0ed643e31a93cc060cf7a4917108224f13553ee5`; it changes only `README.md` and
-`tools/check_docs.py`. It has already been cherry-picked into this assembly.
-Do not merge the README branch's benchmark ancestry and do not edit its evidence
-presentation independently. To reconstruct and push the private assembly, use:
+The initial documentation-only README input was source commit
+`0ed643e31a93cc060cf7a4917108224f13553ee5`; it changed only `README.md` and
+`tools/check_docs.py` and is already in this assembly's ancestry. The reviewed
+second-act pass now lives on this assembly branch; do not replay the source
+commit over it or merge the README branch's benchmark ancestry. To validate and
+push the private assembly, use:
 
 ```bash
 set -euo pipefail
@@ -37,7 +37,8 @@ README_COMMIT=0ed643e31a93cc060cf7a4917108224f13553ee5
 git fetch origin --prune --tags
 git switch "$ASSEMBLY"
 git show --stat --oneline "$README_COMMIT"
-# Reconstruction only: cherry-pick README_COMMIT once if its two-file diff is absent.
+# Ancestry check only: never replay README_COMMIT over this reviewed final pass.
+git merge-base --is-ancestor "$README_COMMIT" HEAD
 python3 tools/check_docs.py
 git diff --check
 test -z "$(git status --porcelain --untracked-files=no)"
@@ -85,12 +86,16 @@ git switch -c day7-ship origin/main
 git merge --no-ff --no-edit "origin/$ASSEMBLY"
 
 test -f docs/launch-saga.md
+test -f docs/transport-flip-postmortem.md
+test -f bench/results/gpt-rah199-mortality-v3-terminal-public.json
+test -f bench/results/endgame-agent-transport-v2-disease10-terminal.json
 test "$(grep -Fxc "$EXPECTED_LINE" docs/launch-saga.md)" -eq 1
 test "$(grep -Fc "$EXPECTED_SCORE" docs/launch-saga.md)" -eq 1
 ! grep -Fq 'SCORE_SUBSTITUTION_POINT' docs/launch-saga.md
 ! grep -Fq 'ENDGAME-FIXED199-SUBSTITUTION-POINT' README.md
 ! grep -Fq 'provisional only because' README.md
 python3 - <<'PY'
+import hashlib
 import json
 from pathlib import Path
 
@@ -103,6 +108,30 @@ assert score["execution_successes"] == 185
 assert score["retained_failure_zeros"] == 14
 assert score["status"] == "permanent_final_no_successor_authorized"
 assert receipt["release_asset_requests_performed"] is False
+
+public_path = Path("bench/results/gpt-rah199-mortality-v3-terminal-public.json")
+public = json.loads(public_path.read_text())
+assert public["score"]["fixed_199_score_percent"] == score["percent"]
+assert public["score"]["execution_successes"] == score["execution_successes"]
+assert public["root_usage"]["measured_rows"] == 198
+assert public["root_usage"]["missing_rows"] == 1
+assert public["root_usage"]["measured_total_tokens"] == 1069865
+assert public["root_usage"]["complete_fixed_199_aggregate"] is False
+assert receipt["evidence"]["sanitized_terminal_receipt_sha256"] == hashlib.sha256(public_path.read_bytes()).hexdigest()
+
+transport_path = Path("bench/results/endgame-agent-transport-v2-disease10-terminal.json")
+transport = json.loads(transport_path.read_text())
+assert transport["terminal_status"] == "FAIL"
+assert transport["execution"]["successful_provider_turns"] == 0
+assert transport["execution"]["agent_class_calls"] == 0
+assert transport["execution"]["control_failures"] == 10
+assert transport["execution"]["treatment_failures"] == 10
+assert receipt["evidence"]["transport_terminal_receipt_sha256"] == hashlib.sha256(transport_path.read_bytes()).hexdigest()
+
+private_prefixes = ("/" + "private/tmp/", "/" + "Users/")
+for path in (public_path, transport_path, Path("docs/transport-flip-postmortem.md")):
+    text = path.read_text()
+    assert not any(prefix in text for prefix in private_prefixes)
 PY
 
 python3 tools/check_docs.py

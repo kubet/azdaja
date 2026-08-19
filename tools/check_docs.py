@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -10,7 +12,14 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
-DOCS = [ROOT / "README.md", ROOT / "drafts" / "README.md", ROOT / "drafts" / "v0.1.1-launch.md"]
+DOCS = [
+    ROOT / "README.md",
+    ROOT / "drafts" / "README.md",
+    ROOT / "drafts" / "v0.1.1-launch.md",
+    ROOT / "docs" / "launch-saga.md",
+    ROOT / "docs" / "transport-flip-postmortem.md",
+    ROOT / "docs" / "day7-public-launch.md",
+]
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 HTML_SRC_RE = re.compile(r'''src=["\']([^"\']+)["\']''')
 
@@ -34,14 +43,25 @@ def check_claim_contract() -> list[str]:
     errors: list[str] = []
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     draft = (ROOT / "drafts" / "v0.1.1-launch.md").read_text(encoding="utf-8")
+    saga = (ROOT / "docs" / "launch-saga.md").read_text(encoding="utf-8")
+    postmortem = (ROOT / "docs" / "transport-flip-postmortem.md").read_text(encoding="utf-8")
+    runbook = (ROOT / "docs" / "day7-public-launch.md").read_text(encoding="utf-8")
     required_readme = [
-        "All 199 scheduled rows reached terminal accounting",
+        "All 199 rows reached terminal accounting",
         "permanent fixed-denominator score is\n"
         "**68.64164968987583%**",
         "not an official leaderboard result",
+        "185/199 (92.96%)",
+        "5,403.36",
+        "not an exact 6K",
+        "4.26164968987583 percentage points",
+        "**+4.3 points**",
+        "highest bare-RLM number shown",
+        "not an exhaustive literature review",
         "64.38%",
         "71.75%",
         "81.36%",
+        "docs/transport-flip-postmortem.md",
         "52,428,800",
         "65,536",
         "not a token or cost-savings claim",
@@ -87,6 +107,44 @@ def check_claim_contract() -> list[str]:
         if needle not in draft:
             errors.append(f"drafts/v0.1.1-launch.md: missing required boundary phrase: {needle}")
 
+    required_saga = [
+        "**+4.3 percentage points**",
+        "not proof of a global best-published result",
+        "5,403.36 mean total root tokens",
+        "Codex at 71.75",
+        "within-game treatment-minus-control deltas",
+        "post-launch v0.2 roadmap material only",
+    ]
+    required_postmortem = [
+        "pre-inference setup failure, non-diagnostic for discoverability or selection—not genuine disuse",
+        "successful provider turns were **0**",
+        "agent-class calls were **0**",
+        "0.00 vs 0.00",
+        "no live root turn was reached",
+        "v0.2 roadmap",
+        "does **not** authorize an extra",
+    ]
+    required_runbook = [
+        "private staging only",
+        "transport-flip-postmortem.md",
+        "gpt-rah199-mortality-v3-terminal-public.json",
+        "release asset `GET`/`HEAD`",
+    ]
+    for name, text, required in (
+        ("docs/launch-saga.md", saga, required_saga),
+        ("docs/transport-flip-postmortem.md", postmortem, required_postmortem),
+        ("docs/day7-public-launch.md", runbook, required_runbook),
+    ):
+        flat_text = " ".join(text.split())
+        for phrase in required:
+            if phrase not in flat_text:
+                errors.append(f"{name}: missing second-act boundary phrase: {phrase}")
+
+    if saga.count("68.64164968987583%") != 1:
+        errors.append("docs/launch-saga.md: expected exact launch percentage once")
+    if "best published bare-configuration RLM" in readme or "best published bare-configuration RLM" in saga:
+        errors.append("launch docs: unsupported absolute best-published claim")
+
     marker = "ENDGAME-FIXED199-SUBSTITUTION-POINT"
     if marker in readme:
         errors.append(f"README.md: frozen launch still contains {marker}")
@@ -94,7 +152,7 @@ def check_claim_contract() -> list[str]:
         r"^\| \*\*Azdaja — final terminal candidate\*\* "
         r"\| (\d+)/199 \((\d+\.\d+)%\) "
         r"\| (\d+\.\d+)% \| \*\*(\d+\.\d+)%\*\* "
-        r"\| Not reported \| Not reported \|$",
+        r"\| ~5\.4K mean \(198/199 measured\) \| Not reported \|$",
         re.MULTILINE,
     )
     rows = candidate_row.findall(readme)
@@ -115,17 +173,114 @@ def check_claim_contract() -> list[str]:
         if abs(fixed_score - completed_mean * completed / 199) > 1e-12:
             errors.append("README.md: completed-row mean does not decompose to fixed-199 score")
 
-    for doc, doc_text in (("README.md", readme), ("drafts/v0.1.1-launch.md", draft)):
+    for doc in DOCS:
+        doc_text = doc.read_text(encoding="utf-8")
+        name = str(doc.relative_to(ROOT))
         if re.search(r"(?:~|≈)\s*72(?:\.0+)?%?", doc_text):
-            errors.append(f"{doc}: forbidden approximate-72 result claim")
+            errors.append(f"{name}: forbidden approximate-72 result claim")
         for private_prefix in ("/Users/", "/private/tmp/", "C:\\Users\\"):
             if private_prefix in doc_text:
-                errors.append(f"{doc}: private host path leaked: {private_prefix}")
+                errors.append(f"{name}: private host path leaked: {private_prefix}")
     return errors
 
 
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _git_blob(path: Path) -> str:
+    data = path.read_bytes()
+    return hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+
+
+def check_launch_receipts() -> list[str]:
+    errors: list[str] = []
+    release_path = ROOT / "release" / "day7-public-launch.json"
+    public_path = ROOT / "bench" / "results" / "gpt-rah199-mortality-v3-terminal-public.json"
+    transport_path = ROOT / "bench" / "results" / "endgame-agent-transport-v2-disease10-terminal.json"
+    postmortem_path = ROOT / "docs" / "transport-flip-postmortem.md"
+    saga_path = ROOT / "docs" / "launch-saga.md"
+    try:
+        release = json.loads(release_path.read_text(encoding="utf-8"))
+        public = json.loads(public_path.read_text(encoding="utf-8"))
+        transport = json.loads(transport_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"launch receipt read failed: {exc}"]
+
+    score = release.get("authorized_launch_score", {})
+    public_score = public.get("score", {})
+    root_usage = public.get("root_usage", {})
+    evidence = release.get("evidence", {})
+    if score.get("percent") != 68.64164968987583 or public_score.get("fixed_199_score_percent") != 68.64164968987583:
+        errors.append("launch receipts: frozen exact score mismatch")
+    if public_score.get("execution_successes") != 185 or public_score.get("retained_failure_zeros") != 14:
+        errors.append("sanitized terminal receipt: fixed-199 accounting mismatch")
+    if abs(public_score.get("completed_row_mean_percent", 0) * 185 / 199 - 68.64164968987583) > 1e-12:
+        errors.append("sanitized terminal receipt: completed-row mean does not decompose")
+    if round(68.64164968987583 - 64.38, 1) != 4.3:
+        errors.append("launch receipts: rounded class-reference delta changed")
+
+    expected_root = {
+        "scheduled_rows": 199,
+        "measured_rows": 198,
+        "missing_rows": 1,
+        "measured_input_tokens": 891498,
+        "measured_output_tokens": 178367,
+        "measured_total_tokens": 1069865,
+        "median_total_tokens_across_measured_rows": 4723,
+        "successful_rows": 185,
+        "successful_rows_total_tokens": 916133,
+    }
+    for key, value in expected_root.items():
+        if root_usage.get(key) != value:
+            errors.append(f"sanitized terminal receipt: root usage {key} changed")
+    if root_usage.get("complete_fixed_199_aggregate") is not False or root_usage.get("estimated") is not False:
+        errors.append("sanitized terminal receipt: missing-root boundary changed")
+    if abs(root_usage.get("mean_total_tokens_across_measured_rows", 0) - 1069865 / 198) > 1e-12:
+        errors.append("sanitized terminal receipt: measured root-token mean mismatch")
+    if abs(root_usage.get("mean_total_tokens_across_successful_rows", 0) - 916133 / 185) > 1e-12:
+        errors.append("sanitized terminal receipt: successful-row root-token mean mismatch")
+
+    execution = transport.get("execution", {})
+    transport_score = transport.get("score", {})
+    if transport.get("terminal_status") != "FAIL" or execution.get("successful_provider_turns") != 0:
+        errors.append("transport receipt: terminal pre-inference failure boundary changed")
+    for key, value in (("agent_class_calls", 0), ("control_failures", 10), ("treatment_failures", 10), ("terminal_rows", 20)):
+        if execution.get(key) != value:
+            errors.append(f"transport receipt: {key} changed")
+    if transport_score.get("control_official_points") != 0.0 or transport_score.get("treatment_official_points") != 0.0 or transport_score.get("delta_points") != 0.0:
+        errors.append("transport receipt: fail-closed +0.00 accounting changed")
+    if transport.get("forced_live_proof", {}).get("passed") is not False:
+        errors.append("transport receipt: forced live proof boundary changed")
+
+    expected_hashes = {
+        "sanitized_terminal_receipt_sha256": _sha256(public_path),
+        "transport_terminal_receipt_sha256": _sha256(transport_path),
+        "transport_postmortem_sha256": _sha256(postmortem_path),
+    }
+    for key, value in expected_hashes.items():
+        if evidence.get(key) != value:
+            errors.append(f"day7 receipt: stale {key}")
+    if score.get("terminal_receipt_path") is not None or score.get("terminal_receipt_retained_private") is not True:
+        errors.append("day7 receipt: missing private-terminal path boundary")
+    if score.get("terminal_receipt_sha256") != "27bbb4da02bf75ff5c3c6b73697bf8518e33566a55f3b9fc8d7012ee5b648e74":
+        errors.append("day7 receipt: retained private terminal identity changed")
+    saga = release.get("saga", {})
+    if saga.get("sha256") != _sha256(saga_path) or saga.get("git_blob") != _git_blob(saga_path):
+        errors.append("day7 receipt: stale launch saga identity")
+    if saga.get("authorized_score_occurrences") != 1 or release.get("release_asset_requests_performed") is not False:
+        errors.append("day7 receipt: publication or score-occurrence boundary changed")
+
+    for path in (release_path, public_path, transport_path, postmortem_path):
+        text = path.read_text(encoding="utf-8")
+        for private_prefix in ("/Users/", "/private/tmp/", "C:\\Users\\"):
+            if private_prefix in text:
+                errors.append(f"{path.relative_to(ROOT)}: private host path leaked: {private_prefix}")
+    return errors
+
 def main() -> int:
-    errors = check_relative_links() + check_claim_contract()
+    errors = check_relative_links() + check_claim_contract() + check_launch_receipts()
     plot_check = subprocess.run(
         [sys.executable, str(ROOT / "tools" / "render_token_crossover.py"), "--check"],
         cwd=ROOT,
