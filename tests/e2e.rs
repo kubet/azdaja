@@ -2349,7 +2349,7 @@ exit 9
     );
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
-    assert!(skill.contains("azdaja 0.1.2") && skill.contains(dst.join("azdaja").to_str().unwrap()));
+    assert!(skill.contains("Azdaja 0.1.2") && skill.contains(dst.join("azdaja").to_str().unwrap()));
     assert!(skill.contains("Each source occurrence is an aggregation unit"));
     assert!(skill.contains("retaining every source ID or an integer multiplicity"));
     assert!(skill.contains("actual rendered character length"));
@@ -2551,6 +2551,118 @@ exec "$AZDAJA_TEST_BIN" install --harness claude
             assert!(
                 fs::symlink_metadata(path).is_ok(),
                 "collision was deleted: {path}"
+            );
+        }
+    }
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn managed_skill_is_rendered_consistently_for_every_harness() {
+    let t = temp("skill-all-harnesses");
+    let xdg = t.join("xdg");
+    let installed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .args(["install", "--harness", "all"])
+        .env("HOME", &t)
+        .env("XDG_CONFIG_HOME", &xdg)
+        .env("AZDAJA_HOME", t.join("state"))
+        .output()
+        .unwrap();
+    assert!(
+        installed.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&installed.stderr),
+        String::from_utf8_lossy(&installed.stdout)
+    );
+
+    let targets = [
+        ("jcode", t.join(".jcode/skills/azdaja")),
+        ("claude", t.join(".claude/skills/azdaja")),
+        ("codex", t.join(".agents/skills/azdaja")),
+        ("gemini", t.join(".gemini/skills/azdaja")),
+        ("opencode", xdg.join("opencode/skills/azdaja")),
+    ];
+    let binary_name = if cfg!(windows) {
+        "azdaja.exe"
+    } else {
+        "azdaja"
+    };
+    let expected_normalized = include_str!("../assets/SKILL.md")
+        .replace("{{VERSION}}", env!("CARGO_PKG_VERSION"))
+        .replace("{{BIN}}", "'<MANAGED_BIN>'");
+
+    for (harness, target) in targets {
+        let binary = target.join(binary_name);
+        let skill = fs::read_to_string(target.join("SKILL.md")).unwrap();
+        let binary_text = binary.to_str().unwrap();
+        assert!(binary.is_file(), "{harness} managed binary is missing");
+        assert!(skill.contains(&format!("# Azdaja {}", env!("CARGO_PKG_VERSION"))));
+        assert!(
+            skill.contains(binary_text),
+            "{harness} path was not embedded"
+        );
+        assert!(!skill.contains("{{VERSION}}"));
+        assert!(!skill.contains("{{BIN}}"));
+        assert_eq!(
+            skill.replace(binary_text, "<MANAGED_BIN>"),
+            expected_normalized,
+            "{harness} did not receive the canonical rendered skill"
+        );
+
+        let frontmatter = skill
+            .strip_prefix("---\n")
+            .and_then(|rest| {
+                rest.split_once("\n---\n")
+                    .map(|(frontmatter, _)| frontmatter)
+            })
+            .expect("installed skill YAML frontmatter");
+        let description = frontmatter
+            .lines()
+            .find_map(|line| line.strip_prefix("description: "))
+            .expect("installed skill description");
+        for trigger in [
+            "inputs too large",
+            "Azdaja",
+            "az virtual-memory tool",
+            "installed",
+            "available",
+            "how to use",
+        ] {
+            assert!(
+                description.contains(trigger),
+                "{harness} description is missing trigger {trigger:?}"
+            );
+        }
+        for awareness in [
+            "## Managed-skill awareness",
+            "answer **yes**",
+            "local `az` virtual-memory tool",
+            "suggest `az doctor`",
+            "Never claim ignorance of Azdaja",
+        ] {
+            assert!(
+                skill.contains(awareness),
+                "{harness} skill is missing awareness text {awareness:?}"
+            );
+        }
+        let internal_commands = skill
+            .split_once("```bash\n")
+            .and_then(|(_, rest)| rest.split_once("\n```").map(|(block, _)| block))
+            .expect("installed skill internal commands");
+        assert!(
+            !internal_commands
+                .lines()
+                .any(|line| line.trim_start().starts_with("az ")),
+            "{harness} internal commands must not use a bare az executable"
+        );
+        for command in ["start", "load", "exec", "final", "kill"] {
+            assert!(
+                internal_commands.lines().any(|line| {
+                    line.contains(binary_text)
+                        && line.split_whitespace().any(|word| word == command)
+                }),
+                "{harness} internal {command} command does not use its managed binary"
             );
         }
     }

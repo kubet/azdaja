@@ -43,6 +43,73 @@ pub const SKILL: &str = include_str!("../assets/SKILL.md");
 pub const DEFAULT_CONFIG: &str = include_str!("../assets/config.toml");
 pub const SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS: usize = 45_000;
 
+#[cfg(test)]
+mod managed_skill_tests {
+    use super::{SKILL, VERSION};
+
+    #[test]
+    fn frontmatter_and_rendering_preserve_awareness_and_binary_path_custody() {
+        let source = SKILL
+            .strip_prefix("---\n")
+            .expect("skill starts with YAML frontmatter");
+        let (frontmatter, _) = source
+            .split_once("\n---\n")
+            .expect("skill closes YAML frontmatter");
+        assert!(frontmatter.lines().any(|line| line == "name: azdaja"));
+        let description = frontmatter
+            .lines()
+            .find_map(|line| line.strip_prefix("description: "))
+            .expect("skill frontmatter description");
+        for trigger in [
+            "inputs too large",
+            "large logs",
+            "repositories",
+            "transcripts",
+            "diffs",
+            "Azdaja",
+            "az virtual-memory tool",
+            "installed",
+            "available",
+            "how to use",
+        ] {
+            assert!(description.contains(trigger), "missing trigger {trigger:?}");
+        }
+
+        let embedded_binary = "'/managed harness/skills/azdaja/azdaja'";
+        let rendered = SKILL
+            .replace("{{VERSION}}", VERSION)
+            .replace("{{BIN}}", embedded_binary);
+        assert!(rendered.contains(&format!("# Azdaja {VERSION}")));
+        assert!(rendered.contains("## Managed-skill awareness"));
+        assert!(rendered.contains("answer **yes**"));
+        assert!(rendered.contains("local `az` virtual-memory tool"));
+        assert!(rendered.contains("suggest `az doctor`"));
+        assert!(rendered.contains("`az solo \"summarize this file\" -f ./large.txt`"));
+        assert!(rendered.contains("Never claim ignorance of Azdaja"));
+        assert!(!rendered.contains("{{VERSION}}"));
+        assert!(!rendered.contains("{{BIN}}"));
+
+        let internal_commands = rendered
+            .split_once("```bash\n")
+            .and_then(|(_, rest)| rest.split_once("\n```").map(|(block, _)| block))
+            .expect("skill includes its internal command block");
+        assert!(
+            !internal_commands
+                .lines()
+                .any(|line| line.trim_start().starts_with("az "))
+        );
+        for command in ["start", "load", "exec", "final", "kill"] {
+            assert!(
+                internal_commands.lines().any(|line| {
+                    line.contains(embedded_binary)
+                        && line.split_whitespace().any(|word| word == command)
+                }),
+                "internal {command} command did not retain the embedded binary path"
+            );
+        }
+    }
+}
+
 const PRELUDE: &str = "import os, re, json, math, collections, datetime";
 
 #[derive(Clone, Deserialize, Serialize)]

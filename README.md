@@ -55,7 +55,7 @@ One command on Apple Silicon macOS or Linux x86-64. It detects installed harness
 curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh
 ```
 
-Detected harness setup runs automatically. When the installer reports the alias, use `az install --harness all` (or a named harness) and `az doctor`; when it reports `short alias skipped`, use `azdaja install --harness all` and `azdaja doctor`. If installed, `az` and `azdaja` run the same executable. A bare invocation prints an indexed 16-row truecolor half-block banner above the five-line help only on an interactive color terminal; non-TTY output, `NO_COLOR`, and `TERM=dumb` emit only the same exact five-line text through either name.
+Detected harness setup runs automatically and installs the managed Azdaja skill for large-input tasks and explicit questions about Azdaja/`az` availability or use. When the installer reports the short alias, use `az install --harness all` (or a named harness) and `az doctor`; when it reports `short alias skipped`, use `azdaja install --harness all` and `azdaja doctor`. Reload the selected harness's skills or start a fresh harness session after installation. If installed, `az` and `azdaja` run the same executable. A bare invocation prints an indexed 16-row truecolor half-block banner above the five-line help only on an interactive color terminal; non-TTY output, `NO_COLOR`, and `TERM=dumb` emit only the same exact five-line text through either name.
 
 Manual alternative with Rust 1.95:
 

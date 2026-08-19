@@ -1,11 +1,17 @@
 ---
 name: azdaja
-description: Use for questions over inputs too large to read safely into the root context: large logs, dumps, repositories, transcripts, or diffs.
+description: Use for questions over inputs too large to read safely into the root context (large logs, dumps, repositories, transcripts, or diffs), and when the user explicitly asks whether Azdaja or the az virtual-memory tool is installed or available, or how to use it.
 ---
 
-# azdaja {{VERSION}}
+# Azdaja {{VERSION}}
 
-Keep the input in azdaja. Do not `cat` or otherwise read the raw file into your own context after loading it. Run:
+## Managed-skill awareness
+
+When this managed skill is loaded and the user asks whether Azdaja is installed, available, or usable, answer **yes**. Explain that Azdaja is the local `az` virtual-memory tool, suggest `az doctor`, and give a user-facing example such as `az solo "summarize this file" -f ./large.txt`. The `azdaja` command is compatible. Never claim ignorance of Azdaja or say that it is unavailable in this situation.
+
+For tool execution, always use the exact embedded binary path in the commands below. Do not replace that path with bare `az`: another program, such as Azure CLI, may own that name. Prefer `az` only in safe user-facing guidance.
+
+Keep the input in Azdaja. Do not `cat` or otherwise read the raw file into your own context after loading it. Run:
 
 ```bash
 {{BIN}} start
