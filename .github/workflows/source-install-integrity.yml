@@ -1,0 +1,151 @@
+name: Current source and install integrity
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: current-source-install-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-install:
+    name: current source/install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.95.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install checked-out source and exercise the local HTTP installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch="$(mktemp -d)"
+          server_pid=
+          cleanup() {
+            if [ -n "${server_pid:-}" ]; then
+              kill "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+            fi
+            rm -rf "$scratch"
+          }
+          trap cleanup EXIT
+
+          source_root="$scratch/source-root"
+          source_home="$scratch/source-home"
+          install_home="$scratch/install-home"
+          install_bin="$install_home/bin"
+          guard="$scratch/provider-guard"
+          marker="$scratch/provider-called"
+          fixture="$scratch/release"
+          mkdir -p "$source_home" "$install_home" "$guard" "$fixture"
+          for tool in jcode claude codex gemini opencode; do
+            cat > "$guard/$tool" <<EOF
+          #!/bin/sh
+          printf called > "$marker"
+          exit 93
+          EOF
+            chmod 755 "$guard/$tool"
+          done
+
+          CARGO_TARGET_DIR="$scratch/cargo-target" \
+            cargo install --path . --locked --root "$source_root"
+          source_binary="$source_root/bin/azdaja"
+          test -x "$source_binary"
+          test "$("$source_binary" --version)" = "azdaja 0.1.2 (monty 0.0.21)"
+          HOME="$source_home" PATH="$guard:$PATH" \
+            "$source_binary" doctor --caps > "$scratch/source-caps.json"
+          python3 - "$scratch/source-caps.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          caps = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          assert caps["azdaja"] == "0.1.2", caps
+          assert caps["monty"] == "0.0.21", caps
+          assert caps["dump_version"] == 5, caps
+          assert "persistent-repl" in caps["capabilities"], caps
+          assert "monty-os-calls-denied" in caps["capabilities"], caps
+          PY
+          test ! -e "$marker"
+          test -z "$(find "$source_home" -mindepth 1 -print -quit)"
+
+          case "$(uname -s)-$(uname -m)" in
+            Darwin-arm64) asset=azdaja-v0.1.2-darwin-arm64 ;;
+            Linux-x86_64) asset=azdaja-v0.1.2-linux-x86_64 ;;
+            *) printf 'unsupported CI host: %s-%s\n' "$(uname -s)" "$(uname -m)" >&2; exit 1 ;;
+          esac
+          cp "$source_binary" "$fixture/$asset"
+          digest="$(python3 - "$source_binary" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+          print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())
+          PY
+          )"
+          printf '%s  %s\n' "$digest" "$asset" > "$fixture/SHA256SUMS"
+
+          cat > "$scratch/serve.py" <<'PY'
+          import functools
+          import http.server
+          import pathlib
+          import sys
+
+          root, port_file = sys.argv[1:]
+          handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=root)
+          server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+          pathlib.Path(port_file).write_text(str(server.server_port))
+          server.serve_forever()
+          PY
+          port_file="$scratch/port"
+          python3 "$scratch/serve.py" "$fixture" "$port_file" > "$scratch/server.log" 2>&1 &
+          server_pid=$!
+          for _ in {1..100}; do
+            [ -s "$port_file" ] && break
+            kill -0 "$server_pid" 2>/dev/null || { cat "$scratch/server.log" >&2; exit 1; }
+            sleep 0.1
+          done
+          test -s "$port_file"
+          base="http://127.0.0.1:$(cat "$port_file")"
+
+          # This is the only download surface: a loopback fixture made from the
+          # checked-out source install. No release asset is requested.
+          HOME="$install_home" PATH="$guard:$PATH" \
+            AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_BASE_URL="$base" \
+            sh site/install --harness claude --bin-dir "$install_bin"
+          installed="$install_bin/azdaja"
+          alias="$install_bin/az"
+          cmp "$source_binary" "$installed"
+          test "$(readlink "$alias")" = azdaja
+
+          cat > "$scratch/expected-help" <<'EOF'
+          AZDAJA v0.1.2 — virtual memory for language models
+          Usage: az <command> [options]  (azdaja also works)
+          Commands: start load exec final list kill solo install doctor uninstall
+          Setup: az install --harness <jcode|claude|codex|gemini|opencode|all>
+          Example: az solo "summarize this file" -f ./document.txt
+          EOF
+          HOME="$install_home" PATH="$guard:$PATH" "$installed" > "$scratch/help-canonical"
+          HOME="$install_home" PATH="$guard:$PATH" "$alias" > "$scratch/help-alias"
+          HOME="$install_home" PATH="$guard:$PATH" NO_COLOR=1 TERM=xterm-256color \
+            "$installed" > "$scratch/help-no-color-canonical"
+          HOME="$install_home" PATH="$guard:$PATH" NO_COLOR=1 TERM=xterm-256color \
+            "$alias" > "$scratch/help-no-color-alias"
+          for output in "$scratch"/help-*; do
+            cmp "$scratch/expected-help" "$output"
+          done
+          HOME="$install_home" PATH="$guard:$PATH" \
+            "$installed" doctor --caps > "$scratch/installed-caps.json"
+          cmp "$scratch/source-caps.json" "$scratch/installed-caps.json"
+          test ! -e "$marker"

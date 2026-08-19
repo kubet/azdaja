@@ -1,6 +1,48 @@
 # Azdaja Scoreboard
 
-## Defining campaign result
+## Current canonical fixed-199 diagnostic
+
+| Status | Protocol | Fixed-denominator score | Execution / valid predictions | Retained failure zeros |
+|---|---|---:|---:|---:|
+| Permanent, terminal, scored exactly once, closed | RAH-protocol Oolong, fixed 199 rows | **68.64164968987583%** | 185/199 | 14 |
+
+The completed-row mean is 73.83615290965021%; multiplying it by the fixed execution fraction (185/199) yields the fixed-denominator result above. All 199 scheduled rows reached terminal accounting, every failure remains a zero, and the score is frozen. The [sanitized terminal receipt](bench/results/gpt-rah199-mortality-v3-terminal-public.json) binds the retained hashes, exclusive gold-access sentinel, one successful scorer invocation, and `TERMINAL_COMPLETED_SCORED_ONCE_CLOSED` status.
+
+This is a private, single-arm, validation-derived diagnostic, not official full OOLONG, a leaderboard result, a paired comparison, or evidence of superiority or general capability. Root usage is provider-reported for 198 of 199 rows; the missing row is not imputed, so the measured ~5.4K mean is not a complete fixed-199 aggregate.
+
+For class context, the RAH paper ([arXiv:2606.13643](https://arxiv.org/abs/2606.13643)) reports Oolong-Synthetic results for its 199-sample, 13-bucket protocol with a GPT-5 backbone. This is the same bounded numeric ladder shown in the README:
+
+| Source | Label | System class | Oolong score |
+|---|---|---|---:|
+| Paper | RLM | Model recursion without agent tools | **64.38%** |
+| This repository | Azdaja — single-arm diagnostic; not paper/leaderboard | Bare RLM layer | **68.64%** |
+| Paper | Codex, No Retriever | Coding agent | **71.75%** |
+| Paper | RAH, GPT-5 | Recursive Agent Harness | **81.36%** |
+
+The exact Azdaja diagnostic is 4.26164968987583 percentage points above the displayed 64.38% paper RLM reference (4.3 points rounded). That arithmetic does not rerun the controls, isolate a cause, or establish equivalence. The next displayed class is Codex at 71.75%, which Azdaja has not reached.
+
+## Current install and release boundary
+
+| Surface | Latest retained result | Boundary / receipt |
+|---|---|---|
+| Current-source installer and `az` alias | 16/16 provider-free local-fixture cells green: 14 positive installs/updates and 2 expected no-harness refusals | The [alias-delta receipt](bench/results/install-alias-delta-v0.1.2-public.json) exercises both platform-selection branches over loopback HTTP. It is not a native cross-platform binary or provider validation. |
+| v0.1.2 candidate readiness | `REBUILD_AND_CROSS_PLATFORM_RETEST_REQUIRED` | The [supersession receipt](bench/results/v0.1.2-candidate-readiness-superseded-public.json) makes the retained pre-change binaries and earlier install/adapter matrices historical only. New native assets, checksums, and a fresh release matrix are required before release readiness. |
+
+Installation itself makes no provider call. `doctor --caps` is local; only an explicit passing `doctor` exercises and validates the configured route. The historical v0.1.2 [install matrix](bench/results/install-matrix-v0.1.2-final-public.json) and [real-adapter receipt](bench/results/install-real-adapters-v0.1.2-final-public.json) remain evidence for their bound old bytes, not the current source.
+
+## Current ARC-AGI-3 local-shadow boundary
+
+The five-game v9 diagnostic retained a 0.0 Ember-minus-baseline **local shadow RHAE** difference for each game and unchanged-feedback counts of 646 for baseline and 654 for Ember (+8, or +1.24% relative to the baseline raw count). It retained no absolute arm scores, completed levels, total actions, per-level actions, or separate waste diagnostics, so it cannot distinguish equal zero from equal nonzero scores and does not support an efficiency or improvement claim.
+
+A retrieval-only follow-up made no game or provider request and recovered none of the missing absolutes. A separate fresh `vc33` smoke recorded 0.0 local shadow RHAE, zero completed levels, 35 actions, three zero diagnostic counters, 36 journal records, and `ACTION_BUDGET` for each arm; it does not reconstruct v9. The prepared full-five source remains **HOLD / not run** and requires its separate fail-closed authorization gates.
+
+Evidence: [ARC benchmark card](bench/arc3/README.md#benchmark-card), [sanitized v9 result](bench/results/arc3-ember-five-public-v9-result.json), [retrieval receipt](bench/results/arc3-scorecard-interrogation-public-v1.json), and [fresh `vc33` smoke receipt](bench/results/arc3-vc33-smoke-v2-public.json). These are local shadow diagnostics, not official ARC scores, leaderboard results, or evidence of general product performance. No new ARC, model, provider, scorecard, or repository request supports this section.
+
+## Historical immutable RAH-199 result (superseded as the top-line result)
+
+The following earlier campaign measurements, hashes, and then-current successor dispositions are preserved as immutable evidence. They are historical and do not replace or modify the current canonical fixed-199 result above.
+
+### Defining campaign result
 
 | Date | Protocol | Candidate | Root | Execution | Fixed-denominator score | 95% CI |
 |---|---|---|---|---:|---:|---:|
@@ -14,7 +56,7 @@ Protocol citation: released OOLONG scoring/parser semantics at [`abertsch72/oolo
 
 This is a preregistered validation-derived RAH slice, not official full OOLONG or a leaderboard result. The `99f8ee7` run is immutable and will not be retried, resumed, replaced, or rescored. The broader candidate campaign may continue only with separately frozen artifacts and schedules.
 
-## Successor dispositions (not scores)
+### Successor dispositions (not scores)
 
 | Workstream | Disposition | Evidence boundary |
 |---|---|---|

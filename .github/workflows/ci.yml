@@ -18,6 +18,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-14]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
@@ -25,6 +26,38 @@ jobs:
           toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Verify exact Cargo package allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          listing="$(mktemp)"
+          trap 'rm -f "$listing"' EXIT
+          cargo package --list --allow-dirty --locked > "$listing"
+          python3 - "$listing" <<'PY'
+          import pathlib
+          import sys
+
+          actual = pathlib.Path(sys.argv[1]).read_text().splitlines()
+          expected = [
+              ".cargo_vcs_info.json",
+              "Cargo.lock",
+              "Cargo.toml",
+              "Cargo.toml.orig",
+              "LICENSE",
+              "README.md",
+              "assets/SKILL.md",
+              "assets/config.toml",
+              "src/banner.rs",
+              "src/lib.rs",
+              "src/main.rs",
+          ]
+          assert actual == expected, {"actual": actual, "expected": expected}
+          forbidden = (
+              "bench/", "evidence/", "docs/evidence/",
+              "history/", "docs/history/", "release/",
+          )
+          assert not any(path.startswith(forbidden) for path in actual), actual
+          PY
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
       - run: cargo test --all --locked -- --test-threads=1
@@ -36,7 +69,7 @@ jobs:
 
       # Manual runs validate and retain exact candidate bytes for later platform validation.
       # These artifacts are not releases and may not be bound into site/install.
-      - name: Validate release candidate install and 50 MiB path
+      - name: Validate release candidate install, plain help, and 50 MiB path
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
@@ -49,17 +82,101 @@ jobs:
           print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())
           PY
           )"
-          home="$(mktemp -d)"
-          trap 'rm -rf "$home"' EXIT
-          HOME="$home"             AZDAJA_INSTALL_TEST_MODE=local             AZDAJA_INSTALL_URL="file://$candidate"             AZDAJA_INSTALL_SHA256="$digest"             sh site/install --harness claude
+          scratch="$(mktemp -d)"
+          server_pid=
+          cleanup() {
+            if [ -n "${server_pid:-}" ]; then
+              kill "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+            fi
+            rm -rf "$scratch"
+          }
+          trap cleanup EXIT
+
+          fixture="$scratch/release"
+          home="$scratch/home"
+          bin="$home/bin"
+          guard="$scratch/provider-guard"
+          marker="$scratch/provider-called"
+          mkdir -p "$fixture" "$home" "$guard"
+          case "$(uname -s)-$(uname -m)" in
+            Darwin-arm64) asset=azdaja-v0.1.2-darwin-arm64 ;;
+            Linux-x86_64) asset=azdaja-v0.1.2-linux-x86_64 ;;
+            *) printf 'unsupported CI host: %s-%s\n' "$(uname -s)" "$(uname -m)" >&2; exit 1 ;;
+          esac
+          cp "$candidate" "$fixture/$asset"
+          printf '%s  %s\n' "$digest" "$asset" > "$fixture/SHA256SUMS"
+          for tool in jcode claude codex gemini opencode; do
+            cat > "$guard/$tool" <<EOF
+          #!/bin/sh
+          printf called > "$marker"
+          exit 93
+          EOF
+            chmod 755 "$guard/$tool"
+          done
+
+          cat > "$scratch/serve.py" <<'PY'
+          import functools
+          import http.server
+          import pathlib
+          import sys
+
+          root, port_file = sys.argv[1:]
+          handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=root)
+          server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+          pathlib.Path(port_file).write_text(str(server.server_port))
+          server.serve_forever()
+          PY
+          port_file="$scratch/port"
+          python3 "$scratch/serve.py" "$fixture" "$port_file" > "$scratch/server.log" 2>&1 &
+          server_pid=$!
+          for _ in {1..100}; do
+            [ -s "$port_file" ] && break
+            kill -0 "$server_pid" 2>/dev/null || { cat "$scratch/server.log" >&2; exit 1; }
+            sleep 0.1
+          done
+          test -s "$port_file"
+          base="http://127.0.0.1:$(cat "$port_file")"
+
+          HOME="$home" PATH="$guard:$PATH" \
+            AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_BASE_URL="$base" \
+            sh site/install --harness claude --bin-dir "$bin"
           installed="$home/.claude/skills/azdaja/azdaja"
           cmp "$candidate" "$installed"
-          AZDAJA_PRODUCT_BINARY="$installed"             cargo test --test product_50mb --locked -- --test-threads=1
-          printf '\n# candidate-receipt-custom\n' >>             "$home/.claude/skills/azdaja/config.toml"
-          HOME="$home"             AZDAJA_INSTALL_TEST_MODE=local             AZDAJA_INSTALL_URL="file://$candidate"             AZDAJA_INSTALL_SHA256="$digest"             sh site/install --harness claude
-          grep -F '# candidate-receipt-custom'             "$home/.claude/skills/azdaja/config.toml"
-          HOME="$home" "$installed" uninstall --harness claude
+          test "$(readlink "$bin/az")" = azdaja
+
+          cat > "$scratch/expected-help" <<'EOF'
+          AZDAJA v0.1.2 — virtual memory for language models
+          Usage: az <command> [options]  (azdaja also works)
+          Commands: start load exec final list kill solo install doctor uninstall
+          Setup: az install --harness <jcode|claude|codex|gemini|opencode|all>
+          Example: az solo "summarize this file" -f ./document.txt
+          EOF
+          HOME="$home" PATH="$guard:$PATH" "$bin/azdaja" > "$scratch/help-canonical"
+          HOME="$home" PATH="$guard:$PATH" "$bin/az" > "$scratch/help-alias"
+          HOME="$home" PATH="$guard:$PATH" NO_COLOR=1 TERM=xterm-256color \
+            "$bin/azdaja" > "$scratch/help-no-color-canonical"
+          HOME="$home" PATH="$guard:$PATH" NO_COLOR=1 TERM=xterm-256color \
+            "$bin/az" > "$scratch/help-no-color-alias"
+          for output in "$scratch"/help-*; do
+            cmp "$scratch/expected-help" "$output"
+          done
+          test ! -e "$marker"
+
+          PATH="$guard:$PATH" AZDAJA_PRODUCT_BINARY="$installed" \
+            cargo test --test product_50mb --locked -- --test-threads=1
+          test ! -e "$marker"
+          printf '\n# candidate-receipt-custom\n' >> \
+            "$home/.claude/skills/azdaja/config.toml"
+          HOME="$home" PATH="$guard:$PATH" \
+            AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_BASE_URL="$base" \
+            sh site/install --harness claude --bin-dir "$bin"
+          grep -F '# candidate-receipt-custom' \
+            "$home/.claude/skills/azdaja/config.toml"
+          test ! -e "$marker"
+          HOME="$home" PATH="$guard:$PATH" "$installed" uninstall --harness claude
           test ! -e "$home/.claude/skills/azdaja"
+
       - name: Package unvalidated candidate
         if: github.event_name == 'workflow_dispatch'
         shell: bash
@@ -108,7 +225,10 @@ jobs:
                   "locked-tests",
                   "locked-release-build",
                   "doctor-caps",
-                  "hash-bound-local-site-install",
+                  "hash-bound-loopback-http-site-install",
+                  "alias-and-canonical-exact-five-line-plain-help",
+                  "NO_COLOR-exact-five-line-plain-help",
+                  "provider-command-guard-untouched",
                   "installed-release-binary-three-file-50MiB",
                   "custom-config-preserved-on-reinstall",
                   "managed-uninstall-cleanup",
