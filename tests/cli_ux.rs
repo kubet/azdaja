@@ -71,7 +71,7 @@ fn utf8(output: &Output) -> (&str, &str) {
 }
 
 #[test]
-fn bare_command_is_exactly_five_useful_lines() {
+fn non_tty_bare_command_is_exactly_five_line_help_without_sprite() {
     let output = Command::new(binary()).output().unwrap();
     assert!(output.status.success());
     let (stdout, stderr) = utf8(&output);
@@ -79,11 +79,14 @@ fn bare_command_is_exactly_five_useful_lines() {
     assert_eq!(
         stdout,
         format!(
-            "          __====-_  _-====__\n    _--^^^#####//      \\\\#####^^^--_\n  _-^##########// (    ) \\\\##########^-_  AZDAJA v{}\nUsage: azdaja <start|load|exec|final|list|kill|solo|install|doctor|uninstall> [options]\nExample: azdaja solo \"summarize this file\" -f ./document.txt\n",
+            "AZDAJA v{} — virtual memory for language models\nUsage: az <command> [options]  (azdaja also works)\nCommands: start load exec final list kill solo install doctor uninstall\nSetup: az install --harness <jcode|claude|codex|gemini|opencode|all>\nExample: az solo \"summarize this file\" -f ./document.txt\n",
             env!("CARGO_PKG_VERSION")
         )
     );
     assert_eq!(stdout.lines().count(), 5);
+    assert!(!stdout.contains('\u{1b}'));
+    assert!(!stdout.contains('▀'));
+    assert!(!stdout.contains('▄'));
 }
 
 #[test]

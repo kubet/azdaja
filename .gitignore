@@ -7,3 +7,18 @@
 __pycache__/
 *.pyc
 /.private-upstream/
+
+# Local credentials and raw run byproducts (tracked historical evidence is unaffected).
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.log
+*.time
+*.timing
+*.trace
+*.raw
+**/raw/
+**/runs/
+**/outputs/

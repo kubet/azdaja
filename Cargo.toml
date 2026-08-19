@@ -6,7 +6,16 @@ license = "MIT"
 description = "Minimal harness-agnostic recursive language model layer"
 repository = "https://github.com/kubet/azdaja"
 rust-version = "1.95"
-exclude = ["/bench/results/*.jsonl", "/bench/results/*.trace", "/bench/fixtures/semantic-incidents.txt"]
+publish = false
+include = [
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/LICENSE",
+    "/README.md",
+    "/src/**",
+    "/assets/SKILL.md",
+    "/assets/config.toml",
+]
 
 [dependencies]
 anyhow = "1.0"

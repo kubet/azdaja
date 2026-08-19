@@ -13,15 +13,16 @@
 | Mean root tokens per item | ~5.4K | 5,403.36 provider-authoritative mean across 198 measured rows; one row is not imputed |
 | Captured root-prompt source-span leaks in the scripted 50 MiB gate | 0 | Three synthetic cases in `tests/product_50mb.rs`; not an information-flow guarantee |
 
-For class context, the RAH paper ([arXiv:2606.13643](https://arxiv.org/abs/2606.13643)) reports Oolong-Synthetic results for its 199-sample, 13-bucket protocol with a GPT-5 backbone:
+For class context, the RAH paper ([arXiv:2606.13643](https://arxiv.org/abs/2606.13643)) reports Oolong-Synthetic results for its 199-sample, 13-bucket protocol with a GPT-5 backbone. This single ordered table places those paper numbers and this repository's diagnostic on one numeric ladder:
 
-| Paper label | System class | Paper-reported Oolong Score |
-|---|---|---:|
-| RLM | Model recursion without agent tools | **64.38%** |
-| Codex, No Retriever | Coding agent | **71.75%** |
-| RAH, GPT-5 | Recursive Agent Harness | **81.36%** |
+| Source | Label | System class | Oolong score |
+|---|---|---|---:|
+| Paper | RLM | Model recursion without agent tools | **64.38%** |
+| This repository | Azdaja — single-arm diagnostic; not paper/leaderboard | Bare RLM layer | **68.64%** |
+| Paper | Codex, No Retriever | Coding agent | **71.75%** |
+| Paper | RAH, GPT-5 | Recursive Agent Harness | **81.36%** |
 
-Azdaja's fixed-199 diagnostic is 4.26164968987583 percentage points above the 64.38% RLM reference (**+4.3 points**, rounded), making it the highest bare-RLM number shown in this non-exhaustive ladder. It is a single Azdaja arm, not an official leaderboard result, a rerun of the paper controls, or evidence of superiority, equivalence, best-published status, or general capability. The visible next class step is Codex at 71.75%, not a result Azdaja has reached.
+Azdaja's fixed-199 diagnostic is 4.26164968987583 percentage points above the 64.38% RLM reference (**+4.3 points**, rounded), making it the highest bare-RLM number shown in this non-exhaustive ladder. That arithmetic is not a rerun of the paper controls or evidence of superiority, equivalence, best-published status, or general capability. Azdaja remains a single-arm diagnostic, not an official leaderboard result; the visible next class step is Codex at 71.75%, not a result Azdaja has reached.
 
 ## What it is
 
@@ -48,11 +49,13 @@ The [crossover figure](docs/token-context-crossover.svg) is illustrative: it ass
 
 ## Install
 
-One command on Apple Silicon macOS or Linux x86-64. It detects installed harnesses without reading their configuration contents, downloads the v0.1.2 binary and `SHA256SUMS`, verifies the selected asset, atomically writes the binary, and reports any PATH action needed:
+One command on Apple Silicon macOS or Linux x86-64. It detects installed harnesses without reading their configuration contents, verifies the v0.1.2 asset against `SHA256SUMS`, atomically writes the `azdaja` binary, and safely adds the short `az` PATH alias without replacing a foreign path:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh
 ```
+
+Detected harness setup runs automatically. To reconfigure explicitly, use `az install --harness all` (or a named harness), then verify the selected route with `az doctor`. `az` and `azdaja` run the same executable. A bare invocation prints an indexed 16-row truecolor half-block banner above the five-line help only on an interactive color terminal; non-TTY output, `NO_COLOR`, and `TERM=dumb` emit only the same exact five-line text through either name.
 
 Manual alternative with Rust 1.95:
 
@@ -62,46 +65,41 @@ azdaja install --harness all
 azdaja doctor
 ```
 
-Uninstall the managed harness copies; if the one-command installer wrote a standalone binary, also remove the exact binary and adjacent `config.toml` path it reported:
+The Cargo path keeps `azdaja` available and does not create `az`; the short alias is installed by the one-line installer. Uninstall the managed harness copies; if the one-command installer wrote PATH entries, also remove the exact `azdaja`, `az`, and adjacent `config.toml` paths it reported:
 
 ```bash
 azdaja uninstall
 ```
 
-Supported harness targets are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation makes no provider call. A passing `doctor` proves only that the configured harness route answered its fixed canary. The [pre-release install matrix](bench/results/install-matrix-v0.1.2-final-public.json) passed all 16 Darwin arm64 and Ubuntu x86-64 cells, including 14 genuine-provider 50 MiB solos and two expected graceful no-harness refusals. A separate [real-adapter receipt](bench/results/install-real-adapters-v0.1.2-final-public.json) records genuine installed OpenCode and Claude adapter E2Es on Darwin arm64: each exact three-line install and three-check doctor passed, then one synthetic 52,428,800-byte solo returned its bound answer. Codex passed all three `doctor` checks but its 50 MiB solo failed on expired local authentication; Jcode passed configuration and evaluator checks but its harness route was unavailable and printed the designed fix hint. Neither is counted as a full route pass. No claim is made for other routes.
+Supported harness targets are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation makes no provider call. A passing `doctor` proves only that the configured harness route answered its fixed canary. The provider-free [short-alias delta receipt](bench/results/install-alias-delta-v0.1.2-public.json) covers 16 local-fixture cells across both supported platform selectors, every detected harness, `all`, no-harness refusal, and already-installed update; it is not a native cross-platform or provider validation. The [readiness supersession receipt](bench/results/v0.1.2-candidate-readiness-superseded-public.json) marks the retained v0.1.2 binaries and their earlier matrix stale after the help/alias source change: new native assets and a fresh release matrix are required before release readiness. The historical [matrix](bench/results/install-matrix-v0.1.2-final-public.json) and [real-adapter receipt](bench/results/install-real-adapters-v0.1.2-final-public.json) remain evidence for their old bytes only, not the current source.
 
 ## Use
 
 ```bash
-azdaja solo "question about this input" -f ./large.txt
+az solo "question about this input" -f ./large.txt
 ```
 
-Explicit evaluator session:
+Explicit evaluator session (use `azdaja` instead when installed through Cargo):
 
 ```bash
-sid=$(azdaja start)
-azdaja load "$sid" ./large.txt ctx
-printf '%s\n' 'FINAL(len(ctx))' | azdaja exec "$sid"
-azdaja final "$sid"
-azdaja kill "$sid"
+sid=$(az start)
+az load "$sid" ./large.txt ctx
+printf '%s\n' 'FINAL(len(ctx))' | az exec "$sid"
+az final "$sid"
+az kill "$sid"
 ```
 
 Core commands: `start`, `load`, `exec`, `final`, `list`, `kill`, `solo`, `doctor`, `install`, `uninstall`.
 
-## ARC-AGI-3 appendix
+## ARC-AGI-3 diagnostic
 
-A five-game paired pilot on the same Claude Sonnet lane, with and without Azdaja, produced a 0.0 Ember-minus-baseline RHAE delta in every game. Under the predefined unchanged-official-feedback rule, wasted actions totaled 646 for baseline and 654 for Ember: **-1.24% fewer wasted actions (1.24% more)**. The receipt retains paired deltas and aggregate waste only, not absolute arm scores or the revisited-state/repeated-control split.
+A one-pair-per-game v9 diagnostic retained a 0.0 Ember-minus-baseline **local shadow RHAE** difference in each of five games. Its unchanged-feedback counts were 646 for baseline and 654 for Ember (**+8; +1.24% relative to the baseline raw count**), but v9 retained no absolute arm scores, levels, action totals, or separate waste diagnostics. The count difference is therefore not an efficiency or improvement claim.
 
-A retrieval-only follow-up found that all ten closed scorecards returned HTTP 404 from the official detail endpoint despite its pinned open-or-closed contract; the HTML results route exposed no detail. Absolute results for that five-game pilot therefore cannot be recovered, and its paired null cannot distinguish zero-level play from equal nonzero results, so the memory-efficiency hypothesis remains open.
-
-A later bounded `vc33` smoke captured absolutes locally: both baseline and Ember scored 0.0 shadow RHAE, completed zero levels, took 35 actions with per-level counts `[35, 0, 0, 0, 0, 0, 0]`, recorded zero wasted actions under the predefined split, emitted 36 journal records, and terminated at `ACTION_BUDGET`; the paired delta was 0.0. This establishes a true played zero-level null for that smoke only. The full five-game rerun remains on hold; it is the first post-launch update, never
-before the public flip, and its execution is handled by an owner-only package
-without an invented public command.
-
-See the [sanitized pilot receipt](bench/results/arc3-ember-five-public-v9-result.json), [retrieval receipt](bench/results/arc3-scorecard-interrogation-public-v1.json), [sanitized `vc33` smoke receipt](bench/results/arc3-vc33-smoke-v2-public.json), and [full evidence boundary](docs/launch-saga.md#the-five-game-second-act).
+A retrieval-only follow-up recovered no missing absolutes. A separate fresh `vc33` smoke recorded 0.0 local shadow RHAE, zero completed levels, 35 actions, three zero diagnostic counters, 36 journal records, and `ACTION_BUDGET` for each arm; it does not reconstruct v9. See the [ARC benchmark card](bench/arc3/README.md#benchmark-card) for method, per-game values, evidence links, and the not-run full-five boundary.
 
 ## Boundaries
 
+- This private evidence lineage and its Git history are not a public-safe source tree. Any public launch requires a clean allowlisted export under a new repository identity while this lineage remains private; moving files does not sanitize history.
 - The CLI reads only paths the user supplies; selected context can be sent to the configured provider.
 - Native harnesses retain the user's host permissions. Strong containment requires a separate trusted inference broker.
 - Monty 0.0.21 is experimental and snapshot-format-bound. Snapshots are unencrypted owner-only files; there is no evaluator memory ceiling.

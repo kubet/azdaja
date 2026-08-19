@@ -678,7 +678,7 @@ Benchmark iteration now has exactly two modes; neither changes candidate semanti
 
 ### SCOUT
 
-SCOUT is fast, disposable, and gold-blind. It may use any existing slice size and exists only to answer directional execution, recognition, latency, or token questions. A scout has no receipts, frozen schedule binding, protocol audit, gold access, authoritative score, promotion authority, or publication path. Its results may be recorded only in `PERF.md`/`FAILS.md`, never in README headline tables.
+SCOUT is fast, disposable, and gold-blind. It may use any existing slice size and exists only to answer directional execution, recognition, latency, or token questions. A scout has no receipts, frozen schedule binding, protocol audit, gold access, authoritative score, promotion authority, or publication path. Its results may be recorded only in `docs/evidence/PERF.md`/`FAILS.md`, never in README headline tables.
 
 A candidate may enter a future frozen LongBench run only after the existing 20-item scout slice records **20/20 execution** and **at least 17/20 (85%) gold-blind extractor recognition**. Recognition means `execution_success` plus a non-null prediction from the existing preregistered derived extractor: pinned official extraction first, then only `re.fullmatch(r"([A-D])\n", response)`. It makes no correctness claim.
 
@@ -1021,7 +1021,7 @@ The same binary then launched the frozen validation-derived RAH-199 schedule `d2
 
 ### Final cache/daemon verdict
 
-No service-lifecycle assumption salvages prefix reuse. The shipped OAuth/ChatGPT request path omits stable cache-key and retention fields. Keeping a provider continuation live reproduces prior-task content; the isolating rewind clears the provider session identifiers and resends context. A service restart therefore cannot be credited with preserved prefill reuse: implementations must either preserve a provider-backed isolated fork explicitly or return a typed expiry/unsupported result, never silently cold-resend while claiming reuse. Jcode v0.75.3 offers no such fork. Cache-prefix and WARM daemon work are a hard NO, and cold fresh sessions remain authoritative. The upstream API request and acceptance tests are in `JCODE_SESSION_FORK_API_REQUEST.md`.
+No service-lifecycle assumption salvages prefix reuse. The shipped OAuth/ChatGPT request path omits stable cache-key and retention fields. Keeping a provider continuation live reproduces prior-task content; the isolating rewind clears the provider session identifiers and resends context. A service restart therefore cannot be credited with preserved prefill reuse: implementations must either preserve a provider-backed isolated fork explicitly or return a typed expiry/unsupported result, never silently cold-resend while claiming reuse. Jcode v0.75.3 offers no such fork. Cache-prefix and WARM daemon work are a hard NO, and cold fresh sessions remain authoritative. The upstream API request and acceptance tests are in `docs/history/JCODE_SESSION_FORK_API_REQUEST.md`.
 
 ### RAH-199 terminal outcome
 

@@ -129,9 +129,9 @@ if [ -z "$BIN_DIR" ]; then
   IFS=$OLD_IFS
 fi
 BIN_DIR=${BIN_DIR:-$HOME/.local/bin}
-(umask 077 && mkdir -p "$BIN_DIR") || fail "cannot create binary directory $BIN_DIR"
-[ -d "$BIN_DIR" ] && [ -w "$BIN_DIR" ] || fail "binary directory is not writable: $BIN_DIR"
 
+# Stage and verify entirely outside HOME. Failure before verification must not
+# create the binary directory, managed harness files, configuration, or alias.
 TMP=${TMPDIR:-/tmp}/azdaja-install.$$
 STAGED=
 (umask 077 && mkdir "$TMP") || fail 'cannot create private staging directory'
@@ -187,6 +187,21 @@ case "$VERSION_OUTPUT" in
 esac
 
 DEST=$BIN_DIR/azdaja
+ALIAS=$BIN_DIR/az
+ALIAS_CREATE=true
+if [ -L "$ALIAS" ]; then
+  command -v readlink >/dev/null 2>&1 || fail 'readlink is required to validate the existing az alias'
+  ALIAS_TARGET=$(readlink "$ALIAS") || fail "cannot inspect existing az alias: $ALIAS"
+  [ "$ALIAS_TARGET" = azdaja ] || fail "refusing to overwrite foreign symlink: $ALIAS"
+  ALIAS_CREATE=false
+elif [ -e "$ALIAS" ]; then
+  fail "refusing to overwrite foreign path: $ALIAS"
+fi
+
+(umask 077 && mkdir -p "$BIN_DIR") || fail "cannot create binary directory $BIN_DIR"
+[ -d "$BIN_DIR" ] && [ -w "$BIN_DIR" ] || fail "binary directory is not writable: $BIN_DIR"
+[ ! -d "$DEST" ] || fail "refusing to replace directory: $DEST"
+
 STAGED=$BIN_DIR/.azdaja-install.$$
 [ ! -e "$STAGED" ] || fail "temporary install path already exists: $STAGED"
 (umask 077 && set -C && : > "$STAGED") 2>/dev/null || fail 'cannot create atomic install file'
@@ -204,7 +219,7 @@ harness_target() {
     opencode) printf '%s' "$CONFIG_ROOT/opencode/skills/azdaja" ;;
   esac
 }
-WRITTEN="binary -> $DEST ($ASSET)"
+WRITTEN="azdaja -> $DEST ($ASSET); az -> $ALIAS (alias to azdaja)"
 PRIMARY_TARGET=
 for harness in $INSTALL_NAMES; do
   "$DEST" install --harness "$harness" >/dev/null
@@ -223,6 +238,13 @@ chmod 600 "$STAGED"
 mv -f "$STAGED" "$BIN_DIR/config.toml"
 STAGED=
 
+# A direct symlink creation is atomic and refuses any path that appeared after
+# the preflight. Managed aliases always use this exact relative target, so an
+# update replaces only azdaja while an existing az link remains valid.
+if [ "$ALIAS_CREATE" = true ]; then
+  ln -s azdaja "$ALIAS" || fail "cannot create az alias without overwriting an existing path: $ALIAS"
+fi
+
 ON_PATH=false
 OLD_IFS=$IFS
 IFS=:
@@ -236,7 +258,7 @@ IFS=$OLD_IFS
 printf 'Detected: %s\n' "$DETECTION_REPORT"
 printf 'Written: %s\n' "$WRITTEN"
 if [ "$ON_PATH" = true ]; then
-  printf 'Next: run azdaja doctor (%s is on PATH)\n' "$BIN_DIR"
+  printf 'Next: run az doctor (%s is on PATH)\n' "$BIN_DIR"
 else
-  printf 'Next: add %s to PATH, then run azdaja doctor\n' "$BIN_DIR"
+  printf 'Next: add %s to PATH, then run az doctor\n' "$BIN_DIR"
 fi

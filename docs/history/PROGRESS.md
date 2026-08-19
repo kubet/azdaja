@@ -48,7 +48,7 @@
 2. Preserve the invalid agent-transport root and both private terminal receipts. Do not resume, retry, revise, replace, score, or relaunch it. A future scout needs fresh explicit authorization and a new independently closed schedule/root.
 3. Freeze the public v0.1.1 annotated tag, release assets, checksum manifest, and versioned installer. Postpublication evidence remains external to the tag; never rewrite history or add a same-commit claim after publication.
 4. Resume product work immediately on a privacy-reviewed actionable first-use defect or private advisory. Reproduce only with synthetic or sanitized material.
-5. Keep `drafts/v0.1.1-launch.md` nonpublished. Any external use needs separate owner authorization plus a fresh anonymous repository, installer, tag, asset, and support-availability check; this branch does not claim adoption.
+5. Keep `docs/history/drafts/v0.1.1-launch.md` nonpublished. Any external use needs separate owner authorization plus a fresh anonymous repository, installer, tag, asset, and support-availability check; this branch does not claim adoption.
 6. Keep `ARC3-MINI-PAIRED-JCODE-AZDAJA-V1` frozen and do not run its live mode. Resume only after the parent confirms Track 1 full-199 completion and the owner explicitly authorizes ARC live; then bind `ARC_API_KEY` from the process environment without persisting it and create a new hash-bound owner-only authorization receipt.
 
 ## Blocking

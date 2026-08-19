@@ -8,14 +8,16 @@ import json
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = [
     ROOT / "README.md",
-    ROOT / "drafts" / "README.md",
-    ROOT / "drafts" / "v0.1.1-launch.md",
+    ROOT / "bench" / "arc3" / "README.md",
+    ROOT / "docs" / "history" / "README-draft.md",
+    ROOT / "docs" / "history" / "drafts" / "v0.1.1-launch.md",
     ROOT / "docs" / "launch-saga.md",
     ROOT / "docs" / "transport-flip-postmortem.md",
     ROOT / "docs" / "day7-public-launch.md",
@@ -42,7 +44,7 @@ def check_relative_links() -> list[str]:
 def check_claim_contract() -> list[str]:
     errors: list[str] = []
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    draft = (ROOT / "drafts" / "v0.1.1-launch.md").read_text(encoding="utf-8")
+    draft = (ROOT / "docs" / "history" / "drafts" / "v0.1.1-launch.md").read_text(encoding="utf-8")
     saga = (ROOT / "docs" / "launch-saga.md").read_text(encoding="utf-8")
     postmortem = (ROOT / "docs" / "transport-flip-postmortem.md").read_text(encoding="utf-8")
     runbook = (ROOT / "docs" / "day7-public-launch.md").read_text(encoding="utf-8")
@@ -54,40 +56,45 @@ def check_claim_contract() -> list[str]:
         "4.26164968987583 percentage points",
         "**+4.3 points**",
         "highest bare-RLM number shown in this non-exhaustive ladder",
-        "64.38%",
-        "71.75%",
-        "81.36%",
+        "| Paper | RLM | Model recursion without agent tools | **64.38%** |",
+        "| This repository | Azdaja — single-arm diagnostic; not paper/leaderboard | Bare RLM layer | **68.64%** |",
+        "| Paper | Codex, No Retriever | Coding agent | **71.75%** |",
+        "| Paper | RAH, GPT-5 | Recursive Agent Harness | **81.36%** |",
         "52,428,800",
         "65,536",
         "not a token or cost-savings claim",
         "docs/token-context-crossover.svg",
         "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh",
         "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked",
+        "`az install --harness all`",
+        "`az doctor`",
+        "indexed 16-row truecolor half-block banner",
+        "non-TTY output, `NO_COLOR`, and `TERM=dumb`",
+        "same exact five-line text through either name",
+        "The Cargo path keeps `azdaja` available and does not create `az`",
         "A passing `doctor` proves only",
-        "**-1.24% fewer wasted actions (1.24% more)**",
-        "bench/results/arc3-ember-five-public-v9-result.json",
-        "bench/results/arc3-scorecard-interrogation-public-v1.json",
-        "not absolute arm scores",
-        "revisited-state/repeated-control split",
-        "memory-efficiency hypothesis remains open",
-        "both baseline and Ember scored 0.0 shadow RHAE",
-        "took 35 actions",
-        "emitted 36 journal records",
-        "terminated at `ACTION_BUDGET`",
-        "full five-game rerun remains on hold",
-        "first post-launch update",
-        "owner-only package",
-        "pre-release install matrix",
-        "passed all 16 Darwin arm64 and Ubuntu x86-64 cells",
-        "14 genuine-provider 50 MiB solos",
-        "two expected graceful no-harness refusals",
+        "0.0 Ember-minus-baseline **local shadow RHAE** difference",
+        "**+8; +1.24% relative to the baseline raw count**",
+        "not an efficiency or improvement claim",
+        "A retrieval-only follow-up recovered no missing absolutes",
+        "three zero diagnostic counters",
+        "36 journal records",
+        "`ACTION_BUDGET` for each arm",
+        "bench/arc3/README.md#benchmark-card",
+        "not-run full-five boundary",
+        "not a public-safe source tree",
+        "clean allowlisted export under a new repository identity",
+        "moving files does not sanitize history",
+        "short-alias delta receipt",
+        "bench/results/install-alias-delta-v0.1.2-public.json",
+        "not a native cross-platform or provider validation",
+        "readiness supersession receipt",
+        "bench/results/v0.1.2-candidate-readiness-superseded-public.json",
+        "marks the retained v0.1.2 binaries and their earlier matrix stale",
+        "new native assets and a fresh release matrix are required",
+        "evidence for their old bytes only, not the current source",
         "bench/results/install-matrix-v0.1.2-final-public.json",
         "bench/results/install-real-adapters-v0.1.2-final-public.json",
-        "genuine installed OpenCode and Claude adapter E2Es",
-        "Codex passed all three `doctor` checks but its 50 MiB solo failed",
-        "Jcode passed configuration and evaluator checks but its harness route was unavailable",
-        "Neither is counted as a full route pass",
-        "bench/results/arc3-vc33-smoke-v2-public.json",
     ]
     required_draft = [
         "NONPUBLISHED DRAFT",
@@ -125,47 +132,38 @@ def check_claim_contract() -> list[str]:
             errors.append(f"README.md: missing required evidence or install phrase: {needle}")
     for needle in required_draft:
         if needle not in draft:
-            errors.append(f"drafts/v0.1.1-launch.md: missing required boundary phrase: {needle}")
+            errors.append(f"docs/history/drafts/v0.1.1-launch.md: missing required boundary phrase: {needle}")
 
     required_saga = [
         "**+4.3 percentage points**",
         "not proof of a global best-published result",
         "5,403.36 mean total root tokens",
         "Codex at 71.75",
-        "same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)",
-        "same Claude Sonnet lane through the direct Claude CLI",
-        "obsolete bridge/helper was bypassed",
-        "All five paired deltas are 0.0",
+        "local-shadow-RHAE Δ was 0.0 in each game",
+        "+8, +1.24% of the baseline raw count",
+        "one fixed-order pair per game, baseline then Ember",
+        "seed 0, a fresh game/runtime per arm",
+        "same pinned direct-Claude Sonnet common configuration",
+        "no randomization or replication",
         "| ls20 | 0.0 | 92 | 103 |",
         "| ft09 | 0.0 | 186 | 208 |",
         "| vc33 | 0.0 | 0 | 0 |",
         "| ar25 | 0.0 | 137 | 110 |",
         "| wa30 | 0.0 | 231 | 233 |",
-        "`-1.238390092879257%` fewer wasted actions",
-        "revisited-state/repeated-control split was not retained",
-        "only the predefined unchanged-official-feedback aggregate is evidenced",
-        "all ten closed scorecard detail requests returned HTTP 404",
-        "zero-level play and equal nonzero arm results cannot be distinguished",
+        "not an action-normalized rate, efficiency result, or improvement claim",
+        "absent from retained v9 artifacts",
+        "`0 / 0 / 0` in the separate unchanged-feedback / revisited-state / repeated-known-control counters",
         "memory-efficiency hypothesis remains open",
-        "each issued 35 actions, completed zero levels, scored 0.0 shadow RHAE",
-        "zero wasted actions in both retained waste categories",
-        "first post-launch update",
-        "cannot run before the public flip",
-        "execution remains in an owner-only package",
-        "two 36-record private journals",
-        "Sixteen isolated cells covered Darwin arm64 and Ubuntu 24.04 x86-64",
-        "All 16 reached their expected outcome",
-        "14 positive cells",
-        "two no-harness cells failed before any fixture request",
+        "No new ARC or provider run supports this documentation",
         "arc3-vc33-smoke-v2-public.json",
-        "install-matrix-v0.1.2-final-public.json",
-        "install-real-adapters-v0.1.2-final-public.json",
-        "genuinely installed OpenCode",
-        "Claude adapters end to end",
-        "50 MiB solo failed on expired local authentication",
-        "Jcode passed configuration and evaluator checks",
-        "Neither is a green full-route product pass",
         "arc3-scorecard-interrogation-public-v1.json",
+        "v0.1.2 release candidate",
+        "immutable historical evidence for the old bytes",
+        "New Darwin arm64 and Linux x86-64 assets",
+        "same exact five-line help",
+        "v0.1.2-candidate-readiness-superseded-public.json",
+        "install-alias-delta-v0.1.2-public.json",
+        "not a native cross-platform or provider validation",
         "post-launch v0.2 roadmap material only",
     ]
     required_postmortem = [
@@ -240,6 +238,19 @@ def check_claim_contract() -> list[str]:
     for row_start in expected_result_rows:
         if readme.count(row_start) != 1:
             errors.append(f"README.md: expected one current result row beginning {row_start}")
+    comparison_rows = [
+        "| Paper | RLM | Model recursion without agent tools | **64.38%** |",
+        "| This repository | Azdaja — single-arm diagnostic; not paper/leaderboard | Bare RLM layer | **68.64%** |",
+        "| Paper | Codex, No Retriever | Coding agent | **71.75%** |",
+        "| Paper | RAH, GPT-5 | Recursive Agent Harness | **81.36%** |",
+    ]
+    if readme.count("| Source | Label | System class | Oolong score |") != 1:
+        errors.append("README.md: expected exactly one shared paper/Azdaja comparison table")
+    positions = [readme.find(row) for row in comparison_rows]
+    if any(position < 0 for position in positions) or positions != sorted(positions):
+        errors.append("README.md: shared comparison rows are missing or not score-ordered")
+    if "| Paper label | System class |" in readme:
+        errors.append("README.md: separate paper-only comparison table remains")
     unsupported_readme_claims = [
         "Cheapest configuration in its table",
         "convergence is the claim",
@@ -281,6 +292,82 @@ def check_claim_contract() -> list[str]:
 
 
 
+def check_root_layout() -> list[str]:
+    """Keep the repository root limited to intentional public entry points."""
+    errors: list[str] = []
+    expected_files = {
+        ".gitignore",
+        "Cargo.lock",
+        "Cargo.toml",
+        "FAILS.md",
+        "LICENSE",
+        "README.md",
+        "SCOREBOARD.md",
+        "WINS.md",
+        "azdaja-logo.png",
+        "install.sh",
+    }
+    expected_directories = {
+        ".github",
+        "assets",
+        "bench",
+        "docs",
+        "release",
+        "site",
+        "src",
+        "tests",
+        "tools",
+    }
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=ROOT, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+    )
+    if tracked.returncode:
+        return [f"root cleanup: git ls-files failed: {tracked.stderr.strip()}"]
+    tracked_paths = [Path(line) for line in tracked.stdout.splitlines() if line]
+    actual_files = {path.name for path in tracked_paths if len(path.parts) == 1}
+    actual_directories = {path.parts[0] for path in tracked_paths if len(path.parts) > 1}
+    if actual_files != expected_files:
+        errors.append(
+            f"repository root files differ: expected {sorted(expected_files)}, found {sorted(actual_files)}"
+        )
+    if actual_directories != expected_directories:
+        errors.append(
+            f"repository root directories differ: expected {sorted(expected_directories)}, found {sorted(actual_directories)}"
+        )
+    required_moves = [
+        ROOT / "docs" / "evidence" / "PERF.md",
+        ROOT / "docs" / "history" / "PLAN.md",
+        ROOT / "docs" / "history" / "PROGRESS.md",
+        ROOT / "docs" / "history" / "JCODE_SESSION_FORK_API_REQUEST.md",
+        ROOT / "docs" / "history" / "README-draft.md",
+        ROOT / "docs" / "history" / "drafts" / "v0.1.1-launch.md",
+    ]
+    for path in required_moves:
+        if not path.is_file():
+            errors.append(f"root cleanup: missing moved history/evidence file {path.relative_to(ROOT)}")
+    if (ROOT / "docs" / "history" / "drafts" / "README.md").exists():
+        errors.append("root cleanup: redundant drafts boilerplate README remains")
+
+    manifest = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    package = manifest.get("package", {})
+    expected_include = [
+        "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/README.md", "/src/**",
+        "/assets/SKILL.md", "/assets/config.toml",
+    ]
+    if package.get("publish") is not False or package.get("include") != expected_include:
+        errors.append("Cargo.toml: publish=false or strict package include allowlist changed")
+    ignore = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    required_ignores = {
+        ".env", ".env.*", "*.key", "*.pem", "*.p12", "*.log", "*.time",
+        "*.timing", "*.trace", "*.raw", "**/raw/", "**/runs/", "**/outputs/",
+    }
+    missing_ignores = sorted(required_ignores - set(ignore))
+    if missing_ignores:
+        errors.append(f".gitignore: missing credential/raw-output patterns {missing_ignores}")
+    return errors
+
+
 def check_arc_public_surface() -> list[str]:
     """Keep the tracked ARC source reviewable while execution remains gated."""
     errors: list[str] = []
@@ -299,6 +386,59 @@ def check_arc_public_surface() -> list[str]:
             "arc_v2_post_public.py", "bind_arc_v2_post_public.py", "driver.py live"
         )):
             errors.append("bench/arc3/README.md: executable post-public recipe is forbidden")
+
+    required_card = [
+        "## Benchmark card",
+        "local shadow diagnostics, not official ARC scores",
+        "one fixed-order pair per listed game (baseline, then Ember)",
+        "seed 0 and a fresh game/runtime per arm",
+        "same pinned direct-Claude Sonnet configuration",
+        "per-level action caps of 5× the published human baselines",
+        "one invocation after two completed turns",
+        "| `ls20` | 0.0 | 92 | 103 |",
+        "| `ft09` | 0.0 | 186 | 208 |",
+        "| `vc33` | 0.0 | 0 | 0 |",
+        "| `ar25` | 0.0 | 137 | 110 |",
+        "| `wa30` | 0.0 | 231 | 233 |",
+        "| **Total (counts only)** | — | **646** | **654** |",
+        "**+8 (+1.24% of the baseline raw count)**",
+        "not an action-normalized rate or an efficiency/improvement claim",
+        "no randomization or replication",
+        "All ten closed scorecard detail requests returned HTTP 404",
+        "absent from the retained v9 artifacts",
+        "| Baseline | 0.0 | 0 | 35 (`[35, 0, 0, 0, 0, 0, 0]`) | `0 / 0 / 0` | 36 records | `ACTION_BUDGET` |",
+        "| Ember | 0.0 | 0 | 35 (`[35, 0, 0, 0, 0, 0, 0]`) | `0 / 0 / 0` | 36 records | `ACTION_BUDGET` |",
+        "separate diagnostics, not a partition",
+        "schema-v9 stub execution is disabled",
+        "## Gated full-five source (not run)",
+        "It remains **HOLD / not run**",
+        "fresh receipt proving `kubet/azdaja` is public",
+        "No new ARC or provider run was performed for this card",
+        "../results/arc3-ember-five-public-v9-result.json",
+        "../results/arc3-scorecard-interrogation-public-v1.json",
+        "../results/arc3-vc33-smoke-v2-public.json",
+        "arc-v2-five-postlaunch-manifest.json",
+    ]
+    for phrase in required_card:
+        if phrase not in readme:
+            errors.append(f"bench/arc3/README.md: missing benchmark-card boundary: {phrase}")
+    active_arc_docs = {
+        "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
+        "bench/arc3/README.md": readme,
+        "docs/launch-saga.md": (ROOT / "docs" / "launch-saga.md").read_text(encoding="utf-8"),
+    }
+    forbidden_framing = (
+        "paired null",
+        "true played zero-level null",
+        "revisited-state/repeated-control split",
+        "-1.24% fewer",
+        "ar25 improved",
+        "server no longer yields",
+    )
+    for name, active_text in active_arc_docs.items():
+        for phrase in forbidden_framing:
+            if phrase.casefold() in active_text.casefold():
+                errors.append(f"{name}: unsupported ARC framing remains: {phrase}")
 
     new_tests = (
         arc / "test_arc_v2_local_custody.py",
@@ -356,6 +496,112 @@ def _sha256(path: Path) -> str:
 def _git_blob(path: Path) -> str:
     data = path.read_bytes()
     return hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+
+
+def check_alias_delta_receipt() -> list[str]:
+    errors: list[str] = []
+    path = ROOT / "bench" / "results" / "install-alias-delta-v0.1.2-public.json"
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"alias delta receipt read failed: {exc}"]
+    expected_result = {
+        "expected_no_harness_refusals": 2,
+        "green_cells": 16,
+        "positive_cells": 14,
+        "status": "PASS",
+        "total_cells": 16,
+    }
+    cells = receipt.get("cells", [])
+    identities = {
+        (cell.get("platform_selector"), cell.get("scenario")) for cell in cells
+    }
+    expected_identities = {
+        (platform, scenario)
+        for platform in ("Darwin/arm64", "Linux/x86_64")
+        for scenario in (
+            "detected-jcode", "detected-claude", "detected-codex",
+            "detected-gemini", "detected-opencode", "all",
+            "no-harness", "already-installed",
+        )
+    }
+    hashes = receipt.get("hashes", {})
+    if (
+        receipt.get("schema_version") != 1
+        or receipt.get("record_type") != "azdaja_install_alias_delta_local_fixture_public_receipt"
+        or receipt.get("base_commit") != "94362aadb712150c31093329d398e2afadbcbda3"
+        or receipt.get("result") != expected_result
+        or len(cells) != 16
+        or identities != expected_identities
+        or hashes.get("install.sh") != _sha256(ROOT / "install.sh")
+        or hashes.get("site/install") != _sha256(ROOT / "site" / "install")
+        or hashes.get("tests/site_installer.rs") != _sha256(ROOT / "tests" / "site_installer.rs")
+        or hashes.get("src/main.rs") != _sha256(ROOT / "src" / "main.rs")
+        or hashes.get("tests/cli_ux.rs") != _sha256(ROOT / "tests" / "cli_ux.rs")
+        or hashes.get("src/banner.rs") != _sha256(ROOT / "src" / "banner.rs")
+        or hashes.get("Cargo.toml") != _sha256(ROOT / "Cargo.toml")
+        or hashes.get(".gitignore") != _sha256(ROOT / ".gitignore")
+    ):
+        errors.append("alias delta receipt: identity, matrix, or source hashes changed")
+    if (ROOT / "install.sh").read_bytes() != (ROOT / "site" / "install").read_bytes():
+        errors.append("alias delta: root and site installers are not byte-identical")
+    if receipt.get("scope", {}).get("provider_calls_performed") is not False:
+        errors.append("alias delta receipt: provider-free boundary changed")
+    if receipt.get("scope", {}).get("native_cross_platform_claim") is not False:
+        errors.append("alias delta receipt: local selector scope misrepresented as native validation")
+    expected_help = [
+        "AZDAJA v0.1.2 — virtual memory for language models",
+        "Usage: az <command> [options]  (azdaja also works)",
+        "Commands: start load exec final list kill solo install doctor uninstall",
+        "Setup: az install --harness <jcode|claude|codex|gemini|opencode|all>",
+        'Example: az solo "summarize this file" -f ./document.txt',
+    ]
+    if receipt.get("positive_contract", {}).get("bare_exact_five_line_help") != expected_help:
+        errors.append("alias delta receipt: exact five-line help contract changed")
+    for private_prefix in ("/Users/", "/private/tmp/", "C:\\Users\\"):
+        if private_prefix in path.read_text(encoding="utf-8"):
+            errors.append(f"alias delta receipt: private host path leaked: {private_prefix}")
+    return errors
+
+
+def check_candidate_readiness_supersession() -> list[str]:
+    errors: list[str] = []
+    path = ROOT / "bench" / "results" / "v0.1.2-candidate-readiness-superseded-public.json"
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"candidate readiness supersession read failed: {exc}"]
+    supersession = receipt.get("supersession", {})
+    publication = receipt.get("publication", {})
+    local_validation = receipt.get("completed_local_source_validation", {})
+    if (
+        receipt.get("schema_version") != 1
+        or receipt.get("record_type") != "azdaja_v0_1_2_candidate_readiness_supersession_receipt"
+        or receipt.get("status") != "REBUILD_AND_CROSS_PLATFORM_RETEST_REQUIRED"
+        or supersession.get("retained_v0_1_2_candidate_is_final") is not False
+        or supersession.get("previous_final_matrix_valid_for_current_source") is not False
+        or supersession.get("previous_receipts_remain_historical_evidence") is not True
+        or supersession.get("old_binary_hashes_are_final_bindings") is not False
+        or not str(local_validation.get("provider_free_alias_fixture_matrix", "")).startswith("PASS_")
+        or local_validation.get("exact_five_line_non_tty_help_and_alias_parity") != "PASS"
+        or local_validation.get("interactive_banner_unit_contract", "").startswith("PASS_") is not True
+        or local_validation.get("full_locked_rust_suite", {}).get("failed") != 0
+        or local_validation.get("clippy_all_targets_all_features") != "PASS_DENY_WARNINGS"
+        or local_validation.get("arc_offline_unit_tests", {}).get("passed") != 55
+        or local_validation.get("provider_calls_performed") is not False
+        or local_validation.get("arc_calls_performed") is not False
+        or any(publication.values())
+    ):
+        errors.append("candidate readiness supersession: stale/nonpublication boundary changed")
+    text = path.read_text(encoding="utf-8")
+    for forbidden in (
+        "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "/Users/", "/private/tmp/", "C:\\Users\\",
+    ):
+        if forbidden in text:
+            errors.append(f"candidate readiness supersession: forbidden old hash or private path: {forbidden}")
+    return errors
 
 
 def check_launch_receipts() -> list[str]:
@@ -857,8 +1103,15 @@ def check_launch_receipts() -> list[str]:
     if score.get("terminal_receipt_sha256") != "27bbb4da02bf75ff5c3c6b73697bf8518e33566a55f3b9fc8d7012ee5b648e74":
         errors.append("day7 receipt: retained private terminal identity changed")
     saga = release.get("saga", {})
-    if saga.get("sha256") != _sha256(saga_path) or saga.get("git_blob") != _git_blob(saga_path):
-        errors.append("day7 receipt: stale launch saga identity")
+    expected_historical_saga = {
+        "authorized_score_occurrences": 1,
+        "git_blob": "0592ed60ec98c57e5e7f37e170ba7ec036303f69",
+        "path": "docs/launch-saga.md",
+        "private_draft_markers_remaining": 0,
+        "sha256": "5899a4047941d85dce67493366772e0e1c05df5ffd350c4841507c9506faa72d",
+    }
+    if saga != expected_historical_saga:
+        errors.append("day7 receipt: historical launch saga identity changed")
     runbook = release.get("runbook", {})
     if runbook != {
         "path": "docs/day7-public-launch.md",
@@ -899,9 +1152,12 @@ def check_launch_receipts() -> list[str]:
 
 def main() -> int:
     errors = (
-        check_relative_links()
+        check_root_layout()
+        + check_relative_links()
         + check_claim_contract()
         + check_arc_public_surface()
+        + check_alias_delta_receipt()
+        + check_candidate_readiness_supersession()
         + check_launch_receipts()
     )
     plot_check = subprocess.run(

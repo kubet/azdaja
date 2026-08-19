@@ -70,10 +70,13 @@ server.serve_forever()
             .spawn()
             .unwrap();
         for _ in 0..200 {
-            if let Ok(port) = fs::read_to_string(&port_file) {
+            if let Ok(port_text) = fs::read_to_string(&port_file)
+                && let Ok(port) = port_text.trim().parse::<u16>()
+                && port != 0
+            {
                 return Self {
                     child,
-                    base: format!("http://127.0.0.1:{}", port.trim()),
+                    base: format!("http://127.0.0.1:{port}"),
                     log,
                 };
             }
@@ -202,6 +205,39 @@ fn mark_detected(home: &Path, harness: &str) {
     fs::create_dir_all(path).unwrap();
 }
 
+fn installed_output(binary: &Path, home: &Path, path: &str, args: &[&str]) -> Output {
+    Command::new(binary)
+        .args(args)
+        .env("HOME", home)
+        .env("PATH", path)
+        .env("AZDAJA_HOME", home.join("state"))
+        .env_remove("AZDAJA_CONFIG")
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap()
+}
+
+fn assert_alias_identity_and_local_caps(home: &Path, bin: &Path, path: &str) {
+    let long = bin.join("azdaja");
+    let short = bin.join("az");
+    assert_eq!(fs::read_link(&short).unwrap(), PathBuf::from("azdaja"));
+    for args in [vec!["--version"], Vec::new(), vec!["doctor", "--caps"]] {
+        let long_output = installed_output(&long, home, path, &args);
+        let short_output = installed_output(&short, home, path, &args);
+        assert_eq!(short_output.status, long_output.status, "args={args:?}");
+        assert_eq!(short_output.stdout, long_output.stdout, "args={args:?}");
+        assert_eq!(short_output.stderr, long_output.stderr, "args={args:?}");
+        assert!(short_output.status.success(), "args={args:?}");
+        if args.is_empty() {
+            let help = String::from_utf8(short_output.stdout).unwrap();
+            assert_eq!(
+                help,
+                "AZDAJA v0.1.2 — virtual memory for language models\nUsage: az <command> [options]  (azdaja also works)\nCommands: start load exec final list kill solo install doctor uninstall\nSetup: az install --harness <jcode|claude|codex|gemini|opencode|all>\nExample: az solo \"summarize this file\" -f ./document.txt\n"
+            );
+        }
+    }
+}
+
 #[test]
 fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -217,6 +253,9 @@ fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
     assert!(text.contains("Linux-x86_64)"));
     assert!(!text.contains("v0.1.1"));
     assert!(text.contains("mv -f \"$STAGED\" \"$DEST\""));
+    assert!(text.contains("ln -s azdaja \"$ALIAS\""));
+    assert!(text.contains("refusing to overwrite foreign symlink"));
+    assert!(text.contains("run az doctor"));
 }
 
 #[test]
@@ -255,6 +294,9 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         let active = fs::read_to_string(bin.join("config.toml")).unwrap();
         assert!(active.contains("claude -p --model {model}"));
         assert!(target(&home, "claude").join("azdaja").is_file());
+        assert!(stdout.contains("azdaja ->") && stdout.contains("az ->"));
+        assert!(stdout.lines().last().unwrap().contains("az doctor"));
+        assert_alias_identity_and_local_caps(&home, &bin, system_path);
     }
     let requests = fs::read_to_string(&server.log).unwrap();
     assert!(requests.contains("/good/SHA256SUMS"));
@@ -294,6 +336,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     assert_success(&good);
     let version = Command::new(&existing).arg("--version").output().unwrap();
     assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.2 "));
+    assert_alias_identity_and_local_caps(&home, &bin, system_path);
 
     let home = scratch.0.join("path-home");
     let path_bin = home.join("path-bin");
@@ -316,6 +359,8 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     let stdout = assert_success(&good);
     assert!(path_bin.join("azdaja").is_file());
     assert!(stdout.contains("is on PATH"));
+    assert!(stdout.lines().last().unwrap().contains("az doctor"));
+    assert_alias_identity_and_local_caps(&home, &path_bin, &path);
     assert!(
         fs::read_to_string(path_bin.join("config.toml"))
             .unwrap()
@@ -336,7 +381,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
 }
 
 #[test]
-fn local_http_fixture_covers_each_detection_target_all_and_no_harness() {
+fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
     let scratch = Scratch::new();
     let fixture_root = scratch.0.join("releases");
     fs::create_dir(&fixture_root).unwrap();
@@ -345,74 +390,248 @@ fn local_http_fixture_covers_each_detection_target_all_and_no_harness() {
     let server = FixtureServer::start(&scratch.0, &fixture_root);
     let base = format!("{}/good", server.base);
     let system_path = "/usr/bin:/bin";
+    let mut positive_cells = 0;
+    let mut expected_refusals = 0;
 
-    for harness in ["jcode", "claude", "codex", "gemini", "opencode"] {
-        let home = scratch.0.join(format!("detected-{harness}"));
+    for (os, arch) in [("Darwin", "arm64"), ("Linux", "x86_64")] {
+        for harness in ["jcode", "claude", "codex", "gemini", "opencode"] {
+            let home = scratch.0.join(format!("matrix-{os}-detected-{harness}"));
+            let bin = home.join("bin");
+            fs::create_dir_all(&home).unwrap();
+            mark_detected(&home, harness);
+            let output = run_installer(InstallRun {
+                home: &home,
+                base: &base,
+                os,
+                arch,
+                harness: None,
+                bin_dir: Some(&bin),
+                path: system_path,
+            });
+            let stdout = assert_success(&output);
+            assert_eq!(stdout.lines().count(), 3, "{stdout}");
+            assert!(stdout.lines().next().unwrap().contains(harness));
+            assert!(stdout.contains("azdaja ->") && stdout.contains("az ->"));
+            assert!(stdout.lines().last().unwrap().contains("az doctor"));
+            assert!(target(&home, harness).join("azdaja").is_file());
+            assert_eq!(
+                fs::read(bin.join("config.toml")).unwrap(),
+                fs::read(target(&home, harness).join("config.toml")).unwrap(),
+                "PATH binary must bind the selected {harness} route"
+            );
+            assert_alias_identity_and_local_caps(&home, &bin, system_path);
+            positive_cells += 1;
+        }
+
+        let home = scratch.0.join(format!("matrix-{os}-all"));
         let bin = home.join("bin");
         fs::create_dir_all(&home).unwrap();
-        mark_detected(&home, harness);
         let output = run_installer(InstallRun {
             home: &home,
             base: &base,
-            os: "Darwin",
-            arch: "arm64",
-            harness: None,
+            os,
+            arch,
+            harness: Some("all"),
             bin_dir: Some(&bin),
             path: system_path,
         });
         let stdout = assert_success(&output);
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
-        assert!(stdout.lines().next().unwrap().contains(harness));
-        assert!(target(&home, harness).join("azdaja").is_file());
-        assert_eq!(
-            fs::read(bin.join("config.toml")).unwrap(),
-            fs::read(target(&home, harness).join("config.toml")).unwrap(),
-            "PATH binary must bind the selected {harness} route"
+        for harness in ["jcode", "claude", "codex", "gemini", "opencode"] {
+            assert!(target(&home, harness).join("azdaja").is_file());
+        }
+        assert!(
+            fs::read_to_string(bin.join("config.toml"))
+                .unwrap()
+                .contains("jcode-api")
         );
+        assert_alias_identity_and_local_caps(&home, &bin, system_path);
+        positive_cells += 1;
+
+        let before = fs::read_to_string(&server.log).unwrap_or_default();
+        let home = scratch.0.join(format!("matrix-{os}-none"));
+        fs::create_dir(&home).unwrap();
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &base,
+            os,
+            arch,
+            harness: None,
+            bin_dir: Some(&home.join("bin")),
+            path: system_path,
+        });
+        assert_eq!(output.status.code(), Some(1));
+        assert!(output.stdout.is_empty());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("no supported harness found"));
+        assert!(!stderr.contains("stack"));
+        assert!(fs::read_dir(&home).unwrap().next().is_none());
+        assert_eq!(fs::read_to_string(&server.log).unwrap_or_default(), before);
+        expected_refusals += 1;
+
+        let home = scratch.0.join(format!("matrix-{os}-already-installed"));
+        let bin = home.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(bin.join("azdaja"), b"old-managed-binary").unwrap();
+        std::os::unix::fs::symlink("azdaja", bin.join("az")).unwrap();
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &base,
+            os,
+            arch,
+            harness: Some("claude"),
+            bin_dir: Some(&bin),
+            path: system_path,
+        });
+        assert_success(&output);
+        assert_alias_identity_and_local_caps(&home, &bin, system_path);
+        assert_ne!(fs::read(bin.join("azdaja")).unwrap(), b"old-managed-binary");
+        // A second update proves the exact managed link is accepted idempotently.
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &base,
+            os,
+            arch,
+            harness: Some("claude"),
+            bin_dir: Some(&bin),
+            path: system_path,
+        });
+        assert_success(&output);
+        assert_alias_identity_and_local_caps(&home, &bin, system_path);
+        positive_cells += 1;
     }
 
-    let home = scratch.0.join("all");
-    let bin = home.join("bin");
-    fs::create_dir_all(&home).unwrap();
-    let output = run_installer(InstallRun {
-        home: &home,
-        base: &base,
-        os: "Darwin",
-        arch: "arm64",
-        harness: Some("all"),
-        bin_dir: Some(&bin),
-        path: system_path,
-    });
-    let stdout = assert_success(&output);
-    assert_eq!(stdout.lines().count(), 3);
-    for harness in ["jcode", "claude", "codex", "gemini", "opencode"] {
-        assert!(target(&home, harness).join("azdaja").is_file());
-    }
-    assert!(
-        fs::read_to_string(bin.join("config.toml"))
-            .unwrap()
-            .contains("jcode-api")
-    );
+    assert_eq!(positive_cells, 14);
+    assert_eq!(expected_refusals, 2);
+}
 
-    let before = fs::read_to_string(&server.log).unwrap_or_default();
-    let home = scratch.0.join("none");
+#[test]
+fn alias_safety_failures_leave_home_and_foreign_paths_unchanged() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    let digest = sha256(&candidate);
+    write_release(&fixture_root, "good", &candidate, &digest);
+    write_release(&fixture_root, "bad", &candidate, &"0".repeat(64));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let system_path = "/usr/bin:/bin";
+
+    let home = scratch.0.join("checksum-home");
     fs::create_dir(&home).unwrap();
     let output = run_installer(InstallRun {
         home: &home,
-        base: &base,
+        base: &format!("{}/bad", server.base),
         os: "Darwin",
         arch: "arm64",
-        harness: None,
+        harness: Some("claude"),
         bin_dir: Some(&home.join("bin")),
         path: system_path,
     });
     assert_eq!(output.status.code(), Some(1));
-    assert!(output.stdout.is_empty());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("no supported harness found"));
-    assert!(!stderr.contains("stack"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("SHA-256 mismatch"));
     assert!(fs::read_dir(&home).unwrap().next().is_none());
-    assert_eq!(fs::read_to_string(&server.log).unwrap_or_default(), before);
+
+    let before_requests = fs::read_to_string(&server.log).unwrap_or_default();
+    let home = scratch.0.join("unsupported-home");
+    fs::create_dir(&home).unwrap();
+    let output = run_installer(InstallRun {
+        home: &home,
+        base: &format!("{}/good", server.base),
+        os: "Plan9",
+        arch: "mips",
+        harness: Some("claude"),
+        bin_dir: Some(&home.join("bin")),
+        path: system_path,
+    });
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unsupported platform"));
+    assert!(fs::read_dir(&home).unwrap().next().is_none());
+    assert_eq!(
+        fs::read_to_string(&server.log).unwrap_or_default(),
+        before_requests
+    );
+
+    for kind in ["regular", "symlink"] {
+        let home = scratch.0.join(format!("foreign-{kind}-home"));
+        let bin = home.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let alias = bin.join("az");
+        if kind == "regular" {
+            fs::write(&alias, b"foreign-command").unwrap();
+        } else {
+            std::os::unix::fs::symlink("foreign-command", &alias).unwrap();
+        }
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &format!("{}/good", server.base),
+            os: "Linux",
+            arch: "x86_64",
+            harness: Some("claude"),
+            bin_dir: Some(&bin),
+            path: system_path,
+        });
+        assert_eq!(output.status.code(), Some(1));
+        assert!(String::from_utf8_lossy(&output.stderr).contains("refusing to overwrite foreign"));
+        assert!(!bin.join("azdaja").exists());
+        assert!(!bin.join("config.toml").exists());
+        assert_eq!(fs::read_dir(&bin).unwrap().count(), 1);
+        if kind == "regular" {
+            assert_eq!(fs::read(&alias).unwrap(), b"foreign-command");
+        } else {
+            assert_eq!(
+                fs::read_link(&alias).unwrap(),
+                PathBuf::from("foreign-command")
+            );
+        }
+    }
+}
+
+#[test]
+fn installed_alias_matches_solo_through_a_provider_free_fixture() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let home = scratch.0.join("solo-home");
+    let bin = home.join("bin");
+    let tools = home.join("tools");
+    fs::create_dir_all(&tools).unwrap();
+    let claude = tools.join("claude");
+    fs::write(
+        &claude,
+        "#!/bin/sh\ncat >/dev/null\nif [ \"${RLM_DEPTH:-}\" = 0 ]; then\n  printf '%s\\n' '```python' 'FINAL(\"ALIAS_SOLO_OK\")' '```'\nelse\n  printf 'AZDAJA\\n'\nfi\n",
+    )
+    .unwrap();
+    fs::set_permissions(&claude, fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!("{}:/usr/bin:/bin", tools.display());
+    let output = run_installer(InstallRun {
+        home: &home,
+        base: &format!("{}/good", server.base),
+        os: "Darwin",
+        arch: "arm64",
+        harness: Some("claude"),
+        bin_dir: Some(&bin),
+        path: &path,
+    });
+    assert_success(&output);
+    let input = home.join("input.txt");
+    fs::write(&input, "synthetic alias parity input").unwrap();
+    let args = [
+        "solo",
+        "return the fixture answer",
+        "-f",
+        input.to_str().unwrap(),
+    ];
+    let long = installed_output(&bin.join("azdaja"), &home, &path, &args);
+    let short = installed_output(&bin.join("az"), &home, &path, &args);
+    assert_success(&long);
+    assert_success(&short);
+    assert_eq!(short.stdout, long.stdout);
+    assert_eq!(short.stderr, long.stderr);
+    assert_eq!(String::from_utf8(short.stdout).unwrap(), "ALIAS_SOLO_OK\n");
 }
 
 #[test]

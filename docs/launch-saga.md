@@ -73,59 +73,26 @@ binds those aggregates to the retained private evidence.
 
 ## The five-game second act
 
-> same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)
+> Five-game diagnostic: local-shadow-RHAE Δ was 0.0 in each game; unchanged-feedback counts were 646 baseline vs 654 Ember (+8, +1.24% of the baseline raw count).
 
-The terminal public-safe ARC receipt contains five fresh-session pairs under the
-public identity Ember. Both arms used the same Claude Sonnet lane through the
-direct Claude CLI. The obsolete bridge/helper was bypassed, and therefore no
-helper anomaly was observed; this does not claim that helper was repaired.
+The v9 pilot contains one fixed-order pair per game, baseline then Ember, under the public identity Ember. It used seed 0, a fresh game/runtime per arm, the same pinned direct-Claude Sonnet common configuration, and per-level action caps of 5× the published human baselines. Ember alone staged the managed Azdaja skill, with one invocation after two completed turns. There was no randomization or replication, so the diagnostic has no variance or uncertainty estimate.
 
-| Public game | Ember − baseline RHAE delta | Baseline wasted actions | Ember wasted actions |
+| Public game | Ember − baseline local shadow RHAE difference | Baseline unchanged-feedback actions | Ember unchanged-feedback actions |
 |---|---:|---:|---:|
 | ls20 | 0.0 | 92 | 103 |
 | ft09 | 0.0 | 186 | 208 |
 | vc33 | 0.0 | 0 | 0 |
 | ar25 | 0.0 | 137 | 110 |
 | wa30 | 0.0 | 231 | 233 |
-| **Total** | — | **646** | **654** |
+| **Total (counts only)** | — | **646** | **654** |
 
-All five paired deltas are 0.0. Under the predefined
-unchanged-official-feedback rule, `(646 - 654) / 646 × 100` is exactly
-`-1.238390092879257%` fewer wasted actions, rounded in the framing above to
--1.24% fewer—equivalently 1.24% more. ar25 improved from 137 to 110 wasted
-actions; ls20, ft09, and wa30 regressed, while vc33 tied at zero.
+An unchanged-feedback action is a non-`RESET` action whose official post-action feedback exactly equaled the immediately preceding official feedback. Ember recorded **+8 (+1.24% of the baseline raw count)**. Total actions were not retained, so this is not an action-normalized rate, efficiency result, or improvement claim. All five observed paired differences were 0.0, but the missing absolutes leave equal zero and equal nonzero arm scores indistinguishable. The separately hash-bound [v9 manifest](../bench/arc3/mini-pilot-live-manifest-v9.json) supplies method, lane, hashes, freshness, and scoring; the minimal [sanitized v9 result](../bench/results/arc3-ember-five-public-v9-result.json) is not self-describing and has no result sidecar.
 
-The result supports no absolute ARC score claim. Version 9 deliberately retained
-only paired RHAE deltas, not either arm's absolute RHAE. The
-revisited-state/repeated-control split was not retained—only the predefined
-unchanged-official-feedback aggregate is evidenced. The
-[sanitized five-game receipt](../bench/results/arc3-ember-five-public-v9-result.json)
-contains only the public identity, arm labels, game IDs, deltas, and aggregate
-wasted-action counts.
+The retrieval-only interrogation made no game or provider request and started no new experiment. All ten closed scorecard detail requests returned HTTP 404 despite the pinned contract's open-or-closed description, and the HTML route redirected to the generic ARC-AGI-3 page. It recovered no absolute per-arm local shadow RHAE, levels completed, or total actions, and those values are absent from retained v9 artifacts. The [sanitized interrogation receipt](../bench/results/arc3-scorecard-interrogation-public-v1.json) contains no scorecard identifiers, credential, host path, or raw log.
 
-The owner-directed scorecard interrogation was retrieval-only: it made no game
-or provider request and started no new experiment. Using one unchanged owner
-credential, all ten closed scorecard detail requests returned HTTP 404 even
-though the pinned OpenAPI contract describes retrieval of open or closed
-scorecards. The HTML results route redirected to the generic ARC-AGI-3 page.
-Because the driver discarded its close responses, the server no longer yields
-absolute per-arm RHAE, levels completed, or total actions for these scorecards.
-The [sanitized interrogation receipt](../bench/results/arc3-scorecard-interrogation-public-v1.json)
-contains no scorecard identifiers, credential, host path, or raw log.
+A separate fresh `vc33` smoke was a distinct pair, not a reconstruction of v9. Baseline and Ember each issued 35 actions with per-level counts `[35, 0, 0, 0, 0, 0, 0]`, completed zero levels, had local shadow RHAE 0.0, recorded `0 / 0 / 0` in the separate unchanged-feedback / revisited-state / repeated-known-control counters, emitted 36 journal records, and stopped at `ACTION_BUDGET`. The observed paired local-shadow-RHAE difference was 0.0. This says only that both arms had a zero local-shadow score and completed zero levels in that smoke; it does not supply the missing v9 absolutes or an official ARC score. The [sanitized smoke receipt](../bench/results/arc3-vc33-smoke-v2-public.json) preserves that boundary without publishing journal streams.
 
-That leaves the original five-game paired null honest but underdetermined: zero-level
-play and equal nonzero arm results cannot be distinguished from its retained data.
-We therefore patched the driver to journal complete action streams and absolute
-scores locally during play, then ran exactly one fresh `vc33` smoke pair. Baseline
-and Ember each issued 35 actions, completed zero levels, scored 0.0 shadow RHAE,
-recorded zero wasted actions in both retained waste categories, and stopped at the
-first-level action budget. The paired delta was again 0.0. This is a true played
-zero-level null for that fresh smoke; it does not retroactively reconstruct the
-original scorecards or resolve the other four games. The memory-efficiency
-hypothesis remains open. The full five-game rerun is the first post-launch update:
-it cannot run before the public flip, and execution remains in an owner-only package
-rather than an invented public command. The [sanitized smoke receipt](../bench/results/arc3-vc33-smoke-v2-public.json)
-binds the two 36-record private journals without publishing their streams.
+The memory-efficiency hypothesis remains open. A fresh five-pair package is held as gated post-public source: it cannot construct an ARC or model client until an independent public-visibility receipt and exact owner-GO binding validate, and it reuses no smoke artifact. No new ARC or provider run supports this documentation. The detailed [benchmark card](../bench/arc3/README.md#benchmark-card) carries the audit table and not-run boundary.
 
 The separate transport scout's 0.00/0.00 tie came from 20 pre-inference setup
 failures, with zero successful provider turns and zero agent-class calls. It
@@ -136,41 +103,11 @@ only; it is not authorized here. The
 
 ## The first run became a benchmark
 
-The first public command is part of the product. The older v0.1.1 release remains
-immutable, so the install and CLI work ships as v0.1.2 rather than pretending new
-source was present in old assets. The one-line installer detects Apple Silicon
-macOS or glibc Linux x86-64, downloads the matching binary and `SHA256SUMS`, verifies
-the exact asset, writes the binary atomically onto a user path, and installs the
-managed skill for detected Jcode, Claude, Codex, Gemini, or OpenCode roots. A clean
-machine with no supported harness refuses before download and prints one actionable
-message instead of manufacturing a default.
+The one-line installer now keeps the managed executable named `azdaja` and atomically adds `az` as its short PATH alias without replacing a foreign path. Its three-line output reports both names and ends with `az doctor`. Bare `az` and `azdaja` print the same exact five-line help, led by the short command; on an interactive color terminal only, a 16-row indexed truecolor half-block banner precedes it. Non-TTY output, `NO_COLOR`, and `TERM=dumb` remain text-only. Cargo installation remains honestly `azdaja`-only.
 
-We treated that path like a benchmark. Sixteen isolated cells covered Darwin arm64
-and Ubuntu 24.04 x86-64 across each harness, all five together, no harness, and an
-already-installed binary. All 16 reached their expected outcome. The 14 positive
-cells each completed install, three explicit `doctor` checks, and one genuine
-provider-backed answer over an exactly 52,428,800-byte input. The two no-harness
-cells failed before any fixture request, without mutating HOME or emitting a stack
-trace. Reinstallation replaced the executable atomically and left no staging or
-backup remnant. The [sanitized matrix receipt](../bench/results/install-matrix-v0.1.2-final-public.json)
-records the platforms, asset hashes, assertions, and retention boundary; raw input,
-prompts, responses, traces, credentials, and host paths were not retained.
+That source change supersedes the previously retained v0.1.2 release candidate. Its 16-cell matrix and native real-adapter receipt remain immutable historical evidence for the old bytes, not release validation for current source. New Darwin arm64 and Linux x86-64 assets, checksums, native exact-help/alias checks, and the full release matrix are required before readiness. The [readiness supersession receipt](../bench/results/v0.1.2-candidate-readiness-superseded-public.json) repeats no old candidate hash as final.
 
-A separate native Darwin arm64 pass exercised the genuinely installed OpenCode
-and Claude adapters end to end. For each route the installer emitted exactly
-three lines, all three `doctor` checks passed, and an exact 52,428,800-byte
-synthetic input returned its route-bound answer. The
-[sanitized real-adapter receipt](../bench/results/install-real-adapters-v0.1.2-final-public.json)
-records those two passes. Codex passed all three `doctor` checks, then its
-50 MiB solo failed on expired local authentication. Jcode passed configuration
-and evaluator checks, but its harness route was unavailable and printed the
-designed fix hint. Neither is a green full-route product pass, and no conclusion
-is drawn about other routes.
-
-The CLI now says what a first-time user needs. `install` reports detection, writes,
-and the next step in three lines. `doctor` emits one PASS or FAIL per check and a
-fix on every failure. Bare `azdaja` prints five usage lines with a copy-pasteable
-example. No new subcommand was added.
+The provider-free [alias delta receipt](../bench/results/install-alias-delta-v0.1.2-public.json) covers both supported platform selectors across each detected harness, `all`, no-harness refusal, and already-installed update. It proves local installer branches, exact five-line help, `doctor --caps`, solo parity, idempotence, and foreign-path refusal through `az`; it is not a native cross-platform or provider validation.
 
 ## Why a dragon
 

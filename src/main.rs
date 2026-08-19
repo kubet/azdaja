@@ -1,3 +1,5 @@
+mod banner;
+
 use anyhow::{Context, Result, anyhow, bail};
 use azdaja::{
     Config, DEFAULT_CONFIG, EnteredTurnBudget, ExecFailureKind, MONTY_VERSION, RootDriver,
@@ -10,7 +12,7 @@ use monty_types::CompileOptions;
 use serde::{Deserialize, Serialize};
 use std::{
     env, fs,
-    io::{self, Read, Write},
+    io::{self, IsTerminal, Read, Write},
     path::{Path, PathBuf},
     process::ExitCode,
     sync::Arc,
@@ -144,9 +146,19 @@ fn preflight_repair_solo_trace(
     Ok(())
 }
 
-fn help() {
+fn help(interactive_banner: bool) {
+    let term = env::var("TERM").ok();
+    if interactive_banner
+        && banner::color_enabled(
+            io::stdout().is_terminal(),
+            env::var_os("NO_COLOR").is_some(),
+            term.as_deref(),
+        )
+    {
+        print!("{}", banner::banner());
+    }
     println!(
-        "          __====-_  _-====__\n    _--^^^#####//      \\\\#####^^^--_\n  _-^##########// (    ) \\\\##########^-_  AZDAJA v{VERSION}\nUsage: azdaja <start|load|exec|final|list|kill|solo|install|doctor|uninstall> [options]\nExample: azdaja solo \"summarize this file\" -f ./document.txt"
+        "AZDAJA v{VERSION} — virtual memory for language models\nUsage: az <command> [options]  (azdaja also works)\nCommands: start load exec final list kill solo install doctor uninstall\nSetup: az install --harness <jcode|claude|codex|gemini|opencode|all>\nExample: az solo \"summarize this file\" -f ./document.txt"
     );
 }
 fn main() -> ExitCode {
@@ -166,8 +178,12 @@ fn main() -> ExitCode {
 }
 fn run() -> Result<bool> {
     let args: Vec<String> = env::args().skip(1).collect();
-    if args.is_empty() || matches!(args[0].as_str(), "-h" | "--help") {
-        help();
+    if args.is_empty() {
+        help(true);
+        return Ok(true);
+    }
+    if matches!(args[0].as_str(), "-h" | "--help") {
+        help(false);
         return Ok(true);
     }
     if args[0] == "--version" {

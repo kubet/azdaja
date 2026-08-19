@@ -1,0 +1,197 @@
+{
+  "base_commit": "94362aadb712150c31093329d398e2afadbcbda3",
+  "cells": [
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Darwin/arm64",
+      "scenario": "detected-jcode"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Darwin/arm64",
+      "scenario": "detected-claude"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Darwin/arm64",
+      "scenario": "detected-codex"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Darwin/arm64",
+      "scenario": "detected-gemini"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Darwin/arm64",
+      "scenario": "detected-opencode"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Darwin/arm64",
+      "scenario": "all"
+    },
+    {
+      "green": true,
+      "outcome": "expected_refusal_before_download_no_home_mutation",
+      "platform_selector": "Darwin/arm64",
+      "scenario": "no-harness"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Darwin/arm64",
+      "scenario": "already-installed"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Linux/x86_64",
+      "scenario": "detected-jcode"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Linux/x86_64",
+      "scenario": "detected-claude"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Linux/x86_64",
+      "scenario": "detected-codex"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Linux/x86_64",
+      "scenario": "detected-gemini"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Linux/x86_64",
+      "scenario": "detected-opencode"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Linux/x86_64",
+      "scenario": "all"
+    },
+    {
+      "green": true,
+      "outcome": "expected_refusal_before_download_no_home_mutation",
+      "platform_selector": "Linux/x86_64",
+      "scenario": "no-harness"
+    },
+    {
+      "green": true,
+      "outcome": "pass",
+      "platform_selector": "Linux/x86_64",
+      "scenario": "already-installed"
+    }
+  ],
+  "change_boundary": {
+    "cargo_manifest_changed": true,
+    "managed_binary_name": "azdaja",
+    "old_binary_hashes_bound_as_final": false,
+    "package_publish_disabled": true,
+    "pre_change_release_candidate_status": "stale_rebuild_required",
+    "release_asset_name_changed": false,
+    "rust_source_changed": true
+  },
+  "failure_contract": {
+    "alias_created_on_failure": false,
+    "checksum_mismatch_home_unchanged": true,
+    "foreign_regular_file_unchanged": true,
+    "foreign_symlink_unchanged": true,
+    "no_harness_home_unchanged_and_no_download": true,
+    "unsupported_platform_home_unchanged_and_no_download": true
+  },
+  "hashes": {
+    ".gitignore": "78f3a3211035abc61620600167071b7767bb483253c60db3153dfafb251fdcb5",
+    "Cargo.toml": "2925561c94a507aa2ebae852e3773981ae2cfc05ed66da495297731163fd9ac8",
+    "install.sh": "892a762b7ce199567c8acb2f42ac3dc62b73abee365de23fd4135d68b1cc1853",
+    "site/install": "892a762b7ce199567c8acb2f42ac3dc62b73abee365de23fd4135d68b1cc1853",
+    "src/banner.rs": "dec4128eea89db1c339ebc6b19f68433f6b7c7986c5f0105f334542720137f79",
+    "src/main.rs": "898abd67f90eee1a5a4902bf629e0c6010483ad1f691c0de268f9843735a1877",
+    "tests/cli_ux.rs": "f38264104329f3a80ec72e124f0fd058624951bca09406442607fe04e22bff61",
+    "tests/site_installer.rs": "ac06b9784155261092b0a7cc48a9963430de0d224d53f574eaa6bbb9bc4de2b5"
+  },
+  "positive_contract": {
+    "alias_path_component": "az",
+    "alias_target": "azdaja",
+    "alias_type": "relative symlink",
+    "already_installed_binary_atomic_update_passed": true,
+    "bare_exact_five_line_help": [
+      "AZDAJA v0.1.2 \u2014 virtual memory for language models",
+      "Usage: az <command> [options]  (azdaja also works)",
+      "Commands: start load exec final list kill solo install doctor uninstall",
+      "Setup: az install --harness <jcode|claude|codex|gemini|opencode|all>",
+      "Example: az solo \"summarize this file\" -f ./document.txt"
+    ],
+    "bare_exact_five_line_help_byte_identical_through_alias": true,
+    "doctor_caps_output_byte_identical_through_alias": true,
+    "installer_stdout_lines": 3,
+    "managed_alias_second_install_idempotent": true,
+    "provider_free_solo_output_byte_identical_through_alias": true,
+    "stdout_line_3_uses": "az doctor",
+    "stdout_reports_commands": [
+      "azdaja",
+      "az"
+    ],
+    "version_output_byte_identical_through_alias": true
+  },
+  "record_type": "azdaja_install_alias_delta_local_fixture_public_receipt",
+  "result": {
+    "expected_no_harness_refusals": 2,
+    "green_cells": 16,
+    "positive_cells": 14,
+    "status": "PASS",
+    "total_cells": 16
+  },
+  "sanitization": {
+    "credentials_retained": false,
+    "host_paths_retained": false,
+    "model_io_retained": false,
+    "raw_logs_retained": false
+  },
+  "schema_version": 1,
+  "scope": {
+    "arc_calls_performed": false,
+    "boundary": "Both asset-selection branches and installer behavior were exercised locally; this delta receipt is not a native Linux binary or provider validation.",
+    "fixture": "loopback HTTP release fixture with a locally built current-source Azdaja candidate",
+    "native_cross_platform_claim": false,
+    "platform_selectors": [
+      "Darwin/arm64",
+      "Linux/x86_64"
+    ],
+    "provider_calls_performed": false,
+    "scenario_order": [
+      "detected-jcode",
+      "detected-claude",
+      "detected-codex",
+      "detected-gemini",
+      "detected-opencode",
+      "all",
+      "no-harness",
+      "already-installed"
+    ]
+  },
+  "validation": {
+    "command": "cargo test --locked --test site_installer -- --test-threads=1",
+    "matrix_test": "local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states",
+    "safety_test": "alias_safety_failures_leave_home_and_foreign_paths_unchanged",
+    "solo_test": "installed_alias_matches_solo_through_a_provider_free_fixture",
+    "tests_failed": 0,
+    "tests_passed": 6
+  },
+  "version": "0.1.2"
+}

@@ -1,0 +1,68 @@
+{
+  "base_commit": "94362aadb712150c31093329d398e2afadbcbda3",
+  "completed_local_source_validation": {
+    "arc_calls_performed": false,
+    "arc_offline_unit_tests": {
+      "failed": 0,
+      "passed": 55,
+      "status": "PASS"
+    },
+    "cargo_package_strict_allowlist": {
+      "packaged_files": 11,
+      "publish": false,
+      "status": "PASS"
+    },
+    "clippy_all_targets_all_features": "PASS_DENY_WARNINGS",
+    "exact_five_line_non_tty_help_and_alias_parity": "PASS",
+    "full_locked_rust_suite": {
+      "failed": 0,
+      "ignored": 1,
+      "passed": 108,
+      "status": "PASS"
+    },
+    "interactive_banner_unit_contract": "PASS_32X26_INDEXED_16_RENDERED_ROWS_TRUECOLOR_RESET_AND_COLOR_GATE",
+    "provider_calls_performed": false,
+    "provider_free_alias_fixture_matrix": "PASS_16_OF_16_GREEN_14_POSITIVE_2_EXPECTED_REFUSALS"
+  },
+  "publication": {
+    "release_created": false,
+    "remote_push_performed": false,
+    "tag_created": false,
+    "visibility_changed": false
+  },
+  "record_type": "azdaja_v0_1_2_candidate_readiness_supersession_receipt",
+  "required_before_release_readiness": [
+    "build new Darwin arm64 and Linux x86-64 assets from the final source commit",
+    "write a new SHA256SUMS and bind the new bytes",
+    "rerun native platform install and exact five-line help checks through both az and azdaja",
+    "rerun the provider and already-installed/no-harness matrix required by the release gate",
+    "replace stale release-plan bindings only after those checks pass"
+  ],
+  "sanitization": {
+    "credentials_retained": false,
+    "host_paths_retained": false,
+    "old_binary_hashes_repeated": false
+  },
+  "schema_version": 1,
+  "status": "REBUILD_AND_CROSS_PLATFORM_RETEST_REQUIRED",
+  "supersession": {
+    "historical_receipts": [
+      "bench/results/install-matrix-v0.1.2-final-public.json",
+      "bench/results/install-real-adapters-v0.1.2-final-public.json"
+    ],
+    "old_binary_hashes_are_final_bindings": false,
+    "previous_final_matrix_valid_for_current_source": false,
+    "previous_real_adapter_receipt_valid_for_current_source": false,
+    "previous_receipts_remain_historical_evidence": true,
+    "retained_candidate_may_be_published": false,
+    "retained_v0_1_2_candidate_is_final": false
+  },
+  "trigger": {
+    "bare_cli_output_changed": true,
+    "compatibility_command": "azdaja",
+    "interactive_truecolor_banner_added": true,
+    "one_line_installer_alias_added": true,
+    "primary_documented_command": "az",
+    "required_exact_lines": 5
+  }
+}
