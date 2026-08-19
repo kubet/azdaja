@@ -29,6 +29,13 @@ use std::os::unix::{
     io::{AsRawFd, FromRawFd},
     net::UnixStream,
 };
+#[cfg(windows)]
+use std::os::windows::fs::OpenOptionsExt as WindowsOpenOptionsExt;
+
+#[cfg(windows)]
+const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+#[cfg(windows)]
+const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const MONTY_VERSION: &str = "0.0.21";
@@ -74,19 +81,52 @@ impl Default for Config {
 }
 impl Config {
     pub fn load() -> Result<Self> {
-        let candidates = [
-            env::var_os("AZDAJA_CONFIG").map(PathBuf::from),
-            env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(|p| p.join("config.toml"))),
-            config_home().map(|p| p.join("azdaja/config.toml")),
-        ];
-        for p in candidates.into_iter().flatten() {
-            if p.is_file() {
-                return toml::from_str::<Self>(&fs::read_to_string(&p)?)
-                    .with_context(|| format!("invalid config {}", p.display()))?
-                    .validate();
+        if let Some(path) = env::var_os("AZDAJA_CONFIG").map(PathBuf::from) {
+            return load_config_file(&path)?.ok_or_else(|| {
+                anyhow!(
+                    "AZDAJA_CONFIG does not name a readable regular file: {}",
+                    path.display()
+                )
+            });
+        }
+
+        if let Ok(executable) = env::current_exe()
+            && let Some(directory) = executable.parent()
+        {
+            let standalone = directory.join("azdaja-config.toml");
+            if let Some(config) = load_config_file(&standalone)? {
+                return Ok(config);
             }
+
+            let marker = directory.join(".azdaja-managed");
+            if let Some(bytes) = read_regular_nofollow(&marker)? {
+                #[derive(Deserialize)]
+                struct ManagedMarker {
+                    files: Vec<(String, u64)>,
+                }
+                let marker: ManagedMarker = serde_json::from_slice(&bytes)
+                    .with_context(|| format!("invalid managed marker {}", marker.display()))?;
+                let has = |expected: &str| marker.files.iter().any(|(name, _)| name == expected);
+                let binary_is_managed = executable
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(&has);
+                if has("config.toml") && has("SKILL.md") && binary_is_managed {
+                    let config_path = directory.join("config.toml");
+                    return load_config_file(&config_path)?.ok_or_else(|| {
+                        anyhow!(
+                            "managed config is missing or unreadable: {}",
+                            config_path.display()
+                        )
+                    });
+                }
+            }
+        }
+
+        if let Some(path) = config_home().map(|p| p.join("azdaja/config.toml"))
+            && let Some(config) = load_config_file(&path)?
+        {
+            return Ok(config);
         }
         Self::default().validate()
     }
@@ -139,6 +179,18 @@ fn config_home() -> Option<PathBuf> {
         .map(PathBuf::from)
         .or_else(|| home().map(|p| p.join(".config")))
 }
+fn load_config_file(path: &Path) -> Result<Option<Config>> {
+    let Some(bytes) = read_regular_nofollow(path)? else {
+        return Ok(None);
+    };
+    let text = String::from_utf8(bytes)
+        .with_context(|| format!("config is not UTF-8: {}", path.display()))?;
+    Ok(Some(
+        toml::from_str::<Config>(&text)
+            .with_context(|| format!("invalid config {}", path.display()))?
+            .validate()?,
+    ))
+}
 pub fn state_home() -> Result<PathBuf> {
     let p = env::var_os("AZDAJA_HOME")
         .map(PathBuf::from)
@@ -149,66 +201,446 @@ pub fn state_home() -> Result<PathBuf> {
     Ok(p)
 }
 #[cfg(unix)]
-fn chmod(path: &Path, mode: u32) -> Result<()> {
+fn metadata_matches(open: &fs::Metadata, path: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    open.dev() == path.dev() && open.ino() == path.ino()
+}
+#[cfg(windows)]
+fn metadata_matches(open: &fs::Metadata, path: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    open.volume_serial_number().is_some()
+        && open.volume_serial_number() == path.volume_serial_number()
+        && open.file_index().is_some()
+        && open.file_index() == path.file_index()
+}
+#[cfg(not(any(unix, windows)))]
+fn metadata_matches(_: &fs::Metadata, _: &fs::Metadata) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn metadata_is_link_or_reparse(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+#[cfg(windows)]
+fn metadata_is_link_or_reparse(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    metadata.file_attributes() & 0x0400 != 0
+}
+#[cfg(not(any(unix, windows)))]
+fn metadata_is_link_or_reparse(_: &fs::Metadata) -> bool {
+    true
+}
+
+fn bound_metadata(file: &File, path: &Path) -> Result<fs::Metadata> {
+    let open = file.metadata()?;
+    let current = fs::symlink_metadata(path)
+        .with_context(|| format!("path binding changed: {}", path.display()))?;
+    if metadata_is_link_or_reparse(&current) || !metadata_matches(&open, &current) {
+        bail!("path binding changed: {}", path.display())
+    }
+    Ok(open)
+}
+
+fn open_regular_nofollow(path: &Path, write: bool) -> Result<File> {
+    let mut options = OpenOptions::new();
+    options.read(true).write(write);
+    #[cfg(unix)]
+    options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC);
+    #[cfg(windows)]
+    options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let file = options
+        .open(path)
+        .with_context(|| format!("open regular file {}", path.display()))?;
+    let metadata = bound_metadata(&file, path)?;
+    if !metadata.file_type().is_file() {
+        bail!("not a regular file: {}", path.display())
+    }
+    Ok(file)
+}
+
+fn read_regular_nofollow(path: &Path) -> Result<Option<Vec<u8>>> {
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+        Ok(metadata)
+            if metadata_is_link_or_reparse(&metadata) || !metadata.file_type().is_file() =>
+        {
+            bail!("not a regular non-symlink file: {}", path.display())
+        }
+        Ok(_) => {}
+    }
+    let mut file = open_regular_nofollow(path, false)?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    bound_metadata(&file, path)?;
+    Ok(Some(bytes))
+}
+
+#[cfg(unix)]
+fn validate_private_file_identity(file: &File, path: &Path) -> Result<fs::Metadata> {
+    use std::os::unix::fs::MetadataExt;
+    let metadata = bound_metadata(file, path)?;
+    if !metadata.file_type().is_file()
+        || metadata.uid() != unsafe { libc::geteuid() }
+        || metadata.nlink() != 1
+    {
+        bail!("unsafe private file: {}", path.display())
+    }
+    Ok(metadata)
+}
+#[cfg(windows)]
+fn validate_private_file_identity(file: &File, path: &Path) -> Result<fs::Metadata> {
+    use std::os::windows::fs::MetadataExt;
+    let metadata = bound_metadata(file, path)?;
+    if !metadata.file_type().is_file() || metadata.number_of_links() != Some(1) {
+        bail!("unsafe private file: {}", path.display())
+    }
+    Ok(metadata)
+}
+#[cfg(not(any(unix, windows)))]
+fn validate_private_file_identity(_: &File, path: &Path) -> Result<fs::Metadata> {
+    bail!(
+        "private file validation is unavailable on this platform: {}",
+        path.display()
+    )
+}
+
+#[cfg(unix)]
+fn validate_private_file(file: &File, path: &Path) -> Result<fs::Metadata> {
     use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
+    let metadata = validate_private_file_identity(file, path)?;
+    if metadata.permissions().mode() & 0o077 != 0 {
+        bail!("unsafe private file mode: {}", path.display())
+    }
+    Ok(metadata)
+}
+#[cfg(windows)]
+fn validate_private_file(file: &File, path: &Path) -> Result<fs::Metadata> {
+    validate_private_file_identity(file, path)
+}
+#[cfg(not(any(unix, windows)))]
+fn validate_private_file(_: &File, path: &Path) -> Result<fs::Metadata> {
+    bail!(
+        "private file validation is unavailable on this platform: {}",
+        path.display()
+    )
+}
+
+fn open_private_file(path: &Path, write: bool) -> Result<File> {
+    let file = open_regular_nofollow(path, write)?;
+    validate_private_file(&file, path)?;
+    Ok(file)
+}
+
+fn create_private_file(path: &Path) -> Result<File> {
+    let mut options = OpenOptions::new();
+    options.read(true).write(true).create_new(true);
+    #[cfg(unix)]
+    options
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC);
+    #[cfg(windows)]
+    options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let file = options.open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = bound_metadata(&file, path)?;
+        use std::os::unix::fs::MetadataExt;
+        if !metadata.file_type().is_file()
+            || metadata.uid() != unsafe { libc::geteuid() }
+            || metadata.nlink() != 1
+        {
+            bail!("unsafe newly-created private file: {}", path.display())
+        }
+        file.set_permissions(fs::Permissions::from_mode(0o600))?;
+    }
+    validate_private_file(&file, path)?;
+    Ok(file)
+}
+
+fn open_private_directory(path: &Path) -> Result<File> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    options.custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC);
+    #[cfg(windows)]
+    options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS);
+    let file = options
+        .open(path)
+        .with_context(|| format!("open private directory {}", path.display()))?;
+    let metadata = bound_metadata(&file, path)?;
+    if !metadata.file_type().is_dir() {
+        bail!("not a private directory: {}", path.display())
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.uid() != unsafe { libc::geteuid() } {
+            bail!(
+                "private directory is not owned by the current user: {}",
+                path.display()
+            )
+        }
+    }
+    Ok(file)
+}
+
+fn validate_private_directory(file: &File, path: &Path) -> Result<()> {
+    let metadata = bound_metadata(file, path)?;
+    if !metadata.file_type().is_dir() {
+        bail!("not a private directory: {}", path.display())
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        if metadata.uid() != unsafe { libc::geteuid() }
+            || metadata.permissions().mode() & 0o777 != 0o700
+        {
+            bail!("unsafe private directory: {}", path.display())
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn chmod(path: &Path, mode: u32) -> Result<()> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() || metadata.uid() != unsafe { libc::geteuid() } {
+        bail!("refusing to chmod unsafe path: {}", path.display())
+    }
+    let mut options = OpenOptions::new();
+    options.read(true);
+    if metadata.file_type().is_dir() {
+        options.custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC);
+    } else {
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC);
+    }
+    let file = options.open(path)?;
+    let open = bound_metadata(&file, path)?;
+    if open.file_type().is_file() && open.nlink() != 1 {
+        bail!("refusing to chmod hard-linked path: {}", path.display())
+    }
+    file.set_permissions(fs::Permissions::from_mode(mode))?;
+    bound_metadata(&file, path)?;
     Ok(())
 }
 #[cfg(not(unix))]
 fn chmod(_: &Path, _: u32) -> Result<()> {
     Ok(())
 }
-fn secure_dir(p: &Path) -> Result<()> {
-    fs::create_dir_all(p)?;
-    chmod(p, 0o700)
+
+fn secure_dir(path: &Path) -> Result<()> {
+    fs::create_dir_all(path)?;
+    let file = open_private_directory(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(fs::Permissions::from_mode(0o700))?;
+    }
+    validate_private_directory(&file, path)
 }
+
+fn create_new_private_directory(path: &Path) -> Result<File> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        let mut builder = fs::DirBuilder::new();
+        builder.mode(0o700);
+        builder.create(path)?;
+    }
+    #[cfg(not(unix))]
+    fs::create_dir(path)?;
+    let directory = open_private_directory(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        directory.set_permissions(fs::Permissions::from_mode(0o700))?;
+    }
+    validate_private_directory(&directory, path)?;
+    Ok(directory)
+}
+
+fn cleanup_owned_directory(path: &Path, directory: &File) {
+    if validate_private_directory(directory, path).is_ok() {
+        let _ = fs::remove_dir_all(path);
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn rename_noreplace(from: &Path, to: &Path) -> Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let from = CString::new(from.as_os_str().as_bytes())?;
+    let to = CString::new(to.as_os_str().as_bytes())?;
+    let result = unsafe {
+        libc::renameat2(
+            libc::AT_FDCWD,
+            from.as_ptr(),
+            libc::AT_FDCWD,
+            to.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error().into())
+    }
+}
+#[cfg(target_vendor = "apple")]
+fn rename_noreplace(from: &Path, to: &Path) -> Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let from = CString::new(from.as_os_str().as_bytes())?;
+    let to = CString::new(to.as_os_str().as_bytes())?;
+    let result = unsafe {
+        libc::renameatx_np(
+            libc::AT_FDCWD,
+            from.as_ptr(),
+            libc::AT_FDCWD,
+            to.as_ptr(),
+            libc::RENAME_EXCL,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error().into())
+    }
+}
+#[cfg(windows)]
+fn rename_noreplace(from: &Path, to: &Path) -> Result<()> {
+    fs::rename(from, to)?;
+    Ok(())
+}
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "android",
+    target_vendor = "apple",
+    windows
+)))]
+fn rename_noreplace(_: &Path, _: &Path) -> Result<()> {
+    bail!("atomic no-replace rename is unavailable on this platform")
+}
+
+fn remove_bound_file(path: &Path, file: &File) {
+    if bound_metadata(file, path).is_ok() {
+        let _ = fs::remove_file(path);
+    }
+}
+
 fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        let parent = open_private_directory(parent)?;
+        validate_private_directory(&parent, path.parent().expect("checked parent"))?;
+    }
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    let tmp = path.with_extension(format!("tmp-{}-{nonce}", std::process::id()));
-    {
-        let mut f = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
-        chmod(&tmp, 0o600)?;
-        f.write_all(data)?;
+    for salt in 0..100u8 {
+        let tmp = path.with_extension(format!("tmp-{}-{nonce}-{salt}", std::process::id()));
+        let mut file = match create_private_file(&tmp) {
+            Ok(file) => file,
+            Err(error)
+                if error
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists) =>
+            {
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        if let Err(error) = file.write_all(data) {
+            remove_bound_file(&tmp, &file);
+            return Err(error.into());
+        }
+        validate_private_file(&file, &tmp)?;
+        drop(file);
+        #[cfg(windows)]
+        match fs::symlink_metadata(path) {
+            Ok(metadata) if metadata_is_link_or_reparse(&metadata) => {
+                let _ = fs::remove_file(&tmp);
+                bail!("refusing to replace symlink: {}", path.display())
+            }
+            Ok(_) => fs::remove_file(path)?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        match fs::rename(&tmp, path) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                if let Ok(file) = open_private_file(&tmp, false) {
+                    remove_bound_file(&tmp, &file);
+                }
+                return Err(error.into());
+            }
+        }
     }
-    #[cfg(windows)]
-    if path.exists() {
-        fs::remove_file(path)?;
-    }
-    fs::rename(tmp, path)?;
-    Ok(())
+    bail!("could not allocate private temporary file")
 }
 fn valid_sid(s: &str) -> bool {
     s.len() == 16
         && s.bytes()
             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
-fn session_dir(sid: &str) -> Result<PathBuf> {
+fn session_dir(sid: &str) -> Result<(PathBuf, File)> {
     if !valid_sid(sid) {
         bail!("invalid session id");
     }
-    let p = state_home()?.join(sid);
-    let m = fs::symlink_metadata(&p).with_context(|| format!("session not found: {sid}"))?;
-    if !m.file_type().is_dir() || m.file_type().is_symlink() {
-        bail!("unsafe session path");
-    }
-    Ok(p)
+    let path = state_home()?.join(sid);
+    let directory =
+        open_private_directory(&path).with_context(|| format!("unsafe session path: {sid}"))?;
+    validate_private_directory(&directory, &path)?;
+    Ok((path, directory))
 }
-fn lock_path(path: &Path) -> Result<File> {
+fn open_lock_file(path: &Path) -> Result<File> {
     if let Some(parent) = path.parent() {
         secure_dir(parent)?
     }
-    let f = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(path)?;
-    chmod(path, 0o600)?;
-    FileExt::lock_exclusive(&f)?;
-    Ok(f)
+    let mut create = OpenOptions::new();
+    create.read(true).write(true).create_new(true);
+    #[cfg(unix)]
+    create
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC);
+    #[cfg(windows)]
+    create.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let file = match create.open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            open_regular_nofollow(path, true)?
+        }
+        Err(error) => return Err(error.into()),
+    };
+    validate_private_file_identity(&file, path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(fs::Permissions::from_mode(0o600))?;
+    }
+    validate_private_file(&file, path)?;
+    Ok(file)
+}
+fn lock_path(path: &Path) -> Result<File> {
+    let file = open_lock_file(path)?;
+    FileExt::lock_exclusive(&file)?;
+    validate_private_file(&file, path)?;
+    Ok(file)
+}
+fn try_lock_path(path: &Path) -> Result<Option<File>> {
+    let file = open_lock_file(path)?;
+    match FileExt::try_lock_exclusive(&file) {
+        Ok(()) => {
+            validate_private_file(&file, path)?;
+            Ok(Some(file))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
+        Err(error) => Err(error.into()),
+    }
 }
 fn lock(dir: &Path) -> Result<File> {
     let sid = dir
@@ -220,11 +652,8 @@ fn global_lock() -> Result<File> {
     lock_path(&state_home()?.join("global.lock"))
 }
 fn load_repl(dir: &Path) -> Result<MontyRepl> {
-    let p = dir.join("state.monty");
-    if fs::symlink_metadata(&p)?.file_type().is_symlink() {
-        bail!("unsafe snapshot path");
-    }
-    let file = File::open(p)?;
+    let path = dir.join("state.monty");
+    let file = open_private_file(&path, false)?;
     // Writers replace the snapshot inode under the session lock, so this mapping is never mutated.
     let bytes = unsafe { memmap2::MmapOptions::new().map(&file)? };
     let restored = Dump::load(&bytes)?;
@@ -241,7 +670,12 @@ fn save_repl(dir: &Path, repl: &MontyRepl) -> Result<()> {
     )
 }
 fn read_meta(dir: &Path) -> Result<Meta> {
-    Ok(serde_json::from_slice(&fs::read(dir.join("meta.json"))?)?)
+    let path = dir.join("meta.json");
+    let mut file = open_private_file(&path, false)?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    validate_private_file(&file, &path)?;
+    Ok(serde_json::from_slice(&bytes)?)
 }
 
 pub fn reap(cfg: &Config) -> Result<()> {
@@ -265,21 +699,23 @@ pub fn reap(cfg: &Config) -> Result<()> {
         if !valid_sid(&name) || e.file_type()?.is_symlink() {
             continue;
         }
-        if !cutoff.is_some_and(|c| e.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < c)) {
+        let entry_path = e.path();
+        let Ok(directory) = open_private_directory(&entry_path) else {
+            continue;
+        };
+        if validate_private_directory(&directory, &entry_path).is_err()
+            || !cutoff.is_some_and(|c| e.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < c))
+        {
             continue;
         }
-        let lockfile = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(base.join("locks").join(&name).with_extension("lock"));
-        let Ok(lockfile) = lockfile else { continue };
-        if FileExt::try_lock_exclusive(&lockfile).is_err() {
+        let lock_path = base.join("locks").join(&name).with_extension("lock");
+        let Ok(Some(_lockfile)) = try_lock_path(&lock_path) else {
             continue;
-        }
-        if cutoff.is_some_and(|c| e.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < c)) {
-            let _ = fs::remove_dir_all(e.path());
+        };
+        if cutoff.is_some_and(|c| e.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < c))
+            && validate_private_directory(&directory, &entry_path).is_ok()
+        {
+            let _ = fs::remove_dir_all(entry_path);
         }
     }
     Ok(())
@@ -313,11 +749,17 @@ pub fn start(cfg: &Config, sub_model: Option<String>) -> Result<String> {
             continue;
         }
         let stage = base.join(format!(".start-{}-{id}", std::process::id()));
-        if stage.exists() {
-            let _ = fs::remove_dir_all(&stage);
-        }
-        fs::create_dir(&stage)?;
-        chmod(&stage, 0o700)?;
+        let stage_directory = match create_new_private_directory(&stage) {
+            Ok(directory) => directory,
+            Err(error)
+                if error
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists) =>
+            {
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
         let setup = (|| -> Result<()> {
             let tracker = ResourceTracker::new(
                 ResourceLimits::default().max_duration(Duration::from_secs(cfg.cell_timeout)),
@@ -335,18 +777,23 @@ pub fn start(cfg: &Config, sub_model: Option<String>) -> Result<String> {
             atomic_write(&stage.join("meta.json"), &serde_json::to_vec(&meta)?)?;
             Ok(())
         })();
-        if let Err(e) = setup {
-            let _ = fs::remove_dir_all(&stage);
-            return Err(e);
+        if let Err(error) = setup {
+            cleanup_owned_directory(&stage, &stage_directory);
+            return Err(error);
         }
-        match fs::rename(&stage, &dir) {
+        validate_private_directory(&stage_directory, &stage)?;
+        match rename_noreplace(&stage, &dir) {
             Ok(()) => return Ok(id),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                let _ = fs::remove_dir_all(&stage);
+            Err(error)
+                if error
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists) =>
+            {
+                cleanup_owned_directory(&stage, &stage_directory);
             }
-            Err(e) => {
-                let _ = fs::remove_dir_all(&stage);
-                return Err(e.into());
+            Err(error) => {
+                cleanup_owned_directory(&stage, &stage_directory);
+                return Err(error);
             }
         }
     }
@@ -367,8 +814,9 @@ pub fn load(sid: &str, path: &Path, var: &str, cfg: &Config) -> Result<String> {
     if !ident.is_match(var) {
         bail!("invalid variable name");
     }
-    let dir = session_dir(sid)?;
+    let (dir, directory) = session_dir(sid)?;
     let _guard = lock(&dir)?;
+    validate_private_directory(&directory, &dir)?;
     let text = fs::read_to_string(path)
         .with_context(|| format!("input is not UTF-8: {}", path.display()))?;
     let chars = text.chars().count();
@@ -1653,8 +2101,9 @@ impl SoloSession {
 }
 
 pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
-    let dir = session_dir(sid)?;
+    let (dir, directory) = session_dir(sid)?;
     let _guard = lock(&dir)?;
+    validate_private_directory(&directory, &dir)?;
     let meta = read_meta(&dir)?;
     let model = meta.sub_model.as_deref().unwrap_or(&cfg.default_model);
     let repl = load_repl(&dir)?;
@@ -1711,14 +2160,20 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
     })
 }
 pub fn final_answer(sid: &str, cfg: &Config) -> Result<String> {
-    let dir = session_dir(sid)?;
+    let (dir, directory) = session_dir(sid)?;
     let _guard = lock(&dir)?;
-    let b = fs::read(dir.join("final")).context("session has no final answer")?;
-    Ok(cap(&String::from_utf8(b)?, cfg.output_cap))
+    validate_private_directory(&directory, &dir)?;
+    let path = dir.join("final");
+    let mut file = open_private_file(&path, false).context("session has no final answer")?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    validate_private_file(&file, &path)?;
+    Ok(cap(&String::from_utf8(bytes)?, cfg.output_cap))
 }
 pub fn kill(sid: &str) -> Result<()> {
-    let dir = session_dir(sid)?;
+    let (dir, directory) = session_dir(sid)?;
     let _guard = lock(&dir)?;
+    validate_private_directory(&directory, &dir)?;
     fs::remove_dir_all(dir)?;
     Ok(())
 }
@@ -4201,7 +4656,7 @@ pub fn call_model(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Result
     Ok(call_model_reply(prompt, model, cfg, depth)?.text)
 }
 fn call_model_command(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Result<String> {
-    let prompt_path = if cfg.sub_llm_cmd.contains("{prompt_file}") {
+    let prompt_file = if cfg.sub_llm_cmd.contains("{prompt_file}") {
         let dir = state_home()?.join("prompts");
         secure_dir(&dir)?;
         let nanos = SystemTime::now()
@@ -4211,20 +4666,36 @@ fn call_model_command(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Re
         let mut made = None;
         for salt in 0..100u8 {
             let path = dir.join(format!("{}-{nanos}-{salt}.txt", std::process::id()));
-            if let Ok(mut file) = OpenOptions::new().write(true).create_new(true).open(&path) {
-                chmod(&path, 0o600)?;
-                file.write_all(prompt.as_bytes())?;
-                made = Some(path);
-                break;
+            match create_private_file(&path) {
+                Ok(mut file) => {
+                    file.write_all(prompt.as_bytes())?;
+                    validate_private_file(&file, &path)?;
+                    made = Some((path, file));
+                    break;
+                }
+                Err(error)
+                    if error
+                        .downcast_ref::<std::io::Error>()
+                        .is_some_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists) =>
+                {
+                    continue;
+                }
+                Err(error) => return Err(error),
             }
         }
         Some(made.ok_or_else(|| anyhow!("could not allocate prompt file"))?)
     } else {
         None
     };
-    let result = call_model_inner(prompt, prompt_path.as_deref(), model, cfg, depth);
-    if let Some(path) = prompt_path {
-        let _ = fs::remove_file(path);
+    let result = call_model_inner(
+        prompt,
+        prompt_file.as_ref().map(|(path, _)| path.as_path()),
+        model,
+        cfg,
+        depth,
+    );
+    if let Some((path, file)) = prompt_file {
+        remove_bound_file(&path, &file);
     }
     result
 }

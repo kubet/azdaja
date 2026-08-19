@@ -21,6 +21,13 @@ use std::{
 
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
+#[cfg(windows)]
+use std::os::windows::fs::OpenOptionsExt as WindowsOpenOptionsExt;
+
+#[cfg(windows)]
+const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+#[cfg(windows)]
+const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
 
 const CANARY_PROMPT: &str = "Reverse the six-letter ASCII string AJADZA. Reply with the reversed string only, no punctuation.";
 const CANARY_ANSWER: &str = "AZDAJA";
@@ -413,6 +420,220 @@ fn hash(b: &[u8]) -> u64 {
     }
     h
 }
+
+fn path_entry_exists(path: &Path) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+#[cfg(unix)]
+fn install_metadata_matches(open: &fs::Metadata, path: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    open.dev() == path.dev() && open.ino() == path.ino()
+}
+#[cfg(windows)]
+fn install_metadata_matches(open: &fs::Metadata, path: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    open.volume_serial_number().is_some()
+        && open.volume_serial_number() == path.volume_serial_number()
+        && open.file_index().is_some()
+        && open.file_index() == path.file_index()
+}
+#[cfg(not(any(unix, windows)))]
+fn install_metadata_matches(_: &fs::Metadata, _: &fs::Metadata) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn install_metadata_is_link_or_reparse(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+#[cfg(windows)]
+fn install_metadata_is_link_or_reparse(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    metadata.file_attributes() & 0x0400 != 0
+}
+#[cfg(not(any(unix, windows)))]
+fn install_metadata_is_link_or_reparse(_: &fs::Metadata) -> bool {
+    true
+}
+
+fn validate_install_directory_binding(file: &fs::File, path: &Path) -> Result<()> {
+    let open = file.metadata()?;
+    let current = fs::symlink_metadata(path)?;
+    if !open.file_type().is_dir()
+        || install_metadata_is_link_or_reparse(&current)
+        || !current.file_type().is_dir()
+        || !install_metadata_matches(&open, &current)
+    {
+        bail!("managed directory binding changed: {}", path.display())
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if open.uid() != unsafe { libc::geteuid() } {
+            bail!("managed directory is not owned by the current user")
+        }
+    }
+    Ok(())
+}
+
+fn open_install_directory(path: &Path) -> Result<fs::File> {
+    let metadata = fs::symlink_metadata(path)?;
+    if install_metadata_is_link_or_reparse(&metadata) || !metadata.file_type().is_dir() {
+        bail!("refusing unsafe managed directory: {}", path.display())
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    options.custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC);
+    #[cfg(windows)]
+    options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS);
+    let file = options.open(path)?;
+    validate_install_directory_binding(&file, path)?;
+    Ok(file)
+}
+
+struct OwnedInstallDirectory {
+    path: PathBuf,
+    file: fs::File,
+    recursive_cleanup: bool,
+    armed: bool,
+}
+impl OwnedInstallDirectory {
+    fn create(parent: &Path, prefix: &str, recursive_cleanup: bool) -> Result<Self> {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        for attempt in 0..128u16 {
+            let path = parent.join(format!(
+                ".{prefix}-{}-{nonce}-{attempt}",
+                std::process::id()
+            ));
+            #[cfg(unix)]
+            let created = {
+                use std::os::unix::fs::DirBuilderExt;
+                let mut builder = fs::DirBuilder::new();
+                builder.mode(0o700);
+                builder.create(&path)
+            };
+            #[cfg(not(unix))]
+            let created = fs::create_dir(&path);
+            match created {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error.into()),
+            }
+            // Fail closed and leave the path untouched when its binding cannot be proven.
+            let file = open_install_directory(&path)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                file.set_permissions(fs::Permissions::from_mode(0o700))?;
+            }
+            validate_install_directory_binding(&file, &path)?;
+            return Ok(Self {
+                path,
+                file,
+                recursive_cleanup,
+                armed: true,
+            });
+        }
+        bail!("could not allocate a collision-free private {prefix} directory")
+    }
+
+    fn validate_at(&self, path: &Path) -> Result<()> {
+        validate_install_directory_binding(&self.file, path)
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+
+    fn remove_now(&mut self) -> Result<()> {
+        self.validate_at(&self.path)?;
+        if self.recursive_cleanup {
+            fs::remove_dir_all(&self.path)?;
+        } else {
+            fs::remove_dir(&self.path)?;
+        }
+        self.armed = false;
+        Ok(())
+    }
+}
+impl Drop for OwnedInstallDirectory {
+    fn drop(&mut self) {
+        if !self.armed || self.validate_at(&self.path).is_err() {
+            return;
+        }
+        if self.recursive_cleanup {
+            let _ = fs::remove_dir_all(&self.path);
+        } else {
+            let _ = fs::remove_dir(&self.path);
+        }
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn install_rename_noreplace(from: &Path, to: &Path) -> Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let from = CString::new(from.as_os_str().as_bytes())?;
+    let to = CString::new(to.as_os_str().as_bytes())?;
+    let result = unsafe {
+        libc::renameat2(
+            libc::AT_FDCWD,
+            from.as_ptr(),
+            libc::AT_FDCWD,
+            to.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error().into())
+    }
+}
+#[cfg(target_vendor = "apple")]
+fn install_rename_noreplace(from: &Path, to: &Path) -> Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let from = CString::new(from.as_os_str().as_bytes())?;
+    let to = CString::new(to.as_os_str().as_bytes())?;
+    let result = unsafe {
+        libc::renameatx_np(
+            libc::AT_FDCWD,
+            from.as_ptr(),
+            libc::AT_FDCWD,
+            to.as_ptr(),
+            libc::RENAME_EXCL,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error().into())
+    }
+}
+#[cfg(windows)]
+fn install_rename_noreplace(from: &Path, to: &Path) -> Result<()> {
+    fs::rename(from, to)?;
+    Ok(())
+}
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "android",
+    target_vendor = "apple",
+    windows
+)))]
+fn install_rename_noreplace(_: &Path, _: &Path) -> Result<()> {
+    bail!("atomic no-replace rename is unavailable on this platform")
+}
 fn install_cmd(args: &[String], remove: bool) -> Result<()> {
     let (harnesses, detection_report) = harnesses(harness_arg(args)?)?;
     let home = home()?;
@@ -430,9 +651,14 @@ fn install_cmd(args: &[String], remove: bool) -> Result<()> {
     for harness in harnesses {
         let dst = target(&home, harness);
         let (cmd, model) = adapter(harness);
-        let preserved = if dst.exists() {
+        let existing_directory = if path_entry_exists(&dst)? {
             validate_install(&dst, true)?;
-            Some(fs::read(dst.join("config.toml"))?)
+            Some(open_install_directory(&dst)?)
+        } else {
+            None
+        };
+        let preserved = if existing_directory.is_some() {
+            Some(read_install_regular(&dst.join("config.toml"))?)
         } else {
             None
         };
@@ -447,12 +673,10 @@ fn install_cmd(args: &[String], remove: bool) -> Result<()> {
         capability_check(&cfg)?;
         let parent = dst.parent().unwrap();
         fs::create_dir_all(parent)?;
-        let stage = parent.join(format!(".azdaja-stage-{}", std::process::id()));
-        if stage.exists() {
-            fs::remove_dir_all(&stage)?
-        }
-        fs::create_dir(&stage)?;
-        let bin = stage.join(if cfg!(windows) {
+        let _parent_directory = open_install_directory(parent)?;
+        let mut stage = OwnedInstallDirectory::create(parent, "azdaja-stage", true)?;
+        let stage_path = stage.path.clone();
+        let bin = stage_path.join(if cfg!(windows) {
             "azdaja.exe"
         } else {
             "azdaja"
@@ -463,9 +687,9 @@ fn install_cmd(args: &[String], remove: bool) -> Result<()> {
         let skill = SKILL
             .replace("{{VERSION}}", VERSION)
             .replace("{{BIN}}", &shell_quote(&final_bin));
-        fs::write(stage.join("SKILL.md"), skill)?;
+        fs::write(stage_path.join("SKILL.md"), skill)?;
         fs::write(
-            stage.join("config.toml"),
+            stage_path.join("config.toml"),
             preserved.unwrap_or(toml::to_string_pretty(&cfg)?.into_bytes()),
         )?;
         let files = [
@@ -479,28 +703,54 @@ fn install_cmd(args: &[String], remove: bool) -> Result<()> {
                 .map(|name| {
                     (
                         name.clone(),
-                        hash(&fs::read(stage.join(name)).expect("staged managed file")),
+                        hash(&fs::read(stage_path.join(name)).expect("staged managed file")),
                     )
                 })
                 .collect(),
         };
         fs::write(
-            stage.join(".azdaja-managed"),
+            stage_path.join(".azdaja-managed"),
             serde_json::to_vec(&manifest)?,
         )?;
-        if dst.exists() {
-            let backup = parent.join(format!(".azdaja-backup-{}", std::process::id()));
-            if backup.exists() {
-                fs::remove_dir_all(&backup)?
+        stage.validate_at(&stage_path)?;
+        if let Some(existing_directory) = existing_directory {
+            let mut backup = OwnedInstallDirectory::create(parent, "azdaja-backup", false)?;
+            let previous = backup.path.join("previous");
+            backup.validate_at(&backup.path)?;
+            install_rename_noreplace(&dst, &previous)?;
+            if let Err(error) = validate_install_directory_binding(&existing_directory, &previous) {
+                backup.disarm();
+                return Err(error.context(format!(
+                    "prior installation retained at {}",
+                    previous.display()
+                )));
             }
-            fs::rename(&dst, &backup)?;
-            if let Err(error) = fs::rename(&stage, &dst) {
-                let _ = fs::rename(&backup, &dst);
+            if let Err(error) = install_rename_noreplace(&stage_path, &dst) {
+                match install_rename_noreplace(&previous, &dst) {
+                    Ok(()) => backup.remove_now()?,
+                    Err(rollback_error) => {
+                        backup.disarm();
+                        return Err(error.context(format!(
+                            "install failed and rollback failed ({rollback_error:#}); prior installation retained at {}",
+                            previous.display()
+                        )));
+                    }
+                }
+                return Err(error);
+            }
+            stage.validate_at(&dst)?;
+            stage.disarm();
+            validate_install_directory_binding(&existing_directory, &previous)?;
+            validate_install(&previous, true)?;
+            if let Err(error) = fs::remove_dir_all(&previous) {
+                backup.disarm();
                 return Err(error.into());
             }
-            fs::remove_dir_all(backup)?
+            backup.remove_now()?;
         } else {
-            fs::rename(&stage, &dst)?
+            install_rename_noreplace(&stage_path, &dst)?;
+            stage.validate_at(&dst)?;
+            stage.disarm();
         }
         written.push(format!("{harness} -> {}", dst.display()));
         doctor.get_or_insert(final_bin);
@@ -514,9 +764,28 @@ fn install_cmd(args: &[String], remove: bool) -> Result<()> {
     Ok(())
 }
 #[cfg(unix)]
-fn executable(p: &Path) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(p, fs::Permissions::from_mode(0o755))?;
+fn executable(path: &Path) -> Result<()> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let current = fs::symlink_metadata(path)?;
+    if install_metadata_is_link_or_reparse(&current) || !current.file_type().is_file() {
+        bail!("refusing to chmod unsafe executable: {}", path.display())
+    }
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(path)?;
+    let open = file.metadata()?;
+    if !install_metadata_matches(&open, &current)
+        || open.uid() != unsafe { libc::geteuid() }
+        || open.nlink() != 1
+    {
+        bail!("refusing to chmod unbound executable: {}", path.display())
+    }
+    file.set_permissions(fs::Permissions::from_mode(0o755))?;
+    let after = fs::symlink_metadata(path)?;
+    if !install_metadata_matches(&file.metadata()?, &after) {
+        bail!("executable path binding changed: {}", path.display())
+    }
     Ok(())
 }
 #[cfg(not(unix))]
@@ -527,15 +796,60 @@ fn shell_quote(p: &Path) -> String {
     let s = p.to_string_lossy();
     format!("'{}'", s.replace('\'', "'\\''"))
 }
+fn read_install_regular(path: &Path) -> Result<Vec<u8>> {
+    let current = fs::symlink_metadata(path)?;
+    if install_metadata_is_link_or_reparse(&current) || !current.file_type().is_file() {
+        bail!("managed path is not a regular file: {}", path.display())
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC);
+    #[cfg(windows)]
+    options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let mut file = options.open(path)?;
+    let open = file.metadata()?;
+    if !install_metadata_matches(&open, &current) {
+        bail!("managed file binding changed: {}", path.display())
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if open.uid() != unsafe { libc::geteuid() } || open.nlink() != 1 {
+            bail!(
+                "managed file is not private to its owner: {}",
+                path.display()
+            )
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if open.number_of_links() != Some(1) {
+            bail!("managed file has multiple links: {}", path.display())
+        }
+    }
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    let after = fs::symlink_metadata(path)?;
+    if install_metadata_is_link_or_reparse(&after)
+        || !install_metadata_matches(&file.metadata()?, &after)
+    {
+        bail!("managed file binding changed: {}", path.display())
+    }
+    Ok(bytes)
+}
 fn validate_install(dst: &Path, allow_config_change: bool) -> Result<()> {
+    let _directory = open_install_directory(dst)
+        .context("refusing to modify unowned or unsafe skill directory")?;
     let manifest: Manifest = serde_json::from_slice(
-        &fs::read(dst.join(".azdaja-managed"))
+        &read_install_regular(&dst.join(".azdaja-managed"))
             .context("refusing to modify unowned skill directory")?,
     )?;
     for (name, want) in &manifest.files {
         let path = dst.join(name);
         let got = hash(
-            &fs::read(&path)
+            &read_install_regular(&path)
                 .with_context(|| format!("managed file missing: {}", path.display()))?,
         );
         if got != *want && !(allow_config_change && name == "config.toml") {
@@ -551,11 +865,13 @@ fn validate_install(dst: &Path, allow_config_change: bool) -> Result<()> {
     Ok(())
 }
 fn uninstall(dst: &Path, allow_config_change: bool) -> Result<()> {
-    if !dst.exists() {
+    if !path_entry_exists(dst)? {
         println!("not installed: {}", dst.display());
         return Ok(());
     }
+    let directory = open_install_directory(dst)?;
     validate_install(dst, allow_config_change)?;
+    validate_install_directory_binding(&directory, dst)?;
     fs::remove_dir_all(dst)?;
     println!("uninstalled {}", dst.display());
     Ok(())

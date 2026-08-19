@@ -2035,6 +2035,273 @@ fn shipped_cleaners_strip_jcode_banners_and_ansi() {
 }
 
 #[test]
+#[cfg(unix)]
+fn authoritative_config_failures_never_enter_fallback_provider() {
+    let t = temp("authoritative-config");
+    let xdg = t.join("xdg/azdaja");
+    fs::create_dir_all(&xdg).unwrap();
+    let calls = t.join("provider-calls");
+    let provider = t.join("provider.py");
+    fs::write(
+        &provider,
+        r#"import pathlib, sys
+pathlib.Path(sys.argv[1]).open("a").write("entered\n")
+sys.stdin.read()
+print("AZDAJA")
+"#,
+    )
+    .unwrap();
+    config(
+        &xdg,
+        &format!("python3 {} {}", provider.display(), calls.display()),
+        512,
+        1,
+        3,
+        4,
+    );
+
+    let missing = t.join("missing.toml");
+    let directory = t.join("directory.toml");
+    fs::create_dir(&directory).unwrap();
+    let dangling = t.join("dangling.toml");
+    std::os::unix::fs::symlink(t.join("absent-target"), &dangling).unwrap();
+    let malformed = t.join("malformed.toml");
+    fs::write(&malformed, "this is not = valid toml [").unwrap();
+
+    for (index, invalid) in [missing, directory, dangling, malformed].iter().enumerate() {
+        let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+            .arg("doctor")
+            .env("HOME", &t)
+            .env("XDG_CONFIG_HOME", t.join("xdg"))
+            .env("AZDAJA_HOME", t.join(format!("state-{index}")))
+            .env("AZDAJA_CONFIG", invalid)
+            .env_remove("RLM_DEPTH")
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(1),
+            "invalid={}",
+            invalid.display()
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).starts_with("FAIL config:"));
+        assert!(output.stderr.is_empty());
+    }
+    assert!(
+        !calls.exists(),
+        "an authoritative config failure must stop before fallback provider entry"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn adjacent_config_requires_standalone_name_or_managed_marker() {
+    let t = temp("adjacent-config");
+    let xdg = t.join("xdg/azdaja");
+    fs::create_dir_all(&xdg).unwrap();
+    let provider = t.join("provider.py");
+    fs::write(
+        &provider,
+        r#"import pathlib, sys
+pathlib.Path(sys.argv[1]).open("a").write("entered\n")
+sys.stdin.read()
+print("AZDAJA")
+"#,
+    )
+    .unwrap();
+
+    let run_copy = |name: &str, adjacent_name: &str, managed: bool| {
+        let root = t.join(name);
+        let bin = root.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let executable = bin.join("azdaja");
+        fs::copy(env!("CARGO_BIN_EXE_azdaja"), &executable).unwrap();
+        let adjacent_calls = root.join("adjacent-calls");
+        let xdg_calls = root.join("xdg-calls");
+        config(
+            &bin,
+            &format!(
+                "python3 {} {}",
+                provider.display(),
+                adjacent_calls.display()
+            ),
+            512,
+            1,
+            3,
+            4,
+        );
+        if adjacent_name != "config.toml" {
+            fs::rename(bin.join("config.toml"), bin.join(adjacent_name)).unwrap();
+        }
+        if managed {
+            fs::write(
+                bin.join(".azdaja-managed"),
+                r#"{"files":[["azdaja",0],["SKILL.md",0],["config.toml",0]]}"#,
+            )
+            .unwrap();
+        }
+        let xdg_dir = root.join("xdg/azdaja");
+        fs::create_dir_all(&xdg_dir).unwrap();
+        config(
+            &xdg_dir,
+            &format!("python3 {} {}", provider.display(), xdg_calls.display()),
+            512,
+            1,
+            3,
+            4,
+        );
+        let output = Command::new(&executable)
+            .arg("doctor")
+            .env("HOME", &root)
+            .env("XDG_CONFIG_HOME", root.join("xdg"))
+            .env("AZDAJA_HOME", root.join("state"))
+            .env_remove("AZDAJA_CONFIG")
+            .env_remove("RLM_DEPTH")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        (adjacent_calls.exists(), xdg_calls.exists())
+    };
+
+    assert_eq!(run_copy("generic", "config.toml", false), (false, true));
+    assert_eq!(
+        run_copy("standalone", "azdaja-config.toml", false),
+        (true, false)
+    );
+    assert_eq!(run_copy("managed", "config.toml", true), (true, false));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn global_lock_symlink_and_hardlink_victims_are_unchanged() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    for kind in ["symlink", "hardlink"] {
+        let t = temp(&format!("global-lock-{kind}"));
+        let state = t.join("state");
+        fs::create_dir(&state).unwrap();
+        fs::set_permissions(&state, fs::Permissions::from_mode(0o700)).unwrap();
+        let victim = t.join("DO_NOT_CHANGE");
+        fs::write(&victim, b"victim-content").unwrap();
+        fs::set_permissions(&victim, fs::Permissions::from_mode(0o644)).unwrap();
+        let before = fs::metadata(&victim).unwrap();
+        if kind == "symlink" {
+            std::os::unix::fs::symlink(&victim, state.join("global.lock")).unwrap();
+        } else {
+            fs::hard_link(&victim, state.join("global.lock")).unwrap();
+        }
+        let cfg = config(&t, "cat", 512, 1, 3, 4);
+        let output = run(&t, &cfg, &["start"], "");
+        assert!(!output.status.success(), "kind={kind}");
+        let after = fs::metadata(&victim).unwrap();
+        assert_eq!(fs::read(&victim).unwrap(), b"victim-content");
+        assert_eq!(after.permissions().mode() & 0o777, 0o644);
+        assert_eq!(after.ino(), before.ino());
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn global_lock_path_replacement_is_detected_after_waiting() {
+    use fs2::FileExt;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    let t = temp("global-lock-replacement");
+    let state = t.join("state");
+    fs::create_dir(&state).unwrap();
+    fs::set_permissions(&state, fs::Permissions::from_mode(0o700)).unwrap();
+    let lock_path = state.join("global.lock");
+    let original = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&lock_path)
+        .unwrap();
+    FileExt::lock_exclusive(&original).unwrap();
+    let cfg = config(&t, "cat", 512, 1, 3, 4);
+    let mut child = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .arg("start")
+        .env("HOME", &t)
+        .env("AZDAJA_HOME", &state)
+        .env("AZDAJA_CONFIG", &cfg)
+        .env_remove("RLM_DEPTH")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(150));
+    assert!(
+        child.try_wait().unwrap().is_none(),
+        "child did not wait on the opened lock inode"
+    );
+
+    let moved = state.join("original.lock");
+    fs::rename(&lock_path, &moved).unwrap();
+    fs::write(&lock_path, b"DO_NOT_CHANGE").unwrap();
+    fs::set_permissions(&lock_path, fs::Permissions::from_mode(0o600)).unwrap();
+    FileExt::unlock(&original).unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("path binding changed"));
+    assert_eq!(fs::read(&lock_path).unwrap(), b"DO_NOT_CHANGE");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn symlinked_state_locks_and_prompts_directories_fail_closed() {
+    use std::os::unix::fs::PermissionsExt;
+
+    for kind in ["state", "locks", "prompts"] {
+        let t = temp(&format!("symlinked-{kind}"));
+        let victim = t.join("DO_NOT_CHANGE");
+        fs::create_dir(&victim).unwrap();
+        fs::set_permissions(&victim, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::write(victim.join("sentinel"), b"unchanged").unwrap();
+        let state = t.join("state");
+        if kind == "state" {
+            std::os::unix::fs::symlink(&victim, &state).unwrap();
+        } else {
+            fs::create_dir(&state).unwrap();
+            fs::set_permissions(&state, fs::Permissions::from_mode(0o700)).unwrap();
+            std::os::unix::fs::symlink(&victim, state.join(kind)).unwrap();
+        }
+        let calls = t.join("provider-calls");
+        let provider = t.join("provider.py");
+        fs::write(
+            &provider,
+            format!(
+                "import pathlib,sys\npathlib.Path({:?}).write_text('entered')\nprint('AZDAJA')\n",
+                calls.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let command = if kind == "prompts" {
+            format!("python3 {} {{prompt_file}}", provider.display())
+        } else {
+            "cat".to_owned()
+        };
+        let cfg = config(&t, &command, 512, 1, 3, 4);
+        let output = run(&t, &cfg, &["doctor"], "");
+        assert!(!output.status.success(), "kind={kind}");
+        let after = fs::metadata(&victim).unwrap();
+        assert_eq!(after.permissions().mode() & 0o777, 0o755);
+        assert_eq!(fs::read(victim.join("sentinel")).unwrap(), b"unchanged");
+        assert!(!calls.exists(), "kind={kind} entered provider");
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
 fn install_is_provider_free_idempotent_and_owned() {
     let t = temp("install");
     let bin = t.join("bin");
@@ -2185,6 +2452,108 @@ exit 9
         .unwrap();
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     assert!(!dst.exists());
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn managed_install_never_removes_stopped_pid_or_symlink_collisions() {
+    let t = temp("install-collisions");
+    let wrapper = t.join("install-wrapper.sh");
+    fs::write(
+        &wrapper,
+        r#"#!/bin/sh
+set -eu
+parent="$HOME/.claude/skills"
+mkdir -p "$parent" "$HOME/collision-victim"
+if [ "$MODE" = first ]; then
+  stage="$parent/.azdaja-stage-$$"
+  backup="$parent/.azdaja-backup-$$"
+  mkdir "$stage"
+  printf DO_NOT_DELETE > "$stage/DO_NOT_DELETE"
+  ln -s "$HOME/collision-victim" "$backup"
+else
+  stage="$parent/.azdaja-stage-$$"
+  backup="$parent/.azdaja-backup-$$"
+  ln -s "$HOME/collision-victim" "$stage"
+  mkdir "$backup"
+  printf DO_NOT_DELETE > "$backup/DO_NOT_DELETE"
+fi
+printf '%s\n%s\n' "$stage" "$backup" > "$HOME/collision-paths-$MODE"
+exec "$AZDAJA_TEST_BIN" install --harness claude
+"#,
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+
+    for mode in ["first", "upgrade"] {
+        let output = Command::new(&wrapper)
+            .env("MODE", mode)
+            .env("HOME", &t)
+            .env("AZDAJA_TEST_BIN", env!("CARGO_BIN_EXE_azdaja"))
+            .env("AZDAJA_HOME", t.join("state"))
+            .env_remove("AZDAJA_CONFIG")
+            .env_remove("RLM_DEPTH")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "mode={mode} stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let paths = fs::read_to_string(t.join(format!("collision-paths-{mode}"))).unwrap();
+        let paths: Vec<_> = paths.lines().map(PathBuf::from).collect();
+        assert_eq!(paths.len(), 2);
+        if mode == "first" {
+            assert_eq!(
+                fs::read(paths[0].join("DO_NOT_DELETE")).unwrap(),
+                b"DO_NOT_DELETE"
+            );
+            assert_eq!(
+                fs::read_link(&paths[1]).unwrap(),
+                t.join("collision-victim")
+            );
+        } else {
+            assert_eq!(
+                fs::read_link(&paths[0]).unwrap(),
+                t.join("collision-victim")
+            );
+            assert_eq!(
+                fs::read(paths[1].join("DO_NOT_DELETE")).unwrap(),
+                b"DO_NOT_DELETE"
+            );
+        }
+    }
+
+    let dst = t.join(".claude/skills/azdaja");
+    assert!(dst.join(".azdaja-managed").is_file());
+    let uninstall = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args(["uninstall", "--harness", "claude"])
+        .env("HOME", &t)
+        .env("AZDAJA_HOME", t.join("state"))
+        .env_remove("AZDAJA_CONFIG")
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert!(
+        uninstall.status.success(),
+        "{}",
+        String::from_utf8_lossy(&uninstall.stderr)
+    );
+    assert!(!dst.exists());
+    for mode in ["first", "upgrade"] {
+        for path in fs::read_to_string(t.join(format!("collision-paths-{mode}")))
+            .unwrap()
+            .lines()
+        {
+            assert!(
+                fs::symlink_metadata(path).is_ok(),
+                "collision was deleted: {path}"
+            );
+        }
+    }
     fs::remove_dir_all(t).unwrap();
 }
 
