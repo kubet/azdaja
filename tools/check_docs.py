@@ -36,6 +36,8 @@ def check_claim_contract() -> list[str]:
     draft = (ROOT / "drafts" / "v0.1.1-launch.md").read_text(encoding="utf-8")
     required_readme = [
         "All 199 scheduled rows reached terminal accounting",
+        "permanent fixed-denominator score is\n"
+        "**68.64164968987583%**",
         "not an official leaderboard result",
         "64.38%",
         "71.75%",
@@ -86,10 +88,10 @@ def check_claim_contract() -> list[str]:
             errors.append(f"drafts/v0.1.1-launch.md: missing required boundary phrase: {needle}")
 
     marker = "ENDGAME-FIXED199-SUBSTITUTION-POINT"
-    if readme.count(marker) != 1:
-        errors.append(f"README.md: expected exactly one {marker} marker")
+    if marker in readme:
+        errors.append(f"README.md: frozen launch still contains {marker}")
     candidate_row = re.compile(
-        r"^\| \*\*Azdaja — current terminal candidate\*\* "
+        r"^\| \*\*Azdaja — final terminal candidate\*\* "
         r"\| (\d+)/199 \((\d+\.\d+)%\) "
         r"\| (\d+\.\d+)% \| \*\*(\d+\.\d+)%\*\* "
         r"\| Not reported \| Not reported \|$",
@@ -104,6 +106,10 @@ def check_claim_contract() -> list[str]:
         execution_rate = float(execution_rate_text)
         completed_mean = float(completed_mean_text)
         fixed_score = float(fixed_score_text)
+        if completed_text != "185" or completed_mean_text != "73.83615290965021":
+            errors.append("README.md: frozen completion arithmetic changed")
+        if fixed_score_text != "68.64164968987583":
+            errors.append("README.md: frozen final fixed-199 score changed")
         if completed > 199 or abs(execution_rate - 100 * completed / 199) > 0.005:
             errors.append("README.md: Azdaja execution count/rate is inconsistent")
         if abs(fixed_score - completed_mean * completed / 199) > 1e-12:

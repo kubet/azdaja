@@ -16,13 +16,9 @@ The staged saga contains this authorized result exactly once:
 
 > **Launch result:** **68.64164968987583%** on a fixed 199-row, validation-derived RAH slice, with 185 execution successes (valid predictions) and 14 retained failures counted as zero.
 
-This is the permanent launch result if neither preregistered lever clears its
-fixed gate. The only permitted replacement is the single fresh fixed-199 result
-allowed by `ENDGAME.md`: it must be terminal, valid, owner-authorized, and
-committed with a sanitized terminal receipt. If that exceptional replacement
-exists, update the blockquote and `release/day7-public-launch.json` together on
-the private assembly branch, rerun the checks below, and review the diff before
-Day 7. No other score substitution is authorized.
+Both preregistered levers are terminal FAIL. Neither authorized a successor
+fixed-199 run, so this is the permanent launch result. The score block is frozen;
+no substitution, rerun, resume, or rescore is authorized.
 
 ## Pre-Day-7 private assembly
 
@@ -49,9 +45,9 @@ git push --set-upstream origin "$ASSEMBLY"
 test "$(gh repo view "$REPO" --json visibility --jq .visibility)" = PRIVATE
 ```
 
-At the launch freeze, the README owner must either apply the one authorized
-successor row or remove its substitution marker and provisional sentence. The
-Day-7 block below refuses to publish either marker.
+The README launch freeze is complete: the substitution marker and provisional
+sentence are absent, and the checker binds the permanent score arithmetic. The
+Day-7 block below refuses to publish either stale phrase.
 
 ## Day-7 launch block — exact commands
 
@@ -105,7 +101,7 @@ assert score["percent"] == 68.64164968987583
 assert score["fixed_denominator"] == 199
 assert score["execution_successes"] == 185
 assert score["retained_failure_zeros"] == 14
-assert score["status"] == "final_unless_single_preregistered_replacement_is_authorized"
+assert score["status"] == "permanent_final_no_successor_authorized"
 assert receipt["release_asset_requests_performed"] is False
 PY
 

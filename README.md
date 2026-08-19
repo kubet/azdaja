@@ -29,14 +29,13 @@ comparison, or a superiority claim.
 
 ### Fixed-199 validation slice
 
-The Azdaja row is the current exact endgame value. It is provisional only because
-the frozen plan permits one possible successor run; if that run becomes terminal,
-replace this row, and otherwise treat the current row as final.
+The frozen endgame is terminal. Neither preregistered lever authorized a
+successor fixed-199 run, so the permanent fixed-denominator score is
+**68.64164968987583%**.
 
-<!-- ENDGAME-FIXED199-SUBSTITUTION-POINT: If and only if the sole authorized successor fixed-199 run becomes terminal, replace the single Azdaja row immediately below. Otherwise remove this comment at launch freeze. -->
 | Candidate | Execution / valid predictions | Completed-row Oolong mean | Fixed-199 Oolong Score | Root tokens | Latency |
 |---|---:|---:|---:|---:|---:|
-| **Azdaja — current terminal candidate** | 185/199 (92.96%) | 73.83615290965021% | **68.64164968987583%** | Not reported | Not reported |
+| **Azdaja — final terminal candidate** | 185/199 (92.96%) | 73.83615290965021% | **68.64164968987583%** | Not reported | Not reported |
 
 All 199 scheduled rows reached terminal accounting; retained execution failures
 contribute zero to the fixed denominator. Complete, comparable token and latency
