@@ -68,13 +68,16 @@ next class step is Codex at 71.75%, not a result Azdaja has reached.
 
 > same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)
 
-Five fresh-session pairs on the same Claude Sonnet lane produced 0.0
-Ember-minus-baseline RHAE delta in every game. Under the predefined
-unchanged-official-feedback rule, wasted actions totaled 646 for baseline and
-654 for Ember. The receipt deliberately retains paired deltas and aggregate
-waste only—not absolute arm scores or the revisited-state/repeated-control
-split. See the [sanitized ARC receipt](bench/results/arc3-ember-five-public-v9-result.json)
-and the [full evidence boundary](docs/launch-saga.md#the-five-game-second-act).
+Five fresh-session pairs on the same Claude Sonnet lane produced 0.0 Ember-minus-baseline RHAE delta in every game. Under the predefined
+unchanged-official-feedback rule, wasted actions totaled 646 for baseline and 654 for Ember. The receipt retains paired deltas and aggregate
+waste only—not absolute arm scores or the revisited-state/repeated-control split.
+
+An owner-directed, retrieval-only follow-up found that all ten closed scorecards returned HTTP 404 from the official detail endpoint,
+despite its pinned open-or-closed contract; the HTML results route exposed no detail. Because close responses were discarded, absolute RHAE,
+levels completed, and total actions cannot be recovered. The paired null cannot distinguish zero-level play from equal nonzero results, so the memory-efficiency
+hypothesis remains open. Retained lifecycle metadata proves that vc33 created, reset, and closed two scorecards; its total actions and degeneracy remain
+unresolved, so 0/0 wasted actions is not a zero-action claim. See the [sanitized ARC receipt](bench/results/arc3-ember-five-public-v9-result.json), the
+[sanitized interrogation receipt](bench/results/arc3-scorecard-interrogation-public-v1.json), and the [full evidence boundary](docs/launch-saga.md#the-five-game-second-act).
 
 The transport flip remains v0.2 roadmap material: its +0.00 scout failed before
 inference and observed no root choice, so it is not genuine disuse and is

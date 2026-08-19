@@ -72,8 +72,11 @@ def check_claim_contract() -> list[str]:
         "**+4.26 points**",
         "same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)",
         "bench/results/arc3-ember-five-public-v9-result.json",
+        "bench/results/arc3-scorecard-interrogation-public-v1.json",
         "not absolute arm scores",
         "revisited-state/repeated-control",
+        "memory-efficiency\nhypothesis remains open",
+        "degeneracy remain\nunresolved",
     ]
     required_draft = [
         "NONPUBLISHED DRAFT",
@@ -130,6 +133,11 @@ def check_claim_contract() -> list[str]:
         "`-1.238390092879257%` fewer wasted actions",
         "revisited-state/repeated-control split was not retained",
         "only the predefined unchanged-official-feedback aggregate is evidenced",
+        "all ten closed scorecard detail requests returned HTTP 404",
+        "zero-level play and equal nonzero arm results cannot be distinguished",
+        "memory-efficiency hypothesis remains open",
+        "total actions and degeneracy remain unresolved",
+        "arc3-scorecard-interrogation-public-v1.json",
         "post-launch v0.2 roadmap material only",
     ]
     required_postmortem = [
@@ -146,11 +154,11 @@ def check_claim_contract() -> list[str]:
         "transport-flip-postmortem.md",
         "gpt-rah199-mortality-v3-terminal-public.json",
         "arc3-ember-five-public-v9-result.json",
-        "public flip, anonymous saga verification, then RAH results-table PR handling",
-        "No public repository identified by arXiv 2606.13643 or its authors",
-        "Do not invent a target repository",
-        "gh pr create",
-        "@EliasLumer",
+        "arc3-scorecard-interrogation-public-v1.json",
+        "public flip, anonymous saga verification, then the queued RAH author email",
+        "The owner resolved the missing-canonical-repository question",
+        "public runbook intentionally omits local staging locations and recipient addresses",
+        "Do not open a PR",
         "release asset `GET`/`HEAD`",
     ]
     for name, text, required in (
@@ -223,6 +231,7 @@ def check_launch_receipts() -> list[str]:
     public_path = ROOT / "bench" / "results" / "gpt-rah199-mortality-v3-terminal-public.json"
     transport_path = ROOT / "bench" / "results" / "endgame-agent-transport-v2-disease10-terminal.json"
     arc_path = ROOT / "bench" / "results" / "arc3-ember-five-public-v9-result.json"
+    interrogation_path = ROOT / "bench" / "results" / "arc3-scorecard-interrogation-public-v1.json"
     postmortem_path = ROOT / "docs" / "transport-flip-postmortem.md"
     saga_path = ROOT / "docs" / "launch-saga.md"
     try:
@@ -230,6 +239,7 @@ def check_launch_receipts() -> list[str]:
         public = json.loads(public_path.read_text(encoding="utf-8"))
         transport = json.loads(transport_path.read_text(encoding="utf-8"))
         arc = json.loads(arc_path.read_text(encoding="utf-8"))
+        interrogation = json.loads(interrogation_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return [f"launch receipt read failed: {exc}"]
 
@@ -306,6 +316,57 @@ def check_launch_receipts() -> list[str]:
         if any(game["ember_minus_baseline_rhae_delta"] != 0.0 for game in arc["games"]):
             errors.append("ARC receipt: paired RHAE delta changed")
 
+    expected_interrogation = {
+        "schema_version": 1,
+        "record_type": "arc3_closed_scorecard_interrogation_sanitized_receipt",
+        "scope": {
+            "arms": ["baseline", "ember"],
+            "closed_scorecards_queried": 10,
+            "game_pairs": 5,
+            "credential_continuity": "one unchanged owner credential",
+            "new_experiment": False,
+            "game_requests_performed": False,
+            "provider_requests_performed": False,
+        },
+        "official_scorecard_retrieval": {
+            "pinned_contract": "open or closed scorecard retrieval",
+            "observed_http_status": 404,
+            "observed_count": 10,
+            "absolute_arm_rhae_recovered": False,
+            "levels_completed_recovered": False,
+            "total_actions_recovered": False,
+        },
+        "html_results_route": {
+            "observation": "redirected to the generic ARC-AGI-3 page",
+            "scorecard_detail_recovered": False,
+        },
+        "retention_boundary": {
+            "driver_retained_close_responses": False,
+            "public_v9_receipt_retains_paired_deltas": True,
+            "public_v9_receipt_retains_aggregate_wasted_actions": True,
+            "zero_level_vs_equal_nonzero_distinguishable": False,
+            "memory_efficiency_hypothesis_status": "open",
+        },
+        "vc33": {
+            "scorecard_lifecycles_created_reset_closed": 2,
+            "lifecycle_source": "retained stdout metadata",
+            "total_actions_established": False,
+            "levels_completed_established": False,
+            "degeneracy_status": "unresolved",
+            "zero_wasted_actions_implies_zero_total_actions": False,
+        },
+        "redaction": {
+            "scorecard_identifiers_included": False,
+            "credentials_included": False,
+            "host_paths_included": False,
+            "raw_logs_included": False,
+        },
+    }
+    if interrogation != expected_interrogation:
+        errors.append("ARC interrogation receipt: exact sanitized schema or findings changed")
+    if _sha256(interrogation_path) != "17de6893eee9cafafdd164965a91fe08b72aecc69d1f2e41044c0b7d4cbc210c":
+        errors.append("ARC interrogation receipt: canonical byte hash changed")
+
     expected_second_act_arc = {
         "absolute_arm_rhae_retained": False,
         "all_paired_rhae_deltas": 0.0,
@@ -326,7 +387,26 @@ def check_launch_receipts() -> list[str]:
             "ember": 654,
             "baseline_minus_ember_percent_of_baseline": -1.238390092879257,
         },
+        "levels_completed_retained": False,
+        "total_actions_retained": False,
+        "scorecard_interrogation": {
+            "absolute_arm_rhae_recovered": False,
+            "closed_scorecards_queried": 10,
+            "game_or_provider_requests_performed": False,
+            "html_result": "redirected_to_generic_arc_agi_3_page",
+            "observed_http_status": 404,
+            "pinned_contract": "open_or_closed_scorecard_retrieval",
+        },
+        "paired_null_interpretation": "zero_level_vs_equal_nonzero_not_distinguishable",
+        "memory_efficiency_hypothesis": "open",
+        "vc33": {
+            "scorecard_lifecycles_created_reset_closed": 2,
+            "total_actions_established": False,
+            "levels_completed_established": False,
+            "degeneracy": "unresolved",
+        },
     }
+
     if release.get("second_act", {}).get("arc") != expected_second_act_arc:
         errors.append("day7 receipt: ARC method or evidence boundary changed")
 
@@ -335,12 +415,15 @@ def check_launch_receipts() -> list[str]:
         "transport_terminal_receipt_sha256": _sha256(transport_path),
         "transport_postmortem_sha256": _sha256(postmortem_path),
         "arc_terminal_receipt_sha256": _sha256(arc_path),
+        "arc_interrogation_receipt_sha256": _sha256(interrogation_path),
     }
     for key, value in expected_hashes.items():
         if evidence.get(key) != value:
             errors.append(f"day7 receipt: stale {key}")
     if evidence.get("arc_terminal_receipt_path") != "bench/results/arc3-ember-five-public-v9-result.json":
         errors.append("day7 receipt: stale ARC public receipt path")
+    if evidence.get("arc_interrogation_receipt_path") != "bench/results/arc3-scorecard-interrogation-public-v1.json":
+        errors.append("day7 receipt: stale ARC interrogation receipt path")
     if score.get("terminal_receipt_path") is not None or score.get("terminal_receipt_retained_private") is not True:
         errors.append("day7 receipt: missing private-terminal path boundary")
     if score.get("terminal_receipt_sha256") != "27bbb4da02bf75ff5c3c6b73697bf8518e33566a55f3b9fc8d7012ee5b648e74":
@@ -351,7 +434,7 @@ def check_launch_receipts() -> list[str]:
     if saga.get("authorized_score_occurrences") != 1 or release.get("release_asset_requests_performed") is not False:
         errors.append("day7 receipt: publication or score-occurrence boundary changed")
 
-    for path in (release_path, public_path, transport_path, arc_path, postmortem_path):
+    for path in (release_path, public_path, transport_path, arc_path, interrogation_path, postmortem_path):
         text = path.read_text(encoding="utf-8")
         for private_prefix in ("/Users/", "/private/tmp/", "C:\\Users\\"):
             if private_prefix in text:

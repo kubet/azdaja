@@ -103,6 +103,23 @@ unchanged-official-feedback aggregate is evidenced. The
 contains only the public identity, arm labels, game IDs, deltas, and aggregate
 wasted-action counts.
 
+The owner-directed scorecard interrogation was retrieval-only: it made no game
+or provider request and started no new experiment. Using one unchanged owner
+credential, all ten closed scorecard detail requests returned HTTP 404 even
+though the pinned OpenAPI contract describes retrieval of open or closed
+scorecards. The HTML results route redirected to the generic ARC-AGI-3 page.
+Because the driver discarded its close responses, the server no longer yields
+absolute per-arm RHAE, levels completed, or total actions for these scorecards.
+The [sanitized interrogation receipt](../bench/results/arc3-scorecard-interrogation-public-v1.json)
+contains no scorecard identifiers, credential, host path, or raw log.
+
+This makes the paired null honest but underdetermined: zero-level play and equal
+nonzero arm results cannot be distinguished, so the memory-efficiency hypothesis
+remains open. In particular, vc33's 0/0 wasted-action row is not evidence of zero
+levels or zero total actions. Retained stdout lifecycle metadata proves only that
+two vc33 scorecards were created, reset, and closed; total actions and degeneracy
+remain unresolved.
+
 The separate transport scout's 0.00/0.00 tie came from 20 pre-inference setup
 failures, with zero successful provider turns and zero agent-class calls. It
 observed no root choice, so it is neither genuine disuse nor a discoverability

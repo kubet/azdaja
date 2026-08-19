@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "record_type": "arc3_closed_scorecard_interrogation_sanitized_receipt",
+  "scope": {
+    "arms": [
+      "baseline",
+      "ember"
+    ],
+    "closed_scorecards_queried": 10,
+    "game_pairs": 5,
+    "credential_continuity": "one unchanged owner credential",
+    "new_experiment": false,
+    "game_requests_performed": false,
+    "provider_requests_performed": false
+  },
+  "official_scorecard_retrieval": {
+    "pinned_contract": "open or closed scorecard retrieval",
+    "observed_http_status": 404,
+    "observed_count": 10,
+    "absolute_arm_rhae_recovered": false,
+    "levels_completed_recovered": false,
+    "total_actions_recovered": false
+  },
+  "html_results_route": {
+    "observation": "redirected to the generic ARC-AGI-3 page",
+    "scorecard_detail_recovered": false
+  },
+  "retention_boundary": {
+    "driver_retained_close_responses": false,
+    "public_v9_receipt_retains_paired_deltas": true,
+    "public_v9_receipt_retains_aggregate_wasted_actions": true,
+    "zero_level_vs_equal_nonzero_distinguishable": false,
+    "memory_efficiency_hypothesis_status": "open"
+  },
+  "vc33": {
+    "scorecard_lifecycles_created_reset_closed": 2,
+    "lifecycle_source": "retained stdout metadata",
+    "total_actions_established": false,
+    "levels_completed_established": false,
+    "degeneracy_status": "unresolved",
+    "zero_wasted_actions_implies_zero_total_actions": false
+  },
+  "redaction": {
+    "scorecard_identifiers_included": false,
+    "credentials_included": false,
+    "host_paths_included": false,
+    "raw_logs_included": false
+  }
+}

@@ -11,9 +11,9 @@ pass. It does not own a visibility change, publication, benchmark run, ARC run,
 or provider call.
 
 After the private merge, the mechanical public order is: **public flip, anonymous
-saga verification, then RAH results-table PR handling**. The third step must
-submit only to an author- or paper-confirmed canonical public target; while no
-such target is verified, it must report the exact blocker rather than invent one.
+saga verification, then the queued RAH author email**. The email follows the
+flip and verified saga; it is not sent during staging and does not depend on an
+invented canonical repository.
 
 ## Bound launch statement
 
@@ -38,6 +38,15 @@ Sonnet lane via the direct Claude CLI. The obsolete bridge/helper was bypassed,
 so no helper anomaly was observed. Version 9 retained neither arm's absolute
 RHAE nor the revisited-state/repeated-control split; only paired deltas and the
 predefined unchanged-official-feedback aggregate are evidenced.
+
+The owner-directed retrieval-only interrogation made no new game or provider
+request. All ten closed scorecard detail requests returned HTTP 404 despite the
+pinned open-or-closed retrieval contract, and the HTML result exposed no detail.
+With close responses discarded, absolute per-arm RHAE, levels completed, and
+total actions are unrecoverable. Zero-level and equal nonzero arm results cannot
+be distinguished, so the memory-efficiency hypothesis remains open. The vc33
+stdout proves two create/reset/close lifecycles, not zero actions or levels;
+degeneracy is unresolved.
 
 ## Pre-Day-7 private assembly
 
@@ -111,6 +120,7 @@ test -f docs/transport-flip-postmortem.md
 test -f bench/results/gpt-rah199-mortality-v3-terminal-public.json
 test -f bench/results/endgame-agent-transport-v2-disease10-terminal.json
 test -f bench/results/arc3-ember-five-public-v9-result.json
+test -f bench/results/arc3-scorecard-interrogation-public-v1.json
 test "$(grep -Fxc "$EXPECTED_LINE" docs/launch-saga.md)" -eq 1
 test "$(grep -Fxc "$EXPECTED_ARC_LINE" docs/launch-saga.md)" -eq 1
 test "$(grep -Fc "$EXPECTED_SCORE" docs/launch-saga.md)" -eq 1
@@ -172,8 +182,25 @@ assert all(game["ember_minus_baseline_rhae_delta"] == 0.0 for game in arc["games
 assert receipt["evidence"]["arc_terminal_receipt_path"] == str(arc_path)
 assert receipt["evidence"]["arc_terminal_receipt_sha256"] == hashlib.sha256(arc_path.read_bytes()).hexdigest()
 
+interrogation_path = Path("bench/results/arc3-scorecard-interrogation-public-v1.json")
+interrogation = json.loads(interrogation_path.read_text())
+assert hashlib.sha256(interrogation_path.read_bytes()).hexdigest() == "17de6893eee9cafafdd164965a91fe08b72aecc69d1f2e41044c0b7d4cbc210c"
+assert interrogation["scope"]["closed_scorecards_queried"] == 10
+assert interrogation["scope"]["new_experiment"] is False
+assert interrogation["scope"]["game_requests_performed"] is False
+assert interrogation["scope"]["provider_requests_performed"] is False
+assert interrogation["official_scorecard_retrieval"]["observed_http_status"] == 404
+assert interrogation["official_scorecard_retrieval"]["observed_count"] == 10
+assert interrogation["retention_boundary"]["zero_level_vs_equal_nonzero_distinguishable"] is False
+assert interrogation["retention_boundary"]["memory_efficiency_hypothesis_status"] == "open"
+assert interrogation["vc33"]["scorecard_lifecycles_created_reset_closed"] == 2
+assert interrogation["vc33"]["total_actions_established"] is False
+assert interrogation["vc33"]["degeneracy_status"] == "unresolved"
+assert receipt["evidence"]["arc_interrogation_receipt_path"] == str(interrogation_path)
+assert receipt["evidence"]["arc_interrogation_receipt_sha256"] == hashlib.sha256(interrogation_path.read_bytes()).hexdigest()
+
 private_prefixes = ("/" + "private/tmp/", "/" + "Users/")
-for path in (public_path, transport_path, arc_path, Path("docs/transport-flip-postmortem.md")):
+for path in (public_path, transport_path, arc_path, interrogation_path, Path("docs/transport-flip-postmortem.md")):
     text = path.read_text()
     assert not any(prefix in text for prefix in private_prefixes)
 PY
@@ -219,42 +246,20 @@ test "$(grep -Fxc "$EXPECTED_ARC_LINE" docs/launch-saga.md)" -eq 1
 test "$(git rev-parse HEAD)" = "$MAIN_HEAD"
 ```
 
-## RAH results-table PR — mechanical third step
+## RAH author email — mechanical third step
 
-Only after the public flip and anonymous saga verification may the staged RAH
-results-table change be proposed. Its current exact external blocker is:
+The owner resolved the missing-canonical-repository question by converting the
+prepared PR into a short author email. Send it only after both the public flip
+and anonymous saga verification above succeed. The owner-only staging package
+contains the queued message, its exact Day-7 Mail command, and a syntax-tested
+send script; this public runbook intentionally omits local staging locations and
+recipient addresses.
 
-> No public repository identified by arXiv 2606.13643 or its authors as the
-> canonical home for RAH or its results table could be verified. Submission
-> requires an author- or paper-confirmed canonical public repository.
->
-> Do not invent a target repository.
-
-If that blocker has been cleared, the reviewed branch has been pushed to an
-accessible fork, and the public target/base/head have all been verified, the
-submission command is:
-
-```bash
-set -euo pipefail
-: "${RAH_CANONICAL_REPOSITORY:?author- or paper-confirmed owner/repository required}"
-: "${RAH_BASE:?verified canonical base branch required}"
-: "${RAH_HEAD:?accessible fork-owner:results/azdaja-fixed199-day7 required}"
-test -f PR_TITLE.txt
-test -f PR_BODY.md
-test "$(gh repo view "$RAH_CANONICAL_REPOSITORY" --json visibility --jq .visibility)" = PUBLIC
-gh pr create \
-  --repo "$RAH_CANONICAL_REPOSITORY" \
-  --base "$RAH_BASE" \
-  --head "$RAH_HEAD" \
-  --title "$(cat PR_TITLE.txt)" \
-  --body-file PR_BODY.md
-```
-
-The reviewed body tags only the verified public identity `@EliasLumer`; Sahil
-Sen, Kevin Paul, and Vamse Kumar Subbiah remain name-only because no matching
-GitHub identity was verified. If the canonical target is still absent on Day 7,
-print the blocker above and stop this third step without opening a PR; the public
-flip and saga remain complete.
+Before invoking that private command, verify that its two recipients still
+match the paper-published addresses, its public README/receipt/saga links resolve,
+and it has no Cc or Bcc. The script refuses pre-deadline execution and requires an
+explicit send confirmation. Do not open a PR and do not send the email during
+pre-Day-7 staging.
 
 Stop immediately on any launch mismatch. Do not force-push, rewrite tags,
 create a new release, upload/download release assets, or use release asset `GET`/`HEAD`
