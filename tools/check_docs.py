@@ -81,12 +81,12 @@ def check_claim_contract() -> list[str]:
         "passed all 16 Darwin arm64 and Ubuntu x86-64 cells",
         "14 genuine-provider 50 MiB solos",
         "two expected graceful no-harness refusals",
-        "bench/results/install-matrix-v0.1.2-public.json",
-        "bench/results/install-real-adapters-v0.1.2-public.json",
+        "bench/results/install-matrix-v0.1.2-final-public.json",
+        "bench/results/install-real-adapters-v0.1.2-final-public.json",
         "genuine installed OpenCode and Claude adapter E2Es",
-        "Codex reached the evaluator but failed its provider check",
-        "Jcode failed its provider check on this host",
-        "neither is counted as a pass",
+        "Codex passed all three `doctor` checks but its 50 MiB solo failed",
+        "Jcode passed configuration and evaluator checks but its harness route was unavailable",
+        "Neither is counted as a full route pass",
         "bench/results/arc3-vc33-smoke-v2-public.json",
     ]
     required_draft = [
@@ -158,12 +158,13 @@ def check_claim_contract() -> list[str]:
         "14 positive cells",
         "two no-harness cells failed before any fixture request",
         "arc3-vc33-smoke-v2-public.json",
-        "install-matrix-v0.1.2-public.json",
-        "install-real-adapters-v0.1.2-public.json",
+        "install-matrix-v0.1.2-final-public.json",
+        "install-real-adapters-v0.1.2-final-public.json",
         "genuinely installed OpenCode",
         "Claude adapters end to end",
-        "local credential refresh was invalid",
-        "neither is a green product pass",
+        "50 MiB solo failed on expired local authentication",
+        "Jcode passed configuration and evaluator checks",
+        "Neither is a green full-route product pass",
         "arc3-scorecard-interrogation-public-v1.json",
         "post-launch v0.2 roadmap material only",
     ]
@@ -188,8 +189,12 @@ def check_claim_contract() -> list[str]:
         "arc3-ember-five-public-v9-result.json",
         "arc3-scorecard-interrogation-public-v1.json",
         "arc3-vc33-smoke-v2-public.json",
-        "install-matrix-v0.1.2-public.json",
-        "fresh v0.1.2 assets from final `main` with Rust 1.95",
+        "install-matrix-v0.1.2-final-public.json",
+        "install-real-adapters-v0.1.2-final-public.json",
+        "independently builds v0.1.2 validation binaries from final `main` with Rust 1.95",
+        "exact final-matrix-tested candidate bytes retained in owner-only custody",
+        "AZDAJA_RELEASE_ASSET_DIR",
+        "clean Mach-O links are not hash-reproducible",
         "rust:1.95.0-bookworm",
         "v0.1.1 tag and release are immutable and untouched",
         "brand-new immutable annotated tag and release",
@@ -203,6 +208,10 @@ def check_claim_contract() -> list[str]:
         "must not run before the public flip",
         "owner-only package",
         "Do not open a PR",
+        "fast-forward the reviewed local head to private `main`",
+        "delete every non-`main` remote head",
+        "fresh-clones only `main`",
+        "Stop there. Do not set the approval variable",
     ]
     for name, text, required in (
         ("docs/launch-saga.md", saga, required_saga),
@@ -357,10 +366,13 @@ def check_launch_receipts() -> list[str]:
     arc_path = ROOT / "bench" / "results" / "arc3-ember-five-public-v9-result.json"
     interrogation_path = ROOT / "bench" / "results" / "arc3-scorecard-interrogation-public-v1.json"
     vc33_smoke_path = ROOT / "bench" / "results" / "arc3-vc33-smoke-v2-public.json"
-    install_matrix_path = ROOT / "bench" / "results" / "install-matrix-v0.1.2-public.json"
-    real_adapters_path = ROOT / "bench" / "results" / "install-real-adapters-v0.1.2-public.json"
+    install_matrix_path = ROOT / "bench" / "results" / "install-matrix-v0.1.2-final-public.json"
+    historical_install_matrix_path = ROOT / "bench" / "results" / "install-matrix-v0.1.2-public.json"
+    real_adapters_path = ROOT / "bench" / "results" / "install-real-adapters-v0.1.2-final-public.json"
+    historical_real_adapters_path = ROOT / "bench" / "results" / "install-real-adapters-v0.1.2-public.json"
     postmortem_path = ROOT / "docs" / "transport-flip-postmortem.md"
     saga_path = ROOT / "docs" / "launch-saga.md"
+    runbook_path = ROOT / "docs" / "day7-public-launch.md"
     try:
         release = json.loads(release_path.read_text(encoding="utf-8"))
         public = json.loads(public_path.read_text(encoding="utf-8"))
@@ -369,7 +381,9 @@ def check_launch_receipts() -> list[str]:
         interrogation = json.loads(interrogation_path.read_text(encoding="utf-8"))
         vc33_smoke = json.loads(vc33_smoke_path.read_text(encoding="utf-8"))
         install_matrix = json.loads(install_matrix_path.read_text(encoding="utf-8"))
+        historical_install_matrix = json.loads(historical_install_matrix_path.read_text(encoding="utf-8"))
         real_adapters = json.loads(real_adapters_path.read_text(encoding="utf-8"))
+        historical_real_adapters = json.loads(historical_real_adapters_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return [f"launch receipt read failed: {exc}"]
 
@@ -378,8 +392,25 @@ def check_launch_receipts() -> list[str]:
     root_usage = public.get("root_usage", {})
     evidence = release.get("evidence", {})
 
-    if release.get("schema_version") != 2:
-        errors.append("day7 receipt: expected approval-gated schema version 2")
+    if release.get("schema_version") != 3:
+        errors.append("day7 receipt: expected private-main consolidation schema version 3")
+    if release.get("record_type") != "day7_public_launch_private_main_consolidation_receipt":
+        errors.append("day7 receipt: private-main consolidation record type changed")
+    if release.get("status") != "PRIVATE_MAIN_CONSOLIDATION_READY_NO_PUBLICATION":
+        errors.append("day7 receipt: private-main no-publication status changed")
+    expected_assembly = {
+        "active_remote_branch_dependency": False,
+        "base_commit": "ece7520cd85e86f0bef2377973cd3b76610acb87",
+        "readme_commit": "0ed643e31a93cc060cf7a4917108224f13553ee5",
+        "saga_source_commit": "f9071c5fa08ec313814d8c977796c195069f3629",
+        "source_consolidation_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
+        "source_tree": "4e803f48a8784bd5322db2d3f47fe8cc578029b3",
+        "status": "curated_private_main_consolidation_ready_for_owner_fast_forward",
+        "target_branch": "main",
+        "v0_1_2_implementation_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
+    }
+    if release.get("assembly") != expected_assembly:
+        errors.append("day7 receipt: curated private-main assembly binding changed")
     obsolete_calendar_key = "_".join(("hard", "public", "launch", "not", "before"))
     if obsolete_calendar_key in release:
         errors.append("day7 receipt: superseded calendar field remains active")
@@ -400,25 +431,42 @@ def check_launch_receipts() -> list[str]:
             "private_author_email_complete": True,
         },
         "install_matrix_requirement": {
-            "path": "bench/results/install-matrix-v0.1.2-public.json",
+            "path": "bench/results/install-matrix-v0.1.2-final-public.json",
             "result": "PASS",
             "green_cells": 16,
             "total_cells": 16,
-            "public_receipt_sha256": "9170d7527c52d2d7ec7972639c8c3f1df776dfb5c2722b71f5102f79b74ffbf7",
+            "public_receipt_sha256": "6d6950dc55611130b3811b5988278f88ea00bffacc6fc9f29dfbd13e3d4044a9",
+            "implementation_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
+            "exact_matrix_tested_candidate_retained": True,
         },
     }
     if release.get("approval_gate") != expected_gate:
         errors.append("day7 receipt: explicit owner-GO review/matrix gate changed")
 
     expected_assets = {
-        "SHA256SUMS": "80fbdebeb6587552f6d04062427d3a699b67c1680b1857d35c30c86c588acb5b",
-        "azdaja-v0.1.2-darwin-arm64": "4fdb907c0af87be49d82ec82849848ca340eae99aeb02d7e18691f19fa39b6b7",
-        "azdaja-v0.1.2-linux-x86_64": "8ab01cc6c14c6d02e3a0cc2cbfbf12c28c4a7ab662bb9d892bffaf1b567c4e4b",
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
     }
     expected_release_plan = {
         "version": "0.1.2",
         "tag": "v0.1.2",
-        "implementation_commit": "a06a5acacf32c20dc19855bae54a013312b34597",
+        "implementation_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
+        "candidate_source_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
+        "source_tree": "4e803f48a8784bd5322db2d3f47fe8cc578029b3",
+        "asset_source": "exact_final_matrix_tested_candidate_from_owner_only_custody",
+        "independent_rebuilds_are_validation_only": True,
+        "owner_asset_directory_disclosed": False,
+        "candidate_custody_receipt": {
+            "local_path_disclosed": False,
+            "retained_owner_only": True,
+            "sha256": "d65dcc21a791ec7d2ab2c3c02428ffc3c678d95b44c75b18e335d1172c91d33d",
+        },
+        "expected_asset_bytes": {
+            "SHA256SUMS": 186,
+            "azdaja-v0.1.2-darwin-arm64": 6434272,
+            "azdaja-v0.1.2-linux-x86_64": 7941464,
+        },
         "rust_version": "1.95.0",
         "v0_1_1_immutable": True,
         "release_assets_published_at_staging": False,
@@ -426,11 +474,13 @@ def check_launch_receipts() -> list[str]:
     }
     if release.get("release_plan") != expected_release_plan:
         errors.append("day7 receipt: v0.1.2 implementation or expected release bytes changed")
-    if release.get("assembly", {}).get("v0_1_2_implementation_commit") != "a06a5acacf32c20dc19855bae54a013312b34597":
-        errors.append("day7 receipt: assembly implementation commit changed")
-
-    expected_install_matrix = {
-        "assets": expected_assets,
+    historical_assets = {
+        "SHA256SUMS": "80fbdebeb6587552f6d04062427d3a699b67c1680b1857d35c30c86c588acb5b",
+        "azdaja-v0.1.2-darwin-arm64": "4fdb907c0af87be49d82ec82849848ca340eae99aeb02d7e18691f19fa39b6b7",
+        "azdaja-v0.1.2-linux-x86_64": "8ab01cc6c14c6d02e3a0cc2cbfbf12c28c4a7ab662bb9d892bffaf1b567c4e4b",
+    }
+    expected_historical_install_matrix = {
+        "assets": historical_assets,
         "cells": {"expected_no_harness_failures": 2, "green": 16, "positive": 14, "total": 16},
         "implementation_commit": "a06a5acacf32c20dc19855bae54a013312b34597",
         "installer_sha256": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636",
@@ -466,12 +516,37 @@ def check_launch_receipts() -> list[str]:
         "schema": "azdaja-install-matrix-public-v1",
         "version": "0.1.2",
     }
-    if install_matrix != expected_install_matrix:
-        errors.append("install matrix: exact public-safe schema or values changed")
-    if _sha256(install_matrix_path) != "9170d7527c52d2d7ec7972639c8c3f1df776dfb5c2722b71f5102f79b74ffbf7":
-        errors.append("install matrix: canonical public byte hash changed")
+    if historical_install_matrix != expected_historical_install_matrix:
+        errors.append("historical install matrix: exact public-safe schema or values changed")
+    if _sha256(historical_install_matrix_path) != "9170d7527c52d2d7ec7972639c8c3f1df776dfb5c2722b71f5102f79b74ffbf7":
+        errors.append("historical install matrix: canonical public byte hash changed")
 
-    expected_real_adapters = {'binary': {'name': 'azdaja-v0.1.2-darwin-arm64',
+    final_matrix_sha = "6d6950dc55611130b3811b5988278f88ea00bffacc6fc9f29dfbd13e3d4044a9"
+    if _sha256(install_matrix_path) != final_matrix_sha:
+        errors.append("final install matrix: canonical public byte hash changed")
+    expected_matrix_result = {
+        "expected_no_harness_failures_green": 2,
+        "green_cells": 16,
+        "positive_cells_passed": 14,
+        "positive_exact_five_line_dragon_passed": 14,
+        "total_cells": 16,
+    }
+    custody_assets = {
+        asset.get("name"): asset.get("sha256")
+        for asset in install_matrix.get("candidate_custody", {}).get("assets", [])
+    }
+    if (
+        install_matrix.get("schema") != "azdaja-install-matrix-aggregate-v2"
+        or install_matrix.get("implementation_commit") != "662b713f17a157cfd0241d87afcc3b9107232eed"
+        or install_matrix.get("source_tree") != "4e803f48a8784bd5322db2d3f47fe8cc578029b3"
+        or install_matrix.get("result") != expected_matrix_result
+        or custody_assets != expected_assets
+        or install_matrix.get("published_or_tagged") is not False
+        or len(install_matrix.get("cells", [])) != 16
+    ):
+        errors.append("final install matrix: source, result, custody, or publication boundary changed")
+
+    expected_historical_real_adapters = {'binary': {'name': 'azdaja-v0.1.2-darwin-arm64',
                 'sha256': '4fdb907c0af87be49d82ec82849848ca340eae99aeb02d7e18691f19fa39b6b7',
                 'version': '0.1.2'},
      'observed_nonpasses': [{'classification': 'local_credential_refresh_invalid',
@@ -511,8 +586,27 @@ def check_launch_receipts() -> list[str]:
                'passing_routes': ['opencode', 'claude'],
                'solo_e2e_genuine_installed_adapter': True},
      'version': '0.1.2'}
-    if real_adapters != expected_real_adapters:
-        errors.append("real-adapter receipt: exact public-safe schema or values changed")
+    if historical_real_adapters != expected_historical_real_adapters:
+        errors.append("historical real-adapter receipt: exact public-safe schema or values changed")
+    if _sha256(historical_real_adapters_path) != "d73dfefb3c277495d2a18cbce7ee7c304a8be8c73e75d375aa7dfa179557bada":
+        errors.append("historical real-adapter receipt: canonical byte hash changed")
+
+    if _sha256(real_adapters_path) != "b3c657da9be4cff611e9286d40be553232e7e51cfb8fe9f1eb734d8433ef48a8":
+        errors.append("final real-adapter receipt: canonical byte hash changed")
+    final_adapter_result = real_adapters.get("result", {})
+    if (
+        real_adapters.get("schema") != "azdaja-install-real-adapters-owner-v2"
+        or real_adapters.get("implementation_commit") != "662b713f17a157cfd0241d87afcc3b9107232eed"
+        or real_adapters.get("binary_sha256") != expected_assets["azdaja-v0.1.2-darwin-arm64"]
+        or final_adapter_result != {
+            "claude_full_50mib_pass": True,
+            "codex_doctor_pass_solo_auth_failure": True,
+            "genuine_provider_successes": 5,
+            "jcode_honest_doctor_failure": True,
+            "opencode_full_50mib_pass": True,
+        }
+    ):
+        errors.append("final real-adapter receipt: source, binary, or outcome boundary changed")
 
     if score.get("percent") != 68.64164968987583 or public_score.get("fixed_199_score_percent") != 68.64164968987583:
         errors.append("launch receipts: frozen exact score mismatch")
@@ -732,7 +826,8 @@ def check_launch_receipts() -> list[str]:
         "arc_interrogation_receipt_sha256": _sha256(interrogation_path),
         "arc_v2_public_receipt_sha256": _sha256(vc33_smoke_path),
         "install_matrix_public_receipt_sha256": _sha256(install_matrix_path),
-        "install_matrix_owner_aggregate_receipt_sha256": "d7413c826f3efc9124c757705c1fffa7b3099102497193f2a436b9e7a230290b",
+        "install_matrix_owner_aggregate_receipt_sha256": "6d6950dc55611130b3811b5988278f88ea00bffacc6fc9f29dfbd13e3d4044a9",
+        "install_real_adapters_public_receipt_sha256": _sha256(real_adapters_path),
     }
     for key, value in expected_hashes.items():
         if evidence.get(key) != value:
@@ -743,8 +838,20 @@ def check_launch_receipts() -> list[str]:
         errors.append("day7 receipt: stale ARC interrogation receipt path")
     if evidence.get("arc_v2_public_receipt_path") != "bench/results/arc3-vc33-smoke-v2-public.json":
         errors.append("day7 receipt: stale ARC-v2 public receipt path")
-    if evidence.get("install_matrix_public_receipt_path") != "bench/results/install-matrix-v0.1.2-public.json":
+    if evidence.get("install_matrix_public_receipt_path") != "bench/results/install-matrix-v0.1.2-final-public.json":
         errors.append("day7 receipt: stale install-matrix public receipt path")
+    if evidence.get("install_real_adapters_public_receipt_path") != "bench/results/install-real-adapters-v0.1.2-final-public.json":
+        errors.append("day7 receipt: stale final real-adapter public receipt path")
+    expected_historical_install_evidence = {
+        "status": "preserved_superseded_by_final_662b713_matrix",
+        "a06a_matrix_public_receipt_path": "bench/results/install-matrix-v0.1.2-public.json",
+        "a06a_matrix_public_receipt_sha256": _sha256(historical_install_matrix_path),
+        "a06a_matrix_owner_aggregate_receipt_sha256": "d7413c826f3efc9124c757705c1fffa7b3099102497193f2a436b9e7a230290b",
+        "a06a_real_adapters_public_receipt_path": "bench/results/install-real-adapters-v0.1.2-public.json",
+        "a06a_real_adapters_public_receipt_sha256": _sha256(historical_real_adapters_path),
+    }
+    if evidence.get("historical_install_evidence") != expected_historical_install_evidence:
+        errors.append("day7 receipt: historical a06a install evidence binding changed")
     if score.get("terminal_receipt_path") is not None or score.get("terminal_receipt_retained_private") is not True:
         errors.append("day7 receipt: missing private-terminal path boundary")
     if score.get("terminal_receipt_sha256") != "27bbb4da02bf75ff5c3c6b73697bf8518e33566a55f3b9fc8d7012ee5b648e74":
@@ -752,8 +859,24 @@ def check_launch_receipts() -> list[str]:
     saga = release.get("saga", {})
     if saga.get("sha256") != _sha256(saga_path) or saga.get("git_blob") != _git_blob(saga_path):
         errors.append("day7 receipt: stale launch saga identity")
+    runbook = release.get("runbook", {})
+    if runbook != {
+        "path": "docs/day7-public-launch.md",
+        "sha256": _sha256(runbook_path),
+        "git_blob": _git_blob(runbook_path),
+    }:
+        errors.append("day7 receipt: stale launch runbook identity")
+    if _sha256(release_path) != "3f5a32294fb3a678baf53223f65c1f6bca5d58387e75bc20ab33e62bd214334e":
+        errors.append("day7 receipt: canonical private-main receipt byte hash changed")
     if saga.get("authorized_score_occurrences") != 1 or release.get("release_asset_requests_performed") is not False:
         errors.append("day7 receipt: publication or score-occurrence boundary changed")
+
+    go_section = runbook_path.read_text(encoding="utf-8").split(
+        "## Approval-gated private-main validation, build, tag, and release", 1
+    )[1].split("## Anonymous public verification", 1)[0]
+    for forbidden in ("ASSEMBLY=", "launch/day7-public-assembly", "git fetch ", "git switch ", "git merge "):
+        if forbidden in go_section:
+            errors.append(f"day7 runbook: GO block retains deleted-branch dependency: {forbidden}")
 
     for path in (
         release_path,
@@ -763,7 +886,9 @@ def check_launch_receipts() -> list[str]:
         interrogation_path,
         vc33_smoke_path,
         install_matrix_path,
+        historical_install_matrix_path,
         real_adapters_path,
+        historical_real_adapters_path,
         postmortem_path,
     ):
         text = path.read_text(encoding="utf-8")

@@ -152,7 +152,7 @@ cells each completed install, three explicit `doctor` checks, and one genuine
 provider-backed answer over an exactly 52,428,800-byte input. The two no-harness
 cells failed before any fixture request, without mutating HOME or emitting a stack
 trace. Reinstallation replaced the executable atomically and left no staging or
-backup remnant. The [sanitized matrix receipt](../bench/results/install-matrix-v0.1.2-public.json)
+backup remnant. The [sanitized matrix receipt](../bench/results/install-matrix-v0.1.2-final-public.json)
 records the platforms, asset hashes, assertions, and retention boundary; raw input,
 prompts, responses, traces, credentials, and host paths were not retained.
 
@@ -160,11 +160,12 @@ A separate native Darwin arm64 pass exercised the genuinely installed OpenCode
 and Claude adapters end to end. For each route the installer emitted exactly
 three lines, all three `doctor` checks passed, and an exact 52,428,800-byte
 synthetic input returned its route-bound answer. The
-[sanitized real-adapter receipt](../bench/results/install-real-adapters-v0.1.2-public.json)
-records those two passes. Codex reached the evaluator but its provider check
-failed because the local credential refresh was invalid; Jcode also failed its
-provider check on that host. Both printed the designed fix hints, neither is a
-green product pass, and no conclusion is drawn about other routes.
+[sanitized real-adapter receipt](../bench/results/install-real-adapters-v0.1.2-final-public.json)
+records those two passes. Codex passed all three `doctor` checks, then its
+50 MiB solo failed on expired local authentication. Jcode passed configuration
+and evaluator checks, but its harness route was unavailable and printed the
+designed fix hint. Neither is a green full-route product pass, and no conclusion
+is drawn about other routes.
 
 The CLI now says what a first-time user needs. `install` reports detection, writes,
 and the next step in three lines. `doctor` emits one PASS or FAIL per check and a

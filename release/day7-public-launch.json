@@ -4,10 +4,12 @@
     "environment_variable": "AZDAJA_OWNER_APPROVAL",
     "install_matrix_requirement": {
       "green_cells": 16,
-      "path": "bench/results/install-matrix-v0.1.2-public.json",
-      "public_receipt_sha256": "9170d7527c52d2d7ec7972639c8c3f1df776dfb5c2722b71f5102f79b74ffbf7",
+      "path": "bench/results/install-matrix-v0.1.2-final-public.json",
+      "public_receipt_sha256": "6d6950dc55611130b3811b5988278f88ea00bffacc6fc9f29dfbd13e3d4044a9",
       "result": "PASS",
-      "total_cells": 16
+      "total_cells": 16,
+      "implementation_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
+      "exact_matrix_tested_candidate_retained": true
     },
     "required_reviews": {
       "launch_saga_complete": true,
@@ -18,17 +20,15 @@
     "satisfied_at_staging": false
   },
   "assembly": {
+    "active_remote_branch_dependency": false,
     "base_commit": "ece7520cd85e86f0bef2377973cd3b76610acb87",
-    "branch": "launch/day7-public-assembly",
     "readme_commit": "0ed643e31a93cc060cf7a4917108224f13553ee5",
-    "readme_files_owned_elsewhere": [
-      "README.md",
-      "tools/check_docs.py"
-    ],
-    "readme_source_branch": "docs/endgame-readme-evidence-v1",
-    "saga_source_branch": "launch/endgame-saga",
     "saga_source_commit": "f9071c5fa08ec313814d8c977796c195069f3629",
-    "v0_1_2_implementation_commit": "a06a5acacf32c20dc19855bae54a013312b34597"
+    "source_consolidation_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
+    "status": "curated_private_main_consolidation_ready_for_owner_fast_forward",
+    "target_branch": "main",
+    "v0_1_2_implementation_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
+    "source_tree": "4e803f48a8784bd5322db2d3f47fe8cc578029b3"
   },
   "authorized_launch_score": {
     "authorization_source_commit": "730b35e6872e493cc148625011e8d5eebb1b9e24",
@@ -66,9 +66,9 @@
     "arc_terminal_receipt_sha256": "f6a518df0183f9d4791e99f58bdc0e91c198056ffa67b9013b8f97ff8fc27c21",
     "arc_v2_public_receipt_path": "bench/results/arc3-vc33-smoke-v2-public.json",
     "arc_v2_public_receipt_sha256": "002deda1f7d6740b0aeffc277ea9f7bab87939960fd6644b6852f6e747f97551",
-    "install_matrix_owner_aggregate_receipt_sha256": "d7413c826f3efc9124c757705c1fffa7b3099102497193f2a436b9e7a230290b",
-    "install_matrix_public_receipt_path": "bench/results/install-matrix-v0.1.2-public.json",
-    "install_matrix_public_receipt_sha256": "9170d7527c52d2d7ec7972639c8c3f1df776dfb5c2722b71f5102f79b74ffbf7",
+    "install_matrix_owner_aggregate_receipt_sha256": "6d6950dc55611130b3811b5988278f88ea00bffacc6fc9f29dfbd13e3d4044a9",
+    "install_matrix_public_receipt_path": "bench/results/install-matrix-v0.1.2-final-public.json",
+    "install_matrix_public_receipt_sha256": "6d6950dc55611130b3811b5988278f88ea00bffacc6fc9f29dfbd13e3d4044a9",
     "private_raw_evidence_retained": true,
     "public_receipts_are_sanitized_aggregates": true,
     "root_usage_boundary": {
@@ -85,32 +85,57 @@
     "transport_postmortem_sha256": "e983ba19fee3e8dc3a5f3500355d72ca03226b1de64dd95e554cda0db69d6c52",
     "transport_selection_decision": "pre_inference_setup_failure_non_diagnostic_for_selection_not_genuine_disuse",
     "transport_terminal_receipt_path": "bench/results/endgame-agent-transport-v2-disease10-terminal.json",
-    "transport_terminal_receipt_sha256": "8eeae2460950f861e8020b001981c2753743834350b1cb9962105b0b435c2c77"
+    "transport_terminal_receipt_sha256": "8eeae2460950f861e8020b001981c2753743834350b1cb9962105b0b435c2c77",
+    "install_real_adapters_public_receipt_path": "bench/results/install-real-adapters-v0.1.2-final-public.json",
+    "install_real_adapters_public_receipt_sha256": "b3c657da9be4cff611e9286d40be553232e7e51cfb8fe9f1eb734d8433ef48a8",
+    "historical_install_evidence": {
+      "status": "preserved_superseded_by_final_662b713_matrix",
+      "a06a_matrix_public_receipt_path": "bench/results/install-matrix-v0.1.2-public.json",
+      "a06a_matrix_public_receipt_sha256": "9170d7527c52d2d7ec7972639c8c3f1df776dfb5c2722b71f5102f79b74ffbf7",
+      "a06a_matrix_owner_aggregate_receipt_sha256": "d7413c826f3efc9124c757705c1fffa7b3099102497193f2a436b9e7a230290b",
+      "a06a_real_adapters_public_receipt_path": "bench/results/install-real-adapters-v0.1.2-public.json",
+      "a06a_real_adapters_public_receipt_sha256": "d73dfefb3c277495d2a18cbce7ee7c304a8be8c73e75d375aa7dfa179557bada"
+    }
   },
-  "record_type": "day7_public_launch_private_staging_receipt",
+  "record_type": "day7_public_launch_private_main_consolidation_receipt",
   "release_asset_requests_performed": false,
   "release_plan": {
     "expected_assets": {
-      "SHA256SUMS": "80fbdebeb6587552f6d04062427d3a699b67c1680b1857d35c30c86c588acb5b",
-      "azdaja-v0.1.2-darwin-arm64": "4fdb907c0af87be49d82ec82849848ca340eae99aeb02d7e18691f19fa39b6b7",
-      "azdaja-v0.1.2-linux-x86_64": "8ab01cc6c14c6d02e3a0cc2cbfbf12c28c4a7ab662bb9d892bffaf1b567c4e4b"
+      "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+      "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e"
     },
-    "implementation_commit": "a06a5acacf32c20dc19855bae54a013312b34597",
+    "implementation_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
     "release_assets_published_at_staging": false,
     "rust_version": "1.95.0",
     "tag": "v0.1.2",
     "v0_1_1_immutable": true,
-    "version": "0.1.2"
+    "version": "0.1.2",
+    "asset_source": "exact_final_matrix_tested_candidate_from_owner_only_custody",
+    "candidate_source_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
+    "independent_rebuilds_are_validation_only": true,
+    "owner_asset_directory_disclosed": false,
+    "expected_asset_bytes": {
+      "SHA256SUMS": 186,
+      "azdaja-v0.1.2-darwin-arm64": 6434272,
+      "azdaja-v0.1.2-linux-x86_64": 7941464
+    },
+    "source_tree": "4e803f48a8784bd5322db2d3f47fe8cc578029b3",
+    "candidate_custody_receipt": {
+      "local_path_disclosed": false,
+      "retained_owner_only": true,
+      "sha256": "d65dcc21a791ec7d2ab2c3c02428ffc3c678d95b44c75b18e335d1172c91d33d"
+    }
   },
   "repository": "kubet/azdaja",
   "saga": {
     "authorized_score_occurrences": 1,
-    "git_blob": "93b5ee7b585c324a33a2caf9530551881a3ab206",
+    "git_blob": "0592ed60ec98c57e5e7f37e170ba7ec036303f69",
     "path": "docs/launch-saga.md",
     "private_draft_markers_remaining": 0,
-    "sha256": "ab5de25d22d4bc384dd75ca6141ae94505fc968ef24a78155e4b7f6ccff4955c"
+    "sha256": "5899a4047941d85dce67493366772e0e1c05df5ffd350c4841507c9506faa72d"
   },
-  "schema_version": 2,
+  "schema_version": 3,
   "second_act": {
     "arc": {
       "absolute_arm_rhae_retained": false,
@@ -137,7 +162,7 @@
         "transport": "direct Claude CLI"
       },
       "paired_null_interpretation": "zero_level_vs_equal_nonzero_not_distinguishable",
-      "result_framing": "same harness, same model, \u00b1 Azdaja: -1.24% fewer wasted actions (1.24% more)",
+      "result_framing": "same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)",
       "revisited_state_repeated_control_split_retained": false,
       "scorecard_interrogation": {
         "absolute_arm_rhae_recovered": false,
@@ -206,7 +231,7 @@
     "codex_reference_percent": 71.75,
     "transport": "post_launch_v0_2_roadmap_only_no_study_authorized"
   },
-  "status": "PRIVATE_STAGING_ONLY",
+  "status": "PRIVATE_MAIN_CONSOLIDATION_READY_NO_PUBLICATION",
   "superseded_calendar_gate": {
     "active": false,
     "former_not_before": "2026-08-26T00:20:29.359377+00:00",
@@ -236,7 +261,7 @@
       "headRefName",
       "baseRefName"
     ],
-    "public_ref_plan": "Before visibility flip, push reviewed assembly to main and delete every non-main remote head.",
+    "public_ref_plan": "Fast-forward the reviewed consolidation to private main and delete every non-main remote head before owner GO; launch thereafter depends only on main.",
     "remote_head_names_scanned": 19,
     "remote_issue_metadata_count": 0,
     "remote_pr_metadata_count": 0,
@@ -268,5 +293,10 @@
       "tool": "gitleaks 8.30.1"
     }
   },
-  "visibility_at_staging": "private"
+  "visibility_at_staging": "private",
+  "runbook": {
+    "git_blob": "ca996fbd47bc55e3ac0356ed311ee9815bce33b7",
+    "path": "docs/day7-public-launch.md",
+    "sha256": "cfcf3105c8084c48fd6cc69c71fb4bcbeb0f50e5a93da01fca16c7c084d02ce9"
+  }
 }

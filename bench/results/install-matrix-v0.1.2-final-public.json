@@ -1,0 +1,484 @@
+{
+  "branch_under_test": "launch/pre-main-consolidation",
+  "candidate_custody": {
+    "SHA256SUMS_verified": true,
+    "assets": [
+      {
+        "bytes": 6434272,
+        "name": "azdaja-v0.1.2-darwin-arm64",
+        "sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24"
+      },
+      {
+        "bytes": 7941464,
+        "name": "azdaja-v0.1.2-linux-x86_64",
+        "sha256": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e"
+      },
+      {
+        "bytes": 186,
+        "name": "SHA256SUMS",
+        "sha256": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1"
+      }
+    ],
+    "custody_id": "azdaja-v0.1.2-release-candidate-662b713",
+    "darwin_macho_uuid_note": "exact retained tested Mach-O is authoritative because clean rebuild hashes can vary",
+    "directory_mode": "0700",
+    "do_not_rebuild_or_replace": true,
+    "exact_matrix_tested_bytes_retained": true
+  },
+  "cells": [
+    {
+      "answer_exact_assertion": true,
+      "arch": "arm64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Darwin",
+      "receipt": "darwin-arm64-all-five.json",
+      "receipt_sha256": "3155414554b805c4cc3cbdb3650cafa15ec170d186dabe01c52de60f2402607c",
+      "scenario": "all-five",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "arm64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Darwin",
+      "receipt": "darwin-arm64-binary-already-installed.json",
+      "receipt_sha256": "8e055d8177fd473b2b7d504478a7e83a61d3a4ef35f99016f840cac6536fac7a",
+      "scenario": "binary-already-installed",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "arm64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Darwin",
+      "receipt": "darwin-arm64-claude.json",
+      "receipt_sha256": "b59668598f8aec5faca3354a9af9bc5f2176e4937d210a873b7cbf90de07c687",
+      "scenario": "claude",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "arm64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Darwin",
+      "receipt": "darwin-arm64-codex.json",
+      "receipt_sha256": "7be927d07ee783242eb6319bc588d33503bed692d7f07d963b18f17cf991b1be",
+      "scenario": "codex",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "arm64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Darwin",
+      "receipt": "darwin-arm64-gemini.json",
+      "receipt_sha256": "994511a1a26335163121afee70dd630d5a208e32761b07410443bdf2c9ebeb71",
+      "scenario": "gemini",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "arm64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Darwin",
+      "receipt": "darwin-arm64-jcode.json",
+      "receipt_sha256": "d81c6caa27b9fdf6c7b34864b02dbb4162e2a8d282b9ef021427334dcac68b2b",
+      "scenario": "jcode",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": null,
+      "arch": "arm64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "not_run_impossible",
+      "binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "doctor_outcome": "not_run_impossible",
+      "green": true,
+      "install_outcome": "expected_failure",
+      "os": "Darwin",
+      "receipt": "darwin-arm64-no-harness.json",
+      "receipt_sha256": "3e07cf4e560bbd8804be63dc6a9555f7f98b04d514b8857bd0232cf5848348c9",
+      "scenario": "no-harness",
+      "solo_outcome": "not_run_impossible"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "arm64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Darwin",
+      "receipt": "darwin-arm64-opencode.json",
+      "receipt_sha256": "55723e10c0a18cdd447e90dc53865c5cd846b94e7a715092ed02648717339531",
+      "scenario": "opencode",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "x86_64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Ubuntu",
+      "receipt": "ubuntu-x86_64-all-five.json",
+      "receipt_sha256": "f173a568a71e92345c502ea2cf30f74343f674dc2c3da4fd9678048b9b35a3fa",
+      "scenario": "all-five",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "x86_64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Ubuntu",
+      "receipt": "ubuntu-x86_64-binary-already-installed.json",
+      "receipt_sha256": "56adb040813a00a7c44051d777e67fabfd21ca708b7e352af4e24752dcaef5e8",
+      "scenario": "binary-already-installed",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "x86_64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Ubuntu",
+      "receipt": "ubuntu-x86_64-claude.json",
+      "receipt_sha256": "19ce9c6adb3f268c2d6248591bb1b097a0883e08f6e69a35e5dafbdfcddb12df",
+      "scenario": "claude",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "x86_64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Ubuntu",
+      "receipt": "ubuntu-x86_64-codex.json",
+      "receipt_sha256": "5ab362c903c7b3b4bf22e97b70a27e7c316b1f9a71acaf2390ad2b3129e41b54",
+      "scenario": "codex",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "x86_64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Ubuntu",
+      "receipt": "ubuntu-x86_64-gemini.json",
+      "receipt_sha256": "d213b78f7e683a81d49e197947afc677b357157d70086797d2525337b999cec2",
+      "scenario": "gemini",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "x86_64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Ubuntu",
+      "receipt": "ubuntu-x86_64-jcode.json",
+      "receipt_sha256": "d77d2a8f6ad744382d97601a24f4bf9d261c072561c5fcc7859d8ed694fba7f9",
+      "scenario": "jcode",
+      "solo_outcome": "pass"
+    },
+    {
+      "answer_exact_assertion": null,
+      "arch": "x86_64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "not_run_impossible",
+      "binary_sha256": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+      "doctor_outcome": "not_run_impossible",
+      "green": true,
+      "install_outcome": "expected_failure",
+      "os": "Ubuntu",
+      "receipt": "ubuntu-x86_64-no-harness.json",
+      "receipt_sha256": "984f136a2090621a67dccf09031e1f1fc879102f5bcd17e2e4901d6cd3129309",
+      "scenario": "no-harness",
+      "solo_outcome": "not_run_impossible"
+    },
+    {
+      "answer_exact_assertion": true,
+      "arch": "x86_64",
+      "artifact_hashes": {
+        "SHA256SUMS": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+        "azdaja-v0.1.2-darwin-arm64": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+        "azdaja-v0.1.2-linux-x86_64": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+        "input_52428800_bytes": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+        "install.sh": "36abdc64885cb9f9ff93daca6e1941ffbc7639fd7d3a3bd1034a6494b5bbf636"
+      },
+      "bare_no_args_outcome": "pass",
+      "binary_sha256": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e",
+      "doctor_outcome": "pass",
+      "green": true,
+      "install_outcome": "success",
+      "os": "Ubuntu",
+      "receipt": "ubuntu-x86_64-opencode.json",
+      "receipt_sha256": "f7193773a9d5ec592f59491241ed97c467b8c7c0bfae53fcef4bc76b473b7819",
+      "scenario": "opencode",
+      "solo_outcome": "pass"
+    }
+  ],
+  "coverage": {
+    "all_five_paths_proven_on_both_platforms": true,
+    "atomic_replacement_and_idempotence_proven_on_both_platforms": true,
+    "exact_installed_five_line_dragon_proven_on_all_positive_cells": true,
+    "no_harness_pre_download_no_mutation_no_trace_proven_on_both_platforms": true,
+    "os_arch": [
+      "Darwin/arm64",
+      "Ubuntu/x86_64"
+    ],
+    "scenarios": [
+      "jcode",
+      "claude",
+      "codex",
+      "gemini",
+      "opencode",
+      "all-five",
+      "no-harness",
+      "binary-already-installed"
+    ]
+  },
+  "fixtures": {
+    "SHA256SUMS_sha256": "33e8e6985ab500d874e4dd32cd4661c8475c4d91202f6cca7c8eba1c09d81ad1",
+    "assets": [
+      {
+        "bytes": 6434272,
+        "name": "azdaja-v0.1.2-darwin-arm64",
+        "sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24"
+      },
+      {
+        "bytes": 7941464,
+        "name": "azdaja-v0.1.2-linux-x86_64",
+        "sha256": "ed71f631e137400754fb089dcf29f7194956c559f614c281c628838a08ae032e"
+      }
+    ],
+    "input": {
+      "bytes": 52428800,
+      "sha256": "22a3b6369ee5dfa1da1b4ce1573203b5c8b22656ecc86518b0daca88a38d56f0",
+      "unique_answer": "ORCHID-9472-662B713",
+      "unique_lookup_key_occurrences": 1
+    },
+    "transport": "loopback HTTP only; no GitHub release asset GET/HEAD performed"
+  },
+  "implementation_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
+  "independent_validation": {
+    "cargo_test_locked_all_targets": {
+      "failed": 0,
+      "ignored": 1,
+      "outcome": "pass",
+      "passed": 103
+    },
+    "container_release_build": {
+      "artifact": "ELF x86-64 dynamically linked glibc",
+      "cargo_locked": true,
+      "fresh_git_archive": true,
+      "image": "rust:1.95-bookworm",
+      "image_id": "sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1",
+      "outcome": "pass",
+      "platform": "linux/amd64"
+    },
+    "native_release_build": {
+      "artifact": "Mach-O 64-bit arm64",
+      "cargo_locked": true,
+      "fresh_exact_commit_clone": true,
+      "llvm": "22.1.2",
+      "outcome": "pass",
+      "rust": "1.95.0",
+      "rust_commit": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+      "target": "aarch64-apple-darwin"
+    },
+    "ubuntu_matrix": {
+      "fresh_rm_container_per_cell": true,
+      "glibc": "2.39",
+      "image": "ubuntu:24.04",
+      "image_id": "sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea",
+      "platform": "linux/amd64"
+    }
+  },
+  "provider_evidence": {
+    "credentials_entered_containers": false,
+    "fake_provider_used": false,
+    "linux_transport": "pass",
+    "matrix_52428800_byte_solo_successes": 14,
+    "matrix_doctor_successes": 14,
+    "matrix_genuine_provider_successes": 28,
+    "matrix_provider_attempts": 28,
+    "matrix_route": "OpenAI gpt-5.4-mini via owner-only local Jcode ChatGPT-subscription relay",
+    "real_installed_adapter_genuine_provider_successes": 5,
+    "relay_setup_probe_successes_excluded_from_matrix_count": 1,
+    "successful_provider_invocations_observed_in_task_including_setup_probe_and_real_adapters": 34
+  },
+  "published_or_tagged": false,
+  "real_installed_adapters": {
+    "claude_full_50mib_pass": true,
+    "codex_doctor_pass_then_solo_local_auth_expired": true,
+    "jcode_doctor_local_auth_route_failure": true,
+    "no_login_or_credential_mutation": true,
+    "opencode_full_50mib_pass": true,
+    "receipt": "e2e/real-installed-adapters.json",
+    "receipt_sha256": "b3c657da9be4cff611e9286d40be553232e7e51cfb8fe9f1eb734d8433ef48a8"
+  },
+  "result": {
+    "expected_no_harness_failures_green": 2,
+    "green_cells": 16,
+    "positive_cells_passed": 14,
+    "positive_exact_five_line_dragon_passed": 14,
+    "total_cells": 16
+  },
+  "retention": {
+    "host_paths_in_receipts": false,
+    "raw_50mib_inputs_in_receipts": false,
+    "raw_prompts_in_receipts": false,
+    "raw_responses_in_receipts": false,
+    "raw_traces_in_receipts": false,
+    "secrets_in_receipts": false
+  },
+  "schema": "azdaja-install-matrix-aggregate-v2",
+  "source_tree": "4e803f48a8784bd5322db2d3f47fe8cc578029b3",
+  "version": "0.1.2"
+}

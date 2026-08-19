@@ -1,0 +1,96 @@
+{
+  "adapters": [
+    {
+      "actual_configured_cli": true,
+      "adapter": "opencode",
+      "bare_exact_five_line_dragon_assertion": true,
+      "doctor_exact_three_pass_assertion": true,
+      "genuine_provider_successes": 2,
+      "install_exact_three_line_assertion": true,
+      "installed_binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "installed_managed_target": true,
+      "solo": {
+        "answer_exact_assertion": true,
+        "input_bytes": 52428800,
+        "input_sha256": "2d2d3884dc3bcf52a8fd876c6b7effca6b97e5cd9fd7e507bcb28ceea45a0555",
+        "outcome": "pass",
+        "raw_input_prompt_response_trace_retained": false
+      }
+    },
+    {
+      "actual_configured_cli": true,
+      "adapter": "claude",
+      "bare_exact_five_line_dragon_assertion": true,
+      "doctor_exact_three_pass_assertion": true,
+      "genuine_provider_successes": 2,
+      "install_exact_three_line_assertion": true,
+      "installed_binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "installed_managed_target": true,
+      "solo": {
+        "answer_exact_assertion": true,
+        "input_bytes": 52428800,
+        "input_sha256": "2b93cc7f2cf886fbf65061997b2c3a4fff15ee61216436bb87cab04d56a89978",
+        "outcome": "pass",
+        "raw_input_prompt_response_trace_retained": false
+      }
+    },
+    {
+      "actual_configured_cli": true,
+      "adapter": "codex",
+      "bare_exact_five_line_dragon_assertion": true,
+      "doctor_exact_three_pass_assertion": true,
+      "genuine_provider_successes": 1,
+      "install_exact_three_line_assertion": true,
+      "installed_binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "installed_managed_target": true,
+      "solo": {
+        "answer_exact_assertion": false,
+        "input_bytes": 52428800,
+        "input_sha256": "b28396b3d8201e534d512cdc9f0eb0442bfc47c7d84ee7c09ffb91e9926e1d06",
+        "no_login_or_credential_mutation": true,
+        "outcome": "fail_local_auth_expired",
+        "raw_input_prompt_response_trace_retained": false
+      }
+    },
+    {
+      "actual_configured_cli": true,
+      "adapter": "jcode",
+      "bare_exact_five_line_dragon_assertion": true,
+      "doctor": {
+        "config_pass": true,
+        "evaluator_pass": true,
+        "harness_fail_with_fix_hint": true,
+        "no_login_or_credential_mutation": true,
+        "outcome": "fail_local_auth_route_unavailable"
+      },
+      "genuine_provider_successes": 0,
+      "install_exact_three_line_assertion": true,
+      "installed_binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+      "installed_managed_target": true,
+      "solo": {
+        "outcome": "not_run_after_doctor_gate"
+      }
+    }
+  ],
+  "binary_sha256": "1a8b442599c25eda05ba4d5a979e018148484ec0396610b900e85e7d9cef1a24",
+  "candidate_bytes": 6434272,
+  "implementation_commit": "662b713f17a157cfd0241d87afcc3b9107232eed",
+  "os_arch": "Darwin/arm64",
+  "result": {
+    "claude_full_50mib_pass": true,
+    "codex_doctor_pass_solo_auth_failure": true,
+    "genuine_provider_successes": 5,
+    "jcode_honest_doctor_failure": true,
+    "opencode_full_50mib_pass": true
+  },
+  "retention": {
+    "credentials": false,
+    "host_paths": false,
+    "raw_inputs": false,
+    "raw_prompts": false,
+    "raw_responses": false,
+    "raw_traces": false
+  },
+  "schema": "azdaja-install-real-adapters-owner-v2",
+  "version": "0.1.2"
+}
