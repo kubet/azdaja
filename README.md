@@ -22,9 +22,11 @@ The [crossover figure](docs/token-context-crossover.svg) is deliberately illustr
 
 ## Current evidence
 
-One current Azdaja candidate is shown as a sanitized public aggregate. This is a
-private, single-arm diagnostic—not an official leaderboard result, a paired
-comparison, or a superiority claim.
+The launch kit is **68.64%** fixed-199 (**+4.26 points** against the
+published bare-RLM reference), **92.96%** execution, and **~5.4K** mean root
+tokens over 198 measured rows, plus the paired ARC diagnostic below. Each number
+keeps its own evidence boundary; this is not an official leaderboard result or
+superiority claim.
 
 ### Fixed-199 validation slice
 
@@ -62,11 +64,20 @@ best-published status. Its values are not controls rerun by us; protocol alignme
 does not establish superiority, equivalence, or general capability. The visible
 next class step is Codex at 71.75%, not a result Azdaja has reached.
 
-### Post-launch second act
+### Paired ARC diagnostic
 
-Future evidence should be within-game paired ARC deltas, never an absolute ARC
-score. The transport flip remains v0.2 roadmap material: its +0.00 scout failed
-before inference and observed no root choice, so it is not genuine disuse and is
+> same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)
+
+Five fresh-session pairs on the same Claude Sonnet lane produced 0.0
+Ember-minus-baseline RHAE delta in every game. Under the predefined
+unchanged-official-feedback rule, wasted actions totaled 646 for baseline and
+654 for Ember. The receipt deliberately retains paired deltas and aggregate
+waste only—not absolute arm scores or the revisited-state/repeated-control
+split. See the [sanitized ARC receipt](bench/results/arc3-ember-five-public-v9-result.json)
+and the [full evidence boundary](docs/launch-saga.md#the-five-game-second-act).
+
+The transport flip remains v0.2 roadmap material: its +0.00 scout failed before
+inference and observed no root choice, so it is not genuine disuse and is
 non-diagnostic for discoverability. See the [sanitized post-mortem](docs/transport-flip-postmortem.md).
 
 ## Install

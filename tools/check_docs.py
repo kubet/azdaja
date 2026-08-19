@@ -68,6 +68,12 @@ def check_claim_contract() -> list[str]:
         "docs/token-context-crossover.svg",
         "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/v0.1.1/site/install | sh",
         "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.1 --locked",
+        "launch kit is **68.64%**",
+        "**+4.26 points**",
+        "same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)",
+        "bench/results/arc3-ember-five-public-v9-result.json",
+        "not absolute arm scores",
+        "revisited-state/repeated-control",
     ]
     required_draft = [
         "NONPUBLISHED DRAFT",
@@ -82,8 +88,8 @@ def check_claim_contract() -> list[str]:
         "No cost or token",
     ]
     readme_lines = len(readme.splitlines())
-    if not 100 <= readme_lines <= 140:
-        errors.append(f"README.md: expected 100-140 lines, found {readme_lines}")
+    if not 100 <= readme_lines <= 155:
+        errors.append(f"README.md: expected 100-155 lines, found {readme_lines}")
     stale_readme = [
         "## First-use feedback",
         "### Derived RULER",
@@ -112,7 +118,18 @@ def check_claim_contract() -> list[str]:
         "not proof of a global best-published result",
         "5,403.36 mean total root tokens",
         "Codex at 71.75",
-        "within-game treatment-minus-control deltas",
+        "same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)",
+        "same Claude Sonnet lane through the direct Claude CLI",
+        "obsolete bridge/helper was bypassed",
+        "All five paired deltas are 0.0",
+        "| ls20 | 0.0 | 92 | 103 |",
+        "| ft09 | 0.0 | 186 | 208 |",
+        "| vc33 | 0.0 | 0 | 0 |",
+        "| ar25 | 0.0 | 137 | 110 |",
+        "| wa30 | 0.0 | 231 | 233 |",
+        "`-1.238390092879257%` fewer wasted actions",
+        "revisited-state/repeated-control split was not retained",
+        "only the predefined unchanged-official-feedback aggregate is evidenced",
         "post-launch v0.2 roadmap material only",
     ]
     required_postmortem = [
@@ -128,6 +145,12 @@ def check_claim_contract() -> list[str]:
         "private staging only",
         "transport-flip-postmortem.md",
         "gpt-rah199-mortality-v3-terminal-public.json",
+        "arc3-ember-five-public-v9-result.json",
+        "public flip, anonymous saga verification, then RAH results-table PR handling",
+        "No public repository identified by arXiv 2606.13643 or its authors",
+        "Do not invent a target repository",
+        "gh pr create",
+        "@EliasLumer",
         "release asset `GET`/`HEAD`",
     ]
     for name, text, required in (
@@ -199,12 +222,14 @@ def check_launch_receipts() -> list[str]:
     release_path = ROOT / "release" / "day7-public-launch.json"
     public_path = ROOT / "bench" / "results" / "gpt-rah199-mortality-v3-terminal-public.json"
     transport_path = ROOT / "bench" / "results" / "endgame-agent-transport-v2-disease10-terminal.json"
+    arc_path = ROOT / "bench" / "results" / "arc3-ember-five-public-v9-result.json"
     postmortem_path = ROOT / "docs" / "transport-flip-postmortem.md"
     saga_path = ROOT / "docs" / "launch-saga.md"
     try:
         release = json.loads(release_path.read_text(encoding="utf-8"))
         public = json.loads(public_path.read_text(encoding="utf-8"))
         transport = json.loads(transport_path.read_text(encoding="utf-8"))
+        arc = json.loads(arc_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return [f"launch receipt read failed: {exc}"]
 
@@ -254,14 +279,68 @@ def check_launch_receipts() -> list[str]:
     if transport.get("forced_live_proof", {}).get("passed") is not False:
         errors.append("transport receipt: forced live proof boundary changed")
 
+    expected_arc = {
+        "arms": ["baseline", "ember"],
+        "games": [
+            {"baseline_wasted_actions": 92, "ember_minus_baseline_rhae_delta": 0.0, "ember_wasted_actions": 103, "game_id": "ls20"},
+            {"baseline_wasted_actions": 186, "ember_minus_baseline_rhae_delta": 0.0, "ember_wasted_actions": 208, "game_id": "ft09"},
+            {"baseline_wasted_actions": 0, "ember_minus_baseline_rhae_delta": 0.0, "ember_wasted_actions": 0, "game_id": "vc33"},
+            {"baseline_wasted_actions": 137, "ember_minus_baseline_rhae_delta": 0.0, "ember_wasted_actions": 110, "game_id": "ar25"},
+            {"baseline_wasted_actions": 231, "ember_minus_baseline_rhae_delta": 0.0, "ember_wasted_actions": 233, "game_id": "wa30"},
+        ],
+        "identity": "Ember",
+    }
+    expected_arc_sha256 = "f6a518df0183f9d4791e99f58bdc0e91c198056ffa67b9013b8f97ff8fc27c21"
+    if arc != expected_arc:
+        errors.append("ARC receipt: exact public-safe schema or values changed")
+    if _sha256(arc_path) != expected_arc_sha256:
+        errors.append("ARC receipt: canonical v9 byte hash changed")
+    else:
+        baseline_wasted = sum(game["baseline_wasted_actions"] for game in arc["games"])
+        ember_wasted = sum(game["ember_wasted_actions"] for game in arc["games"])
+        if baseline_wasted != 646 or ember_wasted != 654:
+            errors.append("ARC receipt: wasted-action totals changed")
+        fewer_percent = (baseline_wasted - ember_wasted) / baseline_wasted * 100
+        if abs(fewer_percent - (-1.238390092879257)) > 1e-15:
+            errors.append("ARC receipt: wasted-action percentage changed")
+        if any(game["ember_minus_baseline_rhae_delta"] != 0.0 for game in arc["games"]):
+            errors.append("ARC receipt: paired RHAE delta changed")
+
+    expected_second_act_arc = {
+        "absolute_arm_rhae_retained": False,
+        "all_paired_rhae_deltas": 0.0,
+        "arms": ["baseline", "ember"],
+        "games": 5,
+        "identity": "Ember",
+        "method": {
+            "fresh_sessions": True,
+            "helper_anomaly_observed": False,
+            "model_lane": "Claude Sonnet",
+            "obsolete_bridge_helper_bypassed": True,
+            "transport": "direct Claude CLI",
+        },
+        "result_framing": "same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)",
+        "revisited_state_repeated_control_split_retained": False,
+        "wasted_actions": {
+            "baseline": 646,
+            "ember": 654,
+            "baseline_minus_ember_percent_of_baseline": -1.238390092879257,
+        },
+    }
+    if release.get("second_act", {}).get("arc") != expected_second_act_arc:
+        errors.append("day7 receipt: ARC method or evidence boundary changed")
+
     expected_hashes = {
         "sanitized_terminal_receipt_sha256": _sha256(public_path),
         "transport_terminal_receipt_sha256": _sha256(transport_path),
         "transport_postmortem_sha256": _sha256(postmortem_path),
+        "arc_terminal_receipt_sha256": _sha256(arc_path),
     }
     for key, value in expected_hashes.items():
         if evidence.get(key) != value:
             errors.append(f"day7 receipt: stale {key}")
+    if evidence.get("arc_terminal_receipt_path") != "bench/results/arc3-ember-five-public-v9-result.json":
+        errors.append("day7 receipt: stale ARC public receipt path")
     if score.get("terminal_receipt_path") is not None or score.get("terminal_receipt_retained_private") is not True:
         errors.append("day7 receipt: missing private-terminal path boundary")
     if score.get("terminal_receipt_sha256") != "27bbb4da02bf75ff5c3c6b73697bf8518e33566a55f3b9fc8d7012ee5b648e74":
@@ -272,7 +351,7 @@ def check_launch_receipts() -> list[str]:
     if saga.get("authorized_score_occurrences") != 1 or release.get("release_asset_requests_performed") is not False:
         errors.append("day7 receipt: publication or score-occurrence boundary changed")
 
-    for path in (release_path, public_path, transport_path, postmortem_path):
+    for path in (release_path, public_path, transport_path, arc_path, postmortem_path):
         text = path.read_text(encoding="utf-8")
         for private_prefix in ("/Users/", "/private/tmp/", "C:\\Users\\"):
             if private_prefix in text:

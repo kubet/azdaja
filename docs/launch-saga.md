@@ -71,13 +71,43 @@ impute the missing row or relabel that as an exact 6K, complete-campaign, cost,
 or efficiency result. The [sanitized terminal receipt](../bench/results/gpt-rah199-mortality-v3-terminal-public.json)
 binds those aggregates to the retained private evidence.
 
-The second act is paired evidence. A future authorized ARC pilot should report
-only within-game treatment-minus-control deltas, never an absolute ARC or
-leaderboard score. The transport scout's 0.00/0.00 tie came from 20
-pre-inference setup failures, with zero successful provider turns and zero
-agent-class calls. It observed no root choice, so it is neither genuine disuse
-nor a discoverability measurement. A repaired activation study is post-launch
-v0.2 roadmap material only; it is not authorized here. The
+## The five-game second act
+
+> same harness, same model, ± Azdaja: -1.24% fewer wasted actions (1.24% more)
+
+The terminal public-safe ARC receipt contains five fresh-session pairs under the
+public identity Ember. Both arms used the same Claude Sonnet lane through the
+direct Claude CLI. The obsolete bridge/helper was bypassed, and therefore no
+helper anomaly was observed; this does not claim that helper was repaired.
+
+| Public game | Ember − baseline RHAE delta | Baseline wasted actions | Ember wasted actions |
+|---|---:|---:|---:|
+| ls20 | 0.0 | 92 | 103 |
+| ft09 | 0.0 | 186 | 208 |
+| vc33 | 0.0 | 0 | 0 |
+| ar25 | 0.0 | 137 | 110 |
+| wa30 | 0.0 | 231 | 233 |
+| **Total** | — | **646** | **654** |
+
+All five paired deltas are 0.0. Under the predefined
+unchanged-official-feedback rule, `(646 - 654) / 646 × 100` is exactly
+`-1.238390092879257%` fewer wasted actions, rounded in the framing above to
+-1.24% fewer—equivalently 1.24% more. ar25 improved from 137 to 110 wasted
+actions; ls20, ft09, and wa30 regressed, while vc33 tied at zero.
+
+The result supports no absolute ARC score claim. Version 9 deliberately retained
+only paired RHAE deltas, not either arm's absolute RHAE. The
+revisited-state/repeated-control split was not retained—only the predefined
+unchanged-official-feedback aggregate is evidenced. The
+[sanitized five-game receipt](../bench/results/arc3-ember-five-public-v9-result.json)
+contains only the public identity, arm labels, game IDs, deltas, and aggregate
+wasted-action counts.
+
+The separate transport scout's 0.00/0.00 tie came from 20 pre-inference setup
+failures, with zero successful provider turns and zero agent-class calls. It
+observed no root choice, so it is neither genuine disuse nor a discoverability
+measurement. A repaired activation study is post-launch v0.2 roadmap material
+only; it is not authorized here. The
 [sanitized post-mortem](transport-flip-postmortem.md) records that boundary.
 
 ## Why a dragon

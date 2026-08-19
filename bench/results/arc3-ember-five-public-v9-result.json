@@ -1,0 +1,39 @@
+{
+  "arms": [
+    "baseline",
+    "ember"
+  ],
+  "games": [
+    {
+      "baseline_wasted_actions": 92,
+      "ember_minus_baseline_rhae_delta": 0.0,
+      "ember_wasted_actions": 103,
+      "game_id": "ls20"
+    },
+    {
+      "baseline_wasted_actions": 186,
+      "ember_minus_baseline_rhae_delta": 0.0,
+      "ember_wasted_actions": 208,
+      "game_id": "ft09"
+    },
+    {
+      "baseline_wasted_actions": 0,
+      "ember_minus_baseline_rhae_delta": 0.0,
+      "ember_wasted_actions": 0,
+      "game_id": "vc33"
+    },
+    {
+      "baseline_wasted_actions": 137,
+      "ember_minus_baseline_rhae_delta": 0.0,
+      "ember_wasted_actions": 110,
+      "game_id": "ar25"
+    },
+    {
+      "baseline_wasted_actions": 231,
+      "ember_minus_baseline_rhae_delta": 0.0,
+      "ember_wasted_actions": 233,
+      "game_id": "wa30"
+    }
+  ],
+  "identity": "Ember"
+}
