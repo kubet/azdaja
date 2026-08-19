@@ -82,6 +82,11 @@ def check_claim_contract() -> list[str]:
         "14 genuine-provider 50 MiB solos",
         "two expected graceful no-harness refusals",
         "bench/results/install-matrix-v0.1.2-public.json",
+        "bench/results/install-real-adapters-v0.1.2-public.json",
+        "genuine installed OpenCode and Claude adapter E2Es",
+        "Codex reached the evaluator but failed its provider check",
+        "Jcode failed its provider check on this host",
+        "neither is counted as a pass",
         "bench/results/arc3-vc33-smoke-v2-public.json",
     ]
     required_draft = [
@@ -154,6 +159,11 @@ def check_claim_contract() -> list[str]:
         "two no-harness cells failed before any fixture request",
         "arc3-vc33-smoke-v2-public.json",
         "install-matrix-v0.1.2-public.json",
+        "install-real-adapters-v0.1.2-public.json",
+        "genuinely installed OpenCode",
+        "Claude adapters end to end",
+        "local credential refresh was invalid",
+        "neither is a green product pass",
         "arc3-scorecard-interrogation-public-v1.json",
         "post-launch v0.2 roadmap material only",
     ]
@@ -262,6 +272,74 @@ def check_claim_contract() -> list[str]:
 
 
 
+def check_arc_public_surface() -> list[str]:
+    """Keep the tracked ARC source reviewable while execution remains gated."""
+    errors: list[str] = []
+    arc = ROOT / "bench" / "arc3"
+    readme_path = arc / "README.md"
+    readme = readme_path.read_text(encoding="utf-8")
+
+    if (arc / "POST_PUBLIC_FIVE.md").exists():
+        errors.append("bench/arc3: private post-public runbook must not be tracked")
+    for forbidden in ("/Users/", "/private/tmp/", "C:\\Users\\", ".private-upstream"):
+        if forbidden in readme:
+            errors.append(f"bench/arc3/README.md: private host material leaked: {forbidden}")
+    code_blocks = re.findall(r"```(?:bash|sh)?\n(.*?)\n```", readme, flags=re.DOTALL)
+    for block in code_blocks:
+        if any(name in block for name in (
+            "arc_v2_post_public.py", "bind_arc_v2_post_public.py", "driver.py live"
+        )):
+            errors.append("bench/arc3/README.md: executable post-public recipe is forbidden")
+
+    new_tests = (
+        arc / "test_arc_v2_local_custody.py",
+        arc / "test_arc_v2_post_public.py",
+        arc / "test_claude_lane.py",
+        arc / "test_driver.py",
+    )
+    for test in new_tests:
+        text = test.read_text(encoding="utf-8")
+        for forbidden in ("/Users/", "/private/tmp/", "/owner/", "/private/"):
+            if forbidden in text:
+                errors.append(f"{test.relative_to(ROOT)}: hard-coded host path remains: {forbidden}")
+
+    five_path = arc / "arc-v2-five-postlaunch-manifest.json"
+    five = json.loads(five_path.read_text(encoding="utf-8"))
+    gate = five.get("launch_gate", {})
+    if (
+        five.get("status") != "PREPARED_OWNER_AUTHORIZED_POST_PUBLIC_FLIP_GATE_NOT_YET_SATISFIED"
+        or gate.get("explicit_owner_go_post_flip_bound") is not False
+        or gate.get("post_public_visibility_receipt_bound") is not False
+        or gate.get("repository_must_be_public_at_execution") is not True
+    ):
+        errors.append("ARC-v2 five-game manifest: post-public/GO gate is not fail-closed")
+
+    required = {
+        "driver.py", "claude_lane.py", "arc_v2_post_public.py",
+        "bind_arc_v2_post_public.py", "arc-v2-local-custody-manifest.json",
+        "arc-v2-five-postlaunch-manifest.json", "toolkit-lock.json",
+        "mini-pilot-manifest.json",
+    }
+    missing = sorted(name for name in required if not (arc / name).is_file())
+    if missing:
+        errors.append(f"bench/arc3: referenced source or lock missing: {missing}")
+    driver_tests = (arc / "test_driver.py").read_text(encoding="utf-8")
+    for generation in range(2, 10):
+        name = f"mini-pilot-live-manifest-v{generation}.json"
+        if name not in driver_tests or not (arc / name).is_file():
+            errors.append(f"bench/arc3: referenced historical manifest missing: {name}")
+
+    for sidecar in sorted(arc.glob("*.sha256")):
+        fields = sidecar.read_text(encoding="ascii").strip().split()
+        if len(fields) != 2:
+            errors.append(f"{sidecar.relative_to(ROOT)}: malformed hash sidecar")
+            continue
+        target = sidecar.parent / fields[1]
+        if not target.is_file() or fields[0] != hashlib.sha256(target.read_bytes()).hexdigest():
+            errors.append(f"{sidecar.relative_to(ROOT)}: stale hash sidecar")
+    return errors
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -280,6 +358,7 @@ def check_launch_receipts() -> list[str]:
     interrogation_path = ROOT / "bench" / "results" / "arc3-scorecard-interrogation-public-v1.json"
     vc33_smoke_path = ROOT / "bench" / "results" / "arc3-vc33-smoke-v2-public.json"
     install_matrix_path = ROOT / "bench" / "results" / "install-matrix-v0.1.2-public.json"
+    real_adapters_path = ROOT / "bench" / "results" / "install-real-adapters-v0.1.2-public.json"
     postmortem_path = ROOT / "docs" / "transport-flip-postmortem.md"
     saga_path = ROOT / "docs" / "launch-saga.md"
     try:
@@ -290,6 +369,7 @@ def check_launch_receipts() -> list[str]:
         interrogation = json.loads(interrogation_path.read_text(encoding="utf-8"))
         vc33_smoke = json.loads(vc33_smoke_path.read_text(encoding="utf-8"))
         install_matrix = json.loads(install_matrix_path.read_text(encoding="utf-8"))
+        real_adapters = json.loads(real_adapters_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return [f"launch receipt read failed: {exc}"]
 
@@ -390,6 +470,49 @@ def check_launch_receipts() -> list[str]:
         errors.append("install matrix: exact public-safe schema or values changed")
     if _sha256(install_matrix_path) != "9170d7527c52d2d7ec7972639c8c3f1df776dfb5c2722b71f5102f79b74ffbf7":
         errors.append("install matrix: canonical public byte hash changed")
+
+    expected_real_adapters = {'binary': {'name': 'azdaja-v0.1.2-darwin-arm64',
+                'sha256': '4fdb907c0af87be49d82ec82849848ca340eae99aeb02d7e18691f19fa39b6b7',
+                'version': '0.1.2'},
+     'observed_nonpasses': [{'classification': 'local_credential_refresh_invalid',
+                             'evaluator_check': 'PASS',
+                             'fix_hint_printed': True,
+                             'harness': 'codex',
+                             'product_pass': False,
+                             'provider_check': 'FAIL'},
+                            {'classification': 'host_provider_route_failed',
+                             'fix_hint_printed': True,
+                             'harness': 'jcode',
+                             'product_pass': False,
+                             'provider_check': 'FAIL'}],
+     'passing_routes': [{'doctor': {'checks': 3, 'failed': 0, 'passed': 3},
+                         'harness': 'opencode',
+                         'installer_stdout_lines': 3,
+                         'solo': {'exact_answer': 'DRAGON-OPENCODE-5120',
+                                  'input_bytes': 52428800,
+                                  'input_sha256': 'e31f7338dcc8d5307fa91b6a22a421a76f094b8601e19450883eb3af08e50f31',
+                                  'passed': True}},
+                        {'doctor': {'checks': 3, 'failed': 0, 'passed': 3},
+                         'harness': 'claude',
+                         'installer_stdout_lines': 3,
+                         'solo': {'exact_answer': 'DRAGON-CLAUDE-5120',
+                                  'input_bytes': 52428800,
+                                  'input_sha256': 'b5b6edc45bd8c926f8a27663de40f66ceda666742e5dddccef7cb15919925f1c',
+                                  'passed': True}}],
+     'platform': 'Darwin/arm64',
+     'sanitization': {'authentication_material_retained': False,
+                      'machine_locations_retained': False,
+                      'model_io_retained': False,
+                      'raw_diagnostics_retained': False,
+                      'synthetic_inputs_deleted': True},
+     'schema': 'azdaja-install-real-adapters-public-v1',
+     'scope': {'installation_provider_free': True,
+               'other_routes_validated': False,
+               'passing_routes': ['opencode', 'claude'],
+               'solo_e2e_genuine_installed_adapter': True},
+     'version': '0.1.2'}
+    if real_adapters != expected_real_adapters:
+        errors.append("real-adapter receipt: exact public-safe schema or values changed")
 
     if score.get("percent") != 68.64164968987583 or public_score.get("fixed_199_score_percent") != 68.64164968987583:
         errors.append("launch receipts: frozen exact score mismatch")
@@ -640,6 +763,7 @@ def check_launch_receipts() -> list[str]:
         interrogation_path,
         vc33_smoke_path,
         install_matrix_path,
+        real_adapters_path,
         postmortem_path,
     ):
         text = path.read_text(encoding="utf-8")
@@ -649,7 +773,12 @@ def check_launch_receipts() -> list[str]:
     return errors
 
 def main() -> int:
-    errors = check_relative_links() + check_claim_contract() + check_launch_receipts()
+    errors = (
+        check_relative_links()
+        + check_claim_contract()
+        + check_arc_public_surface()
+        + check_launch_receipts()
+    )
     plot_check = subprocess.run(
         [sys.executable, str(ROOT / "tools" / "render_token_crossover.py"), "--check"],
         cwd=ROOT,

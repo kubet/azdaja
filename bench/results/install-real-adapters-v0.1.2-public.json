@@ -1,0 +1,75 @@
+{
+  "binary": {
+    "name": "azdaja-v0.1.2-darwin-arm64",
+    "sha256": "4fdb907c0af87be49d82ec82849848ca340eae99aeb02d7e18691f19fa39b6b7",
+    "version": "0.1.2"
+  },
+  "observed_nonpasses": [
+    {
+      "classification": "local_credential_refresh_invalid",
+      "evaluator_check": "PASS",
+      "fix_hint_printed": true,
+      "harness": "codex",
+      "product_pass": false,
+      "provider_check": "FAIL"
+    },
+    {
+      "classification": "host_provider_route_failed",
+      "fix_hint_printed": true,
+      "harness": "jcode",
+      "product_pass": false,
+      "provider_check": "FAIL"
+    }
+  ],
+  "passing_routes": [
+    {
+      "doctor": {
+        "checks": 3,
+        "failed": 0,
+        "passed": 3
+      },
+      "harness": "opencode",
+      "installer_stdout_lines": 3,
+      "solo": {
+        "exact_answer": "DRAGON-OPENCODE-5120",
+        "input_bytes": 52428800,
+        "input_sha256": "e31f7338dcc8d5307fa91b6a22a421a76f094b8601e19450883eb3af08e50f31",
+        "passed": true
+      }
+    },
+    {
+      "doctor": {
+        "checks": 3,
+        "failed": 0,
+        "passed": 3
+      },
+      "harness": "claude",
+      "installer_stdout_lines": 3,
+      "solo": {
+        "exact_answer": "DRAGON-CLAUDE-5120",
+        "input_bytes": 52428800,
+        "input_sha256": "b5b6edc45bd8c926f8a27663de40f66ceda666742e5dddccef7cb15919925f1c",
+        "passed": true
+      }
+    }
+  ],
+  "platform": "Darwin/arm64",
+  "sanitization": {
+    "authentication_material_retained": false,
+    "machine_locations_retained": false,
+    "model_io_retained": false,
+    "raw_diagnostics_retained": false,
+    "synthetic_inputs_deleted": true
+  },
+  "schema": "azdaja-install-real-adapters-public-v1",
+  "scope": {
+    "installation_provider_free": true,
+    "other_routes_validated": false,
+    "passing_routes": [
+      "opencode",
+      "claude"
+    ],
+    "solo_e2e_genuine_installed_adapter": true
+  },
+  "version": "0.1.2"
+}

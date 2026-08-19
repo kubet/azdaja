@@ -68,7 +68,7 @@ Uninstall the managed harness copies; if the one-command installer wrote a stand
 azdaja uninstall
 ```
 
-Supported harness targets are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation makes no provider call. A passing `doctor` proves only that the configured harness route answered its fixed canary. The [pre-release install matrix](bench/results/install-matrix-v0.1.2-public.json) passed all 16 Darwin arm64 and Ubuntu x86-64 cells, including 14 genuine-provider 50 MiB solos and two expected graceful no-harness refusals.
+Supported harness targets are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation makes no provider call. A passing `doctor` proves only that the configured harness route answered its fixed canary. The [pre-release install matrix](bench/results/install-matrix-v0.1.2-public.json) passed all 16 Darwin arm64 and Ubuntu x86-64 cells, including 14 genuine-provider 50 MiB solos and two expected graceful no-harness refusals. A separate [real-adapter receipt](bench/results/install-real-adapters-v0.1.2-public.json) records genuine installed OpenCode and Claude adapter E2Es on Darwin arm64: each exact three-line install and three-check doctor passed, then one synthetic 52,428,800-byte solo returned its bound answer. Codex reached the evaluator but failed its provider check because the local credential refresh was invalid, while Jcode failed its provider check on this host; both printed fix hints and neither is counted as a pass. No claim is made for other routes.
 
 ## Use
 

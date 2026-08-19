@@ -1,0 +1,303 @@
+{
+  "action_budget_semantics": {
+    "authority_commit": "86d72170ce3155551712a9fafd290bab471d6eee",
+    "authority_file": "benchmarking/agent.py",
+    "authority_file_sha256": "a9b4bc228a54ff5d028fa727dda231df02e6538527a6aa926edbbd2e9f97a64e",
+    "authority_repository": "https://github.com/arcprize/arc-agi-3-benchmarking.git",
+    "derivation": "level_action_caps=[ceil(baseline*5.0)]; max_actions=sum(level_action_caps)",
+    "forced_reset_states": [
+      "GAME_OVER",
+      "NOT_PLAYED"
+    ],
+    "multiplier": 5.0
+  },
+  "claim_boundary": "public result contains only Ember identity, baseline/ember arm labels, five public game IDs, and per-game Ember-minus-baseline RHAE deltas",
+  "common_live_model_config": {
+    "claude_binary_sha256": "08d8700313697cbe730a25420c908a299ce52d56f0eb2cf4fac94cab5109bc57",
+    "claude_version": "2.1.234",
+    "driver_sha256": "1a9a8900c871505a1a8ca183984bf3621f348fc6de74fd7833d405fbd761aa17",
+    "fresh_process_per_action": true,
+    "invocation": "direct-cli-fresh-process-v3",
+    "lane_wrapper_sha256": "45db903fb072d58dd37175f143577f8607f6027a5a40efa3012a26c1012738c4",
+    "model": "sonnet",
+    "no_project_discovery": true,
+    "no_session_persistence": true,
+    "no_tools": true,
+    "print_mode": true,
+    "provider": "claude-code",
+    "reasoning_effort": "low",
+    "safe_mode": true,
+    "telemetry": false,
+    "temperature": null
+  },
+  "execution_freshness": {
+    "authorization_generation": "v6",
+    "fresh_process_per_model_call": true,
+    "fresh_runtime_per_arm": true,
+    "manifest_generation": "v6",
+    "output_filename": "arc3-ember-five-public-v6-result.json",
+    "output_identity": "ARC3-FIVE-PUBLIC-PAIRED-EMBER-V6-RESULT",
+    "output_must_not_preexist": true,
+    "reuse_v3_game_session_output_or_runtime": false,
+    "reuse_v4_game_session_output_or_runtime": false,
+    "reuse_v5_game_session_output_or_runtime": false
+  },
+  "experiment_id": "ARC3-FIVE-PUBLIC-PAIRED-EMBER-V6-DIRECT-CLAUDE-DRIVER-STDIN-FIX",
+  "games": [
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": true,
+      "game_id": "ls20",
+      "game_version": "9607627b",
+      "human_level_baseline_actions": [
+        22,
+        123,
+        73,
+        84,
+        96,
+        192,
+        186
+      ],
+      "level_action_caps": [
+        110,
+        615,
+        365,
+        420,
+        480,
+        960,
+        930
+      ],
+      "max_actions": 3880,
+      "mechanics_stratum": "agent reasoning / navigation",
+      "official_human_actions_total": 776,
+      "selection_basis": "official docs label plus seven-level action profile"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "ft09",
+      "game_version": "0d8bbf25",
+      "human_level_baseline_actions": [
+        43,
+        12,
+        23,
+        28,
+        65,
+        37
+      ],
+      "level_action_caps": [
+        215,
+        60,
+        115,
+        140,
+        325,
+        185
+      ],
+      "max_actions": 1040,
+      "mechanics_stratum": "elementary logic",
+      "official_human_actions_total": 208,
+      "selection_basis": "official docs label; six-level short-horizon profile"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "vc33",
+      "game_version": "467a4e69",
+      "human_level_baseline_actions": [
+        7,
+        18,
+        44,
+        61,
+        131,
+        34,
+        152
+      ],
+      "level_action_caps": [
+        35,
+        90,
+        220,
+        305,
+        655,
+        170,
+        760
+      ],
+      "max_actions": 2235,
+      "mechanics_stratum": "orchestration",
+      "official_human_actions_total": 447,
+      "selection_basis": "official docs label; seven-level coordination profile"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "ar25",
+      "game_version": "e3c63847",
+      "human_level_baseline_actions": [
+        32,
+        50,
+        75,
+        37,
+        89,
+        159,
+        233,
+        73
+      ],
+      "level_action_caps": [
+        160,
+        250,
+        375,
+        185,
+        445,
+        795,
+        1165,
+        365
+      ],
+      "max_actions": 3740,
+      "mechanics_stratum": "eight-level control",
+      "official_human_actions_total": 748,
+      "selection_basis": "public baseline profile; semantic mechanic must be rechecked at authorized preflight"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "wa30",
+      "game_version": "ee6fef47",
+      "human_level_baseline_actions": [
+        71,
+        119,
+        183,
+        98,
+        368,
+        68,
+        79,
+        442,
+        415
+      ],
+      "level_action_caps": [
+        355,
+        595,
+        915,
+        490,
+        1840,
+        340,
+        395,
+        2210,
+        2075
+      ],
+      "max_actions": 9215,
+      "mechanics_stratum": "long-horizon nine-level control",
+      "official_human_actions_total": 1843,
+      "selection_basis": "public baseline profile; semantic mechanic must be rechecked at authorized preflight"
+    }
+  ],
+  "human_baseline_authority": {
+    "derivation": "official_human_actions_total=sum(actionsDelta); each level_action_cap=ceil(level_baseline*5.0); max_actions=sum(level_action_caps)",
+    "etag": "W/\"7bd570fcd026c0f4fd83c9db69c15380\"",
+    "field": "actionsDelta",
+    "last_modified": "Thu, 13 Aug 2026 23:45:58 GMT",
+    "sha256": "a219eb932acf22be56f993e703b59eef2d3526f7cae2472e4358800c697a3d6f",
+    "source": "official ARC Prize task-page static bundle",
+    "url": "https://arcprize.org/_next/static/chunks/app/tasks/%5Bname%5D/page-a3cf8338ae433d6b.js"
+  },
+  "launch_gate": {
+    "arc_live_owner_authorized": true,
+    "claude_v7_verdict": "STOP_NO_FULL",
+    "separate_arc_claude_lane_owner_authorized": true,
+    "track1_fixed_199_terminal_completed": true,
+    "track1_fixed_denominator": 199,
+    "track1_full_199_confirmed": true
+  },
+  "owner_only_evidence": {
+    "bridge_helper_bypassed": true,
+    "claude_v7_terminal_receipt_sha256": "8460be9b22a4d101eb8a95cb46854b572f3d772c98282ad72c49dfc11f1d8d98",
+    "claude_v7_verdict": "STOP_NO_FULL",
+    "direct_claude_cli_selected": true,
+    "driver_duplicate_stdin_input_fixed": true,
+    "duplicate_stdin_input_fixed": true,
+    "expired_jcode_oauth_route_rejected": true,
+    "helper_bug_persists": false,
+    "isolation": "fresh HOME, JCODE_HOME, JCODE_RUNTIME_DIR, and AZDAJA_HOME per arm; fresh direct-Claude process and writable runtime per call",
+    "owner_home_auth_exception": "read-only under macOS sandbox solely for Claude Code subscription lookup; all writable runtime, cache, temp, cwd, and session state is disposable",
+    "separate_arc_claude_lane_owner_authorized": true,
+    "track1_fixed_denominator": 199,
+    "track1_status": "TERMINAL_COMPLETED_SCORED_ONCE_CLOSED",
+    "track1_terminal_receipt_sha256": "27bbb4da02bf75ff5c3c6b73697bf8518e33566a55f3b9fc8d7012ee5b648e74",
+    "v4_attempt_status": "TERMINATED_LOCAL_WRAPPER_ERROR_ZERO_ACTIONS_ZERO_PAIRS",
+    "v5_attempt_status": "TERMINATED_LOCAL_DRIVER_ERROR_ZERO_ACTIONS_ZERO_PAIRS"
+  },
+  "privacy_contract": {
+    "helper_bug_annotation_policy": "include neutral helper_bug_annotation per game only if the bypass fails and the helper bug actually persists",
+    "platform_pseudonym": "Ember",
+    "public_arm_order": [
+      "baseline",
+      "ember"
+    ],
+    "public_game_order": [
+      "ls20",
+      "ft09",
+      "vc33",
+      "ar25",
+      "wa30"
+    ],
+    "public_output_contract": "per-game paired RHAE delta and official-feedback wasted-action counts only",
+    "public_result_game_keys": [
+      "game_id",
+      "ember_minus_baseline_rhae_delta",
+      "baseline_wasted_actions",
+      "ember_wasted_actions"
+    ],
+    "public_result_top_level_keys": [
+      "identity",
+      "arms",
+      "games"
+    ],
+    "wasted_action_definition": "non-RESET action whose official post-action game feedback exactly equals the immediately preceding official game feedback"
+  },
+  "schema_version": 6,
+  "shadow_scoring": {
+    "method": "RHAE per official documentation pinned in toolkit-lock.json",
+    "paired_delta": "ember minus baseline within the same game",
+    "per_game": "level-index-weighted completed-level sum divided by all-level weight sum",
+    "per_level": "min((human_baseline_actions / agent_actions)^2, 1.15)",
+    "wasted_actions": [
+      "post-action state already visited",
+      "same control repeated from the same known pre-state"
+    ]
+  },
+  "status": "FROZEN_AUTHORIZED_FOR_LIVE_MINI",
+  "suite": {
+    "fresh_game_instance_per_arm": true,
+    "game_order": [
+      "ls20",
+      "ft09",
+      "vc33",
+      "ar25",
+      "wa30"
+    ],
+    "name": "MINI-PILOT",
+    "pair_order": [
+      "baseline",
+      "ember"
+    ],
+    "public_games": 5,
+    "reuse_prior_game_or_session": false,
+    "seed": 0
+  },
+  "treatment_only": {
+    "binary_sha256_by_platform": {
+      "darwin-arm64": "a469dcf498e2a89f68b55c01d73313b506a07e8dca812f531e105b912194dce7"
+    },
+    "bundle_version": "0.1.0",
+    "max_skill_invocations_per_game": 1,
+    "root_model": "claude-sonnet-5",
+    "skill": "ember",
+    "skill_input_contract": "the sole file input is accumulated owner-only turn history; all temporary material is removed per arm",
+    "skill_question": "Analyze the accumulated turn history. Return concise evidence-bound next-control advice; do not invent unseen state.",
+    "source_bundle_components_sha256": {
+      "SKILL.md": "ec32dbc1b96810eb87b4cc4e296c3f526a7ad91e570c075d9f2471af5820bec6",
+      "config.toml": "07389e1c18f789cbd9d7a2b1626ce66b1193e16b3100d41b0c626ae2ca4a4af4"
+    },
+    "sub_model": "claude-sonnet-5",
+    "subcall_transport": "direct-claude-cli-fresh-process-v1",
+    "trigger_completed_turns": 2
+  }
+}

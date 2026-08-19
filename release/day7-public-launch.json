@@ -105,10 +105,10 @@
   "repository": "kubet/azdaja",
   "saga": {
     "authorized_score_occurrences": 1,
-    "git_blob": "768328c2886791133d86bf9057b1c4534cf9e1c0",
+    "git_blob": "93b5ee7b585c324a33a2caf9530551881a3ab206",
     "path": "docs/launch-saga.md",
     "private_draft_markers_remaining": 0,
-    "sha256": "3e3daf888cfb4df45efad55049d86377b5e1572074a56bfd36651a87a07608f8"
+    "sha256": "ab5de25d22d4bc384dd75ca6141ae94505fc968ef24a78155e4b7f6ccff4955c"
   },
   "schema_version": 2,
   "second_act": {

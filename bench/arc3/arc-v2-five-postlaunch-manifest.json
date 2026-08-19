@@ -1,0 +1,342 @@
+{
+  "authorization_contract": {
+    "all_execution_artifact_paths_absolute_fresh_distinct_and_owner_only": true,
+    "approval_binds_fresh_github_visibility_receipt": true,
+    "owner_file_mode": "0600",
+    "required_fields": [
+      "action_journal_paths",
+      "approval_type",
+      "arc_live_owner_authorized",
+      "authorization_id",
+      "authorized_at_utc",
+      "direct_claude_failure_artifact_path",
+      "execution_sentinel_path",
+      "experiment_id",
+      "full_five_game_rerun_authorized",
+      "game_count",
+      "game_order",
+      "github_visibility_receipt_path",
+      "github_visibility_receipt_sha256",
+      "manifest_sha256",
+      "output_identity",
+      "output_path",
+      "owner_go_post_public_flip_marker",
+      "pair_count",
+      "pair_order",
+      "paired_receipt_paths",
+      "repository_full_name",
+      "required_repository_visibility",
+      "separate_arc_claude_lane_owner_authorized",
+      "suite_terminal_receipt_path",
+      "terminal_receipt_paths"
+    ]
+  },
+  "common_live_model_config": {
+    "claude_binary_sha256": "08d8700313697cbe730a25420c908a299ce52d56f0eb2cf4fac94cab5109bc57",
+    "claude_version": "2.1.234",
+    "driver_sha256": "a589a4aba74f9c04a9d5614ec11bd8834094dfeea983d599a6e48b03456aa665",
+    "fresh_process_per_action": true,
+    "invocation": "direct-cli-fresh-process-v7",
+    "lane_wrapper_sha256": "0cc6de2f2c71b66c255c2c660e40ed83aa965bd9009256e352d1f967c95aac9e",
+    "model": "sonnet",
+    "no_project_discovery": true,
+    "no_session_persistence": true,
+    "no_tools": true,
+    "print_mode": true,
+    "provider": "claude-code",
+    "reasoning_effort": "low",
+    "safe_mode": true,
+    "same_direct_lane_for_both_arms": true,
+    "strict_empty_mcp_config": {
+      "mcpServers": {}
+    },
+    "telemetry": false,
+    "temperature": null
+  },
+  "custody_contract": {
+    "action_journal_content": "start observation plus every completed issued action with full official before/after feedback, turn, state, action/data, and level change",
+    "action_journal_creation": "O_EXCL mode 0600; canonical JSONL append and fsync for every record during play before temporary cleanup",
+    "action_journal_hash_chain": "record_sha256=SHA256(canonical JSON of record without record_sha256); previous_record_sha256 links from 64 zeroes",
+    "artifact_scope": "owner-only local custody; no public result emission required",
+    "forbidden_journal_content": [
+      "model prompts",
+      "model responses",
+      "OAuth material",
+      "API keys"
+    ],
+    "platform_scorecard_retrieval": false,
+    "receipt_creation": "O_EXCL mode 0600",
+    "terminal_receipt_content": [
+      "absolute_shadow_rhae",
+      "levels_completed",
+      "per_level_action_counts",
+      "total_actions_issued",
+      "wasted_actions.aggregate",
+      "wasted_actions.revisited_states",
+      "wasted_actions.repeated_known_controls",
+      "termination_reason",
+      "action_journal.path",
+      "action_journal.sha256",
+      "action_journal.record_count"
+    ]
+  },
+  "execution_freshness": {
+    "action_journals_must_not_preexist": true,
+    "artifact_prefix": "arc-v2-five-postlaunch-v1",
+    "authorization_filename": "arc-v2-five-postlaunch-authorization.json",
+    "direct_claude_failure_artifact_filename": "arc-v2-five-postlaunch-v1.direct-claude-failure.private",
+    "execution_sentinel_created_once_before_first_game_or_model_call": true,
+    "execution_sentinel_filename": "arc-v2-five-postlaunch-v1.execution-consumed.json",
+    "generation": "arc-v2-five-postlaunch-v1",
+    "output_filename": "arc-v2-five-postlaunch-v1.output.json",
+    "output_identity": "ARC-V2-FIVE-POSTLAUNCH-LOCAL-CUSTODY-V1-OUTPUT",
+    "output_must_not_preexist": true,
+    "paired_receipts_must_not_preexist": true,
+    "private_failure_artifact_must_not_preexist": true,
+    "rerun_after_sentinel_refuses": true,
+    "reuse_completed_vc33_smoke_artifacts": false,
+    "suite_terminal_receipt_filename": "arc-v2-five-postlaunch-v1.suite-terminal-receipt.json",
+    "terminal_receipts_must_not_preexist": true,
+    "visibility_receipt_filename": "arc-v2-five-postlaunch-v1.github-public-receipt.json"
+  },
+  "experiment_id": "ARC-V2-FIVE-POSTLAUNCH-LOCAL-CUSTODY-V1",
+  "games": [
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "ls20",
+      "game_version": "9607627b",
+      "human_level_baseline_actions": [
+        22,
+        123,
+        73,
+        84,
+        96,
+        192,
+        186
+      ],
+      "level_action_caps": [
+        110,
+        615,
+        365,
+        420,
+        480,
+        960,
+        930
+      ],
+      "max_actions": 3880,
+      "mechanics_stratum": "agent reasoning / navigation",
+      "official_human_actions_total": 776,
+      "selection_basis": "official docs label plus seven-level action profile"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "ft09",
+      "game_version": "0d8bbf25",
+      "human_level_baseline_actions": [
+        43,
+        12,
+        23,
+        28,
+        65,
+        37
+      ],
+      "level_action_caps": [
+        215,
+        60,
+        115,
+        140,
+        325,
+        185
+      ],
+      "max_actions": 1040,
+      "mechanics_stratum": "elementary logic",
+      "official_human_actions_total": 208,
+      "selection_basis": "official docs label; six-level short-horizon profile"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "vc33",
+      "game_version": "467a4e69",
+      "human_level_baseline_actions": [
+        7,
+        18,
+        44,
+        61,
+        131,
+        34,
+        152
+      ],
+      "level_action_caps": [
+        35,
+        90,
+        220,
+        305,
+        655,
+        170,
+        760
+      ],
+      "max_actions": 2235,
+      "mechanics_stratum": "orchestration",
+      "official_human_actions_total": 447,
+      "selection_basis": "official docs label; seven-level coordination profile"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "ar25",
+      "game_version": "e3c63847",
+      "human_level_baseline_actions": [
+        32,
+        50,
+        75,
+        37,
+        89,
+        159,
+        233,
+        73
+      ],
+      "level_action_caps": [
+        160,
+        250,
+        375,
+        185,
+        445,
+        795,
+        1165,
+        365
+      ],
+      "max_actions": 3740,
+      "mechanics_stratum": "eight-level control",
+      "official_human_actions_total": 748,
+      "selection_basis": "public baseline profile; semantic mechanic must be rechecked at authorized preflight"
+    },
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "wa30",
+      "game_version": "ee6fef47",
+      "human_level_baseline_actions": [
+        71,
+        119,
+        183,
+        98,
+        368,
+        68,
+        79,
+        442,
+        415
+      ],
+      "level_action_caps": [
+        355,
+        595,
+        915,
+        490,
+        1840,
+        340,
+        395,
+        2210,
+        2075
+      ],
+      "max_actions": 9215,
+      "mechanics_stratum": "long-horizon nine-level control",
+      "official_human_actions_total": 1843,
+      "selection_basis": "public baseline profile; semantic mechanic must be rechecked at authorized preflight"
+    }
+  ],
+  "implementation": {
+    "binder_path": "bench/arc3/bind_arc_v2_post_public.py",
+    "binder_sha256": "a1dc0bffd2e76a5ce8d963a95dfb019edd780a70513e90a61485bb6dbd1d763e",
+    "claude_lane_path": "bench/arc3/claude_lane.py",
+    "claude_lane_sha256": "0cc6de2f2c71b66c255c2c660e40ed83aa965bd9009256e352d1f967c95aac9e",
+    "core_driver_path": "bench/arc3/driver.py",
+    "core_driver_sha256": "a589a4aba74f9c04a9d5614ec11bd8834094dfeea983d599a6e48b03456aa665",
+    "runner_path": "bench/arc3/arc_v2_post_public.py",
+    "runner_sha256": "2257e53a0db984e79eb3006aac959c82c96b42ba800f7ad2bd9e75069eb9b865"
+  },
+  "launch_gate": {
+    "explicit_owner_go_post_flip_bound": false,
+    "full_five_game_rerun_authorized_only_by_fresh_owner_approval": true,
+    "package_prepared_without_live_calls": true,
+    "post_public_visibility_receipt_bound": false,
+    "repository_must_be_public_at_execution": true,
+    "single_vc33_smoke_is_completed_and_not_reused": true
+  },
+  "owner_only_evidence": {
+    "completed_vc33_smoke_artifacts_are_out_of_scope": true,
+    "completed_vc33_smoke_source_commit": "1d500edd8eaf651364cfdd8e29638ee540db6062",
+    "local_shadow_rhae_only": true,
+    "same_direct_claude_sonnet_lane_retained": true,
+    "same_ember_bundle_retained": true,
+    "zero_arc_game_model_provider_calls_during_preparation": true
+  },
+  "schema_version": 11,
+  "scope": {
+    "arm_count": 10,
+    "game_count": 5,
+    "game_order": [
+      "ls20",
+      "ft09",
+      "vc33",
+      "ar25",
+      "wa30"
+    ],
+    "pair_count": 5,
+    "pair_order": [
+      "baseline",
+      "ember"
+    ],
+    "scorecard_retrieval": false
+  },
+  "source_commit": "1d500edd8eaf651364cfdd8e29638ee540db6062",
+  "status": "PREPARED_OWNER_AUTHORIZED_POST_PUBLIC_FLIP_GATE_NOT_YET_SATISFIED",
+  "suite": {
+    "fresh_game_instance_per_arm": true,
+    "fresh_identity_per_arm": true,
+    "fresh_process_per_action": true,
+    "game_order": [
+      "ls20",
+      "ft09",
+      "vc33",
+      "ar25",
+      "wa30"
+    ],
+    "name": "ARC-V2-FIVE-POSTLAUNCH-LOCAL-CUSTODY",
+    "pair_order": [
+      "baseline",
+      "ember"
+    ],
+    "pairs": 5,
+    "reuse_prior_game_or_session": false,
+    "seed": 0
+  },
+  "treatment_only": {
+    "binary_sha256_by_platform": {
+      "darwin-arm64": "a469dcf498e2a89f68b55c01d73313b506a07e8dca812f531e105b912194dce7"
+    },
+    "bundle_version": "0.1.0",
+    "max_skill_invocations_per_game": 1,
+    "root_model": "claude-sonnet-5",
+    "skill": "ember",
+    "skill_input_contract": "the sole file input is accumulated owner-only turn history; all temporary material is removed per arm",
+    "skill_question": "Analyze the accumulated turn history. Return concise evidence-bound next-control advice; do not invent unseen state.",
+    "source_bundle_components_sha256": {
+      "SKILL.md": "ec32dbc1b96810eb87b4cc4e296c3f526a7ad91e570c075d9f2471af5820bec6",
+      "config.toml": "07389e1c18f789cbd9d7a2b1626ce66b1193e16b3100d41b0c626ae2ca4a4af4"
+    },
+    "sub_model": "claude-sonnet-5",
+    "subcall_transport": "direct-claude-cli-fresh-process-v1",
+    "trigger_completed_turns": 2
+  },
+  "visibility_gate": {
+    "maximum_future_clock_skew_seconds": 30,
+    "owner_go_post_flip_marker": "OWNER_GO_ARC_V2_FIVE_POST_PUBLIC_FLIP_V1",
+    "proof_source": "fresh owner-custodied receipt derived from GET https://api.github.com/repos/kubet/azdaja",
+    "receipt_max_age_seconds_at_execution": 600,
+    "repository_full_name": "kubet/azdaja",
+    "required_private_flag": false,
+    "required_visibility": "PUBLIC"
+  }
+}

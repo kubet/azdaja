@@ -1,0 +1,175 @@
+{
+  "action_budget_semantics": {
+    "derivation": "level_action_caps=[baseline*5]; max_actions=sum(level_action_caps)",
+    "forced_reset_states": [
+      "GAME_OVER",
+      "NOT_PLAYED"
+    ],
+    "multiplier": 5
+  },
+  "authorization_contract": {
+    "all_artifact_paths_absolute_fresh_and_owner_only": true,
+    "required_fields": [
+      "action_journal_paths",
+      "arc_live_owner_authorized",
+      "arc_v2_exactly_one_pair_owner_authorized",
+      "direct_claude_failure_artifact_path",
+      "experiment_id",
+      "full_five_game_rerun_authorized",
+      "manifest_sha256",
+      "output_identity",
+      "output_path",
+      "pair_count",
+      "pair_order",
+      "paired_receipt_path",
+      "selected_game_id",
+      "separate_arc_claude_lane_owner_authorized",
+      "terminal_receipt_paths",
+      "track1_fixed_199_terminal_completed",
+      "track1_fixed_denominator"
+    ]
+  },
+  "common_live_model_config": {
+    "claude_binary_sha256": "08d8700313697cbe730a25420c908a299ce52d56f0eb2cf4fac94cab5109bc57",
+    "claude_version": "2.1.234",
+    "driver_sha256": "a589a4aba74f9c04a9d5614ec11bd8834094dfeea983d599a6e48b03456aa665",
+    "fresh_process_per_action": true,
+    "invocation": "direct-cli-fresh-process-v7",
+    "lane_wrapper_sha256": "0cc6de2f2c71b66c255c2c660e40ed83aa965bd9009256e352d1f967c95aac9e",
+    "model": "sonnet",
+    "no_project_discovery": true,
+    "no_session_persistence": true,
+    "no_tools": true,
+    "print_mode": true,
+    "provider": "claude-code",
+    "reasoning_effort": "low",
+    "safe_mode": true,
+    "same_direct_lane_for_both_arms": true,
+    "strict_empty_mcp_config": {
+      "mcpServers": {}
+    },
+    "telemetry": false,
+    "temperature": null
+  },
+  "custody_contract": {
+    "action_journal_creation": "O_EXCL mode 0600; canonical JSONL append and fsync for every record",
+    "action_journal_hash_chain": "record_sha256=SHA256(canonical JSON of record without record_sha256); previous_record_sha256 links from 64 zeroes",
+    "artifact_scope": "owner-only local custody; no public output required",
+    "forbidden_journal_content": [
+      "model prompts",
+      "model responses",
+      "OAuth material",
+      "API keys"
+    ],
+    "platform_scorecard_retrieval": false,
+    "receipt_creation": "O_EXCL mode 0600"
+  },
+  "execution_freshness": {
+    "action_journals_must_not_preexist": true,
+    "authorization_generation": "arc-v2-local-custody-v1",
+    "fresh_process_per_model_call": true,
+    "fresh_runtime_per_arm": true,
+    "manifest_generation": "arc-v2-local-custody-v1",
+    "output_identity": "ARC-V2-VC33-PAIRED-LOCAL-CUSTODY-V1-OUTPUT",
+    "output_must_not_preexist": true,
+    "paired_receipt_must_not_preexist": true,
+    "private_failure_artifact_filename": "arc-v2-vc33-paired-local-custody-v1.direct-claude-failure.private",
+    "private_failure_artifact_must_not_preexist": true,
+    "reuse_v9_game_session_output_or_runtime": false,
+    "terminal_receipts_must_not_preexist": true
+  },
+  "experiment_id": "ARC-V2-VC33-PAIRED-LOCAL-CUSTODY-V1",
+  "games": [
+    {
+      "action_cap_multiplier": 5,
+      "dry_run_stub": false,
+      "game_id": "vc33",
+      "game_version": "467a4e69",
+      "human_level_baseline_actions": [
+        7,
+        18,
+        44,
+        61,
+        131,
+        34,
+        152
+      ],
+      "level_action_caps": [
+        35,
+        90,
+        220,
+        305,
+        655,
+        170,
+        760
+      ],
+      "max_actions": 2235,
+      "mechanics_stratum": "orchestration",
+      "official_human_actions_total": 447,
+      "selection_basis": "official docs label; seven-level coordination profile"
+    }
+  ],
+  "hold_gate": {
+    "full_five_game_rerun": "HOLD",
+    "release_condition": "explicit post-public-flip owner authorization"
+  },
+  "launch_gate": {
+    "arc_live_owner_authorized": true,
+    "arc_v2_exactly_one_pair_owner_authorized": true,
+    "full_five_game_rerun_authorized": false,
+    "separate_arc_claude_lane_owner_authorized": true,
+    "track1_fixed_199_terminal_completed": true,
+    "track1_fixed_denominator": 199
+  },
+  "owner_only_evidence": {
+    "direct_claude_wrapper_helper_bypass_retained": true,
+    "prior_vc33_aggregate": "0/0_DEGENERATE_UNRESOLVED",
+    "source_commit": "3399cf700db21b48dbbc532372b6541b31cd62ad",
+    "zero_live_calls_during_patch_preparation": true
+  },
+  "schema_version": 10,
+  "scope": {
+    "game_count": 1,
+    "game_id": "vc33",
+    "pair_count": 1,
+    "pair_order": [
+      "baseline",
+      "ember"
+    ],
+    "selection_reason": "prior 0/0 aggregate was degenerate and unresolved; vc33 has the smallest first-level cap"
+  },
+  "status": "FROZEN_AUTHORIZED_FOR_EXACTLY_ONE_LOCAL_CUSTODY_PAIR",
+  "suite": {
+    "fresh_game_instance_per_arm": true,
+    "fresh_identity_per_arm": true,
+    "game_order": [
+      "vc33"
+    ],
+    "name": "ARC-V2-LOCAL-CUSTODY-SMOKE",
+    "pair_order": [
+      "baseline",
+      "ember"
+    ],
+    "pairs": 1,
+    "reuse_prior_game_or_session": false,
+    "seed": 0
+  },
+  "treatment_only": {
+    "binary_sha256_by_platform": {
+      "darwin-arm64": "a469dcf498e2a89f68b55c01d73313b506a07e8dca812f531e105b912194dce7"
+    },
+    "bundle_version": "0.1.0",
+    "max_skill_invocations_per_game": 1,
+    "root_model": "claude-sonnet-5",
+    "skill": "ember",
+    "skill_input_contract": "the sole file input is accumulated owner-only turn history; all temporary material is removed per arm",
+    "skill_question": "Analyze the accumulated turn history. Return concise evidence-bound next-control advice; do not invent unseen state.",
+    "source_bundle_components_sha256": {
+      "SKILL.md": "ec32dbc1b96810eb87b4cc4e296c3f526a7ad91e570c075d9f2471af5820bec6",
+      "config.toml": "07389e1c18f789cbd9d7a2b1626ce66b1193e16b3100d41b0c626ae2ca4a4af4"
+    },
+    "sub_model": "claude-sonnet-5",
+    "subcall_transport": "direct-claude-cli-fresh-process-v1",
+    "trigger_completed_turns": 2
+  }
+}

@@ -76,12 +76,14 @@ fn bare_command_is_exactly_five_useful_lines() {
     assert!(output.status.success());
     let (stdout, stderr) = utf8(&output);
     assert!(stderr.is_empty());
-    let lines: Vec<_> = stdout.lines().collect();
-    assert_eq!(lines.len(), 5, "{stdout:?}");
-    assert_eq!(lines[1], "Usage: azdaja <command> [options]");
-    assert!(lines[2].contains("install") && lines[2].contains("uninstall"));
-    assert!(lines[4].starts_with("Example: azdaja solo "));
-    assert!(lines[4].contains(" -f ./document.txt"));
+    assert_eq!(
+        stdout,
+        format!(
+            "          __====-_  _-====__\n    _--^^^#####//      \\\\#####^^^--_\n  _-^##########// (    ) \\\\##########^-_  AZDAJA v{}\nUsage: azdaja <start|load|exec|final|list|kill|solo|install|doctor|uninstall> [options]\nExample: azdaja solo \"summarize this file\" -f ./document.txt\n",
+            env!("CARGO_PKG_VERSION")
+        )
+    );
+    assert_eq!(stdout.lines().count(), 5);
 }
 
 #[test]

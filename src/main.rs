@@ -146,7 +146,7 @@ fn preflight_repair_solo_trace(
 
 fn help() {
     println!(
-        "azdaja {VERSION} — bounded-context CLI\nUsage: azdaja <command> [options]\nCommands: start load exec final list kill solo install doctor uninstall\nInstall: azdaja install [--harness jcode|claude|codex|gemini|opencode|all]\nExample: azdaja solo \"summarize this file\" -f ./document.txt"
+        "          __====-_  _-====__\n    _--^^^#####//      \\\\#####^^^--_\n  _-^##########// (    ) \\\\##########^-_  AZDAJA v{VERSION}\nUsage: azdaja <start|load|exec|final|list|kill|solo|install|doctor|uninstall> [options]\nExample: azdaja solo \"summarize this file\" -f ./document.txt"
     );
 }
 fn main() -> ExitCode {

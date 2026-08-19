@@ -156,6 +156,16 @@ backup remnant. The [sanitized matrix receipt](../bench/results/install-matrix-v
 records the platforms, asset hashes, assertions, and retention boundary; raw input,
 prompts, responses, traces, credentials, and host paths were not retained.
 
+A separate native Darwin arm64 pass exercised the genuinely installed OpenCode
+and Claude adapters end to end. For each route the installer emitted exactly
+three lines, all three `doctor` checks passed, and an exact 52,428,800-byte
+synthetic input returned its route-bound answer. The
+[sanitized real-adapter receipt](../bench/results/install-real-adapters-v0.1.2-public.json)
+records those two passes. Codex reached the evaluator but its provider check
+failed because the local credential refresh was invalid; Jcode also failed its
+provider check on that host. Both printed the designed fix hints, neither is a
+green product pass, and no conclusion is drawn about other routes.
+
 The CLI now says what a first-time user needs. `install` reports detection, writes,
 and the next step in three lines. `doctor` emits one PASS or FAIL per check and a
 fix on every failure. Bare `azdaja` prints five usage lines with a copy-pasteable
