@@ -21,6 +21,7 @@ DOCS = [
     ROOT / "docs" / "launch-saga.md",
     ROOT / "docs" / "transport-flip-postmortem.md",
     ROOT / "docs" / "day7-public-launch.md",
+    ROOT / "docs" / "harness-lifecycle.md",
 ]
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 HTML_SRC_RE = re.compile(r'''src=["\']([^"\']+)["\']''')
@@ -271,15 +272,18 @@ def check_claim_contract() -> list[str]:
             errors.append(f"README.md: unsupported owner-draft claim remains: {claim}")
     install_section = readme.split("## Install", 1)[1].split("## Use", 1)[0]
     install_blocks = re.findall(r"```bash\n(.*?)\n```", install_section, flags=re.DOTALL)
-    if len(install_blocks) != 3:
-        errors.append("README.md: Install section must contain exactly three bash blocks")
+    if len(install_blocks) != 4:
+        errors.append("README.md: Install section must contain exactly four bash blocks")
     else:
         if install_blocks[0] != "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh":
             errors.append("README.md: first Install bash block must be the exact HTTPS installer command")
         if "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked" not in install_blocks[1]:
             errors.append("README.md: second Install bash block must retain the HTTPS cargo fallback")
-        if install_blocks[2] != "azdaja uninstall":
-            errors.append("README.md: third Install bash block must be exactly `azdaja uninstall`")
+        if "az doctor --harness jcode" not in install_blocks[2] or "az doctor" not in install_blocks[2]:
+            errors.append("README.md: third Install bash block must document both doctor modes")
+        expected_uninstall = "az uninstall --harness claude\naz uninstall --harness all\naz uninstall --standalone\naz uninstall --all"
+        if install_blocks[3] != expected_uninstall:
+            errors.append("README.md: fourth Install bash block must document the safe uninstall modes")
     if "v0.1.1" in install_section:
         errors.append("README.md: Install section still references immutable v0.1.1 assets")
     if "git@github.com" in readme or "ssh://git@" in readme:
@@ -531,6 +535,16 @@ def check_alias_delta_receipt() -> list[str]:
         )
     }
     hashes = receipt.get("hashes", {})
+    expected_historic_hashes = {
+        ".gitignore": "78f3a3211035abc61620600167071b7767bb483253c60db3153dfafb251fdcb5",
+        "Cargo.toml": "2925561c94a507aa2ebae852e3773981ae2cfc05ed66da495297731163fd9ac8",
+        "install.sh": "ae50243f6fe9354e010c4e6c56eea81e291708890d5b5b947bdcf6ea71c9bb2d",
+        "site/install": "ae50243f6fe9354e010c4e6c56eea81e291708890d5b5b947bdcf6ea71c9bb2d",
+        "src/banner.rs": "dec4128eea89db1c339ebc6b19f68433f6b7c7986c5f0105f334542720137f79",
+        "src/main.rs": "898abd67f90eee1a5a4902bf629e0c6010483ad1f691c0de268f9843735a1877",
+        "tests/cli_ux.rs": "f38264104329f3a80ec72e124f0fd058624951bca09406442607fe04e22bff61",
+        "tests/site_installer.rs": "9d8d6114fcc0ff3a30de3f874e77bd2796de048c27fefe8ca5fcbf374ae07390",
+    }
     if (
         receipt.get("schema_version") != 2
         or receipt.get("record_type") != "azdaja_install_alias_delta_local_fixture_public_receipt"
@@ -538,16 +552,9 @@ def check_alias_delta_receipt() -> list[str]:
         or receipt.get("result") != expected_result
         or len(cells) != 16
         or identities != expected_identities
-        or hashes.get("install.sh") != _sha256(ROOT / "install.sh")
-        or hashes.get("site/install") != _sha256(ROOT / "site" / "install")
-        or hashes.get("tests/site_installer.rs") != _sha256(ROOT / "tests" / "site_installer.rs")
-        or hashes.get("src/main.rs") != _sha256(ROOT / "src" / "main.rs")
-        or hashes.get("tests/cli_ux.rs") != _sha256(ROOT / "tests" / "cli_ux.rs")
-        or hashes.get("src/banner.rs") != _sha256(ROOT / "src" / "banner.rs")
-        or hashes.get("Cargo.toml") != _sha256(ROOT / "Cargo.toml")
-        or hashes.get(".gitignore") != _sha256(ROOT / ".gitignore")
+        or hashes != expected_historic_hashes
     ):
-        errors.append("alias delta receipt: identity, matrix, or source hashes changed")
+        errors.append("alias delta receipt: immutable identity, matrix, or historic hashes changed")
     if (ROOT / "install.sh").read_bytes() != (ROOT / "site" / "install").read_bytes():
         errors.append("alias delta: root and site installers are not byte-identical")
     if receipt.get("scope", {}).get("provider_calls_performed") is not False:

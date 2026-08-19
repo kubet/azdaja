@@ -233,8 +233,8 @@ fn run() -> Result<bool> {
             println!("killed {}", args[1])
         }
         "doctor" => return doctor(&args),
-        "install" => install_cmd(&args, false)?,
-        "uninstall" => install_cmd(&args, true)?,
+        "install" => install_cmd(&args)?,
+        "uninstall" => uninstall_cmd(&args)?,
         "solo" => solo(&args, &Config::load()?)?,
         x => bail!("unknown command '{x}' (run --help)"),
     }
@@ -254,6 +254,24 @@ fn doctor(args: &[String]) -> Result<bool> {
             serde_json::json!({"azdaja":VERSION,"monty":MONTY_VERSION,"dump_version":monty::DUMP_VERSION,"capabilities":["persistent-repl","snapshots","external-functions","re","json","datetime","monty-os-calls-denied"]})
         );
         return Ok(true);
+    }
+    if args
+        .get(1)
+        .is_some_and(|s| matches!(s.as_str(), "-h" | "--help"))
+    {
+        exact(args, 2)?;
+        println!(
+            "Usage: az doctor [--caps | --harness <jcode|claude|codex|gemini|opencode|all>]\n\
+             Note: --harness checks installed-on-disk custody without a provider call.\n\
+             Examples:\n  az doctor\n  az doctor --harness jcode\n  az doctor --harness all"
+        );
+        return Ok(true);
+    }
+    if let [_, flag, which] = args
+        && flag == "--harness"
+    {
+        let (selected, _) = harnesses(Some(which))?;
+        return doctor_harnesses(&selected);
     }
     exact(args, 1)?;
     let cfg = match Config::load() {
@@ -322,9 +340,15 @@ fn command_exists(name: &str) -> bool {
         })
     })
 }
+fn jcode_root(home: &Path) -> PathBuf {
+    env::var_os("JCODE_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".jcode"))
+}
 fn detection_reasons(home: &Path, harness: &str) -> Vec<&'static str> {
     let config_found = match harness {
-        "jcode" => home.join(".jcode").is_dir(),
+        "jcode" => jcode_root(home).is_dir(),
         "claude" => home.join(".claude").is_dir(),
         "codex" => home.join(".codex").is_dir() || home.join(".agents/skills").is_dir(),
         "gemini" => home.join(".gemini").is_dir(),
@@ -386,7 +410,7 @@ fn home() -> Result<PathBuf> {
 }
 fn target(home: &Path, h: &str) -> PathBuf {
     match h {
-        "jcode" => home.join(".jcode/skills/azdaja"),
+        "jcode" => jcode_root(home).join("skills/azdaja"),
         "claude" => home.join(".claude/skills/azdaja"),
         "codex" => home.join(".agents/skills/azdaja"),
         "gemini" => home.join(".gemini/skills/azdaja"),
@@ -408,7 +432,40 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
         _ => ("jcode-api", "gpt-5.6-luna"),
     }
 }
+fn harness_display_name(harness: &str) -> &'static str {
+    match harness {
+        "jcode" => "Jcode",
+        "claude" => "Claude",
+        "codex" => "Codex",
+        "gemini" => "Gemini",
+        "opencode" => "OpenCode",
+        _ => "harness",
+    }
+}
+fn harness_reload_instruction(selected: &[&str]) -> String {
+    if selected.len() == ALL_HARNESSES.len() {
+        return "reload/restart all five harnesses".into();
+    }
+    if selected.len() > 1 {
+        return format!(
+            "reload/restart the selected harnesses ({})",
+            selected.join(", ")
+        );
+    }
+    match selected.first().copied().unwrap_or_default() {
+        "jcode" => {
+            "in Jcode run skill_manage reload_all or /skills -> Reload all (or restart Jcode)"
+                .into()
+        }
+        harness => format!(
+            "restart {} to reload its skills",
+            harness_display_name(harness)
+        ),
+    }
+}
+
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Manifest {
     files: Vec<(String, u64)>,
 }
@@ -634,21 +691,25 @@ fn install_rename_noreplace(from: &Path, to: &Path) -> Result<()> {
 fn install_rename_noreplace(_: &Path, _: &Path) -> Result<()> {
     bail!("atomic no-replace rename is unavailable on this platform")
 }
-fn install_cmd(args: &[String], remove: bool) -> Result<()> {
-    let (harnesses, detection_report) = harnesses(harness_arg(args)?)?;
-    let home = home()?;
-    if remove {
-        for harness in harnesses {
-            // Configuration is the one managed file users are explicitly allowed to customize.
-            // Uninstall must still reject changed binaries, changed skills, or unknown files.
-            uninstall(&target(&home, harness), true)?
-        }
+fn install_cmd(args: &[String]) -> Result<()> {
+    if args
+        .get(1)
+        .is_some_and(|s| matches!(s.as_str(), "-h" | "--help"))
+    {
+        exact(args, 2)?;
+        println!(
+            "Usage: az install [--harness <jcode|claude|codex|gemini|opencode|all>]\n\
+             Jcode target: JCODE_HOME/skills/azdaja when set; otherwise HOME/.jcode/skills/azdaja\n\
+             Examples:\n  az install --harness jcode\n  az install --harness all"
+        );
         return Ok(());
     }
+    let (selected, detection_report) = harnesses(harness_arg(args)?)?;
+    let home = home()?;
     let exe = env::current_exe()?.canonicalize()?;
     let mut written = Vec::new();
     let mut doctor = None;
-    for harness in harnesses {
+    for &harness in &selected {
         let dst = target(&home, harness);
         let (cmd, model) = adapter(harness);
         let existing_directory = if path_entry_exists(&dst)? {
@@ -757,9 +818,11 @@ fn install_cmd(args: &[String], remove: bool) -> Result<()> {
     }
     println!("Detected: {detection_report}");
     println!("Written: {}", written.join("; "));
+    let doctor = doctor.expect("at least one selected harness");
     println!(
-        "Next: run {} doctor",
-        doctor.expect("at least one selected harness").display()
+        "Next: run {} doctor; then {}",
+        shell_quote(&doctor),
+        harness_reload_instruction(&selected)
     );
     Ok(())
 }
@@ -839,13 +902,34 @@ fn read_install_regular(path: &Path) -> Result<Vec<u8>> {
     }
     Ok(bytes)
 }
+fn read_manifest(dst: &Path) -> Result<Manifest> {
+    let manifest: Manifest = serde_json::from_slice(
+        &read_install_regular(&dst.join(".azdaja-managed"))
+            .context("managed marker is missing or unsafe")?,
+    )
+    .context("managed marker is invalid")?;
+    let binary = if cfg!(windows) {
+        "azdaja.exe"
+    } else {
+        "azdaja"
+    };
+    let mut names: Vec<&str> = manifest
+        .files
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect();
+    names.sort_unstable();
+    let mut expected = vec![binary, "SKILL.md", "config.toml"];
+    expected.sort_unstable();
+    if names != expected {
+        bail!("managed marker does not name exactly the Azdaja skill files")
+    }
+    Ok(manifest)
+}
 fn validate_install(dst: &Path, allow_config_change: bool) -> Result<()> {
     let _directory = open_install_directory(dst)
         .context("refusing to modify unowned or unsafe skill directory")?;
-    let manifest: Manifest = serde_json::from_slice(
-        &read_install_regular(&dst.join(".azdaja-managed"))
-            .context("refusing to modify unowned skill directory")?,
-    )?;
+    let manifest = read_manifest(dst)?;
     for (name, want) in &manifest.files {
         let path = dst.join(name);
         let got = hash(
@@ -856,7 +940,8 @@ fn validate_install(dst: &Path, allow_config_change: bool) -> Result<()> {
             bail!("refusing to modify changed file: {}", path.display())
         }
     }
-    if fs::read_dir(dst)?.count() != manifest.files.len() + 1 {
+    let entries = fs::read_dir(dst)?.collect::<io::Result<Vec<_>>>()?;
+    if entries.len() != manifest.files.len() + 1 {
         bail!(
             "refusing to modify directory with unknown files: {}",
             dst.display()
@@ -864,16 +949,345 @@ fn validate_install(dst: &Path, allow_config_change: bool) -> Result<()> {
     }
     Ok(())
 }
-fn uninstall(dst: &Path, allow_config_change: bool) -> Result<()> {
+
+fn validate_skill_custody(dst: &Path) -> Result<()> {
     if !path_entry_exists(dst)? {
-        println!("not installed: {}", dst.display());
+        bail!("managed skill directory is missing: {}", dst.display())
+    }
+    validate_install(dst, false)?;
+    let binary = dst.join(if cfg!(windows) {
+        "azdaja.exe"
+    } else {
+        "azdaja"
+    });
+    if !binary.is_absolute() {
+        bail!("managed binary path is not absolute: {}", binary.display())
+    }
+    let binary_bytes = read_install_regular(&binary)?;
+    if binary_bytes.is_empty() {
+        bail!("managed binary is empty: {}", binary.display())
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if fs::metadata(&binary)?.permissions().mode() & 0o111 == 0 {
+            bail!("managed binary is not executable: {}", binary.display())
+        }
+    }
+
+    let config_bytes = read_install_regular(&dst.join("config.toml"))?;
+    let config_text = String::from_utf8(config_bytes).context("managed config is not UTF-8")?;
+    toml::from_str::<Config>(&config_text)
+        .context("managed config is invalid")?
+        .validate()
+        .context("managed config is invalid")?;
+
+    let skill_bytes = read_install_regular(&dst.join("SKILL.md"))?;
+    let skill = String::from_utf8(skill_bytes).context("managed SKILL.md is not UTF-8")?;
+    let (frontmatter, _) = skill
+        .strip_prefix("---\n")
+        .and_then(|rest| rest.split_once("\n---\n"))
+        .ok_or_else(|| anyhow!("managed SKILL.md frontmatter is missing"))?;
+    if !frontmatter.lines().any(|line| line == "name: azdaja") {
+        bail!("managed SKILL.md frontmatter name is not azdaja")
+    }
+    let description = frontmatter
+        .lines()
+        .find_map(|line| line.strip_prefix("description: "))
+        .ok_or_else(|| anyhow!("managed SKILL.md frontmatter description is missing"))?;
+    for required in ["Azdaja", "az virtual-memory tool", "installed", "available"] {
+        if !description.contains(required) {
+            bail!("managed SKILL.md description lacks awareness text {required:?}")
+        }
+    }
+    if !skill.contains(&format!("# Azdaja {VERSION}")) {
+        bail!("managed SKILL.md version is not {VERSION}")
+    }
+    for required in [
+        "## Managed-skill awareness",
+        "answer **yes**",
+        "Never claim ignorance of Azdaja",
+    ] {
+        if !skill.contains(required) {
+            bail!("managed SKILL.md awareness section is incomplete")
+        }
+    }
+    let embedded = shell_quote(&binary);
+    if !skill.contains(&embedded) {
+        bail!(
+            "managed SKILL.md does not embed its absolute binary path: {}",
+            binary.display()
+        )
+    }
+    Ok(())
+}
+
+fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
+    let home = home()?;
+    let mut passed = true;
+    for &harness in selected {
+        let dst = target(&home, harness);
+        match validate_skill_custody(&dst) {
+            Ok(()) => println!(
+                "PASS {harness}: managed Azdaja skill is installed on disk at {}",
+                dst.display()
+            ),
+            Err(error) => {
+                passed = false;
+                println!(
+                    "FAIL {harness}: {error:#}; Fix: reinstall with azdaja install --harness {harness}"
+                );
+            }
+        }
+        if harness == "jcode" {
+            println!(
+                "INFO jcode: an already-open Jcode session may cache the old registry; run skill_manage reload_all or /skills -> Reload all, or start a fresh Jcode session"
+            );
+        } else {
+            println!(
+                "INFO {harness}: an already-open {} session may need a restart before it discovers the skill",
+                harness_display_name(harness)
+            );
+        }
+    }
+    Ok(passed)
+}
+
+struct HarnessRemoval {
+    harness: &'static str,
+    path: PathBuf,
+    directory: Option<fs::File>,
+}
+
+fn preflight_harness_removals(
+    selected: &[&'static str],
+    home: &Path,
+) -> Result<Vec<HarnessRemoval>> {
+    let mut removals = Vec::new();
+    for &harness in selected {
+        let path = target(home, harness);
+        let directory = if path_entry_exists(&path)? {
+            let directory = open_install_directory(&path)?;
+            // Configuration is the one managed file users are explicitly allowed to customize.
+            validate_install(&path, true)?;
+            validate_install_directory_binding(&directory, &path)?;
+            Some(directory)
+        } else {
+            None
+        };
+        removals.push(HarnessRemoval {
+            harness,
+            path,
+            directory,
+        });
+    }
+    Ok(removals)
+}
+
+const STANDALONE_OWNER_MAGIC: &[u8] = b"azdaja-installer-owned-config-v1\n";
+
+enum StandaloneRemoval {
+    Unmanaged,
+    Owned {
+        executable: PathBuf,
+        config: PathBuf,
+        marker: PathBuf,
+        alias: PathBuf,
+        managed_alias: bool,
+    },
+}
+
+fn alias_is_managed(path: &Path) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            Ok(fs::read_link(path)? == Path::new("azdaja"))
+        }
+        Ok(_) => Ok(false),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn preflight_standalone_removal() -> Result<StandaloneRemoval> {
+    let executable = env::current_exe()?.canonicalize()?;
+    let directory = executable
+        .parent()
+        .ok_or_else(|| anyhow!("current executable has no parent directory"))?;
+    let config = directory.join("azdaja-config.toml");
+    let marker = directory.join("azdaja-config.toml.managed");
+    let config_exists = path_entry_exists(&config)?;
+    let marker_exists = path_entry_exists(&marker)?;
+    if !config_exists && !marker_exists {
+        return Ok(StandaloneRemoval::Unmanaged);
+    }
+    if !config_exists || !marker_exists {
+        bail!(
+            "refusing incomplete standalone ownership state beside {}",
+            executable.display()
+        )
+    }
+    if read_install_regular(&marker)? != STANDALONE_OWNER_MAGIC {
+        bail!(
+            "refusing standalone uninstall: owner marker is not the exact Azdaja installer marker"
+        )
+    }
+    let _config = read_install_regular(&config)
+        .context("refusing unsafe installer-owned standalone config")?;
+    let expected_name = if cfg!(windows) {
+        "azdaja.exe"
+    } else {
+        "azdaja"
+    };
+    if executable.file_name().and_then(|name| name.to_str()) != Some(expected_name) {
+        bail!("refusing standalone uninstall: current executable is not named {expected_name}")
+    }
+    let _executable = read_install_regular(&executable)
+        .context("refusing unsafe currently executing Azdaja binary")?;
+    if !cfg!(unix) {
+        bail!(
+            "standalone self-uninstall is unsupported on this locked-file platform; remove the four reported installer-owned paths only after Azdaja exits"
+        )
+    }
+    let alias = directory.join("az");
+    let managed_alias = alias_is_managed(&alias)?;
+    Ok(StandaloneRemoval::Owned {
+        executable,
+        config,
+        marker,
+        alias,
+        managed_alias,
+    })
+}
+
+fn revalidate_standalone(removal: &StandaloneRemoval) -> Result<()> {
+    let StandaloneRemoval::Owned {
+        executable,
+        config,
+        marker,
+        alias,
+        managed_alias,
+    } = removal
+    else {
+        return Ok(());
+    };
+    if read_install_regular(marker)? != STANDALONE_OWNER_MAGIC {
+        bail!("standalone owner marker changed during uninstall preflight")
+    }
+    let _ = read_install_regular(config)?;
+    let _ = read_install_regular(executable)?;
+    if alias_is_managed(alias)? != *managed_alias {
+        bail!("standalone az alias changed during uninstall preflight")
+    }
+    Ok(())
+}
+
+fn uninstall_cmd(args: &[String]) -> Result<()> {
+    if args
+        .get(1)
+        .is_some_and(|s| matches!(s.as_str(), "-h" | "--help"))
+    {
+        exact(args, 2)?;
+        println!(
+            "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all> | --standalone | --all]\n\
+             Modes:\n  --harness NAME  remove skill copies only; keep standalone\n  --standalone    remove installer-owned standalone only; keep harness skills\n  --all           remove all five harness skills and installer-owned standalone\n\
+             Examples:\n  az uninstall --harness claude\n  az uninstall --harness all\n  az uninstall --standalone\n  az uninstall --all"
+        );
         return Ok(());
     }
-    let directory = open_install_directory(dst)?;
-    validate_install(dst, allow_config_change)?;
-    validate_install_directory_binding(&directory, dst)?;
-    fs::remove_dir_all(dst)?;
-    println!("uninstalled {}", dst.display());
+
+    let (selected, report, remove_standalone) = match args {
+        [_] => {
+            let (selected, _) = harnesses(None)?;
+            let report = format!(
+                "{} skill{} only (standalone kept)",
+                selected.join(", "),
+                if selected.len() == 1 { "" } else { "s" }
+            );
+            (selected, report, false)
+        }
+        [_, flag, harness] if flag == "--harness" => {
+            let (selected, _) = harnesses(Some(harness))?;
+            let report = if harness == "all" {
+                "all five harness skills only (standalone kept)".into()
+            } else {
+                format!("{harness} skill only (standalone kept)")
+            };
+            (selected, report, false)
+        }
+        [_, flag] if flag == "--standalone" => (
+            Vec::new(),
+            "standalone only (harness skills kept)".into(),
+            true,
+        ),
+        [_, flag] if flag == "--all" => (
+            ALL_HARNESSES.into(),
+            "all five harness skills and standalone".into(),
+            true,
+        ),
+        _ => bail!(
+            "usage: uninstall [--harness NAME | --standalone | --all] (run az uninstall --help)"
+        ),
+    };
+    let home = home()?;
+
+    // Every selected surface is validated before any mutation. A changed later
+    // target therefore cannot leave an earlier target partially uninstalled.
+    let removals = preflight_harness_removals(&selected, &home)?;
+    let standalone = if remove_standalone {
+        Some(preflight_standalone_removal()?)
+    } else {
+        None
+    };
+    for removal in &removals {
+        if let Some(directory) = &removal.directory {
+            validate_install(&removal.path, true)?;
+            validate_install_directory_binding(directory, &removal.path)?;
+        }
+    }
+    if let Some(standalone) = &standalone {
+        revalidate_standalone(standalone)?;
+    }
+
+    let mut outcomes = Vec::new();
+    for removal in removals {
+        if let Some(directory) = removal.directory {
+            validate_install_directory_binding(&directory, &removal.path)?;
+            fs::remove_dir_all(&removal.path)?;
+            outcomes.push(removal.harness.into());
+        } else {
+            outcomes.push(format!("{} already absent", removal.harness));
+        }
+    }
+    if let Some(standalone) = standalone {
+        match standalone {
+            StandaloneRemoval::Unmanaged => {
+                outcomes.push("standalone not installer-managed (left untouched)".into())
+            }
+            StandaloneRemoval::Owned {
+                executable,
+                config,
+                marker,
+                alias,
+                managed_alias,
+            } => {
+                if managed_alias {
+                    fs::remove_file(&alias)?;
+                }
+                fs::remove_file(&config)?;
+                fs::remove_file(&marker)?;
+                fs::remove_file(&executable)?;
+                outcomes.push("standalone".into());
+            }
+        }
+    }
+
+    println!("Selected: {report}");
+    println!("Removed: {}", outcomes.join("; "));
+    if selected.is_empty() {
+        println!("Next: restart any harness sessions that used this Azdaja installation");
+    } else {
+        println!("Next: {}", harness_reload_instruction(&selected));
+    }
     Ok(())
 }
 

@@ -149,7 +149,7 @@ struct InstallRun<'a> {
     bin_dir: Option<&'a Path>,
     path: &'a str,
 }
-fn run_installer(run: InstallRun<'_>) -> Output {
+fn run_installer_with_jcode_home(run: InstallRun<'_>, jcode_home: Option<&Path>) -> Output {
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install");
     let mut command = Command::new("sh");
     command
@@ -166,6 +166,11 @@ fn run_installer(run: InstallRun<'_>) -> Output {
         .env_remove("RLM_DEPTH")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if let Some(jcode_home) = jcode_home {
+        command.env("JCODE_HOME", jcode_home);
+    } else {
+        command.env_remove("JCODE_HOME");
+    }
     if let Some(harness) = run.harness {
         command.args(["--harness", harness]);
     }
@@ -174,6 +179,10 @@ fn run_installer(run: InstallRun<'_>) -> Output {
     }
     command.output().unwrap()
 }
+fn run_installer(run: InstallRun<'_>) -> Output {
+    run_installer_with_jcode_home(run, None)
+}
+
 fn assert_success(output: &Output) -> String {
     assert!(
         output.status.success(),
@@ -311,7 +320,8 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         assert!(active.contains("claude -p --model {model}"));
         assert!(target(&home, "claude").join("azdaja").is_file());
         assert!(stdout.contains("azdaja ->") && stdout.contains("az ->"));
-        assert!(stdout.lines().last().unwrap().contains("az doctor"));
+        let next = stdout.lines().last().unwrap();
+        assert!(next.contains("az doctor, then restart Claude to reload its skills"));
         assert_alias_identity_and_local_caps(&home, &bin, system_path);
     }
     let requests = fs::read_to_string(&server.log).unwrap();
@@ -375,7 +385,13 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     let stdout = assert_success(&good);
     assert!(path_bin.join("azdaja").is_file());
     assert!(stdout.contains("is on PATH"));
-    assert!(stdout.lines().last().unwrap().contains("az doctor"));
+    assert!(
+        stdout
+            .lines()
+            .last()
+            .unwrap()
+            .contains("az doctor, then restart Claude to reload its skills")
+    );
     assert_alias_identity_and_local_caps(&home, &path_bin, &path);
     assert!(
         fs::read_to_string(path_bin.join("azdaja-config.toml"))
@@ -394,6 +410,53 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     let stdout = assert_success(&doctor);
     assert_eq!(stdout.lines().count(), 3, "{stdout}");
     assert!(stdout.lines().all(|line| line.starts_with("PASS ")));
+}
+
+#[test]
+fn standalone_installer_honors_authoritative_custom_jcode_home() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let home = scratch.0.join("custom-jcode-home");
+    let custom = scratch.0.join("Jcode root ☃ ' with spaces");
+    let bin = home.join("custom bin");
+    fs::create_dir_all(&custom).unwrap();
+    let output = run_installer_with_jcode_home(
+        InstallRun {
+            home: &home,
+            base: &format!("{}/good", server.base),
+            os: "Linux",
+            arch: "x86_64",
+            harness: None,
+            bin_dir: Some(&bin),
+            path: "/usr/bin:/bin",
+        },
+        Some(&custom),
+    );
+    let stdout = assert_success(&output);
+    assert_eq!(stdout.lines().count(), 3, "{stdout}");
+    assert!(stdout.lines().next().unwrap().contains("jcode"));
+    assert!(custom.join("skills/azdaja/azdaja").is_file());
+    assert!(!home.join(".jcode/skills/azdaja").exists());
+    let next = stdout.lines().last().unwrap();
+    assert!(next.contains("az doctor, then"), "{next}");
+    assert!(next.contains("skill_manage reload_all"), "{next}");
+
+    let doctor = Command::new(bin.join("azdaja"))
+        .args(["doctor", "--harness", "jcode"])
+        .env("HOME", &home)
+        .env("JCODE_HOME", &custom)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .env("AZDAJA_HOME", home.join("state"))
+        .env("PATH", "/usr/bin:/bin")
+        .env_remove("AZDAJA_CONFIG")
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert!(assert_success(&doctor).contains("installed on disk"));
 }
 
 #[test]
@@ -428,7 +491,16 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             assert_eq!(stdout.lines().count(), 3, "{stdout}");
             assert!(stdout.lines().next().unwrap().contains(harness));
             assert!(stdout.contains("azdaja ->") && stdout.contains("az ->"));
-            assert!(stdout.lines().last().unwrap().contains("az doctor"));
+            let reload = match harness {
+                "jcode" => "skill_manage reload_all or /skills -> Reload all",
+                "claude" => "restart Claude to reload its skills",
+                "codex" => "restart Codex to reload its skills",
+                "gemini" => "restart Gemini to reload its skills",
+                _ => "restart OpenCode to reload its skills",
+            };
+            let next = stdout.lines().last().unwrap();
+            assert!(next.contains("az doctor, then"), "{next}");
+            assert!(next.contains(reload), "harness={harness} next={next}");
             assert!(target(&home, harness).join("azdaja").is_file());
             assert_eq!(
                 fs::read(bin.join("azdaja-config.toml")).unwrap(),
@@ -453,6 +525,13 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
         });
         let stdout = assert_success(&output);
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
+        assert!(
+            stdout
+                .lines()
+                .last()
+                .unwrap()
+                .contains("az doctor, then reload/restart all five harnesses")
+        );
         for harness in ["jcode", "claude", "codex", "gemini", "opencode"] {
             assert!(target(&home, harness).join("azdaja").is_file());
         }

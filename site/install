@@ -42,6 +42,7 @@ case "$HARNESS" in
 esac
 
 [ -n "${HOME:-}" ] || fail 'HOME is not set; use --bin-dir DIR and set HOME before installing a harness'
+JCODE_ROOT=${JCODE_HOME:-$HOME/.jcode}
 
 DETECTED=
 add_detected() {
@@ -50,7 +51,7 @@ add_detected() {
     *) DETECTED="${DETECTED}${DETECTED:+ }$1" ;;
   esac
 }
-if [ -d "$HOME/.jcode" ] || command -v jcode >/dev/null 2>&1 || command -v jcode-api >/dev/null 2>&1; then
+if [ -d "$JCODE_ROOT" ] || command -v jcode >/dev/null 2>&1 || command -v jcode-api >/dev/null 2>&1; then
   add_detected jcode
 fi
 if [ -d "$HOME/.claude" ] || command -v claude >/dev/null 2>&1; then
@@ -82,6 +83,22 @@ else
     DETECTION_REPORT="$HARNESS (selected by --harness)"
   fi
 fi
+
+case "$INSTALL_NAMES" in
+  jcode)
+    RELOAD_INSTRUCTION='in Jcode run skill_manage reload_all or /skills -> Reload all (or restart Jcode)'
+    ;;
+  claude) RELOAD_INSTRUCTION='restart Claude to reload its skills' ;;
+  codex) RELOAD_INSTRUCTION='restart Codex to reload its skills' ;;
+  gemini) RELOAD_INSTRUCTION='restart Gemini to reload its skills' ;;
+  opencode) RELOAD_INSTRUCTION='restart OpenCode to reload its skills' ;;
+  'jcode claude codex gemini opencode') RELOAD_INSTRUCTION='reload/restart all five harnesses' ;;
+  *)
+    RELOAD_NAMES=$(printf '%s' "$INSTALL_NAMES" | tr ' ' ',')
+    RELOAD_NAMES=$(printf '%s' "$RELOAD_NAMES" | sed 's/,/, /g')
+    RELOAD_INSTRUCTION="reload/restart the selected harnesses ($RELOAD_NAMES)"
+    ;;
+esac
 
 case "${AZDAJA_INSTALL_TEST_MODE:-}" in
   '')
@@ -132,7 +149,7 @@ BIN_DIR=${BIN_DIR:-$HOME/.local/bin}
 
 harness_target() {
   case "$1" in
-    jcode) printf '%s' "$HOME/.jcode/skills/azdaja" ;;
+    jcode) printf '%s' "$JCODE_ROOT/skills/azdaja" ;;
     claude) printf '%s' "$HOME/.claude/skills/azdaja" ;;
     codex) printf '%s' "$HOME/.agents/skills/azdaja" ;;
     gemini) printf '%s' "$HOME/.gemini/skills/azdaja" ;;
@@ -486,12 +503,12 @@ printf 'Detected: %s\n' "$DETECTION_REPORT"
 printf 'Written: %s\n' "$WRITTEN"
 if [ "$ALIAS_SKIP" = true ]; then
   if [ "$ON_PATH" = true ]; then
-    printf 'Next: run azdaja doctor (%s is on PATH; short alias skipped)\n' "$BIN_DIR"
+    printf 'Next: run azdaja doctor, then %s (%s is on PATH; short alias skipped)\n' "$RELOAD_INSTRUCTION" "$BIN_DIR"
   else
-    printf 'Next: add %s to PATH, then run azdaja doctor (short alias skipped)\n' "$BIN_DIR"
+    printf 'Next: add %s to PATH, run azdaja doctor, then %s (short alias skipped)\n' "$BIN_DIR" "$RELOAD_INSTRUCTION"
   fi
 elif [ "$ON_PATH" = true ]; then
-  printf 'Next: run az doctor (%s is on PATH)\n' "$BIN_DIR"
+  printf 'Next: run az doctor, then %s (%s is on PATH)\n' "$RELOAD_INSTRUCTION" "$BIN_DIR"
 else
-  printf 'Next: add %s to PATH, then run az doctor\n' "$BIN_DIR"
+  printf 'Next: add %s to PATH, run az doctor, then %s\n' "$BIN_DIR" "$RELOAD_INSTRUCTION"
 fi

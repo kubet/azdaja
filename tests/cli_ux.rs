@@ -174,7 +174,9 @@ fn install_is_three_human_lines_and_detects_directories_and_clis() {
     assert!(lines[1].starts_with("Written: "));
     assert!(lines[1].contains(".claude/skills/azdaja"));
     assert!(lines[1].contains(".gemini/skills/azdaja"));
-    assert!(lines[2].starts_with("Next: run ") && lines[2].ends_with(" doctor"));
+    assert!(lines[2].starts_with("Next: run "));
+    assert!(lines[2].contains("/.claude/skills/azdaja/azdaja' doctor; then "));
+    assert!(lines[2].contains("reload/restart the selected harnesses (claude, gemini)"));
     assert!(
         !stdout
             .split_whitespace()
