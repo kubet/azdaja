@@ -1,5 +1,3 @@
-<!-- Launch-assembly draft. Keep private until the authorized publication step. -->
-
 # The dragon that learned to count its dead
 
 *A launch saga about grep disease, five scorer kills, and a 199-row mortality war.*
@@ -8,7 +6,6 @@ Azdaja began with a simple idea: a language model should not have to swallow a h
 
 The implementation fit in one binary. Learning where it broke took considerably longer.
 
-<!-- SCORE_SUBSTITUTION_POINT (ONLY): If and only if the one previously authorized endgame scout clears its preregistered threshold and its single replacement fixed-199 exam reaches a valid terminal score, replace the next blockquote as one unit before publication. Otherwise keep it unchanged and remove only this comment at publication. -->
 > **Launch result:** **68.64164968987583%** on a fixed 199-row, validation-derived RAH slice, with 185 execution successes (valid predictions) and 14 retained failures counted as zero.
 
 That is a private, single-arm diagnostic—not an official leaderboard result, not a claim of model superiority, and not evidence that every large-context task becomes easier. The fixed denominator matters: a dead row is not quietly removed from the average.
