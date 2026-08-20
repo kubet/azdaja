@@ -45,6 +45,7 @@ jobs:
               "Cargo.toml.orig",
               "LICENSE",
               "README.md",
+              "THIRD-PARTY-NOTICES.md",
               "assets/SKILL.md",
               "assets/config.toml",
               "src/banner.rs",
