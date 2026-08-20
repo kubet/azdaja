@@ -49,7 +49,7 @@ The [crossover figure](docs/token-context-crossover.svg) is illustrative: it ass
 
 ## Install
 
-The one-line installer supports Apple Silicon macOS and Linux x86-64. This bare route requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness; if it detects none, it exits before downloading or writing anything. Detection reads only harness directories and `PATH`, not configuration contents:
+The one-line installer supports Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer. On Linux it reads `getconf GNU_LIBC_VERSION` and refuses musl, older glibc, or an unverifiable libc before downloading or changing anything under `HOME`; the error points to a newer glibc system or a Rust 1.95 source build. This bare route requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness; if it detects none, it exits before downloading or writing anything. Detection reads only harness directories and `PATH`, not configuration contents:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh

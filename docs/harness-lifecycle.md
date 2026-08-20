@@ -14,7 +14,7 @@ When `JCODE_HOME` is set, its value is authoritative for Jcode detection and eve
 
 ## Install and session discovery
 
-The curl one-liner supports Apple Silicon macOS and Linux x86-64 and requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness. With none detected it exits before downloading or writing. Its `Written:` line is also the command-name boundary: use `az` only when it reports the `az -> azdaja` alias; when it reports `short alias skipped`, use `azdaja`. A foreign `az`, including Azure CLI, remains untouched.
+The curl one-liner supports Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer and requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness. With none detected it exits before downloading or writing. On Linux it verifies the runtime with `getconf GNU_LIBC_VERSION` and a numeric version comparison before creating staging files or changing anything under `HOME`; musl, glibc below 2.35, a missing `getconf`, and an invalid or unverifiable result fail with an actionable newer-system or Rust 1.95 source-build alternative. Local-validation Linux selectors must bind `AZDAJA_INSTALL_GLIBC_VERSION` explicitly, so selector tests never inherit the host libc. Its `Written:` line is also the command-name boundary: use `az` only when it reports the `az -> azdaja` alias; when it reports `short alias skipped`, use `azdaja`. A foreign `az`, including Azure CLI, remains untouched.
 
 ```bash
 az install --harness jcode

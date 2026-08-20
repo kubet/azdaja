@@ -145,6 +145,7 @@ struct InstallRun<'a> {
     base: &'a str,
     os: &'a str,
     arch: &'a str,
+    glibc_version: Option<&'a str>,
     harness: Option<&'a str>,
     bin_dir: Option<&'a Path>,
     path: &'a str,
@@ -166,6 +167,11 @@ fn run_installer_with_jcode_home(run: InstallRun<'_>, jcode_home: Option<&Path>)
         .env_remove("RLM_DEPTH")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if let Some(glibc_version) = run.glibc_version {
+        command.env("AZDAJA_INSTALL_GLIBC_VERSION", glibc_version);
+    } else {
+        command.env_remove("AZDAJA_INSTALL_GLIBC_VERSION");
+    }
     if let Some(jcode_home) = jcode_home {
         command.env("JCODE_HOME", jcode_home);
     } else {
@@ -212,6 +218,11 @@ fn mark_detected(home: &Path, harness: &str) {
         _ => home.join(".config/opencode"),
     };
     fs::create_dir_all(path).unwrap();
+}
+
+fn write_executable(path: &Path, contents: &str) {
+    fs::write(path, contents).unwrap();
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -350,6 +361,9 @@ fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
     assert!(text.contains("azdaja-v$VERSION-linux-x86_64"));
     assert!(text.contains("Darwin-arm64)"));
     assert!(text.contains("Linux-x86_64)"));
+    assert!(text.contains("GLIBC_MIN=2.35"));
+    assert!(text.contains("getconf GNU_LIBC_VERSION"));
+    assert!(text.contains("AZDAJA_INSTALL_GLIBC_VERSION is required"));
     assert!(!text.contains("v0.1.1"));
     assert!(text.contains("mv -f \"$STAGED\" \"$DEST\""));
     assert!(text.contains("ln -s azdaja \"$ALIAS\""));
@@ -359,6 +373,159 @@ fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
     assert!(!text.contains("\"$BIN_DIR/config.toml\""));
     assert!(text.contains("run az doctor"));
     assert!(text.contains("run azdaja doctor"));
+}
+
+#[test]
+fn linux_glibc_floor_refuses_below_and_accepts_exact_boundary_and_above() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+
+    let curl_log = scratch.0.join("refusal-curl.log");
+    let tools = scratch.0.join("refusal-tools");
+    fs::create_dir(&tools).unwrap();
+    write_executable(
+        &tools.join("curl"),
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' invoked >> '{}'\nexit 97\n",
+            curl_log.display()
+        ),
+    );
+    let refusal_path = format!("{}:/usr/bin:/bin", tools.display());
+    let below_home = scratch.0.join("glibc-below");
+    fs::create_dir(&below_home).unwrap();
+    let before = tree_identity(&below_home);
+    let below = run_installer(InstallRun {
+        home: &below_home,
+        base: &format!("{}/good", server.base),
+        os: "Linux",
+        arch: "x86_64",
+        glibc_version: Some("2.34"),
+        harness: Some("claude"),
+        bin_dir: Some(&below_home.join("bin")),
+        path: &refusal_path,
+    });
+    assert_eq!(below.status.code(), Some(1));
+    assert!(below.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&below.stderr);
+    assert!(stderr.contains("requires glibc 2.35 or newer"), "{stderr}");
+    assert!(stderr.contains("found glibc 2.34"), "{stderr}");
+    assert!(
+        stderr.contains("build from source with Rust 1.95"),
+        "{stderr}"
+    );
+    assert_eq!(tree_identity(&below_home), before);
+    assert!(!curl_log.exists(), "curl was invoked before libc refusal");
+    assert!(
+        !server.log.exists(),
+        "a download was requested before libc refusal"
+    );
+
+    for version in ["2.35", "2.36"] {
+        let home = scratch
+            .0
+            .join(format!("glibc-{}", version.replace('.', "-")));
+        let bin = home.join("bin");
+        fs::create_dir(&home).unwrap();
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &format!("{}/good", server.base),
+            os: "Linux",
+            arch: "x86_64",
+            glibc_version: Some(version),
+            harness: Some("claude"),
+            bin_dir: Some(&bin),
+            path: "/usr/bin:/bin",
+        });
+        let stdout = assert_success(&output);
+        assert_eq!(stdout.lines().count(), 3, "version={version} {stdout}");
+        assert!(bin.join("azdaja").is_file());
+    }
+}
+
+#[test]
+fn linux_local_selector_requires_fake_glibc_instead_of_reading_the_host() {
+    let scratch = Scratch::new();
+    let home = scratch.0.join("home");
+    fs::create_dir(&home).unwrap();
+    let before = tree_identity(&home);
+    let output = run_installer(InstallRun {
+        home: &home,
+        base: "http://127.0.0.1:9",
+        os: "Linux",
+        arch: "x86_64",
+        glibc_version: None,
+        harness: Some("claude"),
+        bin_dir: Some(&home.join("bin")),
+        path: "/usr/bin:/bin",
+    });
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("AZDAJA_INSTALL_GLIBC_VERSION is required")
+    );
+    assert_eq!(tree_identity(&home), before);
+}
+
+#[test]
+fn native_linux_musl_and_missing_getconf_refuse_without_curl_or_home_mutation() {
+    let scratch = Scratch::new();
+    let installer = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install");
+
+    for libc in ["musl", "missing-getconf"] {
+        let tools = scratch.0.join(format!("{libc}-tools"));
+        let home = scratch.0.join(format!("{libc}-home"));
+        let curl_log = scratch.0.join(format!("{libc}-curl.log"));
+        fs::create_dir(&tools).unwrap();
+        fs::create_dir(&home).unwrap();
+        write_executable(
+            &tools.join("uname"),
+            "#!/bin/sh\ncase \"${1-}\" in\n  -s) printf '%s\\n' Linux ;;\n  -m) printf '%s\\n' x86_64 ;;\n  *) exit 2 ;;\nesac\n",
+        );
+        write_executable(
+            &tools.join("curl"),
+            &format!(
+                "#!/bin/sh\nprintf '%s\\n' invoked >> '{}'\nexit 97\n",
+                curl_log.display()
+            ),
+        );
+        if libc == "musl" {
+            write_executable(
+                &tools.join("getconf"),
+                "#!/bin/sh\nprintf '%s\\n' 'musl 1.2.5'\n",
+            );
+        }
+        let before = tree_identity(&home);
+        let output = Command::new("/bin/sh")
+            .arg(&installer)
+            .args(["--harness", "claude", "--bin-dir"])
+            .arg(home.join("bin"))
+            .env("HOME", &home)
+            .env("PATH", &tools)
+            .env_remove("AZDAJA_INSTALL_TEST_MODE")
+            .env_remove("AZDAJA_INSTALL_BASE_URL")
+            .env_remove("AZDAJA_INSTALL_OS")
+            .env_remove("AZDAJA_INSTALL_ARCH")
+            .env_remove("AZDAJA_INSTALL_GLIBC_VERSION")
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1), "libc={libc}");
+        assert!(output.stdout.is_empty(), "libc={libc}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("requires glibc 2.35 or newer"), "{stderr}");
+        assert!(stderr.contains("getconf GNU_LIBC_VERSION"), "{stderr}");
+        assert!(stderr.contains("musl is not supported"), "{stderr}");
+        assert!(
+            stderr.contains("build from source with Rust 1.95"),
+            "{stderr}"
+        );
+        assert_eq!(tree_identity(&home), before, "libc={libc}");
+        assert!(!curl_log.exists(), "libc={libc}: curl was invoked");
+    }
 }
 
 #[test]
@@ -385,6 +552,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
             base: &format!("{}/good", server.base),
             os,
             arch,
+            glibc_version: (os == "Linux").then_some("2.35"),
             harness: Some("claude"),
             bin_dir: Some(&bin),
             path: system_path,
@@ -418,6 +586,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         base: &format!("{}/bad", server.base),
         os: "Darwin",
         arch: "arm64",
+        glibc_version: None,
         harness: Some("claude"),
         bin_dir: Some(&bin),
         path: system_path,
@@ -434,6 +603,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         base: &format!("{}/good", server.base),
         os: "Darwin",
         arch: "arm64",
+        glibc_version: None,
         harness: Some("claude"),
         bin_dir: Some(&bin),
         path: system_path,
@@ -457,6 +627,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         base: &format!("{}/good", server.base),
         os: "Darwin",
         arch: "arm64",
+        glibc_version: None,
         harness: Some("claude"),
         bin_dir: None,
         path: &path,
@@ -509,6 +680,7 @@ fn standalone_installer_honors_authoritative_custom_jcode_home() {
             base: &format!("{}/good", server.base),
             os: "Linux",
             arch: "x86_64",
+            glibc_version: Some("2.35"),
             harness: None,
             bin_dir: Some(&bin),
             path: "/usr/bin:/bin",
@@ -594,6 +766,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
                 base: &base,
                 os,
                 arch,
+                glibc_version: (os == "Linux").then_some("2.35"),
                 harness: None,
                 bin_dir: Some(&bin),
                 path: system_path,
@@ -630,6 +803,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             base: &base,
             os,
             arch,
+            glibc_version: (os == "Linux").then_some("2.35"),
             harness: Some("all"),
             bin_dir: Some(&bin),
             path: system_path,
@@ -658,6 +832,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             base: &base,
             os,
             arch,
+            glibc_version: (os == "Linux").then_some("2.35"),
             harness: None,
             bin_dir: Some(&home.join("bin")),
             path: system_path,
@@ -681,6 +856,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             base: &base,
             os,
             arch,
+            glibc_version: (os == "Linux").then_some("2.35"),
             harness: Some("claude"),
             bin_dir: Some(&bin),
             path: system_path,
@@ -694,6 +870,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             base: &base,
             os,
             arch,
+            glibc_version: (os == "Linux").then_some("2.35"),
             harness: Some("claude"),
             bin_dir: Some(&bin),
             path: system_path,
@@ -726,6 +903,7 @@ fn alias_safety_failures_leave_home_and_foreign_paths_unchanged() {
         base: &format!("{}/bad", server.base),
         os: "Darwin",
         arch: "arm64",
+        glibc_version: None,
         harness: Some("claude"),
         bin_dir: Some(&home.join("bin")),
         path: system_path,
@@ -742,6 +920,7 @@ fn alias_safety_failures_leave_home_and_foreign_paths_unchanged() {
         base: &format!("{}/good", server.base),
         os: "Plan9",
         arch: "mips",
+        glibc_version: None,
         harness: Some("claude"),
         bin_dir: Some(&home.join("bin")),
         path: system_path,
@@ -769,6 +948,7 @@ fn alias_safety_failures_leave_home_and_foreign_paths_unchanged() {
             base: &format!("{}/good", server.base),
             os: "Linux",
             arch: "x86_64",
+            glibc_version: Some("2.35"),
             harness: Some("claude"),
             bin_dir: Some(&bin),
             path: system_path,
@@ -831,6 +1011,7 @@ fn foreign_az_anywhere_on_path_skips_alias_without_changing_resolution() {
             base: &format!("{}/good", server.base),
             os: "Darwin",
             arch: "arm64",
+            glibc_version: None,
             harness: Some("claude"),
             bin_dir: Some(&bin),
             path: &path,
@@ -879,6 +1060,7 @@ fn adjacent_config_ownership_preserves_custom_state_and_generic_config() {
             base: &format!("{}/good", server.base),
             os: "Linux",
             arch: "x86_64",
+            glibc_version: Some("2.35"),
             harness: Some("claude"),
             bin_dir: Some(&bin),
             path: "/usr/bin:/bin",
@@ -959,6 +1141,7 @@ fn ambiguous_adjacent_config_states_refuse_before_install_mutation() {
             base: &format!("{}/good", server.base),
             os: "Linux",
             arch: "x86_64",
+            glibc_version: Some("2.35"),
             harness: Some("claude"),
             bin_dir: Some(&bin),
             path: "/usr/bin:/bin",
@@ -1017,6 +1200,7 @@ fn unowned_hardlinked_harness_refuses_without_inode_link_or_mode_mutation() {
         base: &format!("{}/good", server.base),
         os: "Darwin",
         arch: "arm64",
+        glibc_version: None,
         harness: Some("claude"),
         bin_dir: Some(&bin),
         path: "/usr/bin:/bin",
@@ -1055,6 +1239,7 @@ fn symlinked_harness_target_refuses_without_touching_link_or_target() {
         base: &format!("{}/good", server.base),
         os: "Linux",
         arch: "x86_64",
+        glibc_version: Some("2.35"),
         harness: Some("claude"),
         bin_dir: Some(&bin),
         path: "/usr/bin:/bin",
@@ -1098,6 +1283,7 @@ fn all_harness_preflight_refuses_unknown_late_target_before_valid_first_target_c
         base: &format!("{}/good", server.base),
         os: "Linux",
         arch: "x86_64",
+        glibc_version: Some("2.35"),
         harness: Some("all"),
         bin_dir: Some(&bin),
         path: "/usr/bin:/bin",
@@ -1137,6 +1323,7 @@ fn installed_alias_matches_solo_through_a_provider_free_fixture() {
         base: &format!("{}/good", server.base),
         os: "Darwin",
         arch: "arm64",
+        glibc_version: None,
         harness: Some("claude"),
         bin_dir: Some(&bin),
         path: &path,
@@ -1170,6 +1357,7 @@ fn ordinary_installs_reject_validation_overrides_before_mutation() {
         .env("HOME", &home)
         .env("PATH", "/usr/bin:/bin")
         .env("AZDAJA_INSTALL_BASE_URL", "http://127.0.0.1:9")
+        .env("AZDAJA_INSTALL_GLIBC_VERSION", "2.35")
         .env_remove("AZDAJA_INSTALL_TEST_MODE")
         .output()
         .unwrap();

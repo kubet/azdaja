@@ -2,6 +2,7 @@
 set -eu
 
 VERSION=0.1.2
+GLIBC_MIN=2.35
 RELEASE_BASE=https://github.com/kubet/azdaja/releases/download/v$VERSION
 HARNESS=
 BIN_DIR=${AZDAJA_INSTALL_DIR:-}
@@ -12,6 +13,30 @@ usage() {
 fail() {
   printf 'azdaja install: %s\n' "$1" >&2
   exit "${2:-1}"
+}
+
+glibc_version_at_least() {
+  awk -v actual="$1" -v required="$2" '
+    BEGIN {
+      if (actual !~ /^[0-9]+([.][0-9]+)*$/ || required !~ /^[0-9]+([.][0-9]+)*$/) {
+        exit 2
+      }
+      actual_count = split(actual, actual_parts, ".")
+      required_count = split(required, required_parts, ".")
+      count = actual_count > required_count ? actual_count : required_count
+      for (i = 1; i <= count; i++) {
+        actual_part = i <= actual_count ? actual_parts[i] + 0 : 0
+        required_part = i <= required_count ? required_parts[i] + 0 : 0
+        if (actual_part > required_part) exit 0
+        if (actual_part < required_part) exit 1
+      }
+      exit 0
+    }
+  '
+}
+
+linux_libc_unavailable() {
+  fail "Linux x86-64 release binary requires glibc $GLIBC_MIN or newer; could not verify it with getconf GNU_LIBC_VERSION (musl is not supported). Use a glibc $GLIBC_MIN+ system or build from source with Rust 1.95."
 }
 
 while [ "$#" -gt 0 ]; do
@@ -116,7 +141,7 @@ esac
 
 case "${AZDAJA_INSTALL_TEST_MODE:-}" in
   '')
-    [ -z "${AZDAJA_INSTALL_BASE_URL:-}${AZDAJA_INSTALL_OS:-}${AZDAJA_INSTALL_ARCH:-}" ] || \
+    [ -z "${AZDAJA_INSTALL_BASE_URL:-}${AZDAJA_INSTALL_OS:-}${AZDAJA_INSTALL_ARCH:-}${AZDAJA_INSTALL_GLIBC_VERSION:-}" ] || \
       fail 'validation overrides require AZDAJA_INSTALL_TEST_MODE=local' 2
     OS=$(uname -s)
     ARCH=$(uname -m)
@@ -137,8 +162,29 @@ esac
 
 case "$OS-$ARCH" in
   Darwin-arm64) ASSET=azdaja-v$VERSION-darwin-arm64 ;;
-  Linux-x86_64) ASSET=azdaja-v$VERSION-linux-x86_64 ;;
-  *) fail "unsupported platform $OS-$ARCH; v$VERSION binaries support Darwin-arm64 and Linux-x86_64" ;;
+  Linux-x86_64)
+    ASSET=azdaja-v$VERSION-linux-x86_64
+    if [ "${AZDAJA_INSTALL_TEST_MODE:-}" = local ]; then
+      [ "${AZDAJA_INSTALL_GLIBC_VERSION+x}" = x ] && [ -n "$AZDAJA_INSTALL_GLIBC_VERSION" ] || \
+        fail 'AZDAJA_INSTALL_GLIBC_VERSION is required for a Linux local-validation selector' 2
+      GLIBC_VERSION=$AZDAJA_INSTALL_GLIBC_VERSION
+    else
+      command -v getconf >/dev/null 2>&1 || linux_libc_unavailable
+      GLIBC_REPORT=$(getconf GNU_LIBC_VERSION 2>/dev/null) || linux_libc_unavailable
+      case "$GLIBC_REPORT" in
+        glibc\ *) GLIBC_VERSION=${GLIBC_REPORT#glibc } ;;
+        *) linux_libc_unavailable ;;
+      esac
+    fi
+    GLIBC_COMPARE_STATUS=0
+    glibc_version_at_least "$GLIBC_VERSION" "$GLIBC_MIN" || GLIBC_COMPARE_STATUS=$?
+    case "$GLIBC_COMPARE_STATUS" in
+      0) ;;
+      1) fail "Linux x86-64 release binary requires glibc $GLIBC_MIN or newer; found glibc $GLIBC_VERSION. Upgrade glibc/use a newer distribution, or build from source with Rust 1.95." ;;
+      *) fail "Linux x86-64 release binary requires glibc $GLIBC_MIN or newer; getconf returned an invalid version. Use a glibc $GLIBC_MIN+ system or build from source with Rust 1.95." ;;
+    esac
+    ;;
+  *) fail "unsupported platform $OS-$ARCH; v$VERSION binaries support Apple Silicon macOS 11+ and Linux x86-64 with glibc $GLIBC_MIN+" ;;
 esac
 
 if [ -z "$BIN_DIR" ]; then

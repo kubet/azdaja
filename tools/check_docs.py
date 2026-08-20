@@ -48,7 +48,13 @@ def check_site_onboarding_contract() -> list[str]:
     css = (ROOT / "site" / "styles.css").read_text(encoding="utf-8")
     command = "$ curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh"
     required = [
-        "Apple Silicon macOS or Linux x86-64",
+        "Apple Silicon macOS 11+ or x86-64 Linux with glibc 2.35 or newer",
+        "checks <code>getconf GNU_LIBC_VERSION</code>",
+        "musl, older glibc, and an unverifiable libc",
+        "before any download or <code>HOME</code> mutation",
+        "Rust 1.95 source build as the alternative",
+        '<meta name="description" content="Azdaja — a minimal recursive language model layer for Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35+.">',
+        '<meta property="og:description" content="Think beyond the context window on Apple Silicon macOS 11+ or x86-64 Linux with glibc 2.35+.">',
         "requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness",
         "otherwise it exits before downloading or writing anything",
         "callable by any agent that can run a command",
@@ -82,6 +88,7 @@ def check_claim_contract() -> list[str]:
     saga = (ROOT / "docs" / "launch-saga.md").read_text(encoding="utf-8")
     postmortem = (ROOT / "docs" / "transport-flip-postmortem.md").read_text(encoding="utf-8")
     runbook = (ROOT / "docs" / "day7-public-launch.md").read_text(encoding="utf-8")
+    lifecycle = (ROOT / "docs" / "harness-lifecycle.md").read_text(encoding="utf-8")
     required_readme = [
         "All 199 rows reached terminal accounting",
         "not an official leaderboard result",
@@ -100,7 +107,11 @@ def check_claim_contract() -> list[str]:
         "docs/token-context-crossover.svg",
         "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh",
         "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked",
-        "Apple Silicon macOS and Linux x86-64",
+        "Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer",
+        "`getconf GNU_LIBC_VERSION`",
+        "refuses musl, older glibc, or an unverifiable libc",
+        "before downloading or changing anything under `HOME`",
+        "newer glibc system or a Rust 1.95 source build",
         "requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness",
         "exits before downloading or writing anything",
         "Use the prominent short command `az` only when",
@@ -184,6 +195,20 @@ def check_claim_contract() -> list[str]:
     for needle in required_draft:
         if needle not in draft:
             errors.append(f"docs/history/drafts/v0.1.1-launch.md: missing required boundary phrase: {needle}")
+
+    required_lifecycle = [
+        "Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer",
+        "`getconf GNU_LIBC_VERSION`",
+        "numeric version comparison",
+        "before creating staging files or changing anything under `HOME`",
+        "musl, glibc below 2.35, a missing `getconf`, and an invalid or unverifiable result",
+        "Rust 1.95 source-build alternative",
+        "`AZDAJA_INSTALL_GLIBC_VERSION` explicitly",
+        "selector tests never inherit the host libc",
+    ]
+    for phrase in required_lifecycle:
+        if phrase not in lifecycle:
+            errors.append(f"docs/harness-lifecycle.md: missing runtime-floor boundary: {phrase}")
 
     required_saga = [
         "**+4.3 percentage points**",

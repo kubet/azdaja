@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#e8ddc4">
-  <meta name="description" content="Azdaja — a minimal recursive language model layer for any agent that can run a command.">
+  <meta name="description" content="Azdaja — a minimal recursive language model layer for Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35+.">
   <meta property="og:title" content="Azdaja">
-  <meta property="og:description" content="Think beyond the context window.">
+  <meta property="og:description" content="Think beyond the context window on Apple Silicon macOS 11+ or x86-64 Linux with glibc 2.35+.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://azdaja.dev/">
   <meta property="og:image" content="https://azdaja.dev/og-card.jpg">
@@ -26,7 +26,7 @@
       <p>Point it at the fifty-megabyte log, a textual repository dump, or the transcript that never fit. It reads what it needs, fans out heads where it must, and comes back with one answer.</p>
     </div>
     <section class="install" aria-label="Install Azdaja">
-      <p>For Apple Silicon macOS or Linux x86-64. The bare one-liner requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness; otherwise it exits before downloading or writing anything.</p>
+      <p>For Apple Silicon macOS 11+ or x86-64 Linux with glibc 2.35 or newer. On Linux the installer checks <code>getconf GNU_LIBC_VERSION</code>; musl, older glibc, and an unverifiable libc are refused before any download or <code>HOME</code> mutation, with a Rust 1.95 source build as the alternative. The bare one-liner requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness; otherwise it exits before downloading or writing anything.</p>
       <code class="install-command">$ curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh</code>
       <p>Use <strong>az</strong> only when the installer reports its alias; otherwise use <strong>azdaja</strong>. A foreign <strong>az</strong>, including Azure CLI, is untouched.</p>
     </section>
