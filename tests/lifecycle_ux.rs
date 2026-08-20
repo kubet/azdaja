@@ -2,10 +2,12 @@
 
 use std::{
     fs,
-    os::unix::fs::{PermissionsExt, symlink},
+    os::unix::fs::{MetadataExt, PermissionsExt, symlink},
     path::{Path, PathBuf},
     process::{Command, Output},
-    time::{SystemTime, UNIX_EPOCH},
+    sync::{Arc, Barrier},
+    thread,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 struct Scratch(PathBuf);
@@ -396,4 +398,253 @@ fn foreign_standalone_config_refuses_full_all_before_harness_mutation() {
     assert!(text(&output).1.contains("incomplete standalone ownership"));
     assert!(binary.exists());
     assert!(targets(&scratch.0).iter().all(|path| path.exists()));
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct SurfaceEntry {
+    relative: PathBuf,
+    directory: bool,
+    bytes: Vec<u8>,
+    mode: u32,
+    dev: u64,
+    ino: u64,
+}
+
+fn surface_snapshot(root: &Path) -> Vec<SurfaceEntry> {
+    fn visit(root: &Path, path: &Path, entries: &mut Vec<SurfaceEntry>) {
+        let metadata = fs::symlink_metadata(path).unwrap();
+        let relative = path.strip_prefix(root).unwrap().to_path_buf();
+        let directory = metadata.file_type().is_dir();
+        entries.push(SurfaceEntry {
+            relative,
+            directory,
+            bytes: if directory {
+                Vec::new()
+            } else {
+                fs::read(path).unwrap()
+            },
+            mode: metadata.mode(),
+            dev: metadata.dev(),
+            ino: metadata.ino(),
+        });
+        if directory {
+            let mut children = fs::read_dir(path)
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .collect::<Vec<_>>();
+            children.sort();
+            for child in children {
+                visit(root, &child, entries);
+            }
+        }
+    }
+    let mut entries = Vec::new();
+    visit(root, root, &mut entries);
+    entries
+}
+
+fn selected_snapshots(home: &Path) -> Vec<Vec<SurfaceEntry>> {
+    targets(home)
+        .iter()
+        .map(|target| surface_snapshot(target))
+        .collect()
+}
+
+fn lifecycle_artifacts(home: &Path) -> Vec<PathBuf> {
+    let mut artifacts = Vec::new();
+    for target in targets(home) {
+        if let Some(parent) = target.parent()
+            && let Ok(entries) = fs::read_dir(parent)
+        {
+            for entry in entries {
+                let path = entry.unwrap().path();
+                let name = path.file_name().unwrap().to_string_lossy();
+                if name.starts_with(".azdaja-stage-") || name.starts_with(".azdaja-backup-") {
+                    artifacts.push(path);
+                }
+            }
+        }
+    }
+    artifacts
+}
+
+fn run_with_lifecycle_env(
+    binary: &Path,
+    home: &Path,
+    args: &[&str],
+    extra: &[(&str, &str)],
+) -> Output {
+    let mut command = Command::new(binary);
+    command
+        .args(args)
+        .env("HOME", home)
+        .env("XDG_CONFIG_HOME", home.join("xdg"))
+        .env("AZDAJA_HOME", home.join("state"))
+        .env_remove("AZDAJA_CONFIG")
+        .env_remove("RLM_DEPTH");
+    for (name, value) in extra {
+        command.env(name, value);
+    }
+    command.output().unwrap()
+}
+
+#[test]
+fn concurrent_reinstall_barrier_two_workers_twenty_reinstalls_never_loses_target_or_leaks() {
+    let scratch = Scratch::new("concurrent-reinstall");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_azdaja"));
+    assert_success(&run(
+        &binary,
+        &scratch.0,
+        &["install", "--harness", "jcode"],
+    ));
+
+    for _round in 0..10 {
+        let barrier = Arc::new(Barrier::new(3));
+        let mut workers = Vec::new();
+        for _ in 0..2 {
+            let barrier = Arc::clone(&barrier);
+            let binary = binary.clone();
+            let home = scratch.0.clone();
+            workers.push(thread::spawn(move || {
+                barrier.wait();
+                run(&binary, &home, &["install", "--harness", "jcode"])
+            }));
+        }
+        barrier.wait();
+        for worker in workers {
+            let output = worker.join().unwrap();
+            assert_success(&output);
+        }
+        let target = scratch.0.join(".jcode/skills/azdaja");
+        assert!(target.is_dir());
+        assert!(lifecycle_artifacts(&scratch.0).is_empty());
+        let doctor = run(&binary, &scratch.0, &["doctor", "--harness", "jcode"]);
+        assert!(assert_success(&doctor).contains("PASS jcode"));
+    }
+}
+
+#[test]
+fn all_harness_install_and_uninstall_roll_back_every_injected_target_failure() {
+    let scratch = Scratch::new("all-failpoints");
+    let binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
+    install_all(&scratch.0);
+
+    // A deliberately customized managed config remains supported and must be
+    // preserved byte-for-byte (and by inode) through every rollback.
+    let config = targets(&scratch.0)[2].join("config.toml");
+    let original = fs::read_to_string(&config).unwrap();
+    let model_line = original
+        .lines()
+        .find(|line| line.starts_with("default_model = "))
+        .unwrap();
+    fs::write(
+        &config,
+        original.replace(model_line, "default_model = \"custom-rollback-model\""),
+    )
+    .unwrap();
+    let expected = selected_snapshots(&scratch.0);
+
+    for command_name in ["install", "uninstall"] {
+        for fail_at in 1..=5 {
+            let fail_at = fail_at.to_string();
+            let output = run_with_lifecycle_env(
+                binary,
+                &scratch.0,
+                &[command_name, "--harness", "all"],
+                &[("AZDAJA_LIFECYCLE_TEST_FAIL_AT", &fail_at)],
+            );
+            assert!(!output.status.success(), "{command_name} step {fail_at}");
+            assert!(
+                text(&output).1.contains("injected lifecycle failure"),
+                "{}",
+                text(&output).1
+            );
+            assert_eq!(selected_snapshots(&scratch.0), expected);
+            assert!(lifecycle_artifacts(&scratch.0).is_empty());
+        }
+    }
+}
+
+fn wait_for_barrier(path: &Path) {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !path.exists() {
+        assert!(
+            Instant::now() < deadline,
+            "lifecycle barrier did not become ready"
+        );
+        thread::sleep(Duration::from_millis(2));
+    }
+}
+
+#[test]
+fn late_unknown_and_changed_targets_abort_without_touching_other_selected_surfaces() {
+    let scratch = Scratch::new("late-selected-change");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_azdaja"));
+    install_all(&scratch.0);
+    let all = targets(&scratch.0);
+
+    let barrier = scratch.0.join("install-late");
+    let barrier_value = barrier.to_string_lossy().into_owned();
+    let ready = PathBuf::from(format!("{barrier_value}.ready"));
+    let go = PathBuf::from(format!("{barrier_value}.go"));
+    let home = scratch.0.clone();
+    let install_binary = binary.clone();
+    let install = thread::spawn(move || {
+        run_with_lifecycle_env(
+            &install_binary,
+            &home,
+            &["install", "--harness", "all"],
+            &[("AZDAJA_LIFECYCLE_TEST_BARRIER", &barrier_value)],
+        )
+    });
+    wait_for_barrier(&ready);
+    fs::write(all[4].join("late-unknown"), b"foreign").unwrap();
+    let expected = selected_snapshots(&scratch.0);
+    fs::write(&go, b"go").unwrap();
+    let output = install.join().unwrap();
+    assert!(!output.status.success());
+    assert!(text(&output).1.contains("unknown files"));
+    assert_eq!(selected_snapshots(&scratch.0), expected);
+    assert!(lifecycle_artifacts(&scratch.0).is_empty());
+    fs::remove_file(all[4].join("late-unknown")).unwrap();
+
+    let barrier = scratch.0.join("uninstall-late");
+    let barrier_value = barrier.to_string_lossy().into_owned();
+    let ready = PathBuf::from(format!("{barrier_value}.ready"));
+    let go = PathBuf::from(format!("{barrier_value}.go"));
+    let home = scratch.0.clone();
+    let uninstall_binary = binary.clone();
+    let uninstall = thread::spawn(move || {
+        run_with_lifecycle_env(
+            &uninstall_binary,
+            &home,
+            &["uninstall", "--harness", "all"],
+            &[("AZDAJA_LIFECYCLE_TEST_BARRIER", &barrier_value)],
+        )
+    });
+    wait_for_barrier(&ready);
+    fs::write(all[4].join("SKILL.md"), b"late changed bytes").unwrap();
+    let expected = selected_snapshots(&scratch.0);
+    fs::write(&go, b"go").unwrap();
+    let output = uninstall.join().unwrap();
+    assert!(!output.status.success());
+    assert!(text(&output).1.contains("changed file"));
+    assert_eq!(selected_snapshots(&scratch.0), expected);
+    assert!(lifecycle_artifacts(&scratch.0).is_empty());
+}
+
+#[test]
+fn all_harness_staging_permission_failure_occurs_before_any_commit() {
+    let scratch = Scratch::new("stage-permission");
+    let binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
+    install_all(&scratch.0);
+    let expected = selected_snapshots(&scratch.0);
+    let late_parent = targets(&scratch.0)[4].parent().unwrap().to_path_buf();
+    let prior_mode = fs::metadata(&late_parent).unwrap().permissions().mode();
+    fs::set_permissions(&late_parent, fs::Permissions::from_mode(0o500)).unwrap();
+    let output = run(binary, &scratch.0, &["install", "--harness", "all"]);
+    fs::set_permissions(&late_parent, fs::Permissions::from_mode(prior_mode)).unwrap();
+    assert!(!output.status.success());
+    assert_eq!(selected_snapshots(&scratch.0), expected);
+    assert!(lifecycle_artifacts(&scratch.0).is_empty());
 }

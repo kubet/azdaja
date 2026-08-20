@@ -8,6 +8,7 @@ use azdaja::{
     model_trace_request_id, model_transport_error_category, model_transport_error_is_transient,
     provider_interrupt_exit_status, provider_interrupted, start,
 };
+use fs2::FileExt;
 use monty::MontyRun;
 use monty_types::CompileOptions;
 use serde::{Deserialize, Serialize};
@@ -165,14 +166,17 @@ const COMMAND_USAGES: [(&str, &str); 10] = [
         "solo",
         "Usage: az solo <question> -f <path> [--model <model>] [--sub-model <model>]",
     ),
-    ("doctor", "Usage: az doctor [--caps]"),
+    (
+        "doctor",
+        "Usage: az doctor [--caps | --harness <jcode|claude|codex|gemini|opencode|all>]",
+    ),
     (
         "install",
         "Usage: az install [--harness <jcode|claude|codex|gemini|opencode|all>]",
     ),
     (
         "uninstall",
-        "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all>]",
+        "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all> | --standalone | --all]",
     ),
 ];
 
@@ -201,6 +205,11 @@ fn command_help(args: &[String]) -> Result<bool> {
     let Some(usage) = command_usage(&args[0]) else {
         return Ok(false);
     };
+    // These commands own richer help bodies. Let their parser print those bodies
+    // while COMMAND_USAGES remains the canonical public first/error line.
+    if matches!(args[0].as_str(), "doctor" | "install" | "uninstall") {
+        return Ok(false);
+    }
     if args
         .get(1)
         .is_some_and(|arg| matches!(arg.as_str(), "-h" | "--help"))
@@ -682,6 +691,131 @@ fn open_install_directory(path: &Path) -> Result<fs::File> {
     Ok(file)
 }
 
+struct LifecycleLock {
+    _file: fs::File,
+}
+
+fn validate_lifecycle_lock_binding(file: &fs::File, path: &Path) -> Result<()> {
+    let open = file.metadata()?;
+    let current = fs::symlink_metadata(path)?;
+    if !open.file_type().is_file()
+        || install_metadata_is_link_or_reparse(&current)
+        || !current.file_type().is_file()
+        || !install_metadata_matches(&open, &current)
+    {
+        bail!("lifecycle lock binding changed: {}", path.display())
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        if open.uid() != unsafe { libc::geteuid() }
+            || open.nlink() != 1
+            || open.permissions().mode() & 0o077 != 0
+        {
+            bail!(
+                "lifecycle lock is not private to the current user: {}",
+                path.display()
+            )
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if open.number_of_links() != Some(1) {
+            bail!("lifecycle lock has multiple links: {}", path.display())
+        }
+    }
+    Ok(())
+}
+
+fn acquire_lifecycle_lock(_home: &Path) -> Result<LifecycleLock> {
+    // This path is intentionally created only after the first complete, read-only
+    // selected-set preflight. A private per-user OS-temporary directory also
+    // coordinates authoritative JCODE_HOME targets shared by processes with
+    // different HOME values. Persistent inodes avoid split-lock races; the kernel
+    // releases its advisory lock automatically when the file is dropped.
+    #[cfg(unix)]
+    let identity = unsafe { libc::geteuid() }.to_string();
+    #[cfg(not(unix))]
+    let identity = format!(
+        "{:016x}",
+        hash(
+            env::var_os("USERNAME")
+                .or_else(|| env::var_os("USER"))
+                .unwrap_or_default()
+                .to_string_lossy()
+                .as_bytes()
+        )
+    );
+    #[cfg(unix)]
+    let lifecycle_temp = PathBuf::from("/tmp");
+    #[cfg(not(unix))]
+    let lifecycle_temp = env::temp_dir();
+    let lock_directory_path = lifecycle_temp.join(format!(".azdaja-lifecycle-{identity}"));
+    #[cfg(unix)]
+    let created = {
+        use std::os::unix::fs::DirBuilderExt;
+        let mut builder = fs::DirBuilder::new();
+        builder.mode(0o700);
+        match builder.create(&lock_directory_path) {
+            Ok(()) => true,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => false,
+            Err(error) => return Err(error.into()),
+        }
+    };
+    #[cfg(not(unix))]
+    let created = match fs::create_dir(&lock_directory_path) {
+        Ok(()) => true,
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => false,
+        Err(error) => return Err(error.into()),
+    };
+    let lock_directory = open_install_directory(&lock_directory_path)
+        .context("refusing unsafe lifecycle lock directory")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if created {
+            lock_directory.set_permissions(fs::Permissions::from_mode(0o700))?;
+        }
+        if lock_directory.metadata()?.permissions().mode() & 0o077 != 0 {
+            bail!(
+                "lifecycle lock directory is not private: {}",
+                lock_directory_path.display()
+            )
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = created;
+
+    let path = lock_directory_path.join("lock");
+    let mut create = fs::OpenOptions::new();
+    create.read(true).write(true).create_new(true);
+    #[cfg(unix)]
+    create
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
+    #[cfg(windows)]
+    create.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let file = match create.open(&path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+            let mut existing = fs::OpenOptions::new();
+            existing.read(true).write(true);
+            #[cfg(unix)]
+            existing.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
+            #[cfg(windows)]
+            existing.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+            existing.open(&path)?
+        }
+        Err(error) => return Err(error.into()),
+    };
+    validate_lifecycle_lock_binding(&file, &path)?;
+    FileExt::lock_exclusive(&file)?;
+    validate_install_directory_binding(&lock_directory, &lock_directory_path)?;
+    validate_lifecycle_lock_binding(&file, &path)?;
+    Ok(LifecycleLock { _file: file })
+}
+
 struct OwnedInstallDirectory {
     path: PathBuf,
     file: fs::File,
@@ -731,6 +865,31 @@ impl OwnedInstallDirectory {
         bail!("could not allocate a collision-free private {prefix} directory")
     }
 
+    fn create_exact(path: PathBuf, recursive_cleanup: bool) -> Result<Self> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            let mut builder = fs::DirBuilder::new();
+            builder.mode(0o700);
+            builder.create(&path)?;
+        }
+        #[cfg(not(unix))]
+        fs::create_dir(&path)?;
+        let file = open_install_directory(&path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(fs::Permissions::from_mode(0o700))?;
+        }
+        validate_install_directory_binding(&file, &path)?;
+        Ok(Self {
+            path,
+            file,
+            recursive_cleanup,
+            armed: true,
+        })
+    }
+
     fn validate_at(&self, path: &Path) -> Result<()> {
         validate_install_directory_binding(&self.file, path)
     }
@@ -761,6 +920,96 @@ impl Drop for OwnedInstallDirectory {
             let _ = fs::remove_dir(&self.path);
         }
     }
+}
+
+struct CreatedInstallParents(Vec<OwnedInstallDirectory>);
+impl CreatedInstallParents {
+    fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    fn push(&mut self, directory: OwnedInstallDirectory) {
+        self.0.push(directory);
+    }
+
+    fn disarm(&mut self) {
+        for directory in &mut self.0 {
+            directory.disarm();
+        }
+    }
+}
+impl Drop for CreatedInstallParents {
+    fn drop(&mut self) {
+        // Parents are recorded from the existing ancestor toward the target.
+        // Remove empty invocation-owned directories from leaf to root.
+        for directory in self.0.iter_mut().rev() {
+            if directory.armed {
+                let _ = directory.remove_now();
+            }
+        }
+    }
+}
+
+#[cfg(debug_assertions)]
+struct LifecycleFailpoint {
+    fail_at: Option<usize>,
+    step: usize,
+}
+#[cfg(debug_assertions)]
+impl LifecycleFailpoint {
+    fn from_env() -> Self {
+        Self {
+            fail_at: env::var("AZDAJA_LIFECYCLE_TEST_FAIL_AT")
+                .ok()
+                .and_then(|value| value.parse().ok()),
+            step: 0,
+        }
+    }
+
+    fn step(&mut self, label: &str) -> Result<()> {
+        self.step += 1;
+        if self.fail_at == Some(self.step) {
+            bail!("injected lifecycle failure at step {} ({label})", self.step)
+        }
+        Ok(())
+    }
+}
+#[cfg(not(debug_assertions))]
+struct LifecycleFailpoint;
+#[cfg(not(debug_assertions))]
+impl LifecycleFailpoint {
+    fn from_env() -> Self {
+        Self
+    }
+
+    fn step(&mut self, _: &str) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(debug_assertions)]
+fn lifecycle_test_before_commit_barrier() -> Result<()> {
+    let Some(base) = env::var_os("AZDAJA_LIFECYCLE_TEST_BARRIER") else {
+        return Ok(());
+    };
+    let base = PathBuf::from(base);
+    let ready = PathBuf::from(format!("{}.ready", base.to_string_lossy()));
+    let go = PathBuf::from(format!("{}.go", base.to_string_lossy()));
+    fs::write(&ready, b"ready")?;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !path_entry_exists(&go)? {
+        if Instant::now() >= deadline {
+            bail!("timed out at lifecycle test barrier")
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    fs::remove_file(&ready)?;
+    fs::remove_file(&go)?;
+    Ok(())
+}
+#[cfg(not(debug_assertions))]
+fn lifecycle_test_before_commit_barrier() -> Result<()> {
+    Ok(())
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -887,6 +1136,310 @@ fn preflight_install(home: &Path, harness: &'static str) -> Result<InstallPlan> 
     })
 }
 
+fn ensure_install_parent(
+    plan: &InstallPlan,
+    created: &mut CreatedInstallParents,
+) -> Result<fs::File> {
+    let parent = plan
+        .dst
+        .parent()
+        .ok_or_else(|| anyhow!("install target has no parent: {}", plan.dst.display()))?;
+    if let Some((ancestor_path, ancestor_directory)) = &plan.existing_ancestor {
+        validate_install_directory_binding(ancestor_directory, ancestor_path)?;
+        let mut missing = Vec::new();
+        let mut current = parent.to_path_buf();
+        while current != *ancestor_path {
+            missing.push(current.clone());
+            current = current
+                .parent()
+                .ok_or_else(|| anyhow!("install ancestry changed before staging"))?
+                .to_path_buf();
+        }
+        for path in missing.into_iter().rev() {
+            if path_entry_exists(&path)? {
+                bail!(
+                    "install ancestry changed before staging: {}",
+                    path.display()
+                )
+            }
+            created.push(OwnedInstallDirectory::create_exact(path, false)?);
+        }
+        validate_install_directory_binding(ancestor_directory, ancestor_path)?;
+    }
+    open_install_directory(parent).context("refusing unsafe install-target parent")
+}
+
+fn revalidate_install_plan(plan: &InstallPlan) -> Result<()> {
+    match &plan.existing_directory {
+        Some(directory) => {
+            validate_install_directory_binding(directory, &plan.dst)?;
+            validate_install(&plan.dst, true)?;
+            let current = read_install_regular(&plan.dst.join("config.toml"))?;
+            if plan.preserved.as_deref() != Some(current.as_slice()) {
+                bail!(
+                    "managed configuration changed during install preflight: {}",
+                    plan.dst.display()
+                )
+            }
+            validate_install_directory_binding(directory, &plan.dst)?;
+        }
+        None => {
+            if path_entry_exists(&plan.dst)? {
+                bail!(
+                    "install target appeared during install preflight: {}",
+                    plan.dst.display()
+                )
+            }
+            let (ancestor_path, ancestor_directory) = plan
+                .existing_ancestor
+                .as_ref()
+                .expect("an absent target has an existing ancestor");
+            validate_install_directory_binding(ancestor_directory, ancestor_path)?;
+        }
+    }
+    Ok(())
+}
+
+struct StagedInstall {
+    plan: InstallPlan,
+    stage: OwnedInstallDirectory,
+    final_bin: PathBuf,
+    quarantine: Option<OwnedInstallDirectory>,
+    previous: Option<PathBuf>,
+    old_moved: bool,
+    stage_moved: bool,
+}
+
+fn stage_install(
+    plan: InstallPlan,
+    exe: &Path,
+    created: &mut CreatedInstallParents,
+) -> Result<StagedInstall> {
+    let parent_directory = ensure_install_parent(&plan, created)?;
+    validate_install_directory_binding(
+        &parent_directory,
+        plan.dst.parent().expect("install target has a parent"),
+    )?;
+    let parent = plan.dst.parent().expect("install target has a parent");
+    let stage = OwnedInstallDirectory::create(parent, "azdaja-stage", true)?;
+    let stage_path = stage.path.clone();
+    let bin = stage_path.join(if cfg!(windows) {
+        "azdaja.exe"
+    } else {
+        "azdaja"
+    });
+    fs::copy(exe, &bin)?;
+    executable(&bin)?;
+    let final_bin = plan
+        .dst
+        .join(bin.file_name().expect("staged binary has a name"));
+    let skill = SKILL
+        .replace("{{VERSION}}", VERSION)
+        .replace("{{BIN}}", &shell_quote(&final_bin));
+    fs::write(stage_path.join("SKILL.md"), skill)?;
+    fs::write(
+        stage_path.join("config.toml"),
+        plan.preserved
+            .clone()
+            .unwrap_or(toml::to_string_pretty(&plan.cfg)?.into_bytes()),
+    )?;
+    let files = [
+        bin.file_name()
+            .expect("staged binary has a name")
+            .to_string_lossy()
+            .into_owned(),
+        "SKILL.md".into(),
+        "config.toml".into(),
+    ];
+    let manifest = Manifest {
+        files: files
+            .iter()
+            .map(|name| {
+                fs::read(stage_path.join(name))
+                    .map(|bytes| (name.clone(), hash(&bytes)))
+                    .with_context(|| format!("could not read staged managed file {name}"))
+            })
+            .collect::<Result<Vec<_>>>()?,
+    };
+    fs::write(
+        stage_path.join(".azdaja-managed"),
+        serde_json::to_vec(&manifest)?,
+    )?;
+    stage.validate_at(&stage_path)?;
+    validate_install(&stage_path, true)?;
+    Ok(StagedInstall {
+        plan,
+        stage,
+        final_bin,
+        quarantine: None,
+        previous: None,
+        old_moved: false,
+        stage_moved: false,
+    })
+}
+
+fn rollback_install_transaction(staged: &mut [StagedInstall]) -> Result<()> {
+    let mut errors = Vec::new();
+    for install in staged.iter_mut().rev() {
+        if install.stage_moved {
+            let result = (|| -> Result<()> {
+                install.stage.validate_at(&install.plan.dst)?;
+                install_rename_noreplace(&install.plan.dst, &install.stage.path)?;
+                install.stage.validate_at(&install.stage.path)?;
+                install.stage_moved = false;
+                Ok(())
+            })();
+            if let Err(error) = result {
+                errors.push(format!(
+                    "could not remove invocation-owned replacement at {}: {error:#}",
+                    install.plan.dst.display()
+                ));
+            }
+        }
+        if install.old_moved {
+            let result = (|| -> Result<()> {
+                if path_entry_exists(&install.plan.dst)? {
+                    bail!("replacement still occupies the target path")
+                }
+                let previous = install
+                    .previous
+                    .as_ref()
+                    .expect("a moved prior installation has a quarantine path");
+                let directory = install
+                    .plan
+                    .existing_directory
+                    .as_ref()
+                    .expect("a moved prior installation has an open directory");
+                validate_install_directory_binding(directory, previous)?;
+                install_rename_noreplace(previous, &install.plan.dst)?;
+                validate_install_directory_binding(directory, &install.plan.dst)?;
+                install.old_moved = false;
+                if let Some(quarantine) = &mut install.quarantine {
+                    quarantine.remove_now()?;
+                }
+                Ok(())
+            })();
+            if let Err(error) = result {
+                errors.push(format!(
+                    "could not restore prior installation at {}: {error:#}",
+                    install.plan.dst.display()
+                ));
+            }
+        } else if let Some(quarantine) = &mut install.quarantine
+            && let Err(error) = quarantine.remove_now()
+        {
+            errors.push(format!(
+                "could not remove empty quarantine at {}: {error:#}",
+                quarantine.path.display()
+            ));
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        bail!("{}", errors.join("; "))
+    }
+}
+
+fn make_prior_install_removable(directory: &fs::File, path: &Path) -> Result<()> {
+    validate_install_directory_binding(directory, path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        directory.set_permissions(fs::Permissions::from_mode(0o700))?;
+    }
+    validate_install_directory_binding(directory, path)
+}
+
+fn commit_install_transaction(staged: &mut [StagedInstall]) -> Result<()> {
+    // Allocate every same-filesystem quarantine before the first target rename.
+    for install in staged.iter_mut() {
+        if install.plan.existing_directory.is_some() {
+            let parent = install
+                .plan
+                .dst
+                .parent()
+                .expect("install target has a parent");
+            let quarantine = OwnedInstallDirectory::create(parent, "azdaja-backup", false)?;
+            install.previous = Some(quarantine.path.join("previous"));
+            install.quarantine = Some(quarantine);
+        }
+    }
+    // Staging and quarantine allocation may take time. Refuse every late selected-
+    // surface change before the first commit action.
+    lifecycle_test_before_commit_barrier()?;
+    for install in staged.iter() {
+        revalidate_install_plan(&install.plan)?;
+        install.stage.validate_at(&install.stage.path)?;
+    }
+
+    let mut failpoint = LifecycleFailpoint::from_env();
+    let commit = (|| -> Result<()> {
+        for install in staged.iter_mut() {
+            if let Some(existing_directory) = &install.plan.existing_directory {
+                let previous = install
+                    .previous
+                    .as_ref()
+                    .expect("an existing installation has a quarantine path");
+                let quarantine = install
+                    .quarantine
+                    .as_ref()
+                    .expect("an existing installation has a quarantine");
+                quarantine.validate_at(&quarantine.path)?;
+                install_rename_noreplace(&install.plan.dst, previous)?;
+                install.old_moved = true;
+                validate_install_directory_binding(existing_directory, previous)?;
+                validate_install(previous, true)?;
+            }
+            install_rename_noreplace(&install.stage.path, &install.plan.dst)?;
+            install.stage_moved = true;
+            // A binding failure after the rename is still inside the rollback
+            // boundary, so the exact prior directory is restored before return.
+            install.stage.validate_at(&install.plan.dst)?;
+            validate_install(&install.plan.dst, true)?;
+            failpoint.step("after staged-install rename")?;
+        }
+        for install in staged.iter() {
+            install.stage.validate_at(&install.plan.dst)?;
+            validate_install(&install.plan.dst, true)?;
+        }
+        Ok(())
+    })();
+    if let Err(error) = commit {
+        return match rollback_install_transaction(staged) {
+            Ok(()) => Err(error),
+            Err(rollback) => Err(error.context(format!("install rollback failed: {rollback:#}"))),
+        };
+    }
+
+    // The selected set is now committed. Disarm new targets, then delete prior
+    // directories while the lifecycle lock is still held.
+    for install in staged.iter_mut() {
+        install.stage.disarm();
+        install.stage_moved = false;
+    }
+    for install in staged.iter_mut() {
+        if install.old_moved {
+            let previous = install
+                .previous
+                .as_ref()
+                .expect("a moved prior installation has a quarantine path");
+            let existing_directory = install
+                .plan
+                .existing_directory
+                .as_ref()
+                .expect("a moved prior installation has an open directory");
+            make_prior_install_removable(existing_directory, previous)?;
+            fs::remove_dir_all(previous)?;
+            install.old_moved = false;
+        }
+        if let Some(quarantine) = &mut install.quarantine {
+            quarantine.remove_now()?;
+        }
+    }
+    Ok(())
+}
+
 fn install_cmd(args: &[String]) -> Result<()> {
     if args
         .get(1)
@@ -913,123 +1466,52 @@ fn install_cmd(args: &[String]) -> Result<()> {
     };
     let (selected, detection_report) = harnesses(which)?;
     let home = home()?;
-    // Preflight every selected target before capability checks or mutation. A late
-    // unowned/changed target must not replace an earlier valid target.
-    let mut plans = Vec::with_capacity(selected.len());
+
+    // P1b stays strictly read-only. For a real lifecycle change, this first
+    // complete selected-set preflight must succeed before the lock file or any
+    // other HOME entry can be created.
+    let mut initial_plans = Vec::with_capacity(selected.len());
     for &harness in &selected {
-        plans.push(preflight_install(&home, harness)?);
+        initial_plans.push(preflight_install(&home, harness)?);
     }
     if preflight_only {
         return Ok(());
     }
+
+    drop(initial_plans);
+    let _lifecycle_lock = acquire_lifecycle_lock(&home)?;
+    // A waiting concurrent invocation may have changed the selected set. The
+    // locked preflight is authoritative and the lock remains held through
+    // staging, all commit/rollback work, and prior-directory deletion.
+    let mut plans = Vec::with_capacity(selected.len());
+    for &harness in &selected {
+        plans.push(preflight_install(&home, harness)?);
+    }
     for plan in &plans {
         capability_check(&plan.cfg)?;
     }
+
     let exe = env::current_exe()?.canonicalize()?;
-    let mut written = Vec::new();
-    let mut doctor = None;
+    let mut created_parents = CreatedInstallParents::new();
+    let mut staged = Vec::with_capacity(plans.len());
     for plan in plans {
-        let InstallPlan {
-            harness,
-            dst,
-            existing_directory,
-            existing_ancestor,
-            preserved,
-            cfg,
-        } = plan;
-        let parent = dst.parent().expect("install target has a parent");
-        if let Some((ancestor_path, ancestor_directory)) = &existing_ancestor {
-            validate_install_directory_binding(ancestor_directory, ancestor_path)?;
-        }
-        fs::create_dir_all(parent)?;
-        let _parent_directory = open_install_directory(parent)?;
-        if let Some((ancestor_path, ancestor_directory)) = &existing_ancestor {
-            validate_install_directory_binding(ancestor_directory, ancestor_path)?;
-        }
-        let mut stage = OwnedInstallDirectory::create(parent, "azdaja-stage", true)?;
-        let stage_path = stage.path.clone();
-        let bin = stage_path.join(if cfg!(windows) {
-            "azdaja.exe"
-        } else {
-            "azdaja"
-        });
-        fs::copy(&exe, &bin)?;
-        executable(&bin)?;
-        let final_bin = dst.join(bin.file_name().unwrap());
-        let skill = SKILL
-            .replace("{{VERSION}}", VERSION)
-            .replace("{{BIN}}", &shell_quote(&final_bin));
-        fs::write(stage_path.join("SKILL.md"), skill)?;
-        fs::write(
-            stage_path.join("config.toml"),
-            preserved.unwrap_or(toml::to_string_pretty(&cfg)?.into_bytes()),
-        )?;
-        let files = [
-            bin.file_name().unwrap().to_string_lossy().into_owned(),
-            "SKILL.md".into(),
-            "config.toml".into(),
-        ];
-        let manifest = Manifest {
-            files: files
-                .iter()
-                .map(|name| {
-                    (
-                        name.clone(),
-                        hash(&fs::read(stage_path.join(name)).expect("staged managed file")),
-                    )
-                })
-                .collect(),
-        };
-        fs::write(
-            stage_path.join(".azdaja-managed"),
-            serde_json::to_vec(&manifest)?,
-        )?;
-        stage.validate_at(&stage_path)?;
-        if let Some(existing_directory) = existing_directory {
-            let mut backup = OwnedInstallDirectory::create(parent, "azdaja-backup", false)?;
-            let previous = backup.path.join("previous");
-            backup.validate_at(&backup.path)?;
-            install_rename_noreplace(&dst, &previous)?;
-            if let Err(error) = validate_install_directory_binding(&existing_directory, &previous) {
-                backup.disarm();
-                return Err(error.context(format!(
-                    "prior installation retained at {}",
-                    previous.display()
-                )));
-            }
-            if let Err(error) = install_rename_noreplace(&stage_path, &dst) {
-                match install_rename_noreplace(&previous, &dst) {
-                    Ok(()) => backup.remove_now()?,
-                    Err(rollback_error) => {
-                        backup.disarm();
-                        return Err(error.context(format!(
-                            "install failed and rollback failed ({rollback_error:#}); prior installation retained at {}",
-                            previous.display()
-                        )));
-                    }
-                }
-                return Err(error);
-            }
-            stage.validate_at(&dst)?;
-            stage.disarm();
-            validate_install_directory_binding(&existing_directory, &previous)?;
-            validate_install(&previous, true)?;
-            if let Err(error) = fs::remove_dir_all(&previous) {
-                backup.disarm();
-                return Err(error.into());
-            }
-            backup.remove_now()?;
-        } else {
-            install_rename_noreplace(&stage_path, &dst)?;
-            stage.validate_at(&dst)?;
-            stage.disarm();
-        }
-        written.push(format!("{harness} -> {}", dst.display()));
-        doctor.get_or_insert(final_bin);
+        staged.push(stage_install(plan, &exe, &mut created_parents)?);
     }
+    // No selected target has been renamed until every selected target is
+    // successfully preflighted, capability-checked, and fully staged.
+    commit_install_transaction(&mut staged)?;
+    created_parents.disarm();
+
+    let written = staged
+        .iter()
+        .map(|install| format!("{} -> {}", install.plan.harness, install.plan.dst.display()))
+        .collect::<Vec<_>>();
+    let doctor = staged
+        .first()
+        .map(|install| install.final_bin.clone())
+        .expect("at least one selected harness");
     println!("Detected: {detection_report}");
     println!("Written: {}", written.join("; "));
-    let doctor = doctor.expect("at least one selected harness");
     println!(
         "Next: run {} doctor; then {}",
         shell_quote(&doctor),
@@ -1037,6 +1519,7 @@ fn install_cmd(args: &[String]) -> Result<()> {
     );
     Ok(())
 }
+
 #[cfg(unix)]
 fn executable(path: &Path) -> Result<()> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -1392,6 +1875,175 @@ fn revalidate_standalone(removal: &StandaloneRemoval) -> Result<()> {
     Ok(())
 }
 
+struct QuarantinedRemoval {
+    removal: HarnessRemoval,
+    quarantine: Option<OwnedInstallDirectory>,
+    previous: Option<PathBuf>,
+    moved: bool,
+}
+
+fn rollback_harness_removals(removals: &mut [QuarantinedRemoval]) -> Result<()> {
+    let mut errors = Vec::new();
+    for removal in removals.iter_mut().rev() {
+        if removal.moved {
+            let result = (|| -> Result<()> {
+                if path_entry_exists(&removal.removal.path)? {
+                    bail!("another entry occupies the target path")
+                }
+                let previous = removal
+                    .previous
+                    .as_ref()
+                    .expect("a moved removal has a quarantine path");
+                let directory = removal
+                    .removal
+                    .directory
+                    .as_ref()
+                    .expect("a moved removal has an open directory");
+                validate_install_directory_binding(directory, previous)?;
+                install_rename_noreplace(previous, &removal.removal.path)?;
+                validate_install_directory_binding(directory, &removal.removal.path)?;
+                removal.moved = false;
+                if let Some(quarantine) = &mut removal.quarantine {
+                    quarantine.remove_now()?;
+                }
+                Ok(())
+            })();
+            if let Err(error) = result {
+                errors.push(format!(
+                    "could not restore {} at {}: {error:#}",
+                    removal.removal.harness,
+                    removal.removal.path.display()
+                ));
+            }
+        } else if let Some(quarantine) = &mut removal.quarantine
+            && let Err(error) = quarantine.remove_now()
+        {
+            errors.push(format!(
+                "could not remove empty quarantine at {}: {error:#}",
+                quarantine.path.display()
+            ));
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        bail!("{}", errors.join("; "))
+    }
+}
+
+fn remove_harnesses_transactionally(removals: Vec<HarnessRemoval>) -> Result<Vec<String>> {
+    let mut removals = removals
+        .into_iter()
+        .map(|removal| QuarantinedRemoval {
+            removal,
+            quarantine: None,
+            previous: None,
+            moved: false,
+        })
+        .collect::<Vec<_>>();
+
+    // Allocate every same-filesystem quarantine before the first selected path
+    // is renamed, catching late-parent permission failures without mutation.
+    for removal in &mut removals {
+        if removal.removal.directory.is_some() {
+            let parent = removal
+                .removal
+                .path
+                .parent()
+                .ok_or_else(|| anyhow!("managed target has no parent"))?;
+            let quarantine = OwnedInstallDirectory::create(parent, "azdaja-backup", false)?;
+            removal.previous = Some(quarantine.path.join("previous"));
+            removal.quarantine = Some(quarantine);
+        }
+    }
+    lifecycle_test_before_commit_barrier()?;
+    for removal in &removals {
+        if let Some(directory) = &removal.removal.directory {
+            validate_install_directory_binding(directory, &removal.removal.path)?;
+            validate_install(&removal.removal.path, true)?;
+            validate_install_directory_binding(directory, &removal.removal.path)?;
+        } else if path_entry_exists(&removal.removal.path)? {
+            bail!(
+                "managed target appeared during uninstall preflight: {}",
+                removal.removal.path.display()
+            )
+        }
+    }
+
+    let mut failpoint = LifecycleFailpoint::from_env();
+    let quarantine_result = (|| -> Result<()> {
+        for removal in &mut removals {
+            let Some(directory) = &removal.removal.directory else {
+                continue;
+            };
+            let previous = removal
+                .previous
+                .as_ref()
+                .expect("an existing removal has a quarantine path");
+            install_rename_noreplace(&removal.removal.path, previous)?;
+            removal.moved = true;
+            validate_install_directory_binding(directory, previous)?;
+            validate_install(previous, true)?;
+            failpoint.step("after uninstall quarantine rename")?;
+        }
+        // Nothing is recursively deleted until all selected bindings have moved
+        // and every quarantine has passed its post-rename validation.
+        for removal in &removals {
+            if removal.moved {
+                let previous = removal
+                    .previous
+                    .as_ref()
+                    .expect("a moved removal has a quarantine path");
+                let directory = removal
+                    .removal
+                    .directory
+                    .as_ref()
+                    .expect("a moved removal has an open directory");
+                validate_install_directory_binding(directory, previous)?;
+                validate_install(previous, true)?;
+            }
+        }
+        Ok(())
+    })();
+    if let Err(error) = quarantine_result {
+        return match rollback_harness_removals(&mut removals) {
+            Ok(()) => Err(error),
+            Err(rollback) => Err(error.context(format!("uninstall rollback failed: {rollback:#}"))),
+        };
+    }
+
+    let outcomes = removals
+        .iter()
+        .map(|removal| {
+            if removal.removal.directory.is_some() {
+                removal.removal.harness.into()
+            } else {
+                format!("{} already absent", removal.removal.harness)
+            }
+        })
+        .collect::<Vec<_>>();
+    for removal in &mut removals {
+        if removal.moved {
+            let previous = removal
+                .previous
+                .as_ref()
+                .expect("a moved removal has a quarantine path");
+            let directory = removal
+                .removal
+                .directory
+                .as_ref()
+                .expect("a moved removal has an open directory");
+            make_prior_install_removable(directory, previous)?;
+            fs::remove_dir_all(previous)?;
+            removal.moved = false;
+        }
+        if let Some(quarantine) = &mut removal.quarantine {
+            quarantine.remove_now()?;
+        }
+    }
+    Ok(outcomes)
+}
+
 fn uninstall_cmd(args: &[String]) -> Result<()> {
     if args
         .get(1)
@@ -1439,8 +2091,19 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
     };
     let home = home()?;
 
-    // Every selected surface is validated before any mutation. A changed later
-    // target therefore cannot leave an earlier target partially uninstalled.
+    // First complete preflight is read-only, including standalone custody when
+    // selected. An unowned refusal therefore cannot create a HOME lock entry.
+    let initial_removals = preflight_harness_removals(&selected, &home)?;
+    let initial_standalone = if remove_standalone {
+        Some(preflight_standalone_removal()?)
+    } else {
+        None
+    };
+    drop(initial_removals);
+    drop(initial_standalone);
+    let _lifecycle_lock = acquire_lifecycle_lock(&home)?;
+
+    // The locked preflight is authoritative after any prior waiter completes.
     let removals = preflight_harness_removals(&selected, &home)?;
     let standalone = if remove_standalone {
         Some(preflight_standalone_removal()?)
@@ -1449,26 +2112,11 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
     };
     let standalone_needs_original_installer =
         matches!(standalone.as_ref(), Some(StandaloneRemoval::Unmanaged));
-    for removal in &removals {
-        if let Some(directory) = &removal.directory {
-            validate_install(&removal.path, true)?;
-            validate_install_directory_binding(directory, &removal.path)?;
-        }
-    }
     if let Some(standalone) = &standalone {
         revalidate_standalone(standalone)?;
     }
 
-    let mut outcomes = Vec::new();
-    for removal in removals {
-        if let Some(directory) = removal.directory {
-            validate_install_directory_binding(&directory, &removal.path)?;
-            fs::remove_dir_all(&removal.path)?;
-            outcomes.push(removal.harness.into());
-        } else {
-            outcomes.push(format!("{} already absent", removal.harness));
-        }
-    }
+    let mut outcomes = remove_harnesses_transactionally(removals)?;
     if let Some(standalone) = standalone {
         match standalone {
             StandaloneRemoval::Unmanaged => {

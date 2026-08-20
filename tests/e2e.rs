@@ -4140,14 +4140,17 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
             "solo",
             "Usage: az solo <question> -f <path> [--model <model>] [--sub-model <model>]",
         ),
-        ("doctor", "Usage: az doctor [--caps]"),
+        (
+            "doctor",
+            "Usage: az doctor [--caps | --harness <jcode|claude|codex|gemini|opencode|all>]",
+        ),
         (
             "install",
             "Usage: az install [--harness <jcode|claude|codex|gemini|opencode|all>]",
         ),
         (
             "uninstall",
-            "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all>]",
+            "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all> | --standalone | --all]",
         ),
     ];
     let bare = format!(
@@ -4180,10 +4183,28 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
                 .output()
                 .unwrap();
             assert_eq!(output.status.code(), Some(0), "{name} {command}");
-            assert_eq!(
-                String::from_utf8(output.stdout).unwrap(),
-                format!("{usage}\n")
-            );
+            let stdout = String::from_utf8(output.stdout).unwrap();
+            match command {
+                "doctor" => assert_eq!(
+                    stdout,
+                    format!(
+                        "{usage}\nNote: --harness checks installed-on-disk custody without a provider call.\nExamples:\n  az doctor\n  az doctor --harness jcode\n  az doctor --harness all\n"
+                    )
+                ),
+                "install" => assert_eq!(
+                    stdout,
+                    format!(
+                        "{usage}\nJcode target: JCODE_HOME/skills/azdaja when set; otherwise HOME/.jcode/skills/azdaja\nExamples:\n  az install --harness jcode\n  az install --harness all\n"
+                    )
+                ),
+                "uninstall" => assert_eq!(
+                    stdout,
+                    format!(
+                        "{usage}\nModes:\n  --harness NAME  remove skill copies only; keep standalone\n  --standalone    remove installer-owned standalone only; keep harness skills\n  --all           remove all five harness skills and installer-owned standalone\nExamples:\n  az uninstall --harness claude\n  az uninstall --harness all\n  az uninstall --standalone\n  az uninstall --all\n"
+                    )
+                ),
+                _ => assert_eq!(stdout, format!("{usage}\n")),
+            }
             assert!(output.stderr.is_empty());
         }
 

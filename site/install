@@ -367,15 +367,13 @@ DEST_BACKUP=$BIN_DIR/.azdaja-previous.$$
 [ ! -e "$DEST_BACKUP" ] && [ ! -L "$DEST_BACKUP" ] || \
   fail "temporary binary backup path already exists: $DEST_BACKUP"
 
-# Ask the downloaded, verified binary to preflight the complete selected set.
-# This is read-only: an unowned, linked, symlinked, changed, or unknown target
-# refuses before any harness, standalone binary, configuration, or alias entry
-# is changed. The managed Rust installer repeats the same complete preflight.
+# Delegate the complete harness lifecycle to the verified Rust transaction. It
+# first performs a read-only selected-set preflight, then locks, re-preflights,
+# stages every target, and commits or rolls back as one unit. The shell never
+# copies or recursively removes a harness target.
 if [ -z "$HARNESS" ]; then
-  "$TMP/azdaja" install --preflight-only >/dev/null
   "$TMP/azdaja" install >/dev/null
 else
-  "$TMP/azdaja" install --harness "$HARNESS" --preflight-only >/dev/null
   "$TMP/azdaja" install --harness "$HARNESS" >/dev/null
 fi
 
