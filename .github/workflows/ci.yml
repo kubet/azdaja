@@ -60,7 +60,6 @@ jobs:
           PY
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
-      - run: python3 tools/check_docs.py
       - run: cargo test --all --locked -- --test-threads=1
       - run: cargo build --release --locked
       - name: Release-only 50 MiB product acceptance

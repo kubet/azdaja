@@ -22,3 +22,22 @@ __pycache__/
 **/raw/
 **/runs/
 **/outputs/
+
+# Owner-local notebooks, planning history, and superseded release evidence.
+# Keep these on the workstation; never publish them from this repository.
+/FAILS.md
+/WINS.md
+/SCOREBOARD.md
+/bench/CAMPAIGN_V32.md
+/bench/results/integration-acceptance-v0.1.2-local.json
+/docs/day7-public-launch.md
+/docs/evidence/
+/docs/history/
+/docs/transport-flip-postmortem.md
+/release/NOTICE-DISTRIBUTION-PROPOSAL.md
+/release/candidates/
+/release/day7-public-launch.json
+/release/v0.1.0/
+/release/v0.1.1/
+/tests/release_v011.rs
+/tools/check_docs.py

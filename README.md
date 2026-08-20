@@ -39,7 +39,7 @@ Model-authored code can still select source material for a model call, so this i
 - **Bounded-root evidence.** The frozen run measured ~5.4K mean root tokens on 198 rows, and the scripted 50 MiB cases stayed below a 64 KiB root prompt. These are measured boundaries for named runs, not an O(1), total-token, or cost claim.
 - **Bare architecture.** Children receive plain model calls rather than full agent environments. Systems above 68.64% in the displayed paper ladder use heavier system classes; that comparison does not isolate the cause of score differences.
 - **Harness adapters.** The managed skill supports Jcode, Claude, Codex, Gemini, and OpenCode. Installation is provider-free; only an explicit passing `doctor` validates the selected local route.
-- **Receipts include losses.** The fixed denominator retains every failed row as zero, and public-safe receipts preserve terminal accounting and evidence boundaries. See [FAILS.md](FAILS.md) and [SCOREBOARD.md](SCOREBOARD.md).
+- **Receipts include losses.** The fixed denominator retains every failed row as zero, and the public-safe receipts under `bench/results/` preserve terminal accounting and evidence boundaries.
 
 ## Fast and small
 
@@ -128,7 +128,7 @@ cargo test --all --locked -- --test-threads=1
 cargo build --release --locked
 AZDAJA_PRODUCT_BINARY=target/release/azdaja cargo test --release --locked --test product_50mb offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death -- --ignored --exact --test-threads=1
 cargo clippy --all-targets --all-features --locked -- -D warnings
-python3 tools/check_docs.py
+python3 tools/render_token_crossover.py --check
 ```
 
 ## License and notices
