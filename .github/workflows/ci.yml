@@ -161,7 +161,7 @@ jobs:
 
           HOME="$home" PATH="$guard:$PATH" \
             AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_BASE_URL="$base" \
-            sh site/install --harness claude --bin-dir "$bin"
+            sh site/install claude --bin-dir "$bin"
           installed="$home/.claude/skills/azdaja/azdaja"
           cmp "$candidate" "$installed"
           test "$(readlink "$bin/az")" = azdaja
@@ -170,9 +170,9 @@ jobs:
 
           cat > "$scratch/expected-help" <<'EOF'
           AZDAJA v0.1.2 — virtual memory for language models
-          Usage: az <command> [options]  (azdaja also works)
-          Commands: start load exec final list kill solo install doctor uninstall
-          Setup: az install --harness <jcode|claude|codex|gemini|opencode|all>
+          Usage: az <command>
+          Commands: help solo install doctor start load exec final list kill uninstall
+          Install: az install  (auto-detects supported tools)
           Example: az solo "summarize this file" -f ./document.txt
           EOF
           HOME="$home" PATH="$guard:$PATH" "$bin/azdaja" > "$scratch/help-canonical"
@@ -195,11 +195,11 @@ jobs:
             "$home/.claude/skills/azdaja/config.toml"
           HOME="$home" PATH="$guard:$PATH" \
             AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_BASE_URL="$base" \
-            sh site/install --harness claude --bin-dir "$bin"
+            sh site/install claude --bin-dir "$bin"
           grep -F '# candidate-receipt-custom' \
             "$home/.claude/skills/azdaja/config.toml"
           test ! -e "$marker"
-          HOME="$home" PATH="$guard:$PATH" "$installed" uninstall --harness claude
+          HOME="$home" PATH="$guard:$PATH" "$installed" uninstall claude
           test ! -e "$home/.claude/skills/azdaja"
 
       - name: Package unvalidated candidate

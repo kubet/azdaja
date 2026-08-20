@@ -155,7 +155,7 @@ fn preflight_repair_solo_trace(
     Ok(())
 }
 
-const COMMAND_USAGES: [(&str, &str); 10] = [
+const COMMAND_USAGES: [(&str, &str); 11] = [
     ("start", "Usage: az start"),
     ("load", "Usage: az load <session-id> <path> <variable>"),
     ("exec", "Usage: az exec <session-id>"),
@@ -168,16 +168,17 @@ const COMMAND_USAGES: [(&str, &str); 10] = [
     ),
     (
         "doctor",
-        "Usage: az doctor [--caps | --harness <jcode|claude|codex|gemini|opencode|all>]",
+        "Usage: az doctor [jcode|claude|codex|gemini|opencode|all|--caps]",
     ),
     (
         "install",
-        "Usage: az install [--harness <jcode|claude|codex|gemini|opencode|all>]",
+        "Usage: az install [jcode|claude|codex|gemini|opencode|all]",
     ),
     (
         "uninstall",
-        "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all> | --standalone | --all]",
+        "Usage: az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]",
     ),
+    ("help", "Usage: az help [command]"),
 ];
 
 #[derive(Debug)]
@@ -235,16 +236,12 @@ fn help(interactive_banner: bool) {
         print!("{}", banner::banner());
     }
     println!(
-        "AZDAJA v{VERSION} — virtual memory for language models\nUsage: az <command> [options]  (azdaja also works)\nCommands: start load exec final list kill solo install doctor uninstall\nSetup: az install --harness <jcode|claude|codex|gemini|opencode|all>\nExample: az solo \"summarize this file\" -f ./document.txt"
+        "AZDAJA v{VERSION} — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt"
     );
 }
 
 fn top_help() {
     help(false);
-    println!("\nCommand signatures:");
-    for (_, usage) in COMMAND_USAGES {
-        println!("{usage}");
-    }
 }
 
 fn interrupted_exit() -> Option<ExitCode> {
@@ -302,6 +299,35 @@ fn run() -> Result<bool> {
         }
         top_help();
         return Ok(true);
+    }
+    if args[0] == "help" {
+        if args.len() == 1 {
+            top_help();
+            return Ok(true);
+        }
+        if args.len() != 2 {
+            return Err(usage_error("help"));
+        }
+        if matches!(args[1].as_str(), "-h" | "--help") {
+            println!("{}", command_usage("help").expect("known command"));
+            return Ok(true);
+        }
+        let requested = vec![args[1].clone(), "--help".into()];
+        if command_help(&requested)? {
+            return Ok(true);
+        }
+        return match requested[0].as_str() {
+            "doctor" => doctor(&requested),
+            "install" => {
+                install_cmd(&requested)?;
+                Ok(true)
+            }
+            "uninstall" => {
+                uninstall_cmd(&requested)?;
+                Ok(true)
+            }
+            command => bail!("unknown command '{command}' (run 'az help')"),
+        };
     }
     if args[0] == "--version" {
         if args.len() != 1 {
@@ -363,7 +389,7 @@ fn run() -> Result<bool> {
             })?;
             solo(solo_args, &cfg)?
         }
-        x => bail!("unknown command '{x}' (run --help)"),
+        x => bail!("unknown command '{x}' (run 'az help')"),
     }
     Ok(true)
 }
@@ -389,15 +415,22 @@ fn doctor(args: &[String]) -> Result<bool> {
     {
         exact(args, 2, "doctor")?;
         println!(
-            "Usage: az doctor [--caps | --harness <jcode|claude|codex|gemini|opencode|all>]\n\
-             Note: --harness checks installed-on-disk custody without a provider call.\n\
-             Examples:\n  az doctor\n  az doctor --harness jcode\n  az doctor --harness all"
+            "{}",
+            concat!(
+                "Usage: az doctor [jcode|claude|codex|gemini|opencode|all|--caps]\n",
+                "No name: check the configured connection. A tool name checks installed files only.\n",
+                "Examples:\n  az doctor\n  az doctor jcode"
+            )
         );
         return Ok(true);
     }
-    if let [_, flag, which] = args
-        && flag == "--harness"
-    {
+    let selected_name = match args {
+        [_, which] if !which.starts_with('-') => Some(which.as_str()),
+        [_, legacy, which] if legacy == "--harness" => Some(which.as_str()),
+        [_] => None,
+        _ => return Err(usage_error("doctor")),
+    };
+    if let Some(which) = selected_name {
         let (selected, _) = harnesses(Some(which))?;
         return doctor_harnesses(&selected);
     }
@@ -417,7 +450,7 @@ fn doctor(args: &[String]) -> Result<bool> {
                 "FAIL evaluator: not checked because configuration failed; Fix: repair the configuration, then rerun azdaja doctor"
             );
             println!(
-                "FAIL harness: not checked because configuration failed; Fix: repair the configuration, then rerun azdaja doctor"
+                "FAIL model: not checked because configuration failed; Fix: repair the configuration, then rerun azdaja doctor"
             );
             return Ok(false);
         }
@@ -427,26 +460,26 @@ fn doctor(args: &[String]) -> Result<bool> {
             "FAIL evaluator: local capability check failed; Fix: reinstall azdaja and ensure its state directory is writable"
         );
         println!(
-            "FAIL harness: not checked because the evaluator failed; Fix: repair the evaluator, then rerun azdaja doctor"
+            "FAIL model: not checked because the evaluator failed; Fix: repair the evaluator, then rerun azdaja doctor"
         );
         return Ok(false);
     }
     println!("PASS evaluator: local Monty capability check passed");
     match call_model(CANARY_PROMPT, &cfg.default_model, &cfg, 1) {
         Ok(reply) if reply.trim() == CANARY_ANSWER => {
-            println!("PASS harness: model canary returned the expected answer");
+            println!("PASS model: canary returned the expected answer");
             Ok(true)
         }
         Ok(_) => {
             println!(
-                "FAIL harness: model canary returned an unexpected answer; Fix: verify the configured model and rerun azdaja doctor"
+                "FAIL model: canary returned an unexpected answer; Fix: verify the configured model and rerun azdaja doctor"
             );
             Ok(false)
         }
         Err(error) => {
             let category = model_transport_error_category(&error);
             println!(
-                "FAIL harness: model connection failed ({category:?}); Fix: log in to the configured harness and verify sub_llm_cmd"
+                "FAIL model: connection failed ({category:?}); Fix: log in to the configured model provider and verify sub_llm_cmd"
             );
             Ok(false)
         }
@@ -509,15 +542,15 @@ fn harnesses(which: Option<&str>) -> Result<(Vec<&'static str>, String)> {
     if let Some("all") = which {
         return Ok((
             ALL_HARNESSES.into(),
-            format!("{} (selected by --harness all)", ALL_HARNESSES.join(", ")),
+            format!("{} (selected explicitly)", ALL_HARNESSES.join(", ")),
         ));
     }
     if let Some(which) = which {
         return ALL_HARNESSES
             .into_iter()
             .find(|harness| *harness == which)
-            .map(|harness| (vec![harness], format!("{harness} (selected by --harness)")))
-            .ok_or_else(|| anyhow!("unknown harness '{which}'"));
+            .map(|harness| (vec![harness], format!("{harness} (selected explicitly)")))
+            .ok_or_else(|| anyhow!("unknown tool '{which}'"));
     }
     let home = home()?;
     let mut detected = Vec::new();
@@ -531,7 +564,7 @@ fn harnesses(which: Option<&str>) -> Result<(Vec<&'static str>, String)> {
     }
     if detected.is_empty() {
         bail!(
-            "no supported harness found; install jcode, claude, codex, gemini, or opencode, or rerun with --harness NAME"
+            "no supported tool found; install Jcode, Claude, Codex, Gemini, or OpenCode, or name one: az install jcode"
         )
     }
     Ok((detected, report.join(", ")))
@@ -576,16 +609,16 @@ fn harness_display_name(harness: &str) -> &'static str {
         "codex" => "Codex",
         "gemini" => "Gemini",
         "opencode" => "OpenCode",
-        _ => "harness",
+        _ => "tool",
     }
 }
 fn harness_reload_instruction(selected: &[&str]) -> String {
     if selected.len() == ALL_HARNESSES.len() {
-        return "reload/restart all five harnesses".into();
+        return "reload/restart all five tools".into();
     }
     if selected.len() > 1 {
         return format!(
-            "reload/restart the selected harnesses ({})",
+            "reload/restart the selected tools ({})",
             selected.join(", ")
         );
     }
@@ -1447,20 +1480,26 @@ fn install_cmd(args: &[String]) -> Result<()> {
     {
         exact(args, 2, "install")?;
         println!(
-            "Usage: az install [--harness <jcode|claude|codex|gemini|opencode|all>]\n\
-             Jcode target: JCODE_HOME/skills/azdaja when set; otherwise HOME/.jcode/skills/azdaja\n\
-             Examples:\n  az install --harness jcode\n  az install --harness all"
+            "{}",
+            concat!(
+                "Usage: az install [jcode|claude|codex|gemini|opencode|all]\n",
+                "No name: detect and install every supported tool found on this computer.\n",
+                "Examples:\n  az install\n  az install jcode\n  az install all"
+            )
         );
         return Ok(());
     }
     let (which, preflight_only) = match args {
         [_] => (None, false),
         [_, flag] if flag == "--preflight-only" => (None, true),
-        [_, flag, harness] if flag == "--harness" => (Some(harness.as_str()), false),
-        [_, harness_flag, harness, preflight_flag]
-            if harness_flag == "--harness" && preflight_flag == "--preflight-only" =>
-        {
-            (Some(harness.as_str()), true)
+        [_, target] if !target.starts_with('-') => (Some(target.as_str()), false),
+        [_, target, flag] if !target.starts_with('-') && flag == "--preflight-only" => {
+            (Some(target.as_str()), true)
+        }
+        // Compatibility for older scripts. New help and docs use positional targets.
+        [_, legacy, target] if legacy == "--harness" => (Some(target.as_str()), false),
+        [_, legacy, target, flag] if legacy == "--harness" && flag == "--preflight-only" => {
+            (Some(target.as_str()), true)
         }
         _ => return Err(usage_error("install")),
     };
@@ -1509,7 +1548,7 @@ fn install_cmd(args: &[String]) -> Result<()> {
     let doctor = staged
         .first()
         .map(|install| install.final_bin.clone())
-        .expect("at least one selected harness");
+        .expect("at least one selected tool");
     println!("Detected: {detection_report}");
     println!("Written: {}", written.join("; "));
     println!(
@@ -1728,9 +1767,7 @@ fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
             ),
             Err(error) => {
                 passed = false;
-                println!(
-                    "FAIL {harness}: {error:#}; Fix: reinstall with azdaja install --harness {harness}"
-                );
+                println!("FAIL {harness}: {error:#}; Fix: reinstall with az install {harness}");
             }
         }
         if harness == "jcode" {
@@ -2526,44 +2563,74 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
     {
         exact(args, 2, "uninstall")?;
         println!(
-            "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all> | --standalone | --all]\n\
-             Modes:\n  --harness NAME  remove skill copies only; keep standalone and installed documents\n  --standalone    remove curl-installer-owned standalone and documents; keep harness skills\n  --all           remove all five harness skills plus curl-installer-owned standalone and documents\n\
-             Examples:\n  az uninstall --harness claude\n  az uninstall --harness all\n  az uninstall --standalone\n  az uninstall --all"
+            "{}",
+            concat!(
+                "Usage: az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]\n",
+                "No name: remove detected Azdaja tool integrations only.\n",
+                "'standalone' removes the curl-installed command and documents. 'all' removes both.\n",
+                "Examples:\n  az uninstall jcode\n  az uninstall standalone\n  az uninstall all"
+            )
         );
         return Ok(());
     }
 
     let (selected, report, remove_standalone) = match args {
         [_] => {
-            let (selected, _) = harnesses(None)?;
+            let (selected, _) = harnesses(None).map_err(|error| {
+                if error.to_string().starts_with("no supported tool found;") {
+                    anyhow!("no managed tool integration detected; name one: az uninstall jcode")
+                } else {
+                    error
+                }
+            })?;
             let report = format!(
-                "{} skill{} only (standalone and documents kept)",
+                "{} integration{} only (standalone and documents kept)",
                 selected.join(", "),
                 if selected.len() == 1 { "" } else { "s" }
             );
             (selected, report, false)
         }
-        [_, flag, harness] if flag == "--harness" => {
-            let (selected, _) = harnesses(Some(harness))?;
-            let report = if harness == "all" {
-                "all five harness skills only (standalone and documents kept)".into()
+        // Compatibility for older scripts. New help and docs use positional targets.
+        [_, legacy, target] if legacy == "--harness" => {
+            let (selected, _) = harnesses(Some(target))?;
+            let report = if target == "all" {
+                "all five tool integrations only (standalone and documents kept)".into()
             } else {
-                format!("{harness} skill only (standalone and documents kept)")
+                format!("{target} integration only (standalone and documents kept)")
             };
             (selected, report, false)
         }
-        [_, flag] if flag == "--standalone" => (
+        [_, legacy] if legacy == "--standalone" => (
             Vec::new(),
-            "standalone and documents only (harness skills kept)".into(),
+            "standalone and documents only (tool integrations kept)".into(),
             true,
         ),
-        [_, flag] if flag == "--all" => (
+        [_, legacy] if legacy == "--all" => (
             ALL_HARNESSES.into(),
-            "all five harness skills, standalone, and documents".into(),
+            "all five tool integrations, standalone command, and documents".into(),
             true,
         ),
+        [_, target] if target == "standalone" => (
+            Vec::new(),
+            "standalone and documents only (tool integrations kept)".into(),
+            true,
+        ),
+        [_, target] if target == "all" => (
+            ALL_HARNESSES.into(),
+            "all five tool integrations, standalone command, and documents".into(),
+            true,
+        ),
+        [_, target] if !target.starts_with('-') => {
+            let (selected, _) = harnesses(Some(target))?;
+            (
+                selected,
+                format!("{target} integration only (standalone and documents kept)"),
+                false,
+            )
+        }
         _ => return Err(usage_error("uninstall")),
     };
+
     let home = home()?;
 
     // First complete preflight is read-only, including standalone custody when
@@ -2629,7 +2696,7 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
     println!("Selected: {report}");
     println!("Removed: {}", outcomes.join("; "));
     if standalone_needs_original_installer {
-        let removal = "review https://github.com/kubet/azdaja/blob/main/THIRD-PARTY-NOTICES.md, remove managed harness skills, then run cargo uninstall azdaja for a Cargo install";
+        let removal = "review https://github.com/kubet/azdaja/blob/main/THIRD-PARTY-NOTICES.md, remove managed tool integrations, then run cargo uninstall azdaja for a Cargo install";
         if selected.is_empty() {
             println!("Next: {removal}");
         } else {
@@ -2639,7 +2706,7 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
             );
         }
     } else if selected.is_empty() {
-        println!("Next: restart any harness sessions that used this Azdaja installation");
+        println!("Next: restart any tool sessions that used this Azdaja installation");
     } else {
         println!("Next: {}", harness_reload_instruction(&selected));
     }

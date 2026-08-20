@@ -6,13 +6,13 @@ The standalone installer accepts Apple Silicon macOS 11 or newer and x86-64 Linu
 
 A set `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, or `XDG_DATA_HOME` must be absolute. Empty or relative XDG config and state values fall back to the corresponding absolute `HOME` paths; an invalid data root fails closed.
 
-## Harness discovery and reload
+## Tool discovery and reload
 
-Supported harness names are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. The curl route requires at least one detected harness and exits before download when none is present. Detection examines harness directories and `PATH`, not configuration contents.
+Supported tool names are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. With no target, the curl route requires at least one detected tool and exits before download when none is present. Detection examines tool directories and `PATH`, not configuration contents. Use no target for automatic detection, as in `az install`; use a positional target only when needed, as in `az install jcode`.
 
-`JCODE_HOME` is authoritative when set and must be an absolute path. After installation, run the exact shell-quoted managed-binary `doctor` command printed on output line three. Then reload an existing Jcode registry with `skill_manage reload_all` or `/skills` → `Reload all`, or start a fresh harness session.
+`JCODE_HOME` is authoritative when set and must be an absolute path. After installation, run the exact shell-quoted managed-binary `doctor` command printed on output line three. Then reload an existing Jcode registry with `skill_manage reload_all` or `/skills` → `Reload all`, or start a fresh tool session.
 
-`doctor --harness NAME` checks the managed files on disk without invoking a model. An unqualified `doctor` runs the configured route canary.
+`doctor NAME` checks that tool's managed files on disk without invoking a model. An unqualified `doctor` runs the configured route canary.
 
 ## Command names, paths, and configuration
 
@@ -24,12 +24,12 @@ Standalone configuration uses adjacent `azdaja-config.toml` and `azdaja-config.t
 
 ## Cargo route
 
-Cargo installs the canonical binary but no short alias or harness skill. Complete setup with `azdaja install` for detection or `azdaja install --harness NAME`, then run the managed doctor command that installation prints. Remove managed skills before `cargo uninstall azdaja`.
+Cargo installs the canonical binary but no short alias or tool integration. Complete setup with `azdaja install` for detection or `azdaja install NAME` for one tool, then run the doctor command that installation prints. Remove managed integrations before `cargo uninstall azdaja`.
 
 ## Safe removal
 
-`uninstall --harness` removes selected skills and keeps the standalone files. `uninstall --standalone` removes only curl-owned standalone surfaces and keeps skills. `uninstall --all` selects both.
+`uninstall NAME` removes that tool integration and keeps standalone files. `uninstall standalone` removes only curl-owned standalone surfaces and keeps tool integrations. `uninstall all` removes both.
 
-Every multi-target removal validates all selected paths before deletion. Changed managed binaries or skills, unknown files, symlinks, hardlinks, incomplete ownership state, and foreign documents cause refusal before selected mutation. A user-edited harness `config.toml`, foreign `az`, and unrelated neighboring files remain untouched.
+Every multi-target removal validates all selected paths before deletion. Changed managed binaries or skills, unknown files, symlinks, hardlinks, incomplete ownership state, and foreign documents cause refusal before selected mutation. A user-edited integration `config.toml`, foreign `az`, and unrelated neighboring files remain untouched.
 
 Selected files move to same-filesystem quarantine before commit. A late failure restores them; concurrent lifecycle operations serialize or fail closed. Standalone modes refuse an unmanaged Cargo executable and direct the user to the Cargo removal sequence.

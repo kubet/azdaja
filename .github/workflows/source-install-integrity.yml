@@ -143,7 +143,7 @@ jobs:
           # checked-out source install. No release asset is requested.
           HOME="$install_home" PATH="$guard:$PATH" \
             AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_BASE_URL="$base" \
-            sh site/install --harness claude --bin-dir "$install_bin"
+            sh site/install claude --bin-dir "$install_bin"
           installed="$install_bin/azdaja"
           alias="$install_bin/az"
           cmp "$source_binary" "$installed"
@@ -153,9 +153,9 @@ jobs:
 
           cat > "$scratch/expected-help" <<'EOF'
           AZDAJA v0.1.2 — virtual memory for language models
-          Usage: az <command> [options]  (azdaja also works)
-          Commands: start load exec final list kill solo install doctor uninstall
-          Setup: az install --harness <jcode|claude|codex|gemini|opencode|all>
+          Usage: az <command>
+          Commands: help solo install doctor start load exec final list kill uninstall
+          Install: az install  (auto-detects supported tools)
           Example: az solo "summarize this file" -f ./document.txt
           EOF
           HOME="$install_home" PATH="$guard:$PATH" "$installed" > "$scratch/help-canonical"

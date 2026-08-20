@@ -33,11 +33,11 @@ Azdaja is a recursive language model layer, not a model or agent harness. It kee
 - **Context virtualization:** the root works through variables and computed excerpts instead of receiving the complete source in every request.
 - **Deterministic reduction:** Python handles exact operations before the model handles ambiguous language.
 - **Bare recursion:** subcalls are model calls rather than new agent environments.
-- **Harness adapters:** one managed skill supports Jcode, Claude, Codex, Gemini, and OpenCode.
+- **Tool adapters:** one managed integration supports Jcode, Claude, Codex, Gemini, and OpenCode.
 
 ## Install
 
-The curl installer adds the standalone binary and a detected harness integration without calling a model provider. It supports Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer.
+The curl installer adds the standalone command and integrates with supported tools it finds, without calling a model provider. It supports Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh
@@ -51,16 +51,16 @@ cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked
 
 `azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.
 
-To install every supported harness integration, run `az install --harness all`; then run the exact `az doctor` command printed by install before reloading the harness. See [edge cases and lifecycle details](docs/install.md) for platform checks, registry reloads, configuration paths, Cargo setup, and safe removal.
+`az install` finds supported tools automatically. To target one tool, run `az install jcode`; to install every integration, run `az install all`. Then run the exact `az doctor` command printed by install before reloading the tool. See [edge cases and lifecycle details](docs/install.md) for platform checks, registry reloads, configuration paths, Cargo setup, and safe removal.
 
 Standalone binaries require exact co-distribution of `LICENSE`, matching `SHA256SUMS`, and the [supported-target third-party notices](THIRD-PARTY-NOTICES.md).
 
 Choose one removal scope:
 
 ```bash
-az uninstall --harness all
-az uninstall --standalone
-az uninstall --all
+az uninstall jcode
+az uninstall standalone
+az uninstall all
 ```
 
 ## Use
@@ -82,7 +82,7 @@ az final "$sid"
 az kill "$sid"
 ```
 
-Commands: `start`, `load`, `exec`, `final`, `list`, `kill`, `solo`, `doctor`, `install`, and `uninstall`.
+Commands: `help`, `solo`, `install`, `doctor`, `start`, `load`, `exec`, `final`, `list`, `kill`, and `uninstall`.
 
 See the [CLI reference](docs/cli.md) for signatures, process custody, signal behavior, temporary files, and configuration errors.
 
@@ -98,7 +98,7 @@ See the [CLI reference](docs/cli.md) for signatures, process custody, signal beh
 
 - Model-authored code can select source material for a model call; bounded context is not information-flow control.
 - The CLI reads user-supplied paths, and selected context can be sent to the configured provider.
-- Native harnesses keep the user's host permissions; stronger containment requires a separate trusted inference broker.
+- Native host tools keep the user's permissions; stronger containment requires a separate trusted inference broker.
 - Monty 0.0.21 is experimental and snapshot-format-bound. Snapshots are unencrypted owner-only files, and evaluator memory has no configured ceiling.
 - Use synthetic or sanitized issue reproductions. Never post raw inputs, traces, configuration, host paths, OAuth material, tokens, or secrets.
 

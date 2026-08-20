@@ -2328,7 +2328,7 @@ exit 9
     let dst = t.join(".claude/skills/azdaja");
     let installed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["install", "--harness", "claude"])
+        .args(["install", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -2369,7 +2369,7 @@ exit 9
     // A user-editable config must not make the managed installation impossible to remove.
     let removed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["uninstall", "--harness", "claude"])
+        .args(["uninstall", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -2384,7 +2384,7 @@ exit 9
 
     let reinstalled = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["install", "--harness", "claude"])
+        .args(["install", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -2404,7 +2404,7 @@ exit 9
     // Upgrade remains idempotent and re-hashes the preserved customized config.
     let o = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["install", "--harness", "claude"])
+        .args(["install", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -2422,7 +2422,7 @@ exit 9
     fs::write(dst.join("unknown"), "x").unwrap();
     let refused = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["uninstall", "--harness", "claude"])
+        .args(["uninstall", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -2434,7 +2434,7 @@ exit 9
     fs::write(dst.join("SKILL.md"), "changed").unwrap();
     let refused = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["uninstall", "--harness", "claude"])
+        .args(["uninstall", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -2444,7 +2444,7 @@ exit 9
     fs::write(dst.join("SKILL.md"), original_skill).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["uninstall", "--harness", "claude"])
+        .args(["uninstall", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
@@ -2480,7 +2480,7 @@ else
   printf DO_NOT_DELETE > "$backup/DO_NOT_DELETE"
 fi
 printf '%s\n%s\n' "$stage" "$backup" > "$HOME/collision-paths-$MODE"
-exec "$AZDAJA_TEST_BIN" install --harness claude
+exec "$AZDAJA_TEST_BIN" install claude
 "#,
     )
     .unwrap();
@@ -2530,7 +2530,7 @@ exec "$AZDAJA_TEST_BIN" install --harness claude
     let dst = t.join(".claude/skills/azdaja");
     assert!(dst.join(".azdaja-managed").is_file());
     let uninstall = Command::new(env!("CARGO_BIN_EXE_azdaja"))
-        .args(["uninstall", "--harness", "claude"])
+        .args(["uninstall", "claude"])
         .env("HOME", &t)
         .env("AZDAJA_HOME", t.join("state"))
         .env_remove("AZDAJA_CONFIG")
@@ -2563,7 +2563,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
     let xdg = t.join("xdg");
     let installed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .env_remove("RLM_DEPTH")
-        .args(["install", "--harness", "all"])
+        .args(["install", "all"])
         .env("HOME", &t)
         .env("XDG_CONFIG_HOME", &xdg)
         .env("AZDAJA_HOME", t.join("state"))
@@ -4142,19 +4142,20 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
         ),
         (
             "doctor",
-            "Usage: az doctor [--caps | --harness <jcode|claude|codex|gemini|opencode|all>]",
+            "Usage: az doctor [jcode|claude|codex|gemini|opencode|all|--caps]",
         ),
         (
             "install",
-            "Usage: az install [--harness <jcode|claude|codex|gemini|opencode|all>]",
+            "Usage: az install [jcode|claude|codex|gemini|opencode|all]",
         ),
         (
             "uninstall",
-            "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all> | --standalone | --all]",
+            "Usage: az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]",
         ),
+        ("help", "Usage: az help [command]"),
     ];
     let bare = format!(
-        "AZDAJA v{} — virtual memory for language models\nUsage: az <command> [options]  (azdaja also works)\nCommands: start load exec final list kill solo install doctor uninstall\nSetup: az install --harness <jcode|claude|codex|gemini|opencode|all>\nExample: az solo \"summarize this file\" -f ./document.txt\n",
+        "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
         env!("CARGO_PKG_VERSION")
     );
     for name in ["az", "azdaja"] {
@@ -4169,12 +4170,11 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
         assert_eq!(String::from_utf8(output.stdout).unwrap(), bare);
         assert!(output.stderr.is_empty());
 
-        let top = Command::new(&executable).arg("--help").output().unwrap();
-        assert_eq!(top.status.code(), Some(0));
-        assert!(top.stderr.is_empty());
-        let top = String::from_utf8(top.stdout).unwrap();
-        for (_, usage) in expected {
-            assert!(top.lines().any(|line| line == usage), "missing {usage:?}");
+        for args in [["--help"].as_slice(), ["help"].as_slice()] {
+            let top = Command::new(&executable).args(args).output().unwrap();
+            assert_eq!(top.status.code(), Some(0));
+            assert!(top.stderr.is_empty());
+            assert_eq!(String::from_utf8(top.stdout).unwrap(), bare);
         }
 
         for (command, usage) in expected {
@@ -4188,19 +4188,19 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
                 "doctor" => assert_eq!(
                     stdout,
                     format!(
-                        "{usage}\nNote: --harness checks installed-on-disk custody without a provider call.\nExamples:\n  az doctor\n  az doctor --harness jcode\n  az doctor --harness all\n"
+                        "{usage}\nNo name: check the configured connection. A tool name checks installed files only.\nExamples:\n  az doctor\n  az doctor jcode\n"
                     )
                 ),
                 "install" => assert_eq!(
                     stdout,
                     format!(
-                        "{usage}\nJcode target: JCODE_HOME/skills/azdaja when set; otherwise HOME/.jcode/skills/azdaja\nExamples:\n  az install --harness jcode\n  az install --harness all\n"
+                        "{usage}\nNo name: detect and install every supported tool found on this computer.\nExamples:\n  az install\n  az install jcode\n  az install all\n"
                     )
                 ),
                 "uninstall" => assert_eq!(
                     stdout,
                     format!(
-                        "{usage}\nModes:\n  --harness NAME  remove skill copies only; keep standalone and installed documents\n  --standalone    remove curl-installer-owned standalone and documents; keep harness skills\n  --all           remove all five harness skills plus curl-installer-owned standalone and documents\nExamples:\n  az uninstall --harness claude\n  az uninstall --harness all\n  az uninstall --standalone\n  az uninstall --all\n"
+                        "{usage}\nNo name: remove detected Azdaja tool integrations only.\n'standalone' removes the curl-installed command and documents. 'all' removes both.\nExamples:\n  az uninstall jcode\n  az uninstall standalone\n  az uninstall all\n"
                     )
                 ),
                 _ => assert_eq!(stdout, format!("{usage}\n")),
@@ -4208,7 +4208,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
             assert!(output.stderr.is_empty());
         }
 
-        let invalid: [(&[&str], &str); 10] = [
+        let invalid: [(&[&str], &str); 11] = [
             (&["start", "extra"], expected[0].1),
             (&["load", "only-one"], expected[1].1),
             (&["exec", "session", "extra"], expected[2].1),
@@ -4219,6 +4219,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
             (&["doctor", "--bogus"], expected[7].1),
             (&["install", "--bogus"], expected[8].1),
             (&["uninstall", "--harness"], expected[9].1),
+            (&["help", "start", "extra"], expected[10].1),
         ];
         for (args, usage) in invalid {
             let output = Command::new(&executable).args(args).output().unwrap();

@@ -79,7 +79,7 @@ fn non_tty_bare_command_is_exactly_five_line_help_without_sprite() {
     assert_eq!(
         stdout,
         format!(
-            "AZDAJA v{} — virtual memory for language models\nUsage: az <command> [options]  (azdaja also works)\nCommands: start load exec final list kill solo install doctor uninstall\nSetup: az install --harness <jcode|claude|codex|gemini|opencode|all>\nExample: az solo \"summarize this file\" -f ./document.txt\n",
+            "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
             env!("CARGO_PKG_VERSION")
         )
     );
@@ -87,6 +87,50 @@ fn non_tty_bare_command_is_exactly_five_line_help_without_sprite() {
     assert!(!stdout.contains('\u{1b}'));
     assert!(!stdout.contains('▀'));
     assert!(!stdout.contains('▄'));
+}
+
+#[test]
+fn help_alias_is_concise_and_command_help_uses_plain_targets() {
+    let bare = Command::new(binary()).output().unwrap();
+    let help = Command::new(binary()).arg("help").output().unwrap();
+    let long = Command::new(binary()).arg("--help").output().unwrap();
+    assert!(help.status.success() && long.status.success());
+    assert_eq!(help.stdout, bare.stdout);
+    assert_eq!(long.stdout, bare.stdout);
+    assert!(help.stderr.is_empty() && long.stderr.is_empty());
+
+    let help_help = Command::new(binary())
+        .args(["help", "help"])
+        .output()
+        .unwrap();
+    let (stdout, stderr) = utf8(&help_help);
+    assert!(help_help.status.success());
+    assert_eq!(stdout, "Usage: az help [command]\n");
+    assert!(stderr.is_empty());
+
+    let install = Command::new(binary())
+        .args(["help", "install"])
+        .output()
+        .unwrap();
+    let (stdout, stderr) = utf8(&install);
+    assert!(install.status.success());
+    assert!(stderr.is_empty());
+    assert!(stdout.starts_with("Usage: az install [jcode|claude|codex|gemini|opencode|all]\n"));
+    assert!(stdout.contains("az install\n"));
+    assert!(stdout.contains("az install jcode\n"));
+    assert!(!stdout.contains("--harness"));
+
+    let unknown = Command::new(binary())
+        .args(["help", "spaceship"])
+        .output()
+        .unwrap();
+    let (stdout, stderr) = utf8(&unknown);
+    assert_eq!(unknown.status.code(), Some(2));
+    assert!(stdout.is_empty());
+    assert_eq!(
+        stderr,
+        "error: unknown command 'spaceship' (run 'az help')\n"
+    );
 }
 
 #[test]
@@ -109,7 +153,7 @@ fn doctor_prints_one_pass_or_fail_per_check_and_every_fail_has_a_fix() {
     assert!(lines.iter().all(|line| line.starts_with("PASS ")));
     assert!(lines[0].starts_with("PASS config:"));
     assert!(lines[1].starts_with("PASS evaluator:"));
-    assert!(lines[2].starts_with("PASS harness:"));
+    assert!(lines[2].starts_with("PASS model:"));
 
     fs::write(&oracle, "#!/bin/sh\ncat >/dev/null\nprintf 'WRONG\\n'\n").unwrap();
     let bad = command(&scratch.0)
@@ -129,7 +173,7 @@ fn doctor_prints_one_pass_or_fail_per_check_and_every_fail_has_a_fix() {
             .count(),
         1
     );
-    assert!(lines[2].starts_with("FAIL harness:") && lines[2].contains("; Fix: "));
+    assert!(lines[2].starts_with("FAIL model:") && lines[2].contains("; Fix: "));
 
     let invalid = scratch.0.join("invalid.toml");
     fs::write(&invalid, "not valid toml = [").unwrap();
@@ -231,7 +275,7 @@ fn install_is_three_human_lines_and_detects_directories_and_clis() {
     assert!(lines[1].contains(".gemini/skills/azdaja"));
     assert!(lines[2].starts_with("Next: run "));
     assert!(lines[2].contains("/.claude/skills/azdaja/azdaja' doctor; then "));
-    assert!(lines[2].contains("reload/restart the selected harnesses (claude, gemini)"));
+    assert!(lines[2].contains("reload/restart the selected tools (claude, gemini)"));
     assert!(
         !stdout
             .split_whitespace()
@@ -240,8 +284,8 @@ fn install_is_three_human_lines_and_detects_directories_and_clis() {
 }
 
 #[test]
-fn no_harness_refuses_cleanly_before_writing_anything() {
-    let scratch = Scratch::new("no-harness");
+fn no_supported_tool_refuses_cleanly_before_writing_anything() {
+    let scratch = Scratch::new("no-supported-tool");
     let output = command(&scratch.0)
         .env("PATH", "/usr/bin:/bin")
         .arg("install")
@@ -250,7 +294,20 @@ fn no_harness_refuses_cleanly_before_writing_anything() {
     assert_eq!(output.status.code(), Some(2));
     let (stdout, stderr) = utf8(&output);
     assert!(stdout.is_empty());
-    assert!(stderr.contains("no supported harness found"));
+    assert!(stderr.contains("no supported tool found"));
     assert!(!stderr.contains("stack backtrace"));
+    assert!(fs::read_dir(&scratch.0).unwrap().next().is_none());
+
+    let output = command(&scratch.0)
+        .env("PATH", "/usr/bin:/bin")
+        .arg("uninstall")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    let (stdout, stderr) = utf8(&output);
+    assert!(stdout.is_empty());
+    assert!(stderr.contains("no managed tool integration detected"));
+    assert!(stderr.contains("az uninstall jcode"));
+    assert!(!stderr.contains("az install"));
     assert!(fs::read_dir(&scratch.0).unwrap().next().is_none());
 }

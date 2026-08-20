@@ -267,7 +267,7 @@ fn run_installer_with_jcode_home(run: InstallRun<'_>, jcode_home: Option<&Path>)
         command.env_remove("JCODE_HOME");
     }
     if let Some(harness) = run.harness {
-        command.args(["--harness", harness]);
+        command.arg(harness);
     }
     if let Some(bin_dir) = run.bin_dir {
         command.arg("--bin-dir").arg(bin_dir);
@@ -302,7 +302,7 @@ fn run_installer_with_extra(run: InstallRun<'_>, extra: &[(&str, &OsStr)]) -> Ou
         command.env_remove("AZDAJA_INSTALL_GLIBC_VERSION");
     }
     if let Some(harness) = run.harness {
-        command.args(["--harness", harness]);
+        command.arg(harness);
     }
     if let Some(bin_dir) = run.bin_dir {
         command.arg("--bin-dir").arg(bin_dir);
@@ -466,7 +466,7 @@ fn assert_alias_identity_and_local_caps(home: &Path, bin: &Path, path: &str) {
             let help = String::from_utf8(short_output.stdout).unwrap();
             assert_eq!(
                 help,
-                "AZDAJA v0.1.2 — virtual memory for language models\nUsage: az <command> [options]  (azdaja also works)\nCommands: start load exec final list kill solo install doctor uninstall\nSetup: az install --harness <jcode|claude|codex|gemini|opencode|all>\nExample: az solo \"summarize this file\" -f ./document.txt\n"
+                "AZDAJA v0.1.2 — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
             );
         }
     }
@@ -478,6 +478,29 @@ fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
     let site = fs::read(root.join("site/install")).unwrap();
     let top = fs::read(root.join("install.sh")).unwrap();
     assert_eq!(top, site);
+    let help = Command::new("sh")
+        .arg(root.join("site/install"))
+        .arg("--help")
+        .output()
+        .unwrap();
+    assert!(help.status.success());
+    assert!(help.stderr.is_empty());
+    let expected_help =
+        "Usage: install.sh [jcode|claude|codex|gemini|opencode|all] [--bin-dir DIR]\n";
+    assert_eq!(String::from_utf8(help.stdout).unwrap(), expected_help);
+
+    let legacy_help = Command::new("sh")
+        .arg(root.join("site/install"))
+        .args(["--harness", "jcode", "--help"])
+        .output()
+        .unwrap();
+    assert!(legacy_help.status.success());
+    assert!(legacy_help.stderr.is_empty());
+    assert_eq!(
+        String::from_utf8(legacy_help.stdout).unwrap(),
+        expected_help
+    );
+
     let text = String::from_utf8(site).unwrap();
     assert_eq!(text.matches("VERSION=0.1.2").count(), 1);
     assert!(text.contains("$BASE_URL/SHA256SUMS"));
@@ -626,7 +649,7 @@ fn native_linux_musl_and_missing_getconf_refuse_without_curl_or_home_mutation() 
         let before = tree_identity(&home);
         let output = Command::new("/bin/sh")
             .arg(&installer)
-            .args(["--harness", "claude", "--bin-dir"])
+            .args(["claude", "--bin-dir"])
             .arg(home.join("bin"))
             .env("HOME", &home)
             .env("PATH", &tools)
@@ -853,7 +876,7 @@ fn standalone_installer_honors_authoritative_custom_jcode_home() {
     );
 
     let doctor = Command::new(bin.join("azdaja"))
-        .args(["doctor", "--harness", "jcode"])
+        .args(["doctor", "jcode"])
         .env("HOME", &home)
         .env("JCODE_HOME", &custom)
         .env("XDG_CONFIG_HOME", home.join(".config"))
@@ -936,7 +959,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
         let next = stdout.lines().last().unwrap();
         assert_off_path_doctor(next, &bin);
-        assert!(next.contains("reload/restart all five harnesses"));
+        assert!(next.contains("reload/restart all five tools"));
         for harness in ["jcode", "claude", "codex", "gemini", "opencode"] {
             assert!(target(&home, harness).join("azdaja").is_file());
         }
@@ -964,7 +987,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
         assert_eq!(output.status.code(), Some(1));
         assert!(output.stdout.is_empty());
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(stderr.contains("no supported harness found"));
+        assert!(stderr.contains("no supported tool found"));
         assert!(!stderr.contains("stack"));
         assert!(fs::read_dir(&home).unwrap().next().is_none());
         assert_eq!(fs::read_to_string(&server.log).unwrap_or_default(), before);
@@ -1387,7 +1410,7 @@ fn all_harness_preflight_refuses_unknown_late_target_before_valid_first_target_c
     fs::create_dir_all(&home).unwrap();
 
     let initial = Command::new(env!("CARGO_BIN_EXE_azdaja"))
-        .args(["install", "--harness", "jcode"])
+        .args(["install", "jcode"])
         .env("HOME", &home)
         .env("XDG_CONFIG_HOME", home.join(".config"))
         .env_remove("AZDAJA_CONFIG")
@@ -1477,7 +1500,7 @@ fn ordinary_installs_reject_validation_overrides_before_mutation() {
     fs::create_dir(&home).unwrap();
     let output = Command::new("sh")
         .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("install.sh"))
-        .args(["--harness", "claude"])
+        .arg("claude")
         .env("HOME", &home)
         .env("PATH", "/usr/bin:/bin")
         .env("AZDAJA_INSTALL_BASE_URL", "http://127.0.0.1:9")

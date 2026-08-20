@@ -6,6 +6,7 @@ Use `azdaja` in every command below when the short `az` alias is unavailable.
 
 | Command | Signature | Purpose |
 |---|---|---|
+| `help` | `az help [command]` | Show the five-line overview or help for one command. |
 | `start` | `az start` | Create an evaluator session and print its ID. |
 | `load` | `az load <session-id> <path> <variable>` | Load one UTF-8 file into a session variable. |
 | `exec` | `az exec <session-id>` | Read evaluator code from standard input and execute it. |
@@ -13,11 +14,11 @@ Use `azdaja` in every command below when the short `az` alias is unavailable.
 | `list` | `az list` | List sessions. |
 | `kill` | `az kill <session-id>` | Remove a session. |
 | `solo` | `az solo <question> -f <path> [--model <model>] [--sub-model <model>]` | Run one file question. |
-| `doctor` | `az doctor [--caps \| --harness <name>]` | Check capabilities, managed custody, or the configured route. |
-| `install` | `az install [--harness <name>]` | Install managed harness integrations. |
-| `uninstall` | `az uninstall [--harness <name> \| --standalone \| --all]` | Remove one owned scope. |
+| `doctor` | `az doctor [jcode|claude|codex|gemini|opencode|all|--caps]` | Check the configured route, or name a tool to check installed files only. |
+| `install` | `az install [jcode|claude|codex|gemini|opencode|all]` | Detect supported tools and install their managed integrations. |
+| `uninstall` | `az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]` | Remove detected integrations, one named scope, or everything. |
 
-Every command accepts `--help`. Invalid options or arity print the same canonical usage line on standard error and return status 2.
+Use `az help` for the short overview and `az help <command>` for command-specific help. `--help` remains available. Invalid options or arity print the same canonical usage line on standard error and return status 2.
 
 ## Process and signal custody
 

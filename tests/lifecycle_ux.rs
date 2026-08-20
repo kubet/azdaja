@@ -81,7 +81,7 @@ fn install_all(home: &Path) -> String {
     let output = run(
         Path::new(env!("CARGO_BIN_EXE_azdaja")),
         home,
-        &["install", "--harness", "all"],
+        &["install", "all"],
     );
     assert_success(&output).to_owned()
 }
@@ -107,7 +107,7 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
             .lines()
             .last()
             .unwrap()
-            .contains("reload/restart all five harnesses")
+            .contains("reload/restart all five tools")
     );
     for target in targets(&scratch.0) {
         assert!(target.join(".azdaja-managed").is_file());
@@ -135,7 +135,7 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
     let output = run(
         Path::new(env!("CARGO_BIN_EXE_azdaja")),
         &scratch.0,
-        &["doctor", "--harness", "all"],
+        &["doctor", "all"],
     );
     let stdout = assert_success(&output);
     assert_eq!(stdout.lines().count(), 10, "{stdout}");
@@ -151,6 +151,27 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
     assert!(stdout.contains("/skills -> Reload all"));
     assert!(stdout.contains("fresh Jcode session"));
     assert!(!scratch.0.join("provider-called").exists());
+}
+
+#[test]
+fn legacy_target_flag_remains_compatible_but_hidden_from_help() {
+    let scratch = Scratch::new("legacy-target-compatibility");
+    let binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
+
+    let install = run(binary, &scratch.0, &["install", "--harness", "jcode"]);
+    assert_success(&install);
+    assert!(scratch.0.join(".jcode/skills/azdaja/azdaja").is_file());
+
+    let doctor = run(binary, &scratch.0, &["doctor", "--harness", "jcode"]);
+    assert_success(&doctor);
+
+    let help = run(binary, &scratch.0, &["help", "install"]);
+    let help = assert_success(&help);
+    assert!(!help.contains("--harness"));
+
+    let uninstall = run(binary, &scratch.0, &["uninstall", "--harness", "jcode"]);
+    assert_success(&uninstall);
+    assert!(!scratch.0.join(".jcode/skills/azdaja").exists());
 }
 
 #[test]
@@ -188,30 +209,20 @@ fn custom_jcode_home_is_authoritative_and_next_command_is_shell_quoted() {
         .unwrap();
     assert!(syntax.status.success(), "command={command}");
 
-    let doctor = run_with_jcode_home(
-        binary,
-        &scratch.0,
-        &custom,
-        &["doctor", "--harness", "jcode"],
-    );
+    let doctor = run_with_jcode_home(binary, &scratch.0, &custom, &["doctor", "jcode"]);
     assert!(assert_success(&doctor).contains("installed on disk"));
-    let uninstall = run_with_jcode_home(
-        binary,
-        &scratch.0,
-        &custom,
-        &["uninstall", "--harness", "jcode"],
-    );
+    let uninstall = run_with_jcode_home(binary, &scratch.0, &custom, &["uninstall", "jcode"]);
     let stdout = assert_success(&uninstall);
     assert_eq!(stdout.lines().count(), 3, "{stdout}");
-    assert!(stdout.contains("skill only (standalone and documents kept)"));
+    assert!(stdout.contains("integration only (standalone and documents kept)"));
     assert!(!target.exists());
 }
 
 #[test]
-fn install_and_uninstall_are_exactly_three_lines_with_harness_reload_guidance() {
+fn install_and_uninstall_are_exactly_three_lines_with_tool_reload_guidance() {
     let scratch = Scratch::new("three-lines");
     let binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
-    let install = run(binary, &scratch.0, &["install", "--harness", "jcode"]);
+    let install = run(binary, &scratch.0, &["install", "jcode"]);
     let stdout = assert_success(&install);
     assert_eq!(stdout.lines().count(), 3, "{stdout}");
     let next = stdout.lines().last().unwrap();
@@ -220,7 +231,7 @@ fn install_and_uninstall_are_exactly_three_lines_with_harness_reload_guidance() 
     assert!(next.contains("skill_manage reload_all"));
 
     for _ in 0..2 {
-        let uninstall = run(binary, &scratch.0, &["uninstall", "--harness", "jcode"]);
+        let uninstall = run(binary, &scratch.0, &["uninstall", "jcode"]);
         let stdout = assert_success(&uninstall);
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
         assert!(stdout.lines().last().unwrap().contains("restart Jcode"));
@@ -235,15 +246,9 @@ fn install_and_uninstall_are_exactly_three_lines_with_harness_reload_guidance() 
             .lines()
             .next()
             .unwrap()
-            .contains("all five harness skills only (standalone and documents kept)")
+            .contains("all five tool integrations only (standalone and documents kept)")
     );
-    assert!(
-        stdout
-            .lines()
-            .last()
-            .unwrap()
-            .contains("all five harnesses")
-    );
+    assert!(stdout.lines().last().unwrap().contains("all five tools"));
     assert!(targets(&scratch.0).iter().all(|path| !path.exists()));
 }
 
@@ -418,7 +423,7 @@ fn standalone_and_full_all_self_uninstall_preserve_foreign_neighbors() {
             .lines()
             .next()
             .unwrap()
-            .contains("standalone and documents only (harness skills kept)")
+            .contains("standalone and documents only (tool integrations kept)")
     );
     assert!(!binary.exists());
     assert!(!directory.join("azdaja-config.toml").exists());
@@ -441,15 +446,9 @@ fn standalone_and_full_all_self_uninstall_preserve_foreign_neighbors() {
             .lines()
             .next()
             .unwrap()
-            .contains("all five harness skills, standalone, and documents")
+            .contains("all five tool integrations, standalone command, and documents")
     );
-    assert!(
-        stdout
-            .lines()
-            .last()
-            .unwrap()
-            .contains("all five harnesses")
-    );
+    assert!(stdout.lines().last().unwrap().contains("all five tools"));
     assert!(targets(&scratch.0).iter().all(|path| !path.exists()));
     assert!(
         fs::read_dir(full.parent().unwrap())
@@ -593,7 +592,7 @@ fn concurrent_standalone_document_lifecycle_has_one_owner_and_no_quarantine_leak
 }
 
 fn install_all_with(binary: &Path, home: &Path) {
-    let output = run(binary, home, &["install", "--harness", "all"]);
+    let output = run(binary, home, &["install", "all"]);
     assert_success(&output);
 }
 
@@ -710,11 +709,7 @@ fn run_with_lifecycle_env(
 fn concurrent_reinstall_barrier_two_workers_twenty_reinstalls_never_loses_target_or_leaks() {
     let scratch = Scratch::new("concurrent-reinstall");
     let binary = PathBuf::from(env!("CARGO_BIN_EXE_azdaja"));
-    assert_success(&run(
-        &binary,
-        &scratch.0,
-        &["install", "--harness", "jcode"],
-    ));
+    assert_success(&run(&binary, &scratch.0, &["install", "jcode"]));
 
     for _round in 0..10 {
         let barrier = Arc::new(Barrier::new(3));
@@ -725,7 +720,7 @@ fn concurrent_reinstall_barrier_two_workers_twenty_reinstalls_never_loses_target
             let home = scratch.0.clone();
             workers.push(thread::spawn(move || {
                 barrier.wait();
-                run(&binary, &home, &["install", "--harness", "jcode"])
+                run(&binary, &home, &["install", "jcode"])
             }));
         }
         barrier.wait();
@@ -736,7 +731,7 @@ fn concurrent_reinstall_barrier_two_workers_twenty_reinstalls_never_loses_target
         let target = scratch.0.join(".jcode/skills/azdaja");
         assert!(target.is_dir());
         assert!(lifecycle_artifacts(&scratch.0).is_empty());
-        let doctor = run(&binary, &scratch.0, &["doctor", "--harness", "jcode"]);
+        let doctor = run(&binary, &scratch.0, &["doctor", "jcode"]);
         assert!(assert_success(&doctor).contains("PASS jcode"));
     }
 }
@@ -811,7 +806,7 @@ fn late_unknown_and_changed_targets_abort_without_touching_other_selected_surfac
         run_with_lifecycle_env(
             &install_binary,
             &home,
-            &["install", "--harness", "all"],
+            &["install", "all"],
             &[("AZDAJA_LIFECYCLE_TEST_BARRIER", &barrier_value)],
         )
     });
@@ -860,7 +855,7 @@ fn all_harness_staging_permission_failure_occurs_before_any_commit() {
     let late_parent = targets(&scratch.0)[4].parent().unwrap().to_path_buf();
     let prior_mode = fs::metadata(&late_parent).unwrap().permissions().mode();
     fs::set_permissions(&late_parent, fs::Permissions::from_mode(0o500)).unwrap();
-    let output = run(binary, &scratch.0, &["install", "--harness", "all"]);
+    let output = run(binary, &scratch.0, &["install", "all"]);
     fs::set_permissions(&late_parent, fs::Permissions::from_mode(prior_mode)).unwrap();
     assert!(!output.status.success());
     assert_eq!(selected_snapshots(&scratch.0), expected);
@@ -868,13 +863,13 @@ fn all_harness_staging_permission_failure_occurs_before_any_commit() {
 }
 
 #[test]
-fn harness_only_uninstall_keeps_exact_owned_documents() {
-    let scratch = Scratch::new("harness-keeps-docs");
+fn unqualified_uninstall_removes_detected_integrations_and_keeps_standalone_documents() {
+    let scratch = Scratch::new("detected-tools-keep-docs");
     let binary = standalone(&scratch.0, "bin");
     install_all_with(&binary, &scratch.0);
     let documents = scratch.0.join(".local/share/azdaja");
     let before = surface_snapshot(&documents);
-    let output = run(&binary, &scratch.0, &["uninstall", "--harness", "all"]);
+    let output = run(&binary, &scratch.0, &["uninstall"]);
     let stdout = assert_success(&output);
     assert!(stdout.contains("standalone and documents kept"));
     assert_eq!(surface_snapshot(&documents), before);

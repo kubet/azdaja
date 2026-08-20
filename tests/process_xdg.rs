@@ -156,7 +156,7 @@ time.sleep(30)
     assert!(!output.status.success());
     assert!(started.elapsed() < Duration::from_secs(3), "{output:?}");
     assert!(
-        String::from_utf8_lossy(&output.stdout).contains("model connection failed"),
+        String::from_utf8_lossy(&output.stdout).contains("FAIL model: connection failed"),
         "{output:?}"
     );
     let (group, descendant) = pids(&pid_file);
@@ -341,7 +341,7 @@ fn rust_targets_use_absolute_xdg_fallback_and_unicode_paths_and_reject_bad_jcode
     fs::create_dir_all(&home).unwrap();
 
     let fallback = Command::new(env!("CARGO_BIN_EXE_azdaja"))
-        .args(["install", "--harness", "opencode"])
+        .args(["install", "opencode"])
         .current_dir(&root)
         .env("HOME", &home)
         .env("XDG_CONFIG_HOME", "relative-config")
@@ -354,7 +354,7 @@ fn rust_targets_use_absolute_xdg_fallback_and_unicode_paths_and_reject_bad_jcode
 
     let unicode_xdg = root.join("配置 💾");
     let unicode = Command::new(env!("CARGO_BIN_EXE_azdaja"))
-        .args(["install", "--harness", "opencode"])
+        .args(["install", "opencode"])
         .current_dir(&root)
         .env("HOME", &home)
         .env("XDG_CONFIG_HOME", &unicode_xdg)
@@ -366,7 +366,7 @@ fn rust_targets_use_absolute_xdg_fallback_and_unicode_paths_and_reject_bad_jcode
 
     for value in ["", "relative-jcode"] {
         let invalid = Command::new(env!("CARGO_BIN_EXE_azdaja"))
-            .args(["install", "--harness", "jcode"])
+            .args(["install", "jcode"])
             .current_dir(&root)
             .env("HOME", &home)
             .env("JCODE_HOME", value)
@@ -382,7 +382,7 @@ fn rust_targets_use_absolute_xdg_fallback_and_unicode_paths_and_reject_bad_jcode
     let shell = Path::new(env!("CARGO_MANIFEST_DIR")).join("install.sh");
     let shell_invalid = Command::new("sh")
         .arg(shell)
-        .args(["--harness", "jcode"])
+        .arg("jcode")
         .env("HOME", &home)
         .env("JCODE_HOME", "relative-jcode")
         .output()
@@ -418,7 +418,7 @@ fn shell_ignores_empty_and_relative_xdg_config_during_detection() {
             .unwrap();
         assert!(!output.status.success());
         assert!(
-            String::from_utf8_lossy(&output.stderr).contains("no supported harness found"),
+            String::from_utf8_lossy(&output.stderr).contains("no supported tool found"),
             "{output:?}"
         );
     }

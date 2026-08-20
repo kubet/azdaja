@@ -8,7 +8,7 @@ HARNESS=
 BIN_DIR=${AZDAJA_INSTALL_DIR:-}
 
 usage() {
-  printf '%s\n' 'Usage: install.sh [--harness jcode|claude|codex|gemini|opencode|all] [--bin-dir DIR]'
+  printf '%s\n' 'Usage: install.sh [jcode|claude|codex|gemini|opencode|all] [--bin-dir DIR]'
 }
 fail() {
   printf 'azdaja install: %s\n' "$1" >&2
@@ -41,8 +41,15 @@ linux_libc_unavailable() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    jcode|claude|codex|gemini|opencode|all)
+      [ -z "$HARNESS" ] || fail 'choose only one install target' 2
+      HARNESS=$1
+      shift
+      ;;
     --harness)
+      # Compatibility for older scripts. New help uses a positional target.
       [ "$#" -ge 2 ] || fail '--harness requires a value' 2
+      [ -z "$HARNESS" ] || fail 'choose only one install target' 2
       HARNESS=$2
       shift 2
       ;;
@@ -63,12 +70,12 @@ done
 
 case "$HARNESS" in
   ''|jcode|claude|codex|gemini|opencode|all) ;;
-  *) fail "unknown harness '$HARNESS' (choose jcode, claude, codex, gemini, opencode, or all)" 2 ;;
+  *) fail "unknown install target '$HARNESS' (choose jcode, claude, codex, gemini, opencode, or all)" 2 ;;
 esac
 
 case "${HOME-}" in
   /*) ;;
-  '') fail 'HOME is not set; use --bin-dir DIR and set HOME before installing a harness' ;;
+  '') fail 'HOME is not set; use --bin-dir DIR and set HOME before installing' ;;
   *) fail 'HOME must be set to an absolute path' ;;
 esac
 if [ "${JCODE_HOME+x}" = x ]; then
@@ -117,7 +124,7 @@ if [ -d "$CONFIG_ROOT/opencode" ] || command -v opencode >/dev/null 2>&1; then
 fi
 
 if [ -z "$HARNESS" ]; then
-  [ -n "$DETECTED" ] || fail 'no supported harness found; install jcode, claude, codex, gemini, or opencode, or rerun with --harness NAME'
+  [ -n "$DETECTED" ] || fail 'no supported tool found; install Jcode, Claude, Codex, Gemini, or OpenCode, or name one: install.sh jcode'
   INSTALL_NAMES=$DETECTED
   DISPLAY=$(printf '%s' "$DETECTED" | tr ' ' ',')
   DISPLAY=$(printf '%s' "$DISPLAY" | sed 's/,/, /g')
@@ -125,10 +132,10 @@ if [ -z "$HARNESS" ]; then
 else
   if [ "$HARNESS" = all ]; then
     INSTALL_NAMES='jcode claude codex gemini opencode'
-    DETECTION_REPORT='jcode, claude, codex, gemini, opencode (selected by --harness all)'
+    DETECTION_REPORT='jcode, claude, codex, gemini, opencode (selected explicitly)'
   else
     INSTALL_NAMES=$HARNESS
-    DETECTION_REPORT="$HARNESS (selected by --harness)"
+    DETECTION_REPORT="$HARNESS (selected explicitly)"
   fi
 fi
 
@@ -140,11 +147,11 @@ case "$INSTALL_NAMES" in
   codex) RELOAD_INSTRUCTION='restart Codex to reload its skills' ;;
   gemini) RELOAD_INSTRUCTION='restart Gemini to reload its skills' ;;
   opencode) RELOAD_INSTRUCTION='restart OpenCode to reload its skills' ;;
-  'jcode claude codex gemini opencode') RELOAD_INSTRUCTION='reload/restart all five harnesses' ;;
+  'jcode claude codex gemini opencode') RELOAD_INSTRUCTION='reload/restart all five tools' ;;
   *)
     RELOAD_NAMES=$(printf '%s' "$INSTALL_NAMES" | tr ' ' ',')
     RELOAD_NAMES=$(printf '%s' "$RELOAD_NAMES" | sed 's/,/, /g')
-    RELOAD_INSTRUCTION="reload/restart the selected harnesses ($RELOAD_NAMES)"
+    RELOAD_INSTRUCTION="reload/restart the selected tools ($RELOAD_NAMES)"
     ;;
 esac
 
@@ -565,7 +572,7 @@ DEST_BACKUP=$BIN_DIR/.azdaja-previous.$$
 if [ -z "$HARNESS" ]; then
   "$TMP/azdaja" install --preflight-only >/dev/null
 else
-  "$TMP/azdaja" install --harness "$HARNESS" --preflight-only >/dev/null
+  "$TMP/azdaja" install "$HARNESS" --preflight-only >/dev/null
 fi
 
 PRIMARY_TARGET=
@@ -664,7 +671,7 @@ fi
 if [ -z "$HARNESS" ]; then
   "$TMP/azdaja" install >/dev/null
 else
-  "$TMP/azdaja" install --harness "$HARNESS" >/dev/null
+  "$TMP/azdaja" install "$HARNESS" >/dev/null
 fi
 
 (umask 077 && mkdir -p "$BIN_DIR") || fail "cannot create binary directory $BIN_DIR"
