@@ -17,7 +17,7 @@ use std::{
     process::{Command, Stdio},
     sync::{
         Arc, OnceLock,
-        atomic::{AtomicU32, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
     },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -42,6 +42,53 @@ pub const MONTY_VERSION: &str = "0.0.21";
 pub const SKILL: &str = include_str!("../assets/SKILL.md");
 pub const DEFAULT_CONFIG: &str = include_str!("../assets/config.toml");
 pub const SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS: usize = 45_000;
+
+static INTERRUPT_REQUESTED: AtomicBool = AtomicBool::new(false);
+static PROVIDER_INTERRUPTED: AtomicBool = AtomicBool::new(false);
+#[cfg(unix)]
+static INTERRUPT_HANDLER_INSTALL: OnceLock<std::result::Result<(), i32>> = OnceLock::new();
+
+#[cfg(unix)]
+extern "C" fn record_interrupt(_: libc::c_int) {
+    INTERRUPT_REQUESTED.store(true, Ordering::SeqCst);
+}
+
+fn install_provider_interrupt_handler() -> Result<()> {
+    #[cfg(unix)]
+    {
+        let installed = INTERRUPT_HANDLER_INSTALL.get_or_init(|| {
+            let mut action: libc::sigaction = unsafe { std::mem::zeroed() };
+            action.sa_sigaction = record_interrupt as *const () as usize;
+            action.sa_flags = 0;
+            unsafe {
+                libc::sigemptyset(&mut action.sa_mask);
+            }
+            if unsafe { libc::sigaction(libc::SIGINT, &action, std::ptr::null_mut()) } == 0 {
+                Ok(())
+            } else {
+                Err(std::io::Error::last_os_error()
+                    .raw_os_error()
+                    .unwrap_or(libc::EINVAL))
+            }
+        });
+        if let Err(code) = installed {
+            return Err(std::io::Error::from_raw_os_error(*code).into());
+        }
+    }
+    Ok(())
+}
+
+pub fn provider_interrupted() -> bool {
+    PROVIDER_INTERRUPTED.load(Ordering::SeqCst)
+}
+
+fn interrupt_requested() -> bool {
+    INTERRUPT_REQUESTED.load(Ordering::SeqCst)
+}
+
+fn mark_provider_interrupted() {
+    PROVIDER_INTERRUPTED.store(true, Ordering::SeqCst);
+}
 
 #[cfg(test)]
 mod managed_skill_tests {
@@ -112,6 +159,121 @@ mod managed_skill_tests {
 
 const PRELUDE: &str = "import os, re, json, math, collections, datetime";
 
+#[derive(Debug)]
+struct ConfigFileIssue {
+    path: String,
+    cause: String,
+}
+
+impl std::fmt::Display for ConfigFileIssue {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}: {}", self.path, self.cause)
+    }
+}
+
+impl std::error::Error for ConfigFileIssue {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigErrorReport {
+    pub path: String,
+    pub cause: String,
+}
+
+fn terminal_safe(text: &str) -> String {
+    text.chars()
+        .flat_map(|character| character.escape_default())
+        .take(2048)
+        .collect()
+}
+
+fn config_path(path: &Path) -> String {
+    terminal_safe(&path.to_string_lossy())
+}
+
+fn config_issue(path: &Path, cause: impl AsRef<str>) -> anyhow::Error {
+    ConfigFileIssue {
+        path: config_path(path),
+        cause: terminal_safe(cause.as_ref()),
+    }
+    .into()
+}
+
+fn config_read_cause(error: &anyhow::Error) -> String {
+    let rendered = format!("{error:#}");
+    if rendered.contains("not a regular non-symlink file") {
+        return "not a regular non-symlink file".into();
+    }
+    if let Some(io) = error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<std::io::Error>())
+    {
+        return format!("could not be read: {io}");
+    }
+    format!("could not be read: {}", error.root_cause())
+}
+
+fn config_validation_cause(error: &anyhow::Error) -> String {
+    if let Some(regex) = error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<regex::Error>())
+    {
+        let rendered = regex.to_string();
+        let terminal = rendered
+            .lines()
+            .rev()
+            .find(|line| !line.trim().is_empty())
+            .unwrap_or("invalid regular expression")
+            .trim();
+        let terminal = terminal
+            .strip_prefix("error: ")
+            .unwrap_or("invalid regular expression");
+        return format!("invalid clean pattern: {terminal}");
+    }
+    error.root_cause().to_string()
+}
+
+fn sanitized_toml_message(message: &str) -> String {
+    for prefix in ["invalid type: ", "invalid value: "] {
+        if let Some(detail) = message.strip_prefix(prefix)
+            && let Some((observed, expected)) = detail.split_once(", expected ")
+        {
+            let kind = observed.split_ascii_whitespace().next().unwrap_or("value");
+            return format!("{prefix}{kind}, expected {expected}");
+        }
+    }
+    if message.starts_with("unknown variant ")
+        && let Some((_, expected)) = message.split_once(", expected ")
+    {
+        return format!("unknown value; expected {expected}");
+    }
+    message.to_owned()
+}
+
+fn toml_position(text: &str, offset: usize) -> (usize, usize) {
+    let offset = offset.min(text.len());
+    let before = &text.as_bytes()[..offset];
+    let line = before.iter().filter(|byte| **byte == b'\n').count() + 1;
+    let line_start = before
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map_or(0, |index| index + 1);
+    let column = text[line_start..offset].chars().count() + 1;
+    (line, column)
+}
+
+pub fn config_error_report(error: &anyhow::Error) -> ConfigErrorReport {
+    if let Some(issue) = error.downcast_ref::<ConfigFileIssue>() {
+        return ConfigErrorReport {
+            path: issue.path.clone(),
+            cause: issue.cause.clone(),
+        };
+    }
+    ConfigErrorReport {
+        path: "configuration source".into(),
+        cause: terminal_safe(&error.root_cause().to_string()),
+    }
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
@@ -149,12 +311,7 @@ impl Default for Config {
 impl Config {
     pub fn load() -> Result<Self> {
         if let Some(path) = env::var_os("AZDAJA_CONFIG").map(PathBuf::from) {
-            return load_config_file(&path)?.ok_or_else(|| {
-                anyhow!(
-                    "AZDAJA_CONFIG does not name a readable regular file: {}",
-                    path.display()
-                )
-            });
+            return load_config_file(&path)?.ok_or_else(|| config_issue(&path, "file is missing"));
         }
 
         if let Ok(executable) = env::current_exe()
@@ -180,12 +337,8 @@ impl Config {
                     .is_some_and(&has);
                 if has("config.toml") && has("SKILL.md") && binary_is_managed {
                     let config_path = directory.join("config.toml");
-                    return load_config_file(&config_path)?.ok_or_else(|| {
-                        anyhow!(
-                            "managed config is missing or unreadable: {}",
-                            config_path.display()
-                        )
-                    });
+                    return load_config_file(&config_path)?
+                        .ok_or_else(|| config_issue(&config_path, "managed config is missing"));
                 }
             }
         }
@@ -200,6 +353,9 @@ impl Config {
     pub fn validate(self) -> Result<Self> {
         if self.sub_llm_cmd.trim().is_empty() {
             bail!("sub_llm_cmd cannot be empty")
+        }
+        if self.default_model.trim().is_empty() {
+            bail!("default_model cannot be empty")
         }
         if self.output_cap < 256 {
             bail!("output_cap must be at least 256")
@@ -247,16 +403,27 @@ fn config_home() -> Option<PathBuf> {
         .or_else(|| home().map(|p| p.join(".config")))
 }
 fn load_config_file(path: &Path) -> Result<Option<Config>> {
-    let Some(bytes) = read_regular_nofollow(path)? else {
+    let Some(bytes) = read_regular_nofollow(path)
+        .map_err(|error| config_issue(path, config_read_cause(&error)))?
+    else {
         return Ok(None);
     };
-    let text = String::from_utf8(bytes)
-        .with_context(|| format!("config is not UTF-8: {}", path.display()))?;
-    Ok(Some(
-        toml::from_str::<Config>(&text)
-            .with_context(|| format!("invalid config {}", path.display()))?
-            .validate()?,
-    ))
+    let text = String::from_utf8(bytes).map_err(|_| config_issue(path, "config is not UTF-8"))?;
+    let parsed = toml::from_str::<Config>(&text).map_err(|error| {
+        let location = error.span().map(|span| toml_position(&text, span.start));
+        let message = sanitized_toml_message(error.message());
+        let cause = match location {
+            Some((line, column)) => {
+                format!("TOML error at line {line}, column {column}: {message}")
+            }
+            None => format!("TOML error: {message}"),
+        };
+        config_issue(path, cause)
+    })?;
+    parsed
+        .validate()
+        .map(Some)
+        .map_err(|error| config_issue(path, config_validation_cause(&error)))
 }
 pub fn state_home() -> Result<PathBuf> {
     let p = env::var_os("AZDAJA_HOME")
@@ -2111,6 +2278,10 @@ impl SoloSession {
             mut exception,
             mut failure_line,
         ) = run_cell(repl, code, cfg, &self.sub_model, true);
+        if provider_interrupted() {
+            self.repl = Some(repl);
+            bail!("provider interrupted")
+        }
         let mut success = success;
         if success
             && final_out.is_none()
@@ -2184,6 +2355,9 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         mut exception,
         mut failure_line,
     ) = run_cell(repl, code, cfg, model, false);
+    if provider_interrupted() {
+        bail!("provider interrupted")
+    }
     let mut success = success;
     // Paper-style trajectories sometimes assign `FINAL = answer` instead of calling it.
     if success
@@ -4803,6 +4977,7 @@ fn call_model_inner(
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
+    install_provider_interrupt_handler()?;
     let mut child = command
         .spawn()
         .with_context(|| format!("failed to start {program}"))?;
@@ -4816,7 +4991,18 @@ fn call_model_inner(
     });
     let deadline = Instant::now() + Duration::from_secs(cfg.sub_timeout);
     let mut timed_out = false;
+    let mut interrupted = false;
     let status = loop {
+        if interrupt_requested() {
+            interrupted = true;
+            #[cfg(unix)]
+            unsafe {
+                libc::kill(-(child.id() as i32), libc::SIGKILL);
+            }
+            #[cfg(not(unix))]
+            let _ = child.kill();
+            break child.wait()?;
+        }
         if let Some(status) = child.try_wait()? {
             break status;
         } else if Instant::now() >= deadline {
@@ -4840,6 +5026,10 @@ fn call_model_inner(
     let (stderr, err_over) = err_thread
         .join()
         .map_err(|_| anyhow!("stderr reader panicked"))??;
+    if interrupted {
+        mark_provider_interrupted();
+        bail!("provider interrupted")
+    }
     if timed_out {
         bail!("sub-LLM timed out after {}s", cfg.sub_timeout)
     }

@@ -4124,3 +4124,467 @@ fn jcode_batch_retries_provider_once_then_preserves_failure() {
     assert_eq!(archives, ["s1", "s2", "s3", "s4"]);
     fs::remove_dir_all(t).unwrap();
 }
+
+#[test]
+#[cfg(unix)]
+fn command_help_usage_and_bare_text_are_identical_through_both_names() {
+    let t = temp("command-help");
+    let expected = [
+        ("start", "Usage: az start"),
+        ("load", "Usage: az load <session-id> <path> <variable>"),
+        ("exec", "Usage: az exec <session-id>"),
+        ("final", "Usage: az final <session-id>"),
+        ("list", "Usage: az list"),
+        ("kill", "Usage: az kill <session-id>"),
+        (
+            "solo",
+            "Usage: az solo <question> -f <path> [--model <model>] [--sub-model <model>]",
+        ),
+        ("doctor", "Usage: az doctor [--caps]"),
+        (
+            "install",
+            "Usage: az install [--harness <jcode|claude|codex|gemini|opencode|all>]",
+        ),
+        (
+            "uninstall",
+            "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all>]",
+        ),
+    ];
+    let bare = format!(
+        "AZDAJA v{} — virtual memory for language models\nUsage: az <command> [options]  (azdaja also works)\nCommands: start load exec final list kill solo install doctor uninstall\nSetup: az install --harness <jcode|claude|codex|gemini|opencode|all>\nExample: az solo \"summarize this file\" -f ./document.txt\n",
+        env!("CARGO_PKG_VERSION")
+    );
+    for name in ["az", "azdaja"] {
+        let executable = t.join(name);
+        fs::copy(env!("CARGO_BIN_EXE_azdaja"), &executable).unwrap();
+        let output = Command::new(&executable)
+            .env("TERM", "dumb")
+            .env("NO_COLOR", "1")
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(0));
+        assert_eq!(String::from_utf8(output.stdout).unwrap(), bare);
+        assert!(output.stderr.is_empty());
+
+        let top = Command::new(&executable).arg("--help").output().unwrap();
+        assert_eq!(top.status.code(), Some(0));
+        assert!(top.stderr.is_empty());
+        let top = String::from_utf8(top.stdout).unwrap();
+        for (_, usage) in expected {
+            assert!(top.lines().any(|line| line == usage), "missing {usage:?}");
+        }
+
+        for (command, usage) in expected {
+            let output = Command::new(&executable)
+                .args([command, "--help"])
+                .output()
+                .unwrap();
+            assert_eq!(output.status.code(), Some(0), "{name} {command}");
+            assert_eq!(
+                String::from_utf8(output.stdout).unwrap(),
+                format!("{usage}\n")
+            );
+            assert!(output.stderr.is_empty());
+        }
+
+        let invalid: [(&[&str], &str); 10] = [
+            (&["start", "extra"], expected[0].1),
+            (&["load", "only-one"], expected[1].1),
+            (&["exec", "session", "extra"], expected[2].1),
+            (&["final"], expected[3].1),
+            (&["list", "extra"], expected[4].1),
+            (&["kill"], expected[5].1),
+            (&["solo", "question", "--bogus", "value"], expected[6].1),
+            (&["doctor", "--bogus"], expected[7].1),
+            (&["install", "--bogus"], expected[8].1),
+            (&["uninstall", "--harness"], expected[9].1),
+        ];
+        for (args, usage) in invalid {
+            let output = Command::new(&executable).args(args).output().unwrap();
+            assert_eq!(output.status.code(), Some(2), "{name} {args:?}");
+            assert!(output.stdout.is_empty());
+            assert_eq!(
+                String::from_utf8(output.stderr).unwrap(),
+                format!("{usage}\n")
+            );
+        }
+    }
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_empty_values_fail_before_config_or_input_loading() {
+    let t = temp("solo-empty-preflight");
+    let marker = t.join("provider-entered");
+    let provider = t.join("provider.py");
+    fs::write(
+        &provider,
+        format!(
+            "import pathlib\npathlib.Path({:?}).write_text('entered')\nprint('unexpected')\n",
+            marker.to_str().unwrap()
+        ),
+    )
+    .unwrap();
+    let malformed = t.join("malformed-config.toml");
+    fs::write(&malformed, "this config must not be loaded = [").unwrap();
+    let absent_input = t.join("absent-input");
+
+    let cases: [(&[&str], &str); 3] = [
+        (
+            &["solo", "   ", "-f", absent_input.to_str().unwrap()],
+            "error: solo question cannot be empty\n",
+        ),
+        (
+            &[
+                "solo",
+                "question",
+                "-f",
+                absent_input.to_str().unwrap(),
+                "--model",
+                "",
+            ],
+            "error: --model cannot be empty\n",
+        ),
+        (
+            &[
+                "solo",
+                "question",
+                "-f",
+                absent_input.to_str().unwrap(),
+                "--sub-model",
+                "   ",
+            ],
+            "error: --sub-model cannot be empty\n",
+        ),
+    ];
+    for (args, expected) in cases {
+        let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+            .args(args)
+            .env("AZDAJA_CONFIG", &malformed)
+            .env("AZDAJA_HOME", t.join("state-args"))
+            .env_remove("RLM_DEPTH")
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        assert_eq!(String::from_utf8(output.stderr).unwrap(), expected);
+    }
+
+    let cfg = config(&t, &format!("python3 {}", provider.display()), 512, 1, 3, 4);
+    let invalid_default = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("default_model = \"mock\"", "default_model = \"   \"");
+    fs::write(&cfg, invalid_default).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args(["solo", "question", "-f", absent_input.to_str().unwrap()])
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_HOME", t.join("state-default"))
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "error: default_model cannot be empty\n"
+    );
+    assert!(!marker.exists(), "provider entered during solo preflight");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn doctor_reports_sanitized_config_path_and_terminal_cause() {
+    let t = temp("doctor-config-diagnostics");
+    let provider_called = t.join("provider-called");
+    let provider = t.join("provider.py");
+    fs::write(
+        &provider,
+        format!(
+            "import pathlib\npathlib.Path({:?}).write_text('entered')\nprint('AZDAJA')\n",
+            provider_called.to_str().unwrap()
+        ),
+    )
+    .unwrap();
+    let provider_command = format!("python3 {}", provider.display());
+
+    let missing = t.join("missing.toml");
+    let nonregular = t.join("nonregular.toml");
+    fs::create_dir(&nonregular).unwrap();
+    let syntax = t.join("syntax.toml");
+    fs::write(
+        &syntax,
+        "sub_llm_cmd = \"DO_NOT_DISCLOSE_SYNTAX_VALUE\"\ndefault_model = \"mock\"\nclean_patterns = [",
+    )
+    .unwrap();
+    let unknown = t.join("unknown.toml");
+    fs::write(
+        &unknown,
+        format!(
+            "sub_llm_cmd = {:?}\ndefault_model = \"mock\"\nunknown_field = \"DO_NOT_DISCLOSE_UNKNOWN_VALUE\"\n",
+            provider_command
+        ),
+    )
+    .unwrap();
+    let secret_type = t.join("secret-type.toml");
+    fs::write(
+        &secret_type,
+        format!(
+            "sub_llm_cmd = {:?}\ndefault_model = \"mock\"\noutput_cap = \"DO_NOT_DISCLOSE_TYPE_VALUE\"\n",
+            provider_command
+        ),
+    )
+    .unwrap();
+    let validation = config(&t, &provider_command, 512, 1, 3, 4);
+    let validation_path = t.join("validation.toml");
+    fs::rename(&validation, &validation_path).unwrap();
+    let text = fs::read_to_string(&validation_path)
+        .unwrap()
+        .replace("output_cap = 512", "output_cap = 1");
+    fs::write(&validation_path, text).unwrap();
+    let regex_path = t.join("regex.toml");
+    config(&t, &provider_command, 512, 1, 3, 4);
+    fs::rename(t.join("config.toml"), &regex_path).unwrap();
+    let text = fs::read_to_string(&regex_path).unwrap().replace(
+        "clean_patterns = []",
+        "clean_patterns = [\"DO_NOT_DISCLOSE_REGEX_VALUE(\"]",
+    );
+    fs::write(&regex_path, text).unwrap();
+
+    let cases = [
+        (&missing, "file is missing"),
+        (&nonregular, "not a regular non-symlink file"),
+        (&syntax, "unclosed array"),
+        (&unknown, "unknown field `unknown_field`"),
+        (&secret_type, "invalid type: string, expected usize"),
+        (&validation_path, "output_cap must be at least 256"),
+        (&regex_path, "invalid clean pattern: unclosed group"),
+    ];
+    for (index, (path, terminal)) in cases.into_iter().enumerate() {
+        let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+            .arg("doctor")
+            .env("AZDAJA_CONFIG", path)
+            .env("AZDAJA_HOME", t.join(format!("state-{index}")))
+            .env_remove("RLM_DEPTH")
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1), "{}", path.display());
+        assert!(output.stderr.is_empty());
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let first = stdout.lines().next().unwrap();
+        assert!(
+            first.starts_with(&format!("FAIL config: {}:", path.display())),
+            "{first}"
+        );
+        assert!(first.contains(terminal), "{first}");
+        assert!(
+            first.ends_with(&format!(
+                "; Fix: repair {}, then rerun azdaja doctor",
+                path.display()
+            )),
+            "{first}"
+        );
+        assert!(!stdout.contains("DO_NOT_DISCLOSE"), "{stdout}");
+    }
+    assert!(!provider_called.exists());
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[cfg(unix)]
+fn wait_for_file(path: &Path) {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline {
+        if fs::read_to_string(path).is_ok_and(|contents| !contents.trim().is_empty()) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("provider did not populate {}", path.display());
+}
+
+#[cfg(unix)]
+fn process_exists(pid: i32) -> bool {
+    let result = unsafe { libc::kill(pid, 0) };
+    result == 0 || std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
+}
+
+#[cfg(unix)]
+fn assert_processes_gone(pids: &Path) {
+    let values: Vec<i32> = fs::read_to_string(pids)
+        .unwrap()
+        .split_whitespace()
+        .map(|value| value.parse().unwrap())
+        .collect();
+    assert_eq!(values.len(), 2);
+    let deadline = Instant::now() + Duration::from_secs(1);
+    while values.iter().copied().any(process_exists) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    for pid in values {
+        assert!(
+            !process_exists(pid),
+            "provider process {pid} survived SIGINT"
+        );
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn sigint_stops_provider_group_cleans_prompt_and_preserves_exec_snapshot() {
+    for prompt_file in [false, true] {
+        let t = temp(if prompt_file {
+            "interrupt-exec-prompt-file"
+        } else {
+            "interrupt-exec-stdin"
+        });
+        let calls = t.join("calls");
+        let pids = t.join("pids");
+        let provider = t.join("provider.py");
+        fs::write(
+            &provider,
+            r#"import os, pathlib, subprocess, sys, time
+calls = pathlib.Path(sys.argv[1])
+calls.open("a").write("call\n")
+if len(sys.argv) == 4:
+    assert pathlib.Path(sys.argv[3]).read_text()
+else:
+    assert sys.stdin.read()
+child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+pathlib.Path(sys.argv[2]).write_text(f"{os.getpid()} {child.pid}")
+time.sleep(60)
+"#,
+        )
+        .unwrap();
+        let command = if prompt_file {
+            format!(
+                "python3 {} {} {} {{prompt_file}}",
+                provider.display(),
+                calls.display(),
+                pids.display()
+            )
+        } else {
+            format!(
+                "python3 {} {} {}",
+                provider.display(),
+                calls.display(),
+                pids.display()
+            )
+        };
+        let cfg = config(&t, &command, 1024, 1, 60, 4);
+        let id = sid(&t, &cfg);
+        ok(run(&t, &cfg, &["exec", &id], "x = 1\n"));
+
+        let mut command = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+        command
+            .args(["exec", &id])
+            .env_remove("RLM_DEPTH")
+            .env("AZDAJA_HOME", t.join("state"))
+            .env("AZDAJA_CONFIG", &cfg)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut child = command.spawn().unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"x = 99\nllm('sensitive interrupt prompt')\n")
+            .unwrap();
+        wait_for_file(&pids);
+        let interrupted_at = Instant::now();
+        assert_eq!(unsafe { libc::kill(child.id() as i32, libc::SIGINT) }, 0);
+        let output = child.wait_with_output().unwrap();
+        assert!(interrupted_at.elapsed() < Duration::from_secs(1));
+        assert_eq!(output.status.code(), Some(130));
+        assert!(output.stdout.is_empty());
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            format!(
+                "Interrupted: provider stopped; temporary prompt removed; session {id} preserved.\n"
+            )
+        );
+        assert_processes_gone(&pids);
+        assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
+        let prompt_dir = t.join("state/prompts");
+        assert_eq!(fs::read_dir(prompt_dir).unwrap().count(), 0);
+
+        ok(run(&t, &cfg, &["exec", &id], "FINAL(x)\n"));
+        assert_eq!(ok(run(&t, &cfg, &["final", &id], "")), "1");
+        ok(run(&t, &cfg, &["kill", &id], ""));
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn sigint_stops_solo_provider_without_retry_and_cleans_prompt() {
+    for prompt_file in [false, true] {
+        let t = temp(if prompt_file {
+            "interrupt-solo-prompt-file"
+        } else {
+            "interrupt-solo-stdin"
+        });
+        let calls = t.join("calls");
+        let pids = t.join("pids");
+        let provider = t.join("provider.py");
+        fs::write(
+            &provider,
+            r#"import os, pathlib, subprocess, sys, time
+pathlib.Path(sys.argv[1]).open("a").write("call\n")
+if len(sys.argv) == 4:
+    assert pathlib.Path(sys.argv[3]).read_text()
+else:
+    assert sys.stdin.read()
+child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+pathlib.Path(sys.argv[2]).write_text(f"{os.getpid()} {child.pid}")
+time.sleep(60)
+"#,
+        )
+        .unwrap();
+        let command = if prompt_file {
+            format!(
+                "python3 {} {} {} {{prompt_file}}",
+                provider.display(),
+                calls.display(),
+                pids.display()
+            )
+        } else {
+            format!(
+                "python3 {} {} {}",
+                provider.display(),
+                calls.display(),
+                pids.display()
+            )
+        };
+        let cfg = config(&t, &command, 4096, 1, 60, 4);
+        let input = t.join("input.txt");
+        fs::write(&input, "private solo input").unwrap();
+        let mut command = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+        command
+            .args(["solo", "summarize the input", "-f", input.to_str().unwrap()])
+            .env_remove("RLM_DEPTH")
+            .env("AZDAJA_HOME", t.join("state"))
+            .env("AZDAJA_CONFIG", &cfg)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let child = command.spawn().unwrap();
+        wait_for_file(&pids);
+        let interrupted_at = Instant::now();
+        assert_eq!(unsafe { libc::kill(child.id() as i32, libc::SIGINT) }, 0);
+        let output = child.wait_with_output().unwrap();
+        assert!(interrupted_at.elapsed() < Duration::from_secs(1));
+        assert_eq!(output.status.code(), Some(130));
+        assert!(output.stdout.is_empty());
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            "Interrupted: provider stopped; temporary prompt removed.\n"
+        );
+        assert_processes_gone(&pids);
+        assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 1);
+        let prompt_dir = t.join("state/prompts");
+        if prompt_dir.exists() {
+            assert_eq!(fs::read_dir(prompt_dir).unwrap().count(), 0);
+        }
+        fs::remove_dir_all(t).unwrap();
+    }
+}

@@ -103,7 +103,9 @@ az final "$sid"
 az kill "$sid"
 ```
 
-Core commands: `start`, `load`, `exec`, `final`, `list`, `kill`, `solo`, `doctor`, `install`, `uninstall`.
+Core commands: `start`, `load`, `exec`, `final`, `list`, `kill`, `solo`, `doctor`, `install`, `uninstall`. Every command accepts `--help`; top-level `--help` lists the full signatures. Invalid arity or options return that command's same canonical usage line on stderr with status 2.
+
+For external command adapters, interrupting an in-flight `exec` or `solo` provider turn stops the provider process group and waits for it before returning status 130. A bound `{prompt_file}` temporary is removed without following a replaced path. Interrupted `exec` cells do not replace the prior session snapshot, so the session remains usable. `solo` rejects blank questions, blank model overrides, and a blank configured default model before loading the input or entering a provider. `doctor` configuration failures remain provider-free and report the sanitized configuration path, terminal cause, and repair action.
 
 ## ARC-AGI-3 diagnostic
 

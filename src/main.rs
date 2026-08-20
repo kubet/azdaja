@@ -4,8 +4,9 @@ use anyhow::{Context, Result, anyhow, bail};
 use azdaja::{
     Config, DEFAULT_CONFIG, EnteredTurnBudget, ExecFailureKind, MONTY_VERSION, RootDriver,
     SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS, SKILL, SoloSession, VERSION, call_model,
-    capability_check, exec, final_answer, kill, list, load, model_trace_request_id,
-    model_transport_error_category, model_transport_error_is_transient, start,
+    capability_check, config_error_report, exec, final_answer, kill, list, load,
+    model_trace_request_id, model_transport_error_category, model_transport_error_is_transient,
+    provider_interrupted, start,
 };
 use monty::MontyRun;
 use monty_types::CompileOptions;
@@ -153,6 +154,66 @@ fn preflight_repair_solo_trace(
     Ok(())
 }
 
+const COMMAND_USAGES: [(&str, &str); 10] = [
+    ("start", "Usage: az start"),
+    ("load", "Usage: az load <session-id> <path> <variable>"),
+    ("exec", "Usage: az exec <session-id>"),
+    ("final", "Usage: az final <session-id>"),
+    ("list", "Usage: az list"),
+    ("kill", "Usage: az kill <session-id>"),
+    (
+        "solo",
+        "Usage: az solo <question> -f <path> [--model <model>] [--sub-model <model>]",
+    ),
+    ("doctor", "Usage: az doctor [--caps]"),
+    (
+        "install",
+        "Usage: az install [--harness <jcode|claude|codex|gemini|opencode|all>]",
+    ),
+    (
+        "uninstall",
+        "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all>]",
+    ),
+];
+
+#[derive(Debug)]
+struct CliUsageError(&'static str);
+
+impl std::fmt::Display for CliUsageError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+impl std::error::Error for CliUsageError {}
+
+fn command_usage(command: &str) -> Option<&'static str> {
+    COMMAND_USAGES
+        .iter()
+        .find_map(|(name, usage)| (*name == command).then_some(*usage))
+}
+
+fn usage_error(command: &str) -> anyhow::Error {
+    CliUsageError(command_usage(command).expect("known command")).into()
+}
+
+fn command_help(args: &[String]) -> Result<bool> {
+    let Some(usage) = command_usage(&args[0]) else {
+        return Ok(false);
+    };
+    if args
+        .get(1)
+        .is_some_and(|arg| matches!(arg.as_str(), "-h" | "--help"))
+    {
+        if args.len() != 2 {
+            return Err(usage_error(&args[0]));
+        }
+        println!("{usage}");
+        return Ok(true);
+    }
+    Ok(false)
+}
+
 fn help(interactive_banner: bool) {
     let term = env::var("TERM").ok();
     if interactive_banner
@@ -168,8 +229,40 @@ fn help(interactive_banner: bool) {
         "AZDAJA v{VERSION} — virtual memory for language models\nUsage: az <command> [options]  (azdaja also works)\nCommands: start load exec final list kill solo install doctor uninstall\nSetup: az install --harness <jcode|claude|codex|gemini|opencode|all>\nExample: az solo \"summarize this file\" -f ./document.txt"
     );
 }
+
+fn top_help() {
+    help(false);
+    println!("\nCommand signatures:");
+    for (_, usage) in COMMAND_USAGES {
+        println!("{usage}");
+    }
+}
+
+fn interrupted_exit() -> Option<ExitCode> {
+    if !provider_interrupted() {
+        return None;
+    }
+    let args: Vec<String> = env::args().skip(1).collect();
+    if args.first().is_some_and(|command| command == "exec") {
+        if let Some(session) = args.get(1) {
+            eprintln!(
+                "Interrupted: provider stopped; temporary prompt removed; session {session} preserved."
+            );
+        } else {
+            eprintln!("Interrupted: provider stopped; temporary prompt removed.");
+        }
+    } else {
+        eprintln!("Interrupted: provider stopped; temporary prompt removed.");
+    }
+    Some(ExitCode::from(130))
+}
+
 fn main() -> ExitCode {
-    match run() {
+    let result = run();
+    if let Some(exit) = interrupted_exit() {
+        return exit;
+    }
+    match result {
         Ok(ok) => {
             if ok {
                 ExitCode::SUCCESS
@@ -177,12 +270,17 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         }
-        Err(e) => {
-            eprintln!("error: {e:#}");
+        Err(error) => {
+            if let Some(usage) = error.downcast_ref::<CliUsageError>() {
+                eprintln!("{usage}");
+            } else {
+                eprintln!("error: {error:#}");
+            }
             ExitCode::from(2)
         }
     }
 }
+
 fn run() -> Result<bool> {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
@@ -190,27 +288,36 @@ fn run() -> Result<bool> {
         return Ok(true);
     }
     if matches!(args[0].as_str(), "-h" | "--help") {
-        help(false);
+        if args.len() != 1 {
+            bail!("top-level --help takes no arguments")
+        }
+        top_help();
         return Ok(true);
     }
     if args[0] == "--version" {
+        if args.len() != 1 {
+            bail!("top-level --version takes no arguments")
+        }
         println!("azdaja {VERSION} (monty {MONTY_VERSION})");
+        return Ok(true);
+    }
+    if command_help(&args)? {
         return Ok(true);
     }
     match args[0].as_str() {
         "start" => {
-            exact(&args, 1)?;
+            exact(&args, 1, "start")?;
             println!("{}", start(&Config::load()?, None)?)
         }
         "load" => {
-            exact(&args, 4)?;
+            exact(&args, 4, "load")?;
             println!(
                 "{}",
                 load(&args[1], Path::new(&args[2]), &args[3], &Config::load()?)?
             )
         }
         "exec" => {
-            exact(&args, 2)?;
+            exact(&args, 2, "exec")?;
             let mut code = String::new();
             io::stdin().read_to_string(&mut code)?;
             let r = exec(&args[1], &code, &Config::load()?)?;
@@ -218,37 +325,49 @@ fn run() -> Result<bool> {
             return Ok(r.success);
         }
         "final" => {
-            exact(&args, 2)?;
+            exact(&args, 2, "final")?;
             print!("{}", final_answer(&args[1], &Config::load()?)?)
         }
         "list" => {
-            exact(&args, 1)?;
+            exact(&args, 1, "list")?;
             for id in list(&Config::load()?)? {
                 println!("{id}")
             }
         }
         "kill" => {
-            exact(&args, 2)?;
+            exact(&args, 2, "kill")?;
             kill(&args[1])?;
             println!("killed {}", args[1])
         }
         "doctor" => return doctor(&args),
         "install" => install_cmd(&args)?,
         "uninstall" => uninstall_cmd(&args)?,
-        "solo" => solo(&args, &Config::load()?)?,
+        "solo" => {
+            let solo_args = parse_solo_args(&args)?;
+            let cfg = Config::load().map_err(|error| {
+                let report = config_error_report(&error);
+                if report.cause == "default_model cannot be empty" {
+                    anyhow!(report.cause)
+                } else {
+                    error
+                }
+            })?;
+            solo(solo_args, &cfg)?
+        }
         x => bail!("unknown command '{x}' (run --help)"),
     }
     Ok(true)
 }
-fn exact(args: &[String], n: usize) -> Result<()> {
+
+fn exact(args: &[String], n: usize, command: &str) -> Result<()> {
     if args.len() != n {
-        bail!("wrong number of arguments (run --help)")
+        return Err(usage_error(command));
     }
     Ok(())
 }
 fn doctor(args: &[String]) -> Result<bool> {
     if args.get(1).is_some_and(|s| s == "--caps") {
-        exact(args, 2)?;
+        exact(args, 2, "doctor")?;
         println!(
             "{}",
             serde_json::json!({"azdaja":VERSION,"monty":MONTY_VERSION,"dump_version":monty::DUMP_VERSION,"capabilities":["persistent-repl","snapshots","external-functions","re","json","datetime","monty-os-calls-denied"]})
@@ -259,7 +378,7 @@ fn doctor(args: &[String]) -> Result<bool> {
         .get(1)
         .is_some_and(|s| matches!(s.as_str(), "-h" | "--help"))
     {
-        exact(args, 2)?;
+        exact(args, 2, "doctor")?;
         println!(
             "Usage: az doctor [--caps | --harness <jcode|claude|codex|gemini|opencode|all>]\n\
              Note: --harness checks installed-on-disk custody without a provider call.\n\
@@ -273,15 +392,17 @@ fn doctor(args: &[String]) -> Result<bool> {
         let (selected, _) = harnesses(Some(which))?;
         return doctor_harnesses(&selected);
     }
-    exact(args, 1)?;
+    exact(args, 1, "doctor")?;
     let cfg = match Config::load() {
         Ok(cfg) => {
             println!("PASS config: configuration loaded");
             cfg
         }
-        Err(_) => {
+        Err(error) => {
+            let report = config_error_report(&error);
             println!(
-                "FAIL config: configuration could not be loaded; Fix: repair AZDAJA_CONFIG or the managed config.toml"
+                "FAIL config: {}: {}; Fix: repair {}, then rerun azdaja doctor",
+                report.path, report.cause, report.path
             );
             println!(
                 "FAIL evaluator: not checked because configuration failed; Fix: repair the configuration, then rerun azdaja doctor"
@@ -325,13 +446,6 @@ fn doctor(args: &[String]) -> Result<bool> {
 
 const ALL_HARNESSES: [&str; 5] = ["jcode", "claude", "codex", "gemini", "opencode"];
 
-fn harness_arg(args: &[String]) -> Result<Option<&str>> {
-    match args {
-        [_] => Ok(None),
-        [_, flag, harness] if flag == "--harness" => Ok(Some(harness)),
-        _ => bail!("usage: {} [--harness NAME]", args[0]),
-    }
-}
 fn command_exists(name: &str) -> bool {
     env::var_os("PATH").is_some_and(|path| {
         env::split_paths(&path).any(|dir| {
@@ -756,7 +870,7 @@ fn install_cmd(args: &[String]) -> Result<()> {
         .get(1)
         .is_some_and(|s| matches!(s.as_str(), "-h" | "--help"))
     {
-        exact(args, 2)?;
+        exact(args, 2, "install")?;
         println!(
             "Usage: az install [--harness <jcode|claude|codex|gemini|opencode|all>]\n\
              Jcode target: JCODE_HOME/skills/azdaja when set; otherwise HOME/.jcode/skills/azdaja\n\
@@ -1261,7 +1375,7 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
         .get(1)
         .is_some_and(|s| matches!(s.as_str(), "-h" | "--help"))
     {
-        exact(args, 2)?;
+        exact(args, 2, "uninstall")?;
         println!(
             "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all> | --standalone | --all]\n\
              Modes:\n  --harness NAME  remove skill copies only; keep standalone\n  --standalone    remove installer-owned standalone only; keep harness skills\n  --all           remove all five harness skills and installer-owned standalone\n\
@@ -1601,6 +1715,7 @@ def semantic_manifest(items, task, labels):
 
 const SOLO_ROOT_CODE_BYTES: usize = 64 * 1024;
 const SOLO_ROOT_CODE_NONBLANK_LINES: usize = 50;
+const SOLO_ROOT_TURN_LIMIT: u32 = 3;
 const SOLO_FENCE_GAP_BYTES: usize = 64;
 const SOLO_ROOT_CAPABILITY_PROHIBITION: &str = "Do not use or invoke agent tools, provider-native tools, shell commands, or filesystem actions; solve only through preloaded ctx and the Python names explicitly listed below.";
 const SOLO_FINAL_CONTRACT: &str = "Fail closed: assert a nonempty verified answer, then end with exactly one unconditional top-level FINAL(answer). Never guard FINAL or put it in a condition, loop, function, or exception handler.";
@@ -2053,30 +2168,67 @@ fn solo_program_failure_is_repairable(
         && entered_turns < turn_limit
 }
 
-fn solo(args: &[String], cfg: &Config) -> Result<()> {
-    if args.len() < 4 {
-        bail!("usage: solo <question> -f <file> [--model X] [--sub-model Y]")
+struct SoloArgs {
+    question: String,
+    file: PathBuf,
+    model: Option<String>,
+    sub_model: Option<String>,
+}
+
+fn parse_solo_args(args: &[String]) -> Result<SoloArgs> {
+    let Some(question) = args.get(1) else {
+        return Err(usage_error("solo"));
+    };
+    if question.trim().is_empty() {
+        bail!("solo question cannot be empty")
     }
-    let question = &args[1];
+    if !(args.len() - 2).is_multiple_of(2) {
+        return Err(usage_error("solo"));
+    }
     let mut file = None;
     let mut model = None;
-    let mut sub = None;
-    let mut i = 2;
-    while i < args.len() {
-        let v = args
-            .get(i + 1)
-            .ok_or_else(|| anyhow!("missing value for {}", args[i]))?
-            .clone();
-        match args[i].as_str() {
-            "-f" => file = Some(v),
-            "--model" => model = Some(v),
-            "--sub-model" => sub = Some(v),
-            x => bail!("unknown solo option {x}"),
+    let mut sub_model = None;
+    let mut index = 2;
+    while index < args.len() {
+        let value = args[index + 1].clone();
+        let slot = match args[index].as_str() {
+            "-f" => &mut file,
+            "--model" => {
+                if value.trim().is_empty() {
+                    bail!("--model cannot be empty")
+                }
+                &mut model
+            }
+            "--sub-model" => {
+                if value.trim().is_empty() {
+                    bail!("--sub-model cannot be empty")
+                }
+                &mut sub_model
+            }
+            _ => return Err(usage_error("solo")),
+        };
+        if slot.replace(value).is_some() {
+            return Err(usage_error("solo"));
         }
-        i += 2
+        index += 2;
     }
-    let file = PathBuf::from(file.ok_or_else(|| anyhow!("solo requires -f"))?);
-    let mut session = SoloSession::new(cfg, sub.clone())?;
+    let file = file.ok_or_else(|| usage_error("solo"))?;
+    Ok(SoloArgs {
+        question: question.clone(),
+        file: PathBuf::from(file),
+        model,
+        sub_model,
+    })
+}
+
+fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
+    let SoloArgs {
+        question,
+        file,
+        model,
+        sub_model,
+    } = args;
+    let mut session = SoloSession::new(cfg, sub_model)?;
     let metadata = session.load(&file, "ctx", cfg)?;
 
     // Fixed, provider-free structural evidence. The complete context remains only in Monty.
@@ -2089,7 +2241,7 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
         )
         .replace(
             "__AZ_OFFICIAL_QUESTION_JSON__",
-            &serde_json::to_string(question)?,
+            &serde_json::to_string(&question)?,
         );
     let prelude = session.exec(&semantic_prelude, cfg)?;
     if !prelude.success || prelude.finalized {
@@ -2138,7 +2290,7 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
         metrics: SoloRuntimeMetrics::default(),
         succeeded: false,
     };
-    let entered_turn_budget = Arc::new(EnteredTurnBudget::new(3));
+    let entered_turn_budget = Arc::new(EnteredTurnBudget::new(SOLO_ROOT_TURN_LIMIT));
     let mut model_reply = None;
     let mut root_driver = None;
     let mut root_error = None;
@@ -2278,7 +2430,7 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
             let repairable = solo_program_failure_is_repairable(
                 &first_failure,
                 entered_turn_budget.entered(),
-                3,
+                SOLO_ROOT_TURN_LIMIT,
             );
             if !repairable || !root_driver.reclaim_from_solo(lease)? {
                 return Err(first_failure.error);
@@ -2379,7 +2531,7 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
                     let repairable = solo_program_failure_is_repairable(
                         &repair_failure,
                         entered_turn_budget.entered(),
-                        3,
+                        SOLO_ROOT_TURN_LIMIT,
                     );
                     if !repairable || !root_driver.reclaim_from_solo(repair_lease)? {
                         return Err(repair_failure.error.context(format!(
@@ -2489,6 +2641,77 @@ fn solo(args: &[String], cfg: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn managed_skill_repair_claim_matches_turn_cap_and_eligibility() {
+        const CLAIM: &str = "A failed cell never commits its tentative answer. If a failed cell made no child call and its failure is a repairable protocol/line-limit, compile, ordinary program/extraction, or missing/empty-`FINAL` error, `solo` may make at most two root repair turns in the same root conversation. A child-calling, timeout/resource/host, or twice-repaired failure fails closed.";
+        let rendered = SKILL
+            .replace("{{VERSION}}", VERSION)
+            .replace("{{BIN}}", "/managed/azdaja");
+        assert!(rendered.contains(CLAIM));
+        assert_eq!(SOLO_ROOT_TURN_LIMIT - 1, 2);
+
+        let repairable = [
+            SoloProgramFailureKind::Protocol,
+            SoloProgramFailureKind::LineLimit,
+            SoloProgramFailureKind::Compile,
+            SoloProgramFailureKind::Assertion,
+            SoloProgramFailureKind::Value,
+            SoloProgramFailureKind::Key,
+            SoloProgramFailureKind::Index,
+            SoloProgramFailureKind::Regex,
+            SoloProgramFailureKind::Program,
+            SoloProgramFailureKind::MissingFinal,
+            SoloProgramFailureKind::EmptyFinal,
+        ];
+        for kind in repairable {
+            let failure = SoloProgramFailure {
+                kind,
+                error: anyhow!("typed repair eligibility test"),
+                code: None,
+                output: None,
+                failure_line: None,
+                external_calls: 0,
+            };
+            assert!(solo_program_failure_is_repairable(
+                &failure,
+                1,
+                SOLO_ROOT_TURN_LIMIT
+            ));
+            assert!(!solo_program_failure_is_repairable(
+                &failure,
+                SOLO_ROOT_TURN_LIMIT,
+                SOLO_ROOT_TURN_LIMIT
+            ));
+            let child_call_failure = SoloProgramFailure {
+                external_calls: 1,
+                ..failure
+            };
+            assert!(!solo_program_failure_is_repairable(
+                &child_call_failure,
+                1,
+                SOLO_ROOT_TURN_LIMIT
+            ));
+        }
+        for kind in [
+            SoloProgramFailureKind::Runtime,
+            SoloProgramFailureKind::Host,
+        ] {
+            let failure = SoloProgramFailure {
+                kind,
+                error: anyhow!("typed fail-closed eligibility test"),
+                code: None,
+                output: None,
+                failure_line: None,
+                external_calls: 0,
+            };
+            assert!(!solo_program_failure_is_repairable(
+                &failure,
+                1,
+                SOLO_ROOT_TURN_LIMIT
+            ));
+        }
+    }
 
     #[test]
     fn missing_final_repair_repeats_the_solo_final_contract() {
