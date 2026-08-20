@@ -4200,7 +4200,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
                 "uninstall" => assert_eq!(
                     stdout,
                     format!(
-                        "{usage}\nModes:\n  --harness NAME  remove skill copies only; keep standalone\n  --standalone    remove installer-owned standalone only; keep harness skills\n  --all           remove all five harness skills and installer-owned standalone\nExamples:\n  az uninstall --harness claude\n  az uninstall --harness all\n  az uninstall --standalone\n  az uninstall --all\n"
+                        "{usage}\nModes:\n  --harness NAME  remove skill copies only; keep standalone\n  --standalone    remove curl-installer-owned standalone only; keep harness skills\n  --all           remove all five harness skills and curl-installer-owned standalone\nExamples:\n  az uninstall --harness claude\n  az uninstall --harness all\n  az uninstall --standalone\n  az uninstall --all\n"
                     )
                 ),
                 _ => assert_eq!(stdout, format!("{usage}\n")),
