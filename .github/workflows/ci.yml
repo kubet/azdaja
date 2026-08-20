@@ -60,8 +60,15 @@ jobs:
           PY
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
+      - run: python3 tools/check_docs.py
       - run: cargo test --all --locked -- --test-threads=1
       - run: cargo build --release --locked
+      - name: Release-only 50 MiB product acceptance
+        run: >-
+          AZDAJA_PRODUCT_BINARY=target/release/azdaja
+          cargo test --release --locked --test product_50mb
+          offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death
+          -- --ignored --exact --test-threads=1
       - run: target/release/azdaja --version
       - run: target/release/azdaja doctor --caps
       - if: runner.os == 'Linux'
@@ -163,8 +170,10 @@ jobs:
           done
           test ! -e "$marker"
 
-          PATH="$guard:$PATH" AZDAJA_PRODUCT_BINARY="$installed" \
-            cargo test --test product_50mb --locked -- --test-threads=1
+          AZDAJA_PRODUCT_BINARY=target/release/azdaja \
+            cargo test --release --locked --test product_50mb \
+            offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death \
+            -- --ignored --exact --test-threads=1
           test ! -e "$marker"
           printf '\n# candidate-receipt-custom\n' >> \
             "$home/.claude/skills/azdaja/config.toml"

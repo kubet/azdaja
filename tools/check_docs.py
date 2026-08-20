@@ -91,13 +91,18 @@ def check_claim_contract() -> list[str]:
         "not a public-safe source tree",
         "clean allowlisted export under a new repository identity",
         "moving files does not sanitize history",
+        "current-source integration acceptance receipt",
+        "bench/results/integration-acceptance-v0.1.2-local.json",
         "short-alias delta receipt",
         "bench/results/install-alias-delta-v0.1.2-public.json",
         "not a native cross-platform or provider validation",
+        "then-pending label is no longer current",
+        "is complete and covered by the active suite",
+        "release-only and ignored by the ordinary debug suite",
         "readiness supersession receipt",
         "bench/results/v0.1.2-candidate-readiness-superseded-public.json",
         "marks the retained v0.1.2 binaries and their earlier matrix stale",
-        "new native assets, and a fresh release matrix are required",
+        "new native assets and a fresh release matrix are required",
         "evidence for their old bytes only, not the current source",
         "bench/results/install-matrix-v0.1.2-final-public.json",
         "bench/results/install-real-adapters-v0.1.2-final-public.json",
@@ -272,18 +277,15 @@ def check_claim_contract() -> list[str]:
             errors.append(f"README.md: unsupported owner-draft claim remains: {claim}")
     install_section = readme.split("## Install", 1)[1].split("## Use", 1)[0]
     install_blocks = re.findall(r"```bash\n(.*?)\n```", install_section, flags=re.DOTALL)
-    if len(install_blocks) != 4:
-        errors.append("README.md: Install section must contain exactly four bash blocks")
+    if len(install_blocks) != 3:
+        errors.append("README.md: Install section must contain exactly three bash blocks")
     else:
         if install_blocks[0] != "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh":
             errors.append("README.md: first Install bash block must be the exact HTTPS installer command")
         if "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked" not in install_blocks[1]:
             errors.append("README.md: second Install bash block must retain the HTTPS cargo fallback")
-        if "az doctor --harness jcode" not in install_blocks[2] or "az doctor" not in install_blocks[2]:
-            errors.append("README.md: third Install bash block must document both doctor modes")
-        expected_uninstall = "az uninstall --harness claude\naz uninstall --harness all\naz uninstall --standalone\naz uninstall --all"
-        if install_blocks[3] != expected_uninstall:
-            errors.append("README.md: fourth Install bash block must document the safe uninstall modes")
+        if install_blocks[2] != "azdaja uninstall":
+            errors.append("README.md: third Install bash block must be exactly `azdaja uninstall`")
     if "v0.1.1" in install_section:
         errors.append("README.md: Install section still references immutable v0.1.1 assets")
     if "git@github.com" in readme or "ssh://git@" in readme:
@@ -535,16 +537,6 @@ def check_alias_delta_receipt() -> list[str]:
         )
     }
     hashes = receipt.get("hashes", {})
-    expected_historic_hashes = {
-        ".gitignore": "78f3a3211035abc61620600167071b7767bb483253c60db3153dfafb251fdcb5",
-        "Cargo.toml": "2925561c94a507aa2ebae852e3773981ae2cfc05ed66da495297731163fd9ac8",
-        "install.sh": "ae50243f6fe9354e010c4e6c56eea81e291708890d5b5b947bdcf6ea71c9bb2d",
-        "site/install": "ae50243f6fe9354e010c4e6c56eea81e291708890d5b5b947bdcf6ea71c9bb2d",
-        "src/banner.rs": "dec4128eea89db1c339ebc6b19f68433f6b7c7986c5f0105f334542720137f79",
-        "src/main.rs": "898abd67f90eee1a5a4902bf629e0c6010483ad1f691c0de268f9843735a1877",
-        "tests/cli_ux.rs": "f38264104329f3a80ec72e124f0fd058624951bca09406442607fe04e22bff61",
-        "tests/site_installer.rs": "9d8d6114fcc0ff3a30de3f874e77bd2796de048c27fefe8ca5fcbf374ae07390",
-    }
     if (
         receipt.get("schema_version") != 2
         or receipt.get("record_type") != "azdaja_install_alias_delta_local_fixture_public_receipt"
@@ -552,9 +544,19 @@ def check_alias_delta_receipt() -> list[str]:
         or receipt.get("result") != expected_result
         or len(cells) != 16
         or identities != expected_identities
-        or hashes != expected_historic_hashes
+        or hashes != {
+            ".gitignore": "78f3a3211035abc61620600167071b7767bb483253c60db3153dfafb251fdcb5",
+            "Cargo.toml": "2925561c94a507aa2ebae852e3773981ae2cfc05ed66da495297731163fd9ac8",
+            "install.sh": "ae50243f6fe9354e010c4e6c56eea81e291708890d5b5b947bdcf6ea71c9bb2d",
+            "site/install": "ae50243f6fe9354e010c4e6c56eea81e291708890d5b5b947bdcf6ea71c9bb2d",
+            "src/banner.rs": "dec4128eea89db1c339ebc6b19f68433f6b7c7986c5f0105f334542720137f79",
+            "src/main.rs": "898abd67f90eee1a5a4902bf629e0c6010483ad1f691c0de268f9843735a1877",
+            "tests/cli_ux.rs": "f38264104329f3a80ec72e124f0fd058624951bca09406442607fe04e22bff61",
+            "tests/site_installer.rs": "9d8d6114fcc0ff3a30de3f874e77bd2796de048c27fefe8ca5fcbf374ae07390",
+        }
+        or _sha256(path) != "7bfdd02ae912b82d815dded52ce154669cc429f2b062cc263b0ee2cc9a651fc9"
     ):
-        errors.append("alias delta receipt: immutable identity, matrix, or historic hashes changed")
+        errors.append("historical alias delta receipt: immutable identity, matrix, or bound source hashes changed")
     if (ROOT / "install.sh").read_bytes() != (ROOT / "site" / "install").read_bytes():
         errors.append("alias delta: root and site installers are not byte-identical")
     if receipt.get("scope", {}).get("provider_calls_performed") is not False:
@@ -590,6 +592,100 @@ def check_alias_delta_receipt() -> list[str]:
     for private_prefix in ("/Users/", "/private/tmp/", "C:\\Users\\"):
         if private_prefix in path.read_text(encoding="utf-8"):
             errors.append(f"alias delta receipt: private host path leaked: {private_prefix}")
+    return errors
+
+
+def check_integration_acceptance_receipt() -> list[str]:
+    errors: list[str] = []
+    path = ROOT / "bench" / "results" / "integration-acceptance-v0.1.2-local.json"
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"current-source integration acceptance receipt read failed: {exc}"]
+    source_paths = [
+        ".github/workflows/ci.yml",
+        ".github/workflows/source-install-integrity.yml",
+        "README.md",
+        "SCOREBOARD.md",
+        "install.sh",
+        "site/install",
+        "src/main.rs",
+        "tests/product_50mb.rs",
+        "tests/site_installer.rs",
+        "tools/check_docs.py",
+    ]
+    expected_hashes = {name: _sha256(ROOT / name) for name in source_paths}
+    expected_commands = {
+        "check_docs": "python3 tools/check_docs.py",
+        "clippy": "cargo clippy --all-targets --all-features --locked -- -D warnings",
+        "fmt": "cargo fmt --all --check",
+        "ordinary_debug": "cargo test --all --locked -- --test-threads=1",
+        "release_50mib": (
+            "AZDAJA_PRODUCT_BINARY=target/release/azdaja "
+            "cargo test --release --locked --test product_50mb "
+            "offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death "
+            "-- --ignored --exact --test-threads=1"
+        ),
+        "release_build": "cargo build --release --locked",
+        "rustdoc": "cargo doc --no-deps --locked",
+    }
+    expected_results = {
+        "check_docs": "PASS",
+        "clippy": "PASS",
+        "fmt": "PASS",
+        "install_custody_refusals": "PASS",
+        "ordinary_debug": "PASS",
+        "release_50mib": "PASS",
+        "rustdoc": "PASS",
+    }
+    expected_install_contract = {
+        "complete_selected_set_preflight_before_mutation": True,
+        "hardlink_symlink_inode_link_mode_unknown_target_refusal_zero_mutation": True,
+        "late_multi_target_refusal_zero_mutation": True,
+        "shell_harness_snapshots_or_recursive_rollback": False,
+        "standalone_committed_after_managed_rust_install": True,
+    }
+    expected_performance_contract = {
+        "ordinary_debug_functional_coverage_retained": True,
+        "ordinary_debug_runs_gate": False,
+        "outer_deadline_seconds": 90,
+        "release_only_ignored_gate_active_on_push_and_pull_request": True,
+    }
+    expected_scope = {
+        "external_network_or_release_requests_performed": False,
+        "fixture": "provider-free loopback HTTP release fixture using a locally built current-source binary",
+        "loopback_http_requests_performed": True,
+        "native_cross_platform_claim": False,
+        "platform_selectors_are_native_platform_evidence": False,
+        "provider_calls_performed": False,
+        "publication_performed": False,
+    }
+    expected_supersession = {
+        "current_source_claims_superseded": True,
+        "historical_bytes_modified": False,
+        "path": "bench/results/install-alias-delta-v0.1.2-public.json",
+        "reason": (
+            "The historical receipt binds pre-integration source hashes and a then-pending "
+            "Config::load label; it remains immutable historical evidence."
+        ),
+        "sha256": "7bfdd02ae912b82d815dded52ce154669cc429f2b062cc263b0ee2cc9a651fc9",
+    }
+    if (
+        receipt.get("schema_version") != 1
+        or receipt.get("record_type") != "azdaja_current_source_integration_acceptance_local_receipt"
+        or receipt.get("status") != "PASS_PROVIDER_FREE_EXACT_SOURCE"
+        or receipt.get("base_commit") != "fe2eb9705266e39d75eef49e85b19e5270ad899d"
+        or receipt.get("source_sha256") != expected_hashes
+        or receipt.get("commands") != expected_commands
+        or receipt.get("results") != expected_results
+        or receipt.get("install_custody_contract") != expected_install_contract
+        or receipt.get("performance_contract") != expected_performance_contract
+        or receipt.get("scope") != expected_scope
+        or receipt.get("supersession") != expected_supersession
+    ):
+        errors.append("current-source integration acceptance receipt: identity, exact hashes, commands, results, or evidence boundary changed")
+    if (ROOT / "install.sh").read_bytes() != (ROOT / "site" / "install").read_bytes():
+        errors.append("current-source integration acceptance: installers are not byte-identical")
     return errors
 
 
@@ -1196,6 +1292,7 @@ def main() -> int:
         + check_claim_contract()
         + check_arc_public_surface()
         + check_alias_delta_receipt()
+        + check_integration_acceptance_receipt()
         + check_candidate_readiness_supersession()
         + check_launch_receipts()
     )

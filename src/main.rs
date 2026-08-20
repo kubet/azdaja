@@ -691,6 +691,66 @@ fn install_rename_noreplace(from: &Path, to: &Path) -> Result<()> {
 fn install_rename_noreplace(_: &Path, _: &Path) -> Result<()> {
     bail!("atomic no-replace rename is unavailable on this platform")
 }
+struct InstallPlan {
+    harness: &'static str,
+    dst: PathBuf,
+    existing_directory: Option<fs::File>,
+    existing_ancestor: Option<(PathBuf, fs::File)>,
+    preserved: Option<Vec<u8>>,
+    cfg: Config,
+}
+
+fn nearest_existing_install_ancestor(dst: &Path) -> Result<(PathBuf, fs::File)> {
+    let mut current = dst
+        .parent()
+        .ok_or_else(|| anyhow!("install target has no parent: {}", dst.display()))?
+        .to_path_buf();
+    loop {
+        if path_entry_exists(&current)? {
+            let directory = open_install_directory(&current)
+                .context("refusing unsafe install-target ancestry")?;
+            return Ok((current, directory));
+        }
+        current = current
+            .parent()
+            .ok_or_else(|| anyhow!("install target has no existing directory ancestor"))?
+            .to_path_buf();
+    }
+}
+
+fn preflight_install(home: &Path, harness: &'static str) -> Result<InstallPlan> {
+    let dst = target(home, harness);
+    let (existing_directory, existing_ancestor) = if path_entry_exists(&dst)? {
+        validate_install(&dst, true)?;
+        (Some(open_install_directory(&dst)?), None)
+    } else {
+        let ancestor = nearest_existing_install_ancestor(&dst)?;
+        (None, Some(ancestor))
+    };
+    let preserved = if existing_directory.is_some() {
+        Some(read_install_regular(&dst.join("config.toml"))?)
+    } else {
+        None
+    };
+    let (cmd, model) = adapter(harness);
+    let cfg = if let Some(bytes) = &preserved {
+        toml::from_str::<Config>(&String::from_utf8(bytes.clone())?)?.validate()?
+    } else {
+        let mut config: Config = toml::from_str(DEFAULT_CONFIG)?;
+        config.sub_llm_cmd = cmd.into();
+        config.default_model = model.into();
+        config.validate()?
+    };
+    Ok(InstallPlan {
+        harness,
+        dst,
+        existing_directory,
+        existing_ancestor,
+        preserved,
+        cfg,
+    })
+}
+
 fn install_cmd(args: &[String]) -> Result<()> {
     if args
         .get(1)
@@ -704,37 +764,52 @@ fn install_cmd(args: &[String]) -> Result<()> {
         );
         return Ok(());
     }
-    let (selected, detection_report) = harnesses(harness_arg(args)?)?;
+    let (which, preflight_only) = match args {
+        [_] => (None, false),
+        [_, flag] if flag == "--preflight-only" => (None, true),
+        [_, flag, harness] if flag == "--harness" => (Some(harness.as_str()), false),
+        [_, harness_flag, harness, preflight_flag]
+            if harness_flag == "--harness" && preflight_flag == "--preflight-only" =>
+        {
+            (Some(harness.as_str()), true)
+        }
+        _ => bail!("usage: {} [--harness NAME] [--preflight-only]", args[0]),
+    };
+    let (selected, detection_report) = harnesses(which)?;
     let home = home()?;
+    // Preflight every selected target before capability checks or mutation. A late
+    // unowned/changed target must not replace an earlier valid target.
+    let mut plans = Vec::with_capacity(selected.len());
+    for &harness in &selected {
+        plans.push(preflight_install(&home, harness)?);
+    }
+    if preflight_only {
+        return Ok(());
+    }
+    for plan in &plans {
+        capability_check(&plan.cfg)?;
+    }
     let exe = env::current_exe()?.canonicalize()?;
     let mut written = Vec::new();
     let mut doctor = None;
-    for &harness in &selected {
-        let dst = target(&home, harness);
-        let (cmd, model) = adapter(harness);
-        let existing_directory = if path_entry_exists(&dst)? {
-            validate_install(&dst, true)?;
-            Some(open_install_directory(&dst)?)
-        } else {
-            None
-        };
-        let preserved = if existing_directory.is_some() {
-            Some(read_install_regular(&dst.join("config.toml"))?)
-        } else {
-            None
-        };
-        let cfg = if let Some(bytes) = &preserved {
-            toml::from_str::<Config>(&String::from_utf8(bytes.clone())?)?.validate()?
-        } else {
-            let mut config: Config = toml::from_str(DEFAULT_CONFIG)?;
-            config.sub_llm_cmd = cmd.into();
-            config.default_model = model.into();
-            config.validate()?
-        };
-        capability_check(&cfg)?;
-        let parent = dst.parent().unwrap();
+    for plan in plans {
+        let InstallPlan {
+            harness,
+            dst,
+            existing_directory,
+            existing_ancestor,
+            preserved,
+            cfg,
+        } = plan;
+        let parent = dst.parent().expect("install target has a parent");
+        if let Some((ancestor_path, ancestor_directory)) = &existing_ancestor {
+            validate_install_directory_binding(ancestor_directory, ancestor_path)?;
+        }
         fs::create_dir_all(parent)?;
         let _parent_directory = open_install_directory(parent)?;
+        if let Some((ancestor_path, ancestor_directory)) = &existing_ancestor {
+            validate_install_directory_binding(ancestor_directory, ancestor_path)?;
+        }
         let mut stage = OwnedInstallDirectory::create(parent, "azdaja-stage", true)?;
         let stage_path = stage.path.clone();
         let bin = stage_path.join(if cfg!(windows) {

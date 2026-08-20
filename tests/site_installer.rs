@@ -2,7 +2,7 @@
 
 use std::{
     fs,
-    os::unix::fs::PermissionsExt,
+    os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
     thread,
@@ -212,6 +212,62 @@ fn mark_detected(home: &Path, harness: &str) {
         _ => home.join(".config/opencode"),
     };
     fs::create_dir_all(path).unwrap();
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct PathIdentity {
+    relative: PathBuf,
+    kind: &'static str,
+    device: u64,
+    inode: u64,
+    links: u64,
+    mode: u32,
+    bytes_or_target: Vec<u8>,
+}
+
+fn tree_identity(root: &Path) -> Vec<PathIdentity> {
+    fn visit(root: &Path, path: &Path, entries: &mut Vec<PathIdentity>) {
+        let metadata = fs::symlink_metadata(path).unwrap();
+        let file_type = metadata.file_type();
+        let (kind, bytes_or_target) = if file_type.is_symlink() {
+            (
+                "symlink",
+                fs::read_link(path)
+                    .unwrap()
+                    .as_os_str()
+                    .to_string_lossy()
+                    .as_bytes()
+                    .to_vec(),
+            )
+        } else if file_type.is_file() {
+            ("file", fs::read(path).unwrap())
+        } else {
+            ("directory", Vec::new())
+        };
+        entries.push(PathIdentity {
+            relative: path.strip_prefix(root).unwrap().to_path_buf(),
+            kind,
+            device: metadata.dev(),
+            inode: metadata.ino(),
+            links: metadata.nlink(),
+            mode: metadata.mode(),
+            bytes_or_target,
+        });
+        if file_type.is_dir() {
+            let mut children: Vec<_> = fs::read_dir(path)
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .collect();
+            children.sort();
+            for child in children {
+                visit(root, &child, entries);
+            }
+        }
+    }
+
+    let mut entries = Vec::new();
+    visit(root, root, &mut entries);
+    entries
 }
 
 fn installed_output(binary: &Path, home: &Path, path: &str, args: &[&str]) -> Output {
@@ -878,21 +934,30 @@ fn ambiguous_adjacent_config_states_refuse_before_install_mutation() {
 }
 
 #[test]
-fn late_harness_refusal_rolls_back_binary_and_keeps_managed_alias() {
+fn unowned_hardlinked_harness_refuses_without_inode_link_or_mode_mutation() {
     let scratch = Scratch::new();
     let fixture_root = scratch.0.join("releases");
     fs::create_dir(&fixture_root).unwrap();
     let candidate = local_candidate(&scratch.0);
     write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
     let server = FixtureServer::start(&scratch.0, &fixture_root);
-    let home = scratch.0.join("rollback-home");
+    let home = scratch.0.join("hardlink-refusal-home");
     let bin = home.join("bin");
     fs::create_dir_all(&bin).unwrap();
-    fs::write(bin.join("azdaja"), b"old-binary-must-return").unwrap();
+    let prior_binary = bin.join("azdaja");
+    fs::write(&prior_binary, b"old-binary-must-not-move").unwrap();
+    fs::set_permissions(&prior_binary, fs::Permissions::from_mode(0o740)).unwrap();
     std::os::unix::fs::symlink("azdaja", bin.join("az")).unwrap();
+
     let harness = target(&home, "claude");
     fs::create_dir_all(&harness).unwrap();
-    fs::write(harness.join("foreign"), b"unowned-harness").unwrap();
+    fs::set_permissions(&harness, fs::Permissions::from_mode(0o750)).unwrap();
+    let outside = home.join("outside-hardlink-victim");
+    fs::write(&outside, b"outside-inode-must-survive").unwrap();
+    fs::set_permissions(&outside, fs::Permissions::from_mode(0o640)).unwrap();
+    fs::hard_link(&outside, harness.join("foreign-hardlink")).unwrap();
+    let before = tree_identity(&home);
+    assert_eq!(fs::metadata(&outside).unwrap().nlink(), 2);
 
     let output = run_installer(InstallRun {
         home: &home,
@@ -905,21 +970,93 @@ fn late_harness_refusal_rolls_back_binary_and_keeps_managed_alias() {
     });
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
-    assert_eq!(
-        fs::read(bin.join("azdaja")).unwrap(),
-        b"old-binary-must-return"
-    );
-    assert_eq!(
-        fs::read_link(bin.join("az")).unwrap(),
-        PathBuf::from("azdaja")
-    );
-    assert_eq!(
-        fs::read(harness.join("foreign")).unwrap(),
-        b"unowned-harness"
-    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("refusing"));
+    assert_eq!(tree_identity(&home), before);
+    assert_eq!(fs::metadata(&outside).unwrap().nlink(), 2);
     assert!(!bin.join("azdaja-config.toml").exists());
     assert!(!bin.join("azdaja-config.toml.managed").exists());
-    assert_eq!(fs::read_dir(&bin).unwrap().count(), 2);
+}
+
+#[test]
+fn symlinked_harness_target_refuses_without_touching_link_or_target() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let home = scratch.0.join("symlink-refusal-home");
+    let bin = home.join("bin");
+    let skills = home.join(".claude/skills");
+    let outside = home.join("outside-directory");
+    fs::create_dir_all(&bin).unwrap();
+    fs::create_dir_all(&skills).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join("unknown"), b"preserve").unwrap();
+    fs::set_permissions(&outside, fs::Permissions::from_mode(0o750)).unwrap();
+    std::os::unix::fs::symlink(&outside, skills.join("azdaja")).unwrap();
+    let before = tree_identity(&home);
+
+    let output = run_installer(InstallRun {
+        home: &home,
+        base: &format!("{}/good", server.base),
+        os: "Linux",
+        arch: "x86_64",
+        harness: Some("claude"),
+        bin_dir: Some(&bin),
+        path: "/usr/bin:/bin",
+    });
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("refusing"));
+    assert_eq!(tree_identity(&home), before);
+}
+
+#[test]
+fn all_harness_preflight_refuses_unknown_late_target_before_valid_first_target_changes() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let home = scratch.0.join("multi-target-refusal-home");
+    let bin = home.join("bin");
+    fs::create_dir_all(&home).unwrap();
+
+    let initial = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args(["install", "--harness", "jcode"])
+        .env("HOME", &home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .env_remove("AZDAJA_CONFIG")
+        .env_remove("AZDAJA_HOME")
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert_success(&initial);
+    let claude = target(&home, "claude");
+    fs::create_dir_all(&claude).unwrap();
+    fs::write(claude.join("unknown"), b"unowned-late-target").unwrap();
+    fs::set_permissions(&claude, fs::Permissions::from_mode(0o550)).unwrap();
+    let before = tree_identity(&home);
+
+    let output = run_installer(InstallRun {
+        home: &home,
+        base: &format!("{}/good", server.base),
+        os: "Linux",
+        arch: "x86_64",
+        harness: Some("all"),
+        bin_dir: Some(&bin),
+        path: "/usr/bin:/bin",
+    });
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("refusing"));
+    assert_eq!(tree_identity(&home), before);
+    assert!(
+        !bin.exists(),
+        "standalone bin directory was created before refusal"
+    );
 }
 
 #[test]

@@ -204,6 +204,7 @@ fn assert_no_raw_source_span(input: &Path, provider_prompt: &[u8]) {
 }
 
 #[test]
+#[ignore = "release-only acceptance: run with AZDAJA_PRODUCT_BINARY=target/release/azdaja"]
 fn offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death() {
     let scratch = Scratch::new();
     let prompt_dir = scratch.0.join("prompts");

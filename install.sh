@@ -167,7 +167,6 @@ BIN_DIR_CREATED=false
 DEST_MUTATED=false
 DEST_HAD_OLD=false
 DEST_BACKUP_CREATED=false
-HARNESS_PHASE_STARTED=false
 DEST_BACKUP=
 CONFIG_CREATED=false
 OWNER_CREATED=false
@@ -189,30 +188,15 @@ rollback() {
   fi
   [ "$OWNER_CREATED" = false ] || rm -f "$CONFIG_OWNER"
   [ "$CONFIG_CREATED" = false ] || rm -f "$CONFIG_PATH"
-  if [ "$HARNESS_PHASE_STARTED" = true ]; then
-    for harness in $INSTALL_NAMES; do
-      TARGET=$(harness_target "$harness")
-      rm -rf "$TARGET"
-      if [ -f "$TMP/harness-$harness.present" ]; then
-        cp -pPR "$TMP/harness-$harness" "$TARGET"
-      fi
-      level=1
-      while [ -f "$TMP/harness-$harness-parent-$level" ]; do
-        IFS= read -r PARENT < "$TMP/harness-$harness-parent-$level"
-        rmdir "$PARENT" 2>/dev/null || :
-        level=$((level + 1))
-      done
-    done
-  fi
   if [ "$DEST_MUTATED" = true ]; then
-    rm -rf "$DEST"
+    rm -f "$DEST"
     if [ "$DEST_HAD_OLD" = true ] && [ -n "$DEST_BACKUP" ]; then
       mv -f "$DEST_BACKUP" "$DEST"
       DEST_BACKUP_CREATED=false
     fi
   fi
   if [ "$DEST_BACKUP_CREATED" = true ] && [ -n "$DEST_BACKUP" ]; then
-    rm -rf "$DEST_BACKUP"
+    rm -f "$DEST_BACKUP"
   fi
   if [ "$BIN_DIR_CREATED" = true ]; then
     rmdir "$BIN_DIR" 2>/dev/null || :
@@ -284,6 +268,10 @@ CONFIG_PATH=$BIN_DIR/azdaja-config.toml
 CONFIG_OWNER=$BIN_DIR/azdaja-config.toml.managed
 OWNER_MAGIC=azdaja-installer-owned-config-v1
 printf '%s\n' "$OWNER_MAGIC" > "$TMP/config-owner.expected"
+
+if [ -L "$BIN_DIR" ] || { [ -e "$BIN_DIR" ] && [ ! -d "$BIN_DIR" ]; }; then
+  fail "refusing unsafe binary directory: $BIN_DIR"
+fi
 
 # Refuse ambiguous adjacent configuration before the binary, harnesses, or
 # alias can be changed. A matching owner manifest permits user customization:
@@ -361,30 +349,28 @@ DEST_BACKUP=$BIN_DIR/.azdaja-previous.$$
 [ ! -e "$DEST_BACKUP" ] && [ ! -L "$DEST_BACKUP" ] || \
   fail "temporary binary backup path already exists: $DEST_BACKUP"
 
-# Snapshot each selected managed target. The Rust installer validates ownership
-# and atomically replaces one target at a time; these snapshots let this outer
-# multi-target transaction restore earlier targets if a later target refuses.
-snapshot_harness() {
-  harness=$1
-  TARGET=$(harness_target "$harness")
-  if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
-    cp -pPR "$TARGET" "$TMP/harness-$harness" || \
-      fail "cannot snapshot existing $harness harness target"
-    : > "$TMP/harness-$harness.present"
-  fi
-  PARENT=$(dirname "$TARGET")
-  level=1
-  while [ ! -e "$PARENT" ] && [ ! -L "$PARENT" ]; do
-    printf '%s\n' "$PARENT" > "$TMP/harness-$harness-parent-$level"
-    [ "$PARENT" != / ] || break
-    PARENT=$(dirname "$PARENT")
-    level=$((level + 1))
-  done
-}
+# Ask the downloaded, verified binary to preflight the complete selected set.
+# This is read-only: an unowned, linked, symlinked, changed, or unknown target
+# refuses before any harness, standalone binary, configuration, or alias entry
+# is changed. The managed Rust installer repeats the same complete preflight.
+if [ -z "$HARNESS" ]; then
+  "$TMP/azdaja" install --preflight-only >/dev/null
+  "$TMP/azdaja" install >/dev/null
+else
+  "$TMP/azdaja" install --harness "$HARNESS" --preflight-only >/dev/null
+  "$TMP/azdaja" install --harness "$HARNESS" >/dev/null
+fi
+
+PRIMARY_TARGET=
+HARNESS_WRITTEN=
 for harness in $INSTALL_NAMES; do
-  snapshot_harness "$harness"
+  TARGET=$(harness_target "$harness")
+  HARNESS_WRITTEN="$HARNESS_WRITTEN; $harness -> $TARGET"
+  [ -n "$PRIMARY_TARGET" ] || PRIMARY_TARGET=$TARGET
 done
 
+# Commit the standalone surfaces only after the custody-safe Rust transaction.
+# Rollback uses the original path entry itself (rename), never a recursive copy.
 BIN_DIR_WAS_DIR=false
 [ ! -d "$BIN_DIR" ] || BIN_DIR_WAS_DIR=true
 TRANSACTION_ACTIVE=true
@@ -394,29 +380,21 @@ if [ "$BIN_DIR_WAS_DIR" = false ]; then
 fi
 [ -d "$BIN_DIR" ] && [ -w "$BIN_DIR" ] || fail "binary directory is not writable: $BIN_DIR"
 
-if [ -e "$DEST" ] || [ -L "$DEST" ]; then
-  DEST_BACKUP_CREATED=true
-  cp -pPR "$DEST" "$DEST_BACKUP" || fail 'cannot snapshot the existing azdaja binary'
-  DEST_HAD_OLD=true
-fi
 STAGED=$BIN_DIR/.azdaja-install.$$
 [ ! -e "$STAGED" ] && [ ! -L "$STAGED" ] || fail "temporary install path already exists: $STAGED"
 (umask 077 && set -C && : > "$STAGED") 2>/dev/null || fail 'cannot create atomic install file'
 cat "$TMP/azdaja" > "$STAGED"
 chmod 755 "$STAGED"
+if [ -e "$DEST" ] || [ -L "$DEST" ]; then
+  mv "$DEST" "$DEST_BACKUP" || fail 'cannot retain the existing azdaja binary path entry'
+  DEST_BACKUP_CREATED=true
+  DEST_HAD_OLD=true
+fi
 DEST_MUTATED=true
 mv -f "$STAGED" "$DEST"
 STAGED=
 
-WRITTEN="azdaja -> $DEST ($ASSET)"
-PRIMARY_TARGET=
-HARNESS_PHASE_STARTED=true
-for harness in $INSTALL_NAMES; do
-  "$DEST" install --harness "$harness" >/dev/null
-  TARGET=$(harness_target "$harness")
-  WRITTEN="$WRITTEN; $harness -> $TARGET"
-  [ -n "$PRIMARY_TARGET" ] || PRIMARY_TARGET=$TARGET
-done
+WRITTEN="azdaja -> $DEST ($ASSET)$HARNESS_WRITTEN"
 
 # Bind the standalone PATH binary to the first selected harness. The generic
 # adjacent config.toml name is never written: Config::load support for this
@@ -481,7 +459,7 @@ fi
 
 # Only discard rollback material after every install surface is committed.
 if [ "$DEST_BACKUP_CREATED" = true ]; then
-  rm -rf "$DEST_BACKUP"
+  rm -f "$DEST_BACKUP"
   DEST_BACKUP_CREATED=false
 fi
 TRANSACTION_ACTIVE=false
