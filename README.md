@@ -49,38 +49,43 @@ The [crossover figure](docs/token-context-crossover.svg) is illustrative: it ass
 
 ## Install
 
-One command on Apple Silicon macOS or Linux x86-64. It detects installed harnesses without reading their configuration contents, verifies the v0.1.2 asset against `SHA256SUMS`, and atomically writes the `azdaja` binary. Before adding the optional short `az` alias, it scans every PATH entry: if Azure CLI or any other foreign `az` file or symlink exists, the install succeeds without an alias and reports `short alias skipped`. Standalone route configuration uses owned `azdaja-config.toml` plus `azdaja-config.toml.managed`; an unrelated adjacent `config.toml` is never overwritten:
+The one-line installer supports Apple Silicon macOS and Linux x86-64. This bare route requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness; if it detects none, it exits before downloading or writing anything. Detection reads only harness directories and `PATH`, not configuration contents:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh
 ```
 
-Detected harness setup runs automatically and installs the managed Azdaja skill for large-input tasks and explicit questions about Azdaja/`az` availability or use. Use `az install --harness all` (or a named harness) to update managed copies. Install output is exactly three lines: detection, writes, and an honest next step. Run the reported `az doctor`/`azdaja doctor` command, then reload the selected harness's skill registry or start a fresh session. `JCODE_HOME` is authoritative when set, including for detection and lifecycle operations. An already-open Jcode session caches its registry: run `skill_manage reload_all`, choose `/skills` -> `Reload all`, or start a fresh Jcode session before expecting the skill to appear. The installer does not kill or restart sessions and makes no provider call. If installed, `az` and `azdaja` run the same executable. A bare invocation prints an indexed 16-row truecolor half-block banner above the five-line help only on an interactive color terminal; non-TTY output, `NO_COLOR`, and `TERM=dumb` emit only the same exact five-line text through either name.
+The result is exactly three lines. Use the prominent short command `az` only when the `Written:` line reports `az -> ...`; if it reports `short alias skipped`, use `azdaja` instead. A foreign `az`, including Azure CLI, is untouched. When the alias is reported, **`az install --harness all`** updates all managed copies and **`az doctor`** runs the configured route canary; otherwise substitute `azdaja` in those commands.
+
+Detected harness setup is automatic. It installs the managed Azdaja skill for large-input tasks and explicit questions about Azdaja/`az` availability or use. The third output line prints the doctor command to run before reloading the selected harness's skill registry or starting a fresh session. When the binary directory is off `PATH`, that command is a shell-quoted absolute `azdaja` path; run it first, then follow the reload and `PATH` note. `JCODE_HOME` is authoritative when set. An already-open Jcode session caches its registry: run `skill_manage reload_all`, choose `/skills` -> `Reload all`, or start a fresh Jcode session. The installer makes no provider call.
+
+Standalone route configuration uses installer-owned `azdaja-config.toml` plus `azdaja-config.toml.managed`; an unrelated adjacent `config.toml` is never overwritten. A bare invocation prints an indexed 16-row truecolor half-block banner above the mandated five-line help only on an interactive color terminal; non-TTY output, `NO_COLOR`, and `TERM=dumb` emit only the same exact five-line text through either name.
 
 Manual alternative with Rust 1.95:
 
 ```bash
 cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked
-azdaja install --harness all
-azdaja doctor
 ```
 
-The Cargo path keeps `azdaja` available and does not create `az`; the one-line installer creates the short alias only when no foreign `az` exists anywhere on PATH. Inspect on-disk skill custody without contacting a provider with `az doctor --harness jcode` (or `all`), or run the existing configured-provider route canary with `az doctor`.
+Cargo creates `azdaja`, never `az`, and does not install a harness skill automatically. Continue with `azdaja install` to auto-detect supported harnesses, or `azdaja install --harness NAME` using a supported name. Run the exact absolute managed-binary `doctor` command that install prints, then reload or restart that harness. For Cargo removal, remove the managed skills first and then run `cargo uninstall azdaja`. The `--standalone` and standalone part of `--all` modes are only for the curl installer's ownership marker; an unmanaged executable is left untouched and line 3 directs you to its original installer or Cargo.
 
-The custody check verifies the managed directory, marker and hashes, executable, valid configuration, rendered skill awareness/version, and its absolute embedded binary path. `PASS ... installed on disk` does not mean an already-open harness has reloaded its registry.
-
-Uninstall one harness, all managed harness skills, only the installer-owned standalone PATH copy, or every managed surface:
+One combined lifecycle and uninstall reference (replace `az` with `azdaja` whenever the curl installer skipped the alias):
 
 ```bash
-azdaja uninstall
+azdaja install                              # Cargo: auto-detect installed harnesses
+azdaja install --harness jcode              # Cargo: choose one; all is also accepted
+# Run the exact managed-binary doctor command printed by install, then reload/restart.
+azdaja uninstall --harness all              # Cargo: remove managed skills first
+cargo uninstall azdaja
+az doctor --harness jcode                   # curl: provider-free custody check
+az uninstall --standalone                   # curl only: keep managed skills
+az uninstall --all                          # curl only: remove skills and standalone
 ```
+Every uninstall preflights all selected targets before deleting anything. Changed binaries/skills, symlinks, and unknown files cause a refusal; harness `config.toml` remains user-editable. Curl standalone removal deletes only its exact owned binary, relative `az -> azdaja` alias, Azdaja config, and marker. Foreign aliases, Azure CLI, configuration, and neighboring files remain untouched. See [Harness lifecycle and custody](docs/harness-lifecycle.md).
 
-Use `az uninstall --harness claude`, `az uninstall --harness all`, `az uninstall --standalone`, or `az uninstall --all` for a narrower or complete managed-surface selection.
+Supported harness names are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation and `doctor --harness` are provider-free; the latter proves only on-disk custody. A passing unqualified `doctor` proves only that the configured harness answered its fixed canary.
 
-Every uninstall preflights all selected targets before deleting anything. Harness configuration remains user-editable, but changed binaries/skills, symlinks, and unknown files cause a refusal. Standalone removal requires the exact adjacent `azdaja-config.toml.managed` installer marker; it removes only the currently executing `azdaja`, an exact relative `az -> azdaja` alias, the Azdaja config, and marker. Foreign aliases/configuration/files are left untouched or cause a pre-mutation refusal. Unix self-unlink is supported; locked-file platforms fail closed. Successful uninstall output is exactly three lines, distinguishes skill-only from standalone removal, and reminds you to reload/restart affected sessions. See [Harness lifecycle and custody](docs/harness-lifecycle.md).
-
-Supported harness targets are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation makes no provider call. A passing `doctor` proves only that the configured harness answered its fixed canary; `doctor --harness` makes the narrower on-disk custody claim described above. `Config::load` integration for adjacent `azdaja-config.toml` is complete and covered by the active suite. The provider-free [current-source integration acceptance receipt](bench/results/integration-acceptance-v0.1.2-local.json) binds exact hashes for the installer, Rust custody preflight, refusal tests, release-only 50 MiB gate, workflows, and current documentation; its selector coverage is not a native cross-platform or provider validation. It supersedes the old [short-alias delta receipt](bench/results/install-alias-delta-v0.1.2-public.json) only for current-source claims without changing those immutable historical bytes. The historical receipt's then-pending label is no longer current: adjacent `azdaja-config.toml` loading is implemented and covered. The [readiness supersession receipt](bench/results/v0.1.2-candidate-readiness-superseded-public.json) still marks the retained v0.1.2 binaries and their earlier matrix stale; new native assets and a fresh release matrix are required before release readiness. The historical [matrix](bench/results/install-matrix-v0.1.2-final-public.json) and [real-adapter receipt](bench/results/install-real-adapters-v0.1.2-final-public.json) remain evidence for their old bytes only, not the current source.
-
+The provider-free [source acceptance receipt](bench/results/integration-acceptance-v0.1.2-local.json) binds the exact older source hashes recorded at its base commit; it does not validate this onboarding delta and remains immutable historical evidence. The [short-alias delta receipt](bench/results/install-alias-delta-v0.1.2-public.json), [readiness supersession receipt](bench/results/v0.1.2-candidate-readiness-superseded-public.json), historical [matrix](bench/results/install-matrix-v0.1.2-final-public.json), and [real-adapter receipt](bench/results/install-real-adapters-v0.1.2-final-public.json) remain evidence for their old bytes only, not the current source. Local selector coverage is not a native cross-platform or provider validation. The readiness receipt marks the retained v0.1.2 binaries and their earlier matrix stale; new native assets and a fresh release matrix are required before release readiness.
 ## Use
 
 ```bash

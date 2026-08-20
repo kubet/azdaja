@@ -42,6 +42,39 @@ def check_relative_links() -> list[str]:
     return errors
 
 
+def check_site_onboarding_contract() -> list[str]:
+    errors: list[str] = []
+    site = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    css = (ROOT / "site" / "styles.css").read_text(encoding="utf-8")
+    command = "$ curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh"
+    required = [
+        "Apple Silicon macOS or Linux x86-64",
+        "requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness",
+        "otherwise it exits before downloading or writing anything",
+        "callable by any agent that can run a command",
+        "Model subcalls still route through a supported",
+        "Use <strong>az</strong> only when the installer reports its alias",
+        "including Azure CLI, is untouched",
+    ]
+    if site.count(command) != 1:
+        errors.append("site/index.html: expected one complete curl-pipe-sh CTA")
+    for phrase in required:
+        if phrase not in site:
+            errors.append(f"site/index.html: missing onboarding boundary: {phrase}")
+    match = re.search(r"\.install-command\{([^}]*)\}", css)
+    if not match:
+        errors.append("site/styles.css: missing install-command rule")
+    else:
+        rule = match.group(1)
+        if "white-space:nowrap" not in rule or "overflow-x:auto" not in rule:
+            errors.append("site/styles.css: install CTA must remain fully horizontally scrollable")
+        if "overflow:hidden" in rule:
+            errors.append("site/styles.css: install CTA must not hide overflow")
+    if "text-overflow:ellipsis" in css:
+        errors.append("site/styles.css: install CTA must not be truncated with an ellipsis")
+    return errors
+
+
 def check_claim_contract() -> list[str]:
     errors: list[str] = []
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -67,18 +100,26 @@ def check_claim_contract() -> list[str]:
         "docs/token-context-crossover.svg",
         "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh",
         "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked",
+        "Apple Silicon macOS and Linux x86-64",
+        "requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness",
+        "exits before downloading or writing anything",
+        "Use the prominent short command `az` only when",
+        "including Azure CLI, is untouched",
         "`az install --harness all`",
         "`az doctor`",
+        "shell-quoted absolute `azdaja` path",
         "indexed 16-row truecolor half-block banner",
         "non-TTY output, `NO_COLOR`, and `TERM=dumb`",
         "same exact five-line text through either name",
-        "The Cargo path keeps `azdaja` available and does not create `az`",
-        "scans every PATH entry",
+        "Cargo creates `azdaja`, never `az`",
+        "`azdaja install --harness NAME`",
+        "exact absolute managed-binary `doctor` command",
+        "cargo uninstall azdaja",
+        "only for the curl installer's ownership marker",
         "`short alias skipped`",
         "`azdaja-config.toml` plus `azdaja-config.toml.managed`",
         "an unrelated adjacent `config.toml` is never overwritten",
-        "`Config::load` integration for adjacent `azdaja-config.toml`",
-        "A passing `doctor` proves only",
+        "A passing unqualified `doctor` proves only",
         "0.0 Ember-minus-baseline **local shadow RHAE** difference",
         "**+8; +1.24% relative to the baseline raw count**",
         "not an efficiency or improvement claim",
@@ -91,13 +132,12 @@ def check_claim_contract() -> list[str]:
         "not a public-safe source tree",
         "clean allowlisted export under a new repository identity",
         "moving files does not sanitize history",
-        "current-source integration acceptance receipt",
         "bench/results/integration-acceptance-v0.1.2-local.json",
+        "binds the exact older source hashes recorded at its base commit",
+        "does not validate this onboarding delta",
         "short-alias delta receipt",
         "bench/results/install-alias-delta-v0.1.2-public.json",
         "not a native cross-platform or provider validation",
-        "then-pending label is no longer current",
-        "is complete and covered by the active suite",
         "release-only and ignored by the ordinary debug suite",
         "readiness supersession receipt",
         "bench/results/v0.1.2-candidate-readiness-superseded-public.json",
@@ -277,15 +317,22 @@ def check_claim_contract() -> list[str]:
             errors.append(f"README.md: unsupported owner-draft claim remains: {claim}")
     install_section = readme.split("## Install", 1)[1].split("## Use", 1)[0]
     install_blocks = re.findall(r"```bash\n(.*?)\n```", install_section, flags=re.DOTALL)
-    if len(install_blocks) != 3:
-        errors.append("README.md: Install section must contain exactly three bash blocks")
-    else:
-        if install_blocks[0] != "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh":
-            errors.append("README.md: first Install bash block must be the exact HTTPS installer command")
-        if "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked" not in install_blocks[1]:
-            errors.append("README.md: second Install bash block must retain the HTTPS cargo fallback")
-        if install_blocks[2] != "azdaja uninstall":
-            errors.append("README.md: third Install bash block must be exactly `azdaja uninstall`")
+    expected_install_blocks = [
+        "curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh",
+        "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked",
+        """azdaja install                              # Cargo: auto-detect installed harnesses
+azdaja install --harness jcode              # Cargo: choose one; all is also accepted
+# Run the exact managed-binary doctor command printed by install, then reload/restart.
+azdaja uninstall --harness all              # Cargo: remove managed skills first
+cargo uninstall azdaja
+az doctor --harness jcode                   # curl: provider-free custody check
+az uninstall --standalone                   # curl only: keep managed skills
+az uninstall --all                          # curl only: remove skills and standalone""",
+    ]
+    if install_blocks != expected_install_blocks:
+        errors.append(
+            "README.md: Install must contain exactly the curl, Cargo, and combined lifecycle/uninstall bash blocks"
+        )
     if "v0.1.1" in install_section:
         errors.append("README.md: Install section still references immutable v0.1.1 assets")
     if "git@github.com" in readme or "ssh://git@" in readme:
@@ -601,24 +648,22 @@ def check_integration_acceptance_receipt() -> list[str]:
     try:
         receipt = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return [f"current-source integration acceptance receipt read failed: {exc}"]
-    source_paths = [
-        ".github/workflows/ci.yml",
-        ".github/workflows/source-install-integrity.yml",
-        "README.md",
-        "SCOREBOARD.md",
-        "docs/harness-lifecycle.md",
-        "install.sh",
-        "site/install",
-        "src/lib.rs",
-        "src/main.rs",
-        "tests/process_xdg.rs",
-        "tests/product_50mb.rs",
-        "tests/site_installer.rs",
-        "tools/check_docs.py",
-    ]
-    expected_hashes = {name: _sha256(ROOT / name) for name in source_paths}
-    expected_commands = {
+        return [f"historical source acceptance receipt read failed: {exc}"]
+    # This receipt is immutable evidence for its recorded base commit. Do not
+    # compare it to the moving working tree and accidentally describe old
+    # validation as coverage for a newer onboarding delta.
+    expected_hashes = {
+        ".github/workflows/ci.yml": "c88095bc18e1b796fc6c6c290b8b391356a94b2c5c4602c7f375d5a44d4559bd",
+        ".github/workflows/source-install-integrity.yml": "1a946fc01c0c1a5f6dc78ffb9179bae5373dbf3c57f6b3d16cb65090ab63ac3b",
+        "README.md": "4d972009b928914c6c71c9de345c9ca5c9ad002d93041749fe329ab06d8de86e",
+        "SCOREBOARD.md": "5085dbef81adde7785efbc199b82aeb8bff473a4cffef1b324050a2c5d63fac8",
+        "install.sh": "661740d0aa985ac348ad56643f884f225771d36337694a5567b363fc7c24cdb6",
+        "site/install": "661740d0aa985ac348ad56643f884f225771d36337694a5567b363fc7c24cdb6",
+        "src/main.rs": "c5778ed0c5d4344f9a943ac4525eb05a4de64ec6f88f66ca486a5073b9fa125e",
+        "tests/product_50mb.rs": "87a66d26b5c82766af03b648540cb45802c1396aa5dd808f875f1b2e1ac279a8",
+        "tests/site_installer.rs": "f8a3e0dd43c15e3373d5a668d619a3db318476c3b93a2b62205e7d949cedb004",
+        "tools/check_docs.py": "5dbd07133f94e86143c2ec667e3750360168657a4b2f163b58a8e892250f6a87",
+    }    expected_commands = {
         "check_docs": "python3 tools/check_docs.py",
         "clippy": "cargo clippy --all-targets --all-features --locked -- -D warnings",
         "fmt": "cargo fmt --all --check",
@@ -685,10 +730,11 @@ def check_integration_acceptance_receipt() -> list[str]:
         or receipt.get("performance_contract") != expected_performance_contract
         or receipt.get("scope") != expected_scope
         or receipt.get("supersession") != expected_supersession
+        or _sha256(path) != "2d0c0dc550b053383a8b232f33644cb63d2842aa29a48f743bd3ca3f93858c36"
     ):
-        errors.append("current-source integration acceptance receipt: identity, exact hashes, commands, results, or evidence boundary changed")
+        errors.append("historical source acceptance receipt: immutable identity, hashes, results, or boundary changed")
     if (ROOT / "install.sh").read_bytes() != (ROOT / "site" / "install").read_bytes():
-        errors.append("current-source integration acceptance: installers are not byte-identical")
+        errors.append("active installers are not byte-identical")
     return errors
 
 
@@ -1292,6 +1338,7 @@ def main() -> int:
     errors = (
         check_root_layout()
         + check_relative_links()
+        + check_site_onboarding_contract()
         + check_claim_contract()
         + check_arc_public_surface()
         + check_alias_delta_receipt()

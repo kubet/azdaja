@@ -339,6 +339,10 @@ path_dir_key() {
     esac
   fi
 }
+shell_quote() {
+  quoted=$(printf '%s' "$1" | sed "s/'/'\\\\''/g")
+  printf "'%s'" "$quoted"
+}
 BIN_DIR_KEY=$(path_dir_key "$BIN_DIR")
 PATH_REST=${PATH:-}
 while :; do
@@ -497,10 +501,12 @@ if [ "$ALIAS_SKIP" = true ]; then
   if [ "$ON_PATH" = true ]; then
     printf 'Next: run azdaja doctor, then %s (%s is on PATH; short alias skipped)\n' "$RELOAD_INSTRUCTION" "$BIN_DIR"
   else
-    printf 'Next: add %s to PATH, run azdaja doctor, then %s (short alias skipped)\n' "$BIN_DIR" "$RELOAD_INSTRUCTION"
+    DOCTOR_COMMAND=$(shell_quote "$BIN_DIR_KEY/azdaja")
+    printf 'Next: run %s doctor, then %s; add %s to PATH for bare azdaja commands (short alias skipped)\n' "$DOCTOR_COMMAND" "$RELOAD_INSTRUCTION" "$BIN_DIR"
   fi
 elif [ "$ON_PATH" = true ]; then
   printf 'Next: run az doctor, then %s (%s is on PATH)\n' "$RELOAD_INSTRUCTION" "$BIN_DIR"
 else
-  printf 'Next: add %s to PATH, run az doctor, then %s\n' "$BIN_DIR" "$RELOAD_INSTRUCTION"
+  DOCTOR_COMMAND=$(shell_quote "$BIN_DIR_KEY/azdaja")
+  printf 'Next: run %s doctor, then %s; add %s to PATH for az/azdaja commands\n' "$DOCTOR_COMMAND" "$RELOAD_INSTRUCTION" "$BIN_DIR"
 fi

@@ -295,6 +295,28 @@ fn standalone(home: &Path, name: &str) -> PathBuf {
 }
 
 #[test]
+fn unmanaged_standalone_uninstall_points_to_original_installer_or_cargo() {
+    let scratch = Scratch::new("unmanaged-standalone");
+    let directory = scratch.0.join("cargo bin");
+    fs::create_dir_all(&directory).unwrap();
+    let binary = directory.join("azdaja");
+    fs::copy(env!("CARGO_BIN_EXE_azdaja"), &binary).unwrap();
+    fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let output = run(&binary, &scratch.0, &["uninstall", "--standalone"]);
+    let stdout = assert_success(&output);
+    assert_eq!(stdout.lines().count(), 3, "{stdout}");
+    assert!(stdout.contains("standalone not installer-managed (left untouched)"));
+    let next = stdout.lines().last().unwrap();
+    assert!(next.contains("original installer"), "{next}");
+    assert!(next.contains("cargo uninstall azdaja"), "{next}");
+    assert!(
+        binary.is_file(),
+        "unmanaged executable must remain untouched"
+    );
+}
+
+#[test]
 fn standalone_and_full_all_self_uninstall_preserve_foreign_neighbors() {
     let scratch = Scratch::new("standalone");
     let binary = standalone(&scratch.0, "custom bin");

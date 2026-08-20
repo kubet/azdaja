@@ -14,27 +14,28 @@ When `JCODE_HOME` is set, its value is authoritative for Jcode detection and eve
 
 ## Install and session discovery
 
+The curl one-liner supports Apple Silicon macOS and Linux x86-64 and requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness. With none detected it exits before downloading or writing. Its `Written:` line is also the command-name boundary: use `az` only when it reports the `az -> azdaja` alias; when it reports `short alias skipped`, use `azdaja`. A foreign `az`, including Azure CLI, remains untouched.
+
 ```bash
 az install --harness jcode
 az install --harness all
 ```
 
-Managed install output is exactly three lines. The third line contains the exact
-managed-binary `doctor` command and the selected harness's reload/restart step.
-Installation writes files only: it does not contact a provider, invoke a harness,
-kill a session, or claim that an open session has discovered the skill.
+The commands above assume the curl installer reported its alias. Otherwise use `azdaja install ...`. Managed install output is exactly three lines. The third line contains the shell-quoted absolute managed-binary `doctor` command and the selected harness's reload/restart step. Run that exact doctor command rather than the Cargo/PATH binary: the managed copy is adjacent to the selected route configuration. Installation writes files only; it does not contact a provider, invoke a harness, kill a session, or claim that an open session has discovered the skill.
 
-Harnesses can cache their skill registry. In particular, a Jcode session opened
-before installation will not see the new skill until you run
-`skill_manage reload_all`, choose `/skills` -> `Reload all`, or start a fresh
-Jcode session. Restart Claude, Codex, Gemini, or OpenCode after installing when
-its open session does not discover the skill. For `--harness all`, reload or
-restart all five.
+A Cargo install creates only `azdaja`. Complete its setup with `azdaja install` for automatic detection or `azdaja install --harness NAME` for a supported named harness, then run the exact managed doctor command it prints. Remove Cargo-managed skills before removing the executable:
 
-The standalone curl installer also emits exactly three lines. Its final line is
-collision-aware: it reports `az doctor` when it safely created `az`, otherwise
-`azdaja doctor`; reload/restart the selected detected harnesses after that
-command finishes.
+```bash
+azdaja install
+azdaja install --harness jcode
+# Run the exact managed-binary doctor command printed above.
+azdaja uninstall --harness all
+cargo uninstall azdaja
+```
+
+Harnesses can cache their skill registry. In particular, a Jcode session opened before installation will not see the new skill until you run `skill_manage reload_all`, choose `/skills` -> `Reload all`, or start a fresh Jcode session. Restart Claude, Codex, Gemini, or OpenCode after installing when its open session does not discover the skill. For `--harness all`, reload or restart all five.
+
+The standalone curl installer also emits exactly three lines. If its binary directory is off `PATH`, the final line starts with a shell-quoted absolute `azdaja doctor` command that is directly executable even when the path contains spaces, Unicode, or apostrophes; reload/restart and `PATH` guidance follows on that same line.
 
 ## Provider-free custody doctor
 
@@ -64,8 +65,8 @@ provider canary semantics.
 ```bash
 az uninstall --harness claude   # one managed skill
 az uninstall --harness all      # all five managed skills
-az uninstall --standalone       # installer-owned adjacent PATH surface
-az uninstall --all              # all five skills plus standalone
+az uninstall --standalone       # curl only: owned PATH surface
+az uninstall --all              # curl only: all skills plus standalone
 az uninstall --help
 ```
 
@@ -90,4 +91,4 @@ before any selected harness is removed. Unix permits a running process to
 unlink its executable. Platforms with locked running executables fail closed
 with manual-path guidance.
 
-Successful uninstall output is exactly three concise lines. `--harness` says it removed skill copies only and kept standalone; `--standalone` says it kept harness skills; `--all` names both surfaces. The last line asks you to reload/restart the affected harnesses so cached registries forget the removed skill.
+Successful uninstall output is exactly three concise lines. `--harness` says it removed skill copies only and kept standalone; `--standalone` says it kept harness skills; `--all` names both surfaces. The standalone modes are curl-only: without the curl ownership marker, the executable is left untouched and line 3 tells the user to return to the original installer or run `cargo uninstall azdaja` for a Cargo installation. When skills were removed, the same line also asks the user to reload/restart affected harnesses so cached registries forget them.

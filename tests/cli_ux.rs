@@ -148,6 +148,61 @@ fn doctor_prints_one_pass_or_fail_per_check_and_every_fail_has_a_fix() {
 }
 
 #[test]
+fn doctor_config_failures_name_adjacent_and_xdg_paths_before_provider_work() {
+    let scratch = Scratch::new("doctor-config-paths");
+    let adjacent_dir = scratch.0.join("adjacent bin");
+    fs::create_dir_all(&adjacent_dir).unwrap();
+    let adjacent_binary = adjacent_dir.join("azdaja");
+    fs::copy(binary(), &adjacent_binary).unwrap();
+    fs::set_permissions(&adjacent_binary, fs::Permissions::from_mode(0o755)).unwrap();
+    let adjacent_config = adjacent_dir.join("azdaja-config.toml");
+    fs::write(&adjacent_config, "not valid toml = [").unwrap();
+
+    let adjacent = Command::new(&adjacent_binary)
+        .arg("doctor")
+        .env("HOME", &scratch.0)
+        .env("AZDAJA_HOME", scratch.0.join("adjacent-state"))
+        .env_remove("AZDAJA_CONFIG")
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert_eq!(adjacent.status.code(), Some(1));
+    let (stdout, stderr) = utf8(&adjacent);
+    assert!(stderr.is_empty());
+    assert!(
+        stdout
+            .lines()
+            .next()
+            .unwrap()
+            .starts_with(&format!("FAIL config: {}:", adjacent_config.display())),
+        "{stdout}"
+    );
+
+    fs::remove_file(&adjacent_config).unwrap();
+    let xdg_home = scratch.0.join("xdg");
+    let xdg_config = xdg_home.join("azdaja/config.toml");
+    fs::create_dir_all(xdg_config.parent().unwrap()).unwrap();
+    fs::write(&xdg_config, "not valid toml = [").unwrap();
+    let xdg = command(&scratch.0)
+        .env("XDG_CONFIG_HOME", &xdg_home)
+        .env_remove("AZDAJA_CONFIG")
+        .arg("doctor")
+        .output()
+        .unwrap();
+    assert_eq!(xdg.status.code(), Some(1));
+    let (stdout, stderr) = utf8(&xdg);
+    assert!(stderr.is_empty());
+    assert!(
+        stdout
+            .lines()
+            .next()
+            .unwrap()
+            .starts_with(&format!("FAIL config: {}:", xdg_config.display())),
+        "{stdout}"
+    );
+}
+
+#[test]
 fn install_is_three_human_lines_and_detects_directories_and_clis() {
     let scratch = Scratch::new("install");
     fs::create_dir_all(scratch.0.join(".claude")).unwrap();

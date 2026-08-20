@@ -849,8 +849,16 @@ fn nearest_existing_install_ancestor(dst: &Path) -> Result<(PathBuf, fs::File)> 
 fn preflight_install(home: &Path, harness: &'static str) -> Result<InstallPlan> {
     let dst = target(home, harness)?;
     let (existing_directory, existing_ancestor) = if path_entry_exists(&dst)? {
-        validate_install(&dst, true)?;
-        (Some(open_install_directory(&dst)?), None)
+        validate_install(&dst, true).with_context(|| {
+            format!(
+                "refusing unowned or changed install target {}",
+                dst.display()
+            )
+        })?;
+        (
+            Some(open_install_directory(&dst).context("refusing unsafe install target")?),
+            None,
+        )
     } else {
         let ancestor = nearest_existing_install_ancestor(&dst)?;
         (None, Some(ancestor))
@@ -1392,7 +1400,7 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
         exact(args, 2, "uninstall")?;
         println!(
             "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all> | --standalone | --all]\n\
-             Modes:\n  --harness NAME  remove skill copies only; keep standalone\n  --standalone    remove installer-owned standalone only; keep harness skills\n  --all           remove all five harness skills and installer-owned standalone\n\
+             Modes:\n  --harness NAME  remove skill copies only; keep standalone\n  --standalone    remove curl-installer-owned standalone only; keep harness skills\n  --all           remove all five harness skills and curl-installer-owned standalone\n\
              Examples:\n  az uninstall --harness claude\n  az uninstall --harness all\n  az uninstall --standalone\n  az uninstall --all"
         );
         return Ok(());
@@ -1439,6 +1447,8 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
     } else {
         None
     };
+    let standalone_needs_original_installer =
+        matches!(standalone.as_ref(), Some(StandaloneRemoval::Unmanaged));
     for removal in &removals {
         if let Some(directory) = &removal.directory {
             validate_install(&removal.path, true)?;
@@ -1484,7 +1494,17 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
 
     println!("Selected: {report}");
     println!("Removed: {}", outcomes.join("; "));
-    if selected.is_empty() {
+    if standalone_needs_original_installer {
+        let removal = "remove the executable with its original installer, or run cargo uninstall azdaja for a Cargo install";
+        if selected.is_empty() {
+            println!("Next: {removal}");
+        } else {
+            println!(
+                "Next: {}; then {removal}",
+                harness_reload_instruction(&selected)
+            );
+        }
+    } else if selected.is_empty() {
         println!("Next: restart any harness sessions that used this Azdaja installation");
     } else {
         println!("Next: {}", harness_reload_instruction(&selected));

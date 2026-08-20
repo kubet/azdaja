@@ -68,6 +68,36 @@ fn v011_release_plan_is_exact_and_v010_receipts_remain_immutable() {
 }
 
 #[test]
+fn site_install_cta_is_complete_scrollable_and_has_onboarding_boundaries() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let site = fs::read_to_string(root.join("site/index.html")).unwrap();
+    let css = fs::read_to_string(root.join("site/styles.css")).unwrap();
+    let command =
+        "$ curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh";
+
+    assert_eq!(site.matches(command).count(), 1);
+    assert!(site.contains("Apple Silicon macOS or Linux x86-64"));
+    assert!(site.contains("requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness"));
+    assert!(site.contains("otherwise it exits before downloading or writing anything"));
+    assert!(site.contains("callable by any agent that can run a command"));
+    assert!(site.contains("Model subcalls still route through a supported"));
+    assert!(site.contains("Use <strong>az</strong> only when the installer reports its alias"));
+    assert!(site.contains("including Azure CLI, is untouched"));
+
+    let rule = css
+        .split(".install-command{")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    assert!(rule.contains("white-space:nowrap"));
+    assert!(rule.contains("overflow-x:auto"));
+    assert!(!rule.contains("overflow:hidden"));
+    assert!(!css.contains("text-overflow:ellipsis"));
+}
+
+#[test]
 fn workflows_are_read_only_and_have_no_release_mutation_automation() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows");
     for entry in fs::read_dir(root).unwrap() {

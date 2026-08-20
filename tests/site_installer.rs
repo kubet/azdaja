@@ -293,6 +293,28 @@ fn assert_owned_adjacent_config(bin: &Path) {
     );
 }
 
+fn shell_quoted(path: &Path) -> String {
+    format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
+}
+
+fn assert_off_path_doctor(next: &str, bin: &Path) {
+    let literal = bin.join("azdaja");
+    let canonical = fs::canonicalize(bin).unwrap().join("azdaja");
+    assert!(
+        [literal, canonical]
+            .iter()
+            .any(|absolute| next.starts_with(&format!(
+                "Next: run {} doctor, then ",
+                shell_quoted(absolute)
+            ))),
+        "{next}"
+    );
+    assert!(
+        next.contains("; add ") && next.contains(" to PATH"),
+        "{next}"
+    );
+}
+
 fn assert_alias_identity_and_local_caps(home: &Path, bin: &Path, path: &str) {
     assert_owned_adjacent_config(bin);
     let long = bin.join("azdaja");
@@ -377,7 +399,8 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         assert!(target(&home, "claude").join("azdaja").is_file());
         assert!(stdout.contains("azdaja ->") && stdout.contains("az ->"));
         let next = stdout.lines().last().unwrap();
-        assert!(next.contains("az doctor, then restart Claude to reload its skills"));
+        assert_off_path_doctor(next, &bin);
+        assert!(next.contains("restart Claude to reload its skills"));
         assert_alias_identity_and_local_caps(&home, &bin, system_path);
     }
     let requests = fs::read_to_string(&server.log).unwrap();
@@ -478,7 +501,7 @@ fn standalone_installer_honors_authoritative_custom_jcode_home() {
     let server = FixtureServer::start(&scratch.0, &fixture_root);
     let home = scratch.0.join("custom-jcode-home");
     let custom = scratch.0.join("Jcode root ☃ ' with spaces");
-    let bin = home.join("custom bin");
+    let bin = home.join("custom bin ☃ ' path");
     fs::create_dir_all(&custom).unwrap();
     let output = run_installer_with_jcode_home(
         InstallRun {
@@ -498,8 +521,40 @@ fn standalone_installer_honors_authoritative_custom_jcode_home() {
     assert!(custom.join("skills/azdaja/azdaja").is_file());
     assert!(!home.join(".jcode/skills/azdaja").exists());
     let next = stdout.lines().last().unwrap();
-    assert!(next.contains("az doctor, then"), "{next}");
+    assert_off_path_doctor(next, &bin);
     assert!(next.contains("skill_manage reload_all"), "{next}");
+
+    // Extract the advertised command exactly as a user would. A deliberately
+    // missing config makes doctor stop before evaluator/provider work while
+    // still proving the spaces/Unicode/apostrophe shell quoting is executable.
+    let command = next
+        .strip_prefix("Next: run ")
+        .unwrap()
+        .split_once(", then ")
+        .unwrap()
+        .0;
+    let missing_config = home.join("missing-provider-free-config.toml");
+    let executed = Command::new("sh")
+        .args(["-c", command])
+        .env("HOME", &home)
+        .env("JCODE_HOME", &custom)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .env("AZDAJA_HOME", home.join("quoted-command-state"))
+        .env("AZDAJA_CONFIG", &missing_config)
+        .env("PATH", "/usr/bin:/bin")
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert_eq!(executed.status.code(), Some(1));
+    assert!(executed.stderr.is_empty());
+    assert!(
+        String::from_utf8(executed.stdout)
+            .unwrap()
+            .starts_with(&format!(
+                "FAIL config: {}: file is missing",
+                missing_config.display()
+            ))
+    );
 
     let doctor = Command::new(bin.join("azdaja"))
         .args(["doctor", "--harness", "jcode"])
@@ -555,7 +610,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
                 _ => "restart OpenCode to reload its skills",
             };
             let next = stdout.lines().last().unwrap();
-            assert!(next.contains("az doctor, then"), "{next}");
+            assert_off_path_doctor(next, &bin);
             assert!(next.contains(reload), "harness={harness} next={next}");
             assert!(target(&home, harness).join("azdaja").is_file());
             assert_eq!(
@@ -581,13 +636,9 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
         });
         let stdout = assert_success(&output);
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
-        assert!(
-            stdout
-                .lines()
-                .last()
-                .unwrap()
-                .contains("az doctor, then reload/restart all five harnesses")
-        );
+        let next = stdout.lines().last().unwrap();
+        assert_off_path_doctor(next, &bin);
+        assert!(next.contains("reload/restart all five harnesses"));
         for harness in ["jcode", "claude", "codex", "gemini", "opencode"] {
             assert!(target(&home, harness).join("azdaja").is_file());
         }
@@ -731,7 +782,9 @@ fn alias_safety_failures_leave_home_and_foreign_paths_unchanged() {
                 .unwrap()
                 .contains("short alias skipped")
         );
-        assert!(stdout.lines().last().unwrap().contains("azdaja doctor"));
+        let next = stdout.lines().last().unwrap();
+        assert_off_path_doctor(next, &bin);
+        assert!(next.contains("short alias skipped"));
         assert!(!stdout.contains("; az ->"));
         assert!(bin.join("azdaja").is_file());
         assert_owned_adjacent_config(&bin);
