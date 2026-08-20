@@ -41,8 +41,19 @@ case "$HARNESS" in
   *) fail "unknown harness '$HARNESS' (choose jcode, claude, codex, gemini, opencode, or all)" 2 ;;
 esac
 
-[ -n "${HOME:-}" ] || fail 'HOME is not set; use --bin-dir DIR and set HOME before installing a harness'
-JCODE_ROOT=${JCODE_HOME:-$HOME/.jcode}
+case "${HOME-}" in
+  /*) ;;
+  '') fail 'HOME is not set; use --bin-dir DIR and set HOME before installing a harness' ;;
+  *) fail 'HOME must be set to an absolute path' ;;
+esac
+if [ "${JCODE_HOME+x}" = x ]; then
+  case "$JCODE_HOME" in
+    /*) JCODE_ROOT=$JCODE_HOME ;;
+    *) fail 'JCODE_HOME must be set to a non-empty absolute path' ;;
+  esac
+else
+  JCODE_ROOT=$HOME/.jcode
+fi
 
 DETECTED=
 add_detected() {
@@ -63,7 +74,10 @@ fi
 if [ -d "$HOME/.gemini" ] || command -v gemini >/dev/null 2>&1; then
   add_detected gemini
 fi
-CONFIG_ROOT=${XDG_CONFIG_HOME:-$HOME/.config}
+case "${XDG_CONFIG_HOME-}" in
+  /*) CONFIG_ROOT=$XDG_CONFIG_HOME ;;
+  *) CONFIG_ROOT=$HOME/.config ;;
+esac
 if [ -d "$CONFIG_ROOT/opencode" ] || command -v opencode >/dev/null 2>&1; then
   add_detected opencode
 fi

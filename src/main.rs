@@ -6,7 +6,7 @@ use azdaja::{
     SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS, SKILL, SoloSession, VERSION, call_model,
     capability_check, config_error_report, exec, final_answer, kill, list, load,
     model_trace_request_id, model_transport_error_category, model_transport_error_is_transient,
-    provider_interrupted, start,
+    provider_interrupt_exit_status, provider_interrupted, start,
 };
 use monty::MontyRun;
 use monty_types::CompileOptions;
@@ -254,7 +254,7 @@ fn interrupted_exit() -> Option<ExitCode> {
     } else {
         eprintln!("Interrupted: provider stopped; temporary prompt removed.");
     }
-    Some(ExitCode::from(130))
+    Some(ExitCode::from(provider_interrupt_exit_status()))
 }
 
 fn main() -> ExitCode {
@@ -454,23 +454,34 @@ fn command_exists(name: &str) -> bool {
         })
     })
 }
-fn jcode_root(home: &Path) -> PathBuf {
-    env::var_os("JCODE_HOME")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".jcode"))
+fn strict_absolute_override(name: &str) -> Result<Option<PathBuf>> {
+    let Some(value) = env::var_os(name) else {
+        return Ok(None);
+    };
+    let path = PathBuf::from(value);
+    if path.as_os_str().is_empty() || !path.is_absolute() {
+        bail!("{name} must be set to a non-empty absolute path")
+    }
+    Ok(Some(path))
 }
-fn detection_reasons(home: &Path, harness: &str) -> Vec<&'static str> {
+
+fn xdg_config_root(home: &Path) -> PathBuf {
+    env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .filter(|path| !path.as_os_str().is_empty() && path.is_absolute())
+        .unwrap_or_else(|| home.join(".config"))
+}
+
+fn jcode_root(home: &Path) -> Result<PathBuf> {
+    Ok(strict_absolute_override("JCODE_HOME")?.unwrap_or_else(|| home.join(".jcode")))
+}
+fn detection_reasons(home: &Path, harness: &str) -> Result<Vec<&'static str>> {
     let config_found = match harness {
-        "jcode" => jcode_root(home).is_dir(),
+        "jcode" => jcode_root(home)?.is_dir(),
         "claude" => home.join(".claude").is_dir(),
         "codex" => home.join(".codex").is_dir() || home.join(".agents/skills").is_dir(),
         "gemini" => home.join(".gemini").is_dir(),
-        _ => env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".config"))
-            .join("opencode")
-            .is_dir(),
+        _ => xdg_config_root(home).join("opencode").is_dir(),
     };
     let cli_found = match harness {
         "jcode" => command_exists("jcode") || command_exists("jcode-api"),
@@ -483,7 +494,7 @@ fn detection_reasons(home: &Path, harness: &str) -> Vec<&'static str> {
     if cli_found {
         reasons.push("CLI");
     }
-    reasons
+    Ok(reasons)
 }
 fn harnesses(which: Option<&str>) -> Result<(Vec<&'static str>, String)> {
     if let Some("all") = which {
@@ -503,7 +514,7 @@ fn harnesses(which: Option<&str>) -> Result<(Vec<&'static str>, String)> {
     let mut detected = Vec::new();
     let mut report = Vec::new();
     for harness in ALL_HARNESSES {
-        let reasons = detection_reasons(&home, harness);
+        let reasons = detection_reasons(&home, harness)?;
         if !reasons.is_empty() {
             detected.push(harness);
             report.push(format!("{harness} ({})", reasons.join(" + ")));
@@ -517,22 +528,25 @@ fn harnesses(which: Option<&str>) -> Result<(Vec<&'static str>, String)> {
     Ok((detected, report.join(", ")))
 }
 fn home() -> Result<PathBuf> {
-    env::var_os("HOME")
-        .or_else(|| env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-        .ok_or_else(|| anyhow!("no home directory"))
+    for name in ["HOME", "USERPROFILE"] {
+        if let Some(value) = env::var_os(name) {
+            let path = PathBuf::from(value);
+            if path.as_os_str().is_empty() || !path.is_absolute() {
+                bail!("{name} must be set to a non-empty absolute path")
+            }
+            return Ok(path);
+        }
+    }
+    bail!("no home directory")
 }
-fn target(home: &Path, h: &str) -> PathBuf {
-    match h {
-        "jcode" => jcode_root(home).join("skills/azdaja"),
+fn target(home: &Path, h: &str) -> Result<PathBuf> {
+    Ok(match h {
+        "jcode" => jcode_root(home)?.join("skills/azdaja"),
         "claude" => home.join(".claude/skills/azdaja"),
         "codex" => home.join(".agents/skills/azdaja"),
         "gemini" => home.join(".gemini/skills/azdaja"),
-        _ => env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".config"))
-            .join("opencode/skills/azdaja"),
-    }
+        _ => xdg_config_root(home).join("opencode/skills/azdaja"),
+    })
 }
 fn adapter(h: &str) -> (&'static str, &'static str) {
     match h {
@@ -833,7 +847,7 @@ fn nearest_existing_install_ancestor(dst: &Path) -> Result<(PathBuf, fs::File)> 
 }
 
 fn preflight_install(home: &Path, harness: &'static str) -> Result<InstallPlan> {
-    let dst = target(home, harness);
+    let dst = target(home, harness)?;
     let (existing_directory, existing_ancestor) = if path_entry_exists(&dst)? {
         validate_install(&dst, true)?;
         (Some(open_install_directory(&dst)?), None)
@@ -887,7 +901,7 @@ fn install_cmd(args: &[String]) -> Result<()> {
         {
             (Some(harness.as_str()), true)
         }
-        _ => bail!("usage: {} [--harness NAME] [--preflight-only]", args[0]),
+        _ => return Err(usage_error("install")),
     };
     let (selected, detection_report) = harnesses(which)?;
     let home = home()?;
@@ -1094,7 +1108,7 @@ fn read_install_regular(path: &Path) -> Result<Vec<u8>> {
 fn read_manifest(dst: &Path) -> Result<Manifest> {
     let manifest: Manifest = serde_json::from_slice(
         &read_install_regular(&dst.join(".azdaja-managed"))
-            .context("managed marker is missing or unsafe")?,
+            .context("refusing unowned or unsafe managed directory: marker is missing or unsafe")?,
     )
     .context("managed marker is invalid")?;
     let binary = if cfg!(windows) {
@@ -1215,7 +1229,7 @@ fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
     let home = home()?;
     let mut passed = true;
     for &harness in selected {
-        let dst = target(&home, harness);
+        let dst = target(&home, harness)?;
         match validate_skill_custody(&dst) {
             Ok(()) => println!(
                 "PASS {harness}: managed Azdaja skill is installed on disk at {}",
@@ -1254,7 +1268,7 @@ fn preflight_harness_removals(
 ) -> Result<Vec<HarnessRemoval>> {
     let mut removals = Vec::new();
     for &harness in selected {
-        let path = target(home, harness);
+        let path = target(home, harness)?;
         let directory = if path_entry_exists(&path)? {
             let directory = open_install_directory(&path)?;
             // Configuration is the one managed file users are explicitly allowed to customize.
@@ -1413,9 +1427,7 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
             "all five harness skills and standalone".into(),
             true,
         ),
-        _ => bail!(
-            "usage: uninstall [--harness NAME | --standalone | --all] (run az uninstall --help)"
-        ),
+        _ => return Err(usage_error("uninstall")),
     };
     let home = home()?;
 

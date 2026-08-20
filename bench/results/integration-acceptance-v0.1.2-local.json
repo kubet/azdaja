@@ -1,5 +1,5 @@
 {
-  "base_commit": "fe2eb9705266e39d75eef49e85b19e5270ad899d",
+  "base_commit": "193a63b6d73110155ec090d12fbb52f51bb11bfd",
   "commands": {
     "check_docs": "python3 tools/check_docs.py",
     "clippy": "cargo clippy --all-targets --all-features --locked -- -D warnings",
@@ -45,14 +45,17 @@
   "source_sha256": {
     ".github/workflows/ci.yml": "c88095bc18e1b796fc6c6c290b8b391356a94b2c5c4602c7f375d5a44d4559bd",
     ".github/workflows/source-install-integrity.yml": "1a946fc01c0c1a5f6dc78ffb9179bae5373dbf3c57f6b3d16cb65090ab63ac3b",
-    "README.md": "4d972009b928914c6c71c9de345c9ca5c9ad002d93041749fe329ab06d8de86e",
+    "README.md": "e09e42a5caae5e946febbc340e1fdb54559c465cb4c9b9b5c2b8475324672d75",
     "SCOREBOARD.md": "5085dbef81adde7785efbc199b82aeb8bff473a4cffef1b324050a2c5d63fac8",
-    "install.sh": "661740d0aa985ac348ad56643f884f225771d36337694a5567b363fc7c24cdb6",
-    "site/install": "661740d0aa985ac348ad56643f884f225771d36337694a5567b363fc7c24cdb6",
-    "src/main.rs": "c5778ed0c5d4344f9a943ac4525eb05a4de64ec6f88f66ca486a5073b9fa125e",
+    "docs/harness-lifecycle.md": "bde19fa5e16cd5c29aabc27f3c583a696d446f32e1a8b8bb1348aa8666e7855b",
+    "install.sh": "7164f4bdca480872f5d5b84079882b865c6656ca4a0411deac013190ed718bb0",
+    "site/install": "7164f4bdca480872f5d5b84079882b865c6656ca4a0411deac013190ed718bb0",
+    "src/lib.rs": "96af1f1b57889638fde26e34242f8e8978e12e7ab8ece7b9987f377d6e8fbd93",
+    "src/main.rs": "9c410c04be2cbd120aca7fdfedca1f87f736fb93ee194978010adabe7a7aa79f",
+    "tests/process_xdg.rs": "56baee44292d159a7c0877c9856195895ea85118e41f3388175308275792ca46",
     "tests/product_50mb.rs": "87a66d26b5c82766af03b648540cb45802c1396aa5dd808f875f1b2e1ac279a8",
-    "tests/site_installer.rs": "f8a3e0dd43c15e3373d5a668d619a3db318476c3b93a2b62205e7d949cedb004",
-    "tools/check_docs.py": "5dbd07133f94e86143c2ec667e3750360168657a4b2f163b58a8e892250f6a87"
+    "tests/site_installer.rs": "5ce6b08a343796e74fa5fe7e4603099ea9fdaba5d5fd64f584b540094db803c8",
+    "tools/check_docs.py": "6b8896ec18d8d9737d0a90d58d1482ca46c7241b351e4ca616b016d67a3ce89d"
   },
   "status": "PASS_PROVIDER_FREE_EXACT_SOURCE",
   "supersession": {

@@ -65,27 +65,21 @@ azdaja install --harness all
 azdaja doctor
 ```
 
-The Cargo path keeps `azdaja` available and does not create `az`; the one-line installer creates the short alias only when no foreign `az` exists anywhere on PATH. Inspect on-disk skill custody without contacting a provider, or run the existing route canary explicitly:
-
-```bash
-az doctor --harness jcode  # provider-free; use all for every target
-az doctor                  # existing evaluator + configured-provider route canary
-```
+The Cargo path keeps `azdaja` available and does not create `az`; the one-line installer creates the short alias only when no foreign `az` exists anywhere on PATH. Inspect on-disk skill custody without contacting a provider with `az doctor --harness jcode` (or `all`), or run the existing configured-provider route canary with `az doctor`.
 
 The custody check verifies the managed directory, marker and hashes, executable, valid configuration, rendered skill awareness/version, and its absolute embedded binary path. `PASS ... installed on disk` does not mean an already-open harness has reloaded its registry.
 
 Uninstall one harness, all managed harness skills, only the installer-owned standalone PATH copy, or every managed surface:
 
 ```bash
-az uninstall --harness claude
-az uninstall --harness all
-az uninstall --standalone
-az uninstall --all
+azdaja uninstall
 ```
+
+Use `az uninstall --harness claude`, `az uninstall --harness all`, `az uninstall --standalone`, or `az uninstall --all` for a narrower or complete managed-surface selection.
 
 Every uninstall preflights all selected targets before deleting anything. Harness configuration remains user-editable, but changed binaries/skills, symlinks, and unknown files cause a refusal. Standalone removal requires the exact adjacent `azdaja-config.toml.managed` installer marker; it removes only the currently executing `azdaja`, an exact relative `az -> azdaja` alias, the Azdaja config, and marker. Foreign aliases/configuration/files are left untouched or cause a pre-mutation refusal. Unix self-unlink is supported; locked-file platforms fail closed. Successful uninstall output is exactly three lines, distinguishes skill-only from standalone removal, and reminds you to reload/restart affected sessions. See [Harness lifecycle and custody](docs/harness-lifecycle.md).
 
-Supported harness targets are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation makes no provider call. A passing route `doctor` proves only that the configured harness answered its fixed canary; `doctor --harness` makes the narrower on-disk custody claim described above. The provider-free [current-source integration acceptance receipt](bench/results/integration-acceptance-v0.1.2-local.json) binds exact hashes for the installer, Rust custody preflight, refusal tests, release-only 50 MiB gate, workflows, and current documentation; its selector coverage is not a native cross-platform or provider validation. It supersedes the old [short-alias delta receipt](bench/results/install-alias-delta-v0.1.2-public.json) only for current-source claims without changing those immutable historical bytes. The historical receipt's then-pending label is no longer current: adjacent `azdaja-config.toml` loading is implemented and covered. The [readiness supersession receipt](bench/results/v0.1.2-candidate-readiness-superseded-public.json) still marks the retained v0.1.2 binaries and their earlier matrix stale; new native assets and a fresh release matrix are required before release readiness. The historical [matrix](bench/results/install-matrix-v0.1.2-final-public.json) and [real-adapter receipt](bench/results/install-real-adapters-v0.1.2-final-public.json) remain evidence for their old bytes only, not the current source.
+Supported harness targets are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation makes no provider call. A passing `doctor` proves only that the configured harness answered its fixed canary; `doctor --harness` makes the narrower on-disk custody claim described above. `Config::load` integration for adjacent `azdaja-config.toml` is complete and covered by the active suite. The provider-free [current-source integration acceptance receipt](bench/results/integration-acceptance-v0.1.2-local.json) binds exact hashes for the installer, Rust custody preflight, refusal tests, release-only 50 MiB gate, workflows, and current documentation; its selector coverage is not a native cross-platform or provider validation. It supersedes the old [short-alias delta receipt](bench/results/install-alias-delta-v0.1.2-public.json) only for current-source claims without changing those immutable historical bytes. The historical receipt's then-pending label is no longer current: adjacent `azdaja-config.toml` loading is implemented and covered. The [readiness supersession receipt](bench/results/v0.1.2-candidate-readiness-superseded-public.json) still marks the retained v0.1.2 binaries and their earlier matrix stale; new native assets and a fresh release matrix are required before release readiness. The historical [matrix](bench/results/install-matrix-v0.1.2-final-public.json) and [real-adapter receipt](bench/results/install-real-adapters-v0.1.2-final-public.json) remain evidence for their old bytes only, not the current source.
 
 ## Use
 
@@ -105,7 +99,7 @@ az kill "$sid"
 
 Core commands: `start`, `load`, `exec`, `final`, `list`, `kill`, `solo`, `doctor`, `install`, `uninstall`. Every command accepts `--help`; top-level `--help` lists the full signatures. Invalid arity or options return that command's same canonical usage line on stderr with status 2.
 
-For external command adapters, interrupting an in-flight `exec` or `solo` provider turn stops the provider process group and waits for it before returning status 130. A bound `{prompt_file}` temporary is removed without following a replaced path. Interrupted `exec` cells do not replace the prior session snapshot, so the session remains usable. `solo` rejects blank questions, blank model overrides, and a blank configured default model before loading the input or entering a provider. `doctor` configuration failures remain provider-free and report the sanitized configuration path, terminal cause, and repair action.
+For external command adapters on Unix, an in-flight `SIGINT`, `SIGTERM`, or `SIGHUP` stops the provider process group and waits for its direct child before returning the conventional status `128 + signal` (`130` for `SIGINT`). Direct-child success, error, timeout, and unwind also terminate the remaining group before pipe workers are joined, so inherited pipes cannot leave an adapter daemon or stall completion. Windows still has direct-child timeout custody but no portable POSIX signal/process-group descendant guarantee. A bound `{prompt_file}` temporary is removed without following a replaced path. Interrupted `exec` cells do not replace the prior session snapshot, so the session remains usable. `solo` rejects blank questions, blank model overrides, and a blank configured default model before loading the input or entering a provider. `doctor` configuration failures remain provider-free and report the sanitized configuration path, terminal cause, and repair action. Explicit `AZDAJA_HOME` and `AZDAJA_CONFIG` values must be nonempty absolute paths and fail before provider entry; invalid XDG config/state roots are ignored in favor of absolute HOME defaults.
 
 ## ARC-AGI-3 diagnostic
 

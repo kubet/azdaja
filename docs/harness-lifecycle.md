@@ -10,7 +10,7 @@ Azdaja manages one skill directory per supported harness:
 | Gemini | `~/.gemini/skills/azdaja` |
 | OpenCode | `${XDG_CONFIG_HOME:-~/.config}/opencode/skills/azdaja` |
 
-When `JCODE_HOME` is set, its value is authoritative for Jcode detection and every install, doctor, uninstall, snapshot, and rollback path. Paths containing spaces, Unicode, or apostrophes are supported; the managed install next step shell-quotes its exact binary path.
+When `JCODE_HOME` is set, its value is authoritative for Jcode detection and every install, doctor, uninstall, snapshot, and rollback path. Explicit `JCODE_HOME`, `AZDAJA_HOME`, and `AZDAJA_CONFIG` overrides must be nonempty absolute paths. An invalid Jcode override fails before harness lifecycle mutation; invalid Azdaja state/config overrides fail before provider entry. Unset, empty, or relative `XDG_CONFIG_HOME` and `XDG_STATE_HOME` values are ignored as required by the XDG specification, falling back to the absolute `HOME` locations `~/.config` and `~/.local/state`. This prevents a working directory from becoming an implicit configuration, OpenCode, or state root. Paths containing spaces, Unicode, or apostrophes are supported; the managed install next step shell-quotes its exact binary path.
 
 ## Install and session discovery
 

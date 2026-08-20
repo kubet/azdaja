@@ -43,14 +43,17 @@ pub const SKILL: &str = include_str!("../assets/SKILL.md");
 pub const DEFAULT_CONFIG: &str = include_str!("../assets/config.toml");
 pub const SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS: usize = 45_000;
 
-static INTERRUPT_REQUESTED: AtomicBool = AtomicBool::new(false);
 static PROVIDER_INTERRUPTED: AtomicBool = AtomicBool::new(false);
+#[cfg(unix)]
+static INTERRUPT_SIGNAL: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 #[cfg(unix)]
 static INTERRUPT_HANDLER_INSTALL: OnceLock<std::result::Result<(), i32>> = OnceLock::new();
 
 #[cfg(unix)]
-extern "C" fn record_interrupt(_: libc::c_int) {
-    INTERRUPT_REQUESTED.store(true, Ordering::SeqCst);
+extern "C" fn record_interrupt(signal: libc::c_int) {
+    // Only async-signal-safe atomics are touched here. Preserve the first signal so the
+    // command can return the conventional 128 + signal status after process-tree cleanup.
+    let _ = INTERRUPT_SIGNAL.compare_exchange(0, signal, Ordering::SeqCst, Ordering::SeqCst);
 }
 
 fn install_provider_interrupt_handler() -> Result<()> {
@@ -63,13 +66,14 @@ fn install_provider_interrupt_handler() -> Result<()> {
             unsafe {
                 libc::sigemptyset(&mut action.sa_mask);
             }
-            if unsafe { libc::sigaction(libc::SIGINT, &action, std::ptr::null_mut()) } == 0 {
-                Ok(())
-            } else {
-                Err(std::io::Error::last_os_error()
-                    .raw_os_error()
-                    .unwrap_or(libc::EINVAL))
+            for signal in [libc::SIGINT, libc::SIGTERM, libc::SIGHUP] {
+                if unsafe { libc::sigaction(signal, &action, std::ptr::null_mut()) } != 0 {
+                    return Err(std::io::Error::last_os_error()
+                        .raw_os_error()
+                        .unwrap_or(libc::EINVAL));
+                }
             }
+            Ok(())
         });
         if let Err(code) = installed {
             return Err(std::io::Error::from_raw_os_error(*code).into());
@@ -82,8 +86,30 @@ pub fn provider_interrupted() -> bool {
     PROVIDER_INTERRUPTED.load(Ordering::SeqCst)
 }
 
+/// Conventional shell status for the Unix signal that interrupted provider custody.
+///
+/// Windows does not expose the POSIX INT/TERM/HUP contract used by this supervisor.
+pub fn provider_interrupt_exit_status() -> u8 {
+    #[cfg(unix)]
+    {
+        let signal = INTERRUPT_SIGNAL.load(Ordering::SeqCst);
+        u8::try_from(128_i32.saturating_add(signal)).unwrap_or(130)
+    }
+    #[cfg(not(unix))]
+    {
+        130
+    }
+}
+
 fn interrupt_requested() -> bool {
-    INTERRUPT_REQUESTED.load(Ordering::SeqCst)
+    #[cfg(unix)]
+    {
+        INTERRUPT_SIGNAL.load(Ordering::SeqCst) != 0
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
 }
 
 fn mark_provider_interrupted() {
@@ -310,7 +336,11 @@ impl Default for Config {
 }
 impl Config {
     pub fn load() -> Result<Self> {
-        if let Some(path) = env::var_os("AZDAJA_CONFIG").map(PathBuf::from) {
+        // Validate both authoritative overrides before any configuration can select a provider.
+        // This also makes an invalid AZDAJA_HOME fail closed for stdin-based adapters that do not
+        // otherwise need to allocate state before spawning.
+        let _ = strict_absolute_override("AZDAJA_HOME")?;
+        if let Some(path) = strict_absolute_override("AZDAJA_CONFIG")? {
             return load_config_file(&path)?.ok_or_else(|| config_issue(&path, "file is missing"));
         }
 
@@ -392,15 +422,31 @@ fn now_ms() -> u128 {
         .unwrap_or_default()
         .as_millis()
 }
-fn home() -> Option<PathBuf> {
-    env::var_os("HOME")
-        .or_else(|| env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
+fn absolute_home() -> Option<PathBuf> {
+    ["HOME", "USERPROFILE"].into_iter().find_map(|name| {
+        let path = PathBuf::from(env::var_os(name)?);
+        (!path.as_os_str().is_empty() && path.is_absolute()).then_some(path)
+    })
 }
+
+fn strict_absolute_override(name: &str) -> Result<Option<PathBuf>> {
+    let Some(value) = env::var_os(name) else {
+        return Ok(None);
+    };
+    let path = PathBuf::from(value);
+    if path.as_os_str().is_empty() || !path.is_absolute() {
+        bail!("{name} must be set to a non-empty absolute path")
+    }
+    Ok(Some(path))
+}
+
+fn xdg_absolute(name: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(env::var_os(name)?);
+    (!path.as_os_str().is_empty() && path.is_absolute()).then_some(path)
+}
+
 fn config_home() -> Option<PathBuf> {
-    env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| home().map(|p| p.join(".config")))
+    xdg_absolute("XDG_CONFIG_HOME").or_else(|| absolute_home().map(|p| p.join(".config")))
 }
 fn load_config_file(path: &Path) -> Result<Option<Config>> {
     let Some(bytes) = read_regular_nofollow(path)
@@ -426,11 +472,11 @@ fn load_config_file(path: &Path) -> Result<Option<Config>> {
         .map_err(|error| config_issue(path, config_validation_cause(&error)))
 }
 pub fn state_home() -> Result<PathBuf> {
-    let p = env::var_os("AZDAJA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| env::var_os("XDG_STATE_HOME").map(|p| PathBuf::from(p).join("azdaja")))
-        .or_else(|| home().map(|p| p.join(".local/state/azdaja")))
-        .ok_or_else(|| anyhow!("no home directory; set AZDAJA_HOME"))?;
+    let p = strict_absolute_override("AZDAJA_HOME")?
+        .or_else(|| xdg_absolute("XDG_STATE_HOME").map(|p| p.join("azdaja")))
+        .or_else(|| absolute_home().map(|p| p.join(".local/state/azdaja")))
+        .ok_or_else(|| anyhow!("no absolute home directory; set AZDAJA_HOME"))?;
+    debug_assert!(p.is_absolute());
     secure_dir(&p)?;
     Ok(p)
 }
@@ -3464,6 +3510,71 @@ impl Drop for JcodeWorkspace {
     }
 }
 
+/// A spawned adapter remains in custody until its entire process group has been killed and its
+/// direct child has been waited. Dropping this guard is the unwind/error backstop.
+struct CustodiedChild {
+    child: std::process::Child,
+    finished: bool,
+}
+
+impl CustodiedChild {
+    fn new(child: std::process::Child) -> Self {
+        Self {
+            child,
+            finished: false,
+        }
+    }
+
+    fn child_mut(&mut self) -> &mut std::process::Child {
+        &mut self.child
+    }
+
+    fn terminate_and_reap(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        if self.finished {
+            return self.child.wait();
+        }
+
+        #[cfg(unix)]
+        {
+            // The child is the process-group leader. This is deliberately done even after the
+            // direct child exited: background descendants can still own its stdout/stderr/stdin
+            // pipe ends and would otherwise make reader/writer joins hang indefinitely.
+            let result = unsafe { libc::kill(-(self.child.id() as i32), libc::SIGKILL) };
+            if result != 0 {
+                let error = std::io::Error::last_os_error();
+                if error.raw_os_error() != Some(libc::ESRCH) {
+                    self.finished = self.child.wait().is_ok();
+                    return Err(error);
+                }
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            // std does not provide a portable descendant-tree primitive. The direct child is
+            // still terminated and reaped; the documented POSIX group guarantee is Unix-only.
+            let _ = self.child.kill();
+        }
+
+        let status = self.child.wait();
+        self.finished = status.is_ok();
+        status
+    }
+
+    /// Release the long-lived private bridge only after its socket is ready.
+    #[cfg(unix)]
+    fn release(mut self) {
+        self.finished = true;
+    }
+}
+
+impl Drop for CustodiedChild {
+    fn drop(&mut self) {
+        if !self.finished {
+            let _ = self.terminate_and_reap();
+        }
+    }
+}
+
 #[cfg(unix)]
 fn bridge_paths() -> Result<BridgePaths> {
     use std::os::unix::ffi::OsStrExt;
@@ -3583,16 +3694,22 @@ fn ensure_jcode_bridge(cfg: &Config) -> Result<PathBuf> {
         .stderr(Stdio::null());
     use std::os::unix::process::CommandExt;
     cmd.process_group(0);
-    let mut child = cmd
+    let child = cmd
         .spawn()
         .context("failed to start private Jcode API bridge")?;
-    atomic_write(&paths.pidfile, child.id().to_string().as_bytes())?;
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut child = CustodiedChild::new(child);
+    atomic_write(
+        &paths.pidfile,
+        child.child_mut().id().to_string().as_bytes(),
+    )?;
+    let deadline = Instant::now() + Duration::from_secs(cfg.sub_timeout.min(30));
     while Instant::now() < deadline {
         if socket_alive(&paths.socket) {
+            child.release();
             return Ok(paths.socket);
         }
-        if let Some(status) = child.try_wait()? {
+        if let Some(status) = child.child_mut().try_wait()? {
+            // The custody guard kills any bridge descendants before this error unwinds.
             bail!(
                 "private Jcode API bridge exited before readiness ({status}); inspect {}",
                 paths.home.join("logs").display()
@@ -3600,8 +3717,7 @@ fn ensure_jcode_bridge(cfg: &Config) -> Result<PathBuf> {
         }
         thread::sleep(Duration::from_millis(25))
     }
-    let _ = child.kill();
-    let _ = child.wait();
+    child.terminate_and_reap()?;
     bail!(
         "private Jcode API bridge did not become ready; inspect {} (runtime marker {})",
         paths.home.join("logs").display(),
@@ -4978,54 +5094,56 @@ fn call_model_inner(
         command.process_group(0);
     }
     install_provider_interrupt_handler()?;
-    let mut child = command
+    let child = command
         .spawn()
         .with_context(|| format!("failed to start {program}"))?;
-    let out = child.stdout.take().unwrap();
-    let err = child.stderr.take().unwrap();
+    let mut child = CustodiedChild::new(child);
+    let out = child.child_mut().stdout.take().unwrap();
+    let err = child.child_mut().stderr.take().unwrap();
     let out_thread = thread::spawn(move || drain_limited(out, 16 * 1024 * 1024));
     let err_thread = thread::spawn(move || drain_limited(err, 1024 * 1024));
-    let input_thread = child.stdin.take().map(|mut input| {
+    let input_thread = child.child_mut().stdin.take().map(|mut input| {
         let bytes = prompt.as_bytes().to_vec();
         thread::spawn(move || input.write_all(&bytes))
     });
     let deadline = Instant::now() + Duration::from_secs(cfg.sub_timeout);
     let mut timed_out = false;
     let mut interrupted = false;
-    let status = loop {
+    let mut wait_error = None;
+    loop {
         if interrupt_requested() {
             interrupted = true;
-            #[cfg(unix)]
-            unsafe {
-                libc::kill(-(child.id() as i32), libc::SIGKILL);
-            }
-            #[cfg(not(unix))]
-            let _ = child.kill();
-            break child.wait()?;
+            break;
         }
-        if let Some(status) = child.try_wait()? {
-            break status;
-        } else if Instant::now() >= deadline {
-            timed_out = true;
-            #[cfg(unix)]
-            unsafe {
-                libc::kill(-(child.id() as i32), libc::SIGKILL);
+        match child.child_mut().try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if Instant::now() >= deadline => {
+                timed_out = true;
+                break;
             }
-            #[cfg(not(unix))]
-            let _ = child.kill();
-            break child.wait()?;
+            Ok(None) => thread::sleep(Duration::from_millis(10)),
+            Err(error) => {
+                wait_error = Some(error);
+                break;
+            }
         }
-        thread::sleep(Duration::from_millis(10));
-    };
+    }
+
+    // Always close custody before joining any pipe worker. In particular, a successful or failed
+    // direct parent is not enough: its background descendants can inherit all three pipe ends.
+    let custody_result = child.terminate_and_reap();
     let input_result = input_thread
-        .map(|t| t.join().map_err(|_| anyhow!("stdin writer panicked")))
-        .transpose()?;
-    let (stdout, out_over) = out_thread
+        .map(|worker| worker.join().map_err(|_| anyhow!("stdin writer panicked")))
+        .transpose();
+    let stdout_result = out_thread
         .join()
-        .map_err(|_| anyhow!("stdout reader panicked"))??;
-    let (stderr, err_over) = err_thread
+        .map_err(|_| anyhow!("stdout reader panicked"));
+    let stderr_result = err_thread
         .join()
-        .map_err(|_| anyhow!("stderr reader panicked"))??;
+        .map_err(|_| anyhow!("stderr reader panicked"));
+
+    // Signal and deadline outcomes retain their exact public contract even when terminating the
+    // provider caused the expected BrokenPipe in the input worker.
     if interrupted {
         mark_provider_interrupted();
         bail!("provider interrupted")
@@ -5033,6 +5151,13 @@ fn call_model_inner(
     if timed_out {
         bail!("sub-LLM timed out after {}s", cfg.sub_timeout)
     }
+    if let Some(error) = wait_error {
+        return Err(error.into());
+    }
+    let status = custody_result?;
+    let input_result = input_result?;
+    let (stdout, out_over) = stdout_result??;
+    let (stderr, err_over) = stderr_result??;
     if let Some(result) = input_result {
         result?
     }

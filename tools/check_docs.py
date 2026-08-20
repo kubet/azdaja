@@ -607,9 +607,12 @@ def check_integration_acceptance_receipt() -> list[str]:
         ".github/workflows/source-install-integrity.yml",
         "README.md",
         "SCOREBOARD.md",
+        "docs/harness-lifecycle.md",
         "install.sh",
         "site/install",
+        "src/lib.rs",
         "src/main.rs",
+        "tests/process_xdg.rs",
         "tests/product_50mb.rs",
         "tests/site_installer.rs",
         "tools/check_docs.py",
@@ -674,7 +677,7 @@ def check_integration_acceptance_receipt() -> list[str]:
         receipt.get("schema_version") != 1
         or receipt.get("record_type") != "azdaja_current_source_integration_acceptance_local_receipt"
         or receipt.get("status") != "PASS_PROVIDER_FREE_EXACT_SOURCE"
-        or receipt.get("base_commit") != "fe2eb9705266e39d75eef49e85b19e5270ad899d"
+        or receipt.get("base_commit") != "193a63b6d73110155ec090d12fbb52f51bb11bfd"
         or receipt.get("source_sha256") != expected_hashes
         or receipt.get("commands") != expected_commands
         or receipt.get("results") != expected_results
