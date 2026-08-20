@@ -1,6 +1,7 @@
 #![cfg(unix)]
 
 use std::{
+    ffi::OsStr,
     fs,
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
@@ -133,9 +134,20 @@ fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     for asset in ["azdaja-v0.1.2-darwin-arm64", "azdaja-v0.1.2-linux-x86_64"] {
         fs::copy(candidate, release.join(asset)).unwrap();
     }
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"));
+    fs::copy(source.join("LICENSE"), release.join("LICENSE")).unwrap();
+    fs::copy(
+        source.join("THIRD-PARTY-NOTICES.md"),
+        release.join("THIRD-PARTY-NOTICES.md"),
+    )
+    .unwrap();
+    let license_digest = sha256(&release.join("LICENSE"));
+    let notices_digest = sha256(&release.join("THIRD-PARTY-NOTICES.md"));
     fs::write(
         release.join("SHA256SUMS"),
-        format!("{digest}  azdaja-v0.1.2-darwin-arm64\n{digest}  azdaja-v0.1.2-linux-x86_64\n"),
+        format!(
+            "{digest}  azdaja-v0.1.2-darwin-arm64\n{digest}  azdaja-v0.1.2-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
+        ),
     )
     .unwrap();
 }
@@ -157,6 +169,7 @@ fn run_installer_with_jcode_home(run: InstallRun<'_>, jcode_home: Option<&Path>)
         .arg(script)
         .env("HOME", run.home)
         .env("XDG_CONFIG_HOME", run.home.join(".config"))
+        .env_remove("XDG_DATA_HOME")
         .env("PATH", run.path)
         .env("AZDAJA_INSTALL_TEST_MODE", "local")
         .env("AZDAJA_INSTALL_BASE_URL", run.base)
@@ -187,6 +200,41 @@ fn run_installer_with_jcode_home(run: InstallRun<'_>, jcode_home: Option<&Path>)
 }
 fn run_installer(run: InstallRun<'_>) -> Output {
     run_installer_with_jcode_home(run, None)
+}
+
+fn run_installer_with_extra(run: InstallRun<'_>, extra: &[(&str, &OsStr)]) -> Output {
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install");
+    let mut command = Command::new("sh");
+    command
+        .arg(script)
+        .env("HOME", run.home)
+        .env("XDG_CONFIG_HOME", run.home.join(".config"))
+        .env_remove("XDG_DATA_HOME")
+        .env("PATH", run.path)
+        .env("AZDAJA_INSTALL_TEST_MODE", "local")
+        .env("AZDAJA_INSTALL_BASE_URL", run.base)
+        .env("AZDAJA_INSTALL_OS", run.os)
+        .env("AZDAJA_INSTALL_ARCH", run.arch)
+        .env_remove("AZDAJA_CONFIG")
+        .env_remove("AZDAJA_HOME")
+        .env_remove("RLM_DEPTH")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(glibc_version) = run.glibc_version {
+        command.env("AZDAJA_INSTALL_GLIBC_VERSION", glibc_version);
+    } else {
+        command.env_remove("AZDAJA_INSTALL_GLIBC_VERSION");
+    }
+    if let Some(harness) = run.harness {
+        command.args(["--harness", harness]);
+    }
+    if let Some(bin_dir) = run.bin_dir {
+        command.arg("--bin-dir").arg(bin_dir);
+    }
+    for (name, value) in extra {
+        command.env(name, value);
+    }
+    command.output().unwrap()
 }
 
 fn assert_success(output: &Output) -> String {
@@ -1367,4 +1415,227 @@ fn ordinary_installs_reject_validation_overrides_before_mutation() {
             .contains("validation overrides require AZDAJA_INSTALL_TEST_MODE=local")
     );
     assert!(fs::read_dir(home).unwrap().next().is_none());
+}
+
+#[test]
+fn license_and_notice_checksum_missing_or_mismatch_is_zero_home_mutation() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    let digest = sha256(&candidate);
+    for name in [
+        "missing-license",
+        "missing-notice",
+        "bad-license",
+        "bad-notice",
+    ] {
+        write_release(&fixture_root, name, &candidate, &digest);
+    }
+    for (name, needle) in [
+        ("missing-license", "  LICENSE"),
+        ("missing-notice", "  THIRD-PARTY-NOTICES.md"),
+    ] {
+        let sums = fixture_root.join(name).join("SHA256SUMS");
+        let filtered = fs::read_to_string(&sums)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.ends_with(needle))
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        fs::write(sums, filtered).unwrap();
+    }
+    fs::write(fixture_root.join("bad-license/LICENSE"), b"changed license").unwrap();
+    fs::write(
+        fixture_root.join("bad-notice/THIRD-PARTY-NOTICES.md"),
+        b"changed notices",
+    )
+    .unwrap();
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    for name in [
+        "missing-license",
+        "missing-notice",
+        "bad-license",
+        "bad-notice",
+    ] {
+        let home = scratch.0.join(format!("home-{name}"));
+        fs::create_dir(&home).unwrap();
+        mark_detected(&home, "claude");
+        let before = tree_identity(&home);
+        let base = format!("{}/{name}", server.base);
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &base,
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: Some("claude"),
+            bin_dir: Some(&home.join("bin")),
+            path: "/usr/bin:/bin",
+        });
+        assert!(!output.status.success(), "case={name}");
+        assert_eq!(tree_identity(&home), before, "case={name}");
+        assert!(!target(&home, "claude").exists(), "case={name}");
+        assert!(!home.join(".local/share/azdaja").exists(), "case={name}");
+    }
+}
+
+#[test]
+fn foreign_document_directory_file_symlink_and_hardlink_refuse_without_mutation() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let base = format!("{}/good", server.base);
+    for state in [
+        "empty-directory",
+        "foreign-entry",
+        "regular-path",
+        "symlink",
+        "hardlink",
+    ] {
+        let home = scratch.0.join(format!("foreign-doc-{state}"));
+        fs::create_dir(&home).unwrap();
+        mark_detected(&home, "claude");
+        let docs = home.join(".local/share/azdaja");
+        fs::create_dir_all(docs.parent().unwrap()).unwrap();
+        match state {
+            "empty-directory" => fs::create_dir(&docs).unwrap(),
+            "foreign-entry" => {
+                fs::create_dir(&docs).unwrap();
+                fs::write(docs.join("foreign"), b"keep").unwrap();
+            }
+            "regular-path" => fs::write(&docs, b"keep").unwrap(),
+            "symlink" => {
+                let victim = home.join("victim-docs");
+                fs::create_dir(&victim).unwrap();
+                fs::write(victim.join("keep"), b"keep").unwrap();
+                std::os::unix::fs::symlink(&victim, &docs).unwrap();
+            }
+            "hardlink" => {
+                fs::create_dir(&docs).unwrap();
+                let source = home.join("license-hardlink-source");
+                fs::write(&source, include_bytes!("../LICENSE")).unwrap();
+                fs::hard_link(&source, docs.join("LICENSE")).unwrap();
+                fs::write(
+                    docs.join("THIRD-PARTY-NOTICES.md"),
+                    include_bytes!("../THIRD-PARTY-NOTICES.md"),
+                )
+                .unwrap();
+                fs::write(
+                    docs.join(".azdaja-managed"),
+                    b"azdaja-installer-owned-docs-v1\n",
+                )
+                .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let before = tree_identity(&home);
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &base,
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: Some("claude"),
+            bin_dir: Some(&home.join("bin")),
+            path: "/usr/bin:/bin",
+        });
+        assert!(!output.status.success(), "state={state}");
+        assert_eq!(tree_identity(&home), before, "state={state}");
+    }
+}
+
+#[test]
+fn custom_xdg_unicode_space_apostrophe_reinstall_is_exact_and_idempotent() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let base = format!("{}/good", server.base);
+    let home = scratch.0.join("home Ü space's");
+    let xdg = scratch.0.join("data Ω space's");
+    let bin = home.join("bin space's");
+    fs::create_dir(&home).unwrap();
+    mark_detected(&home, "claude");
+    let extra = [("XDG_DATA_HOME", xdg.as_os_str())];
+    let run_once = || {
+        run_installer_with_extra(
+            InstallRun {
+                home: &home,
+                base: &base,
+                os: "Darwin",
+                arch: "arm64",
+                glibc_version: None,
+                harness: Some("claude"),
+                bin_dir: Some(&bin),
+                path: "/usr/bin:/bin",
+            },
+            &extra,
+        )
+    };
+    let first = assert_success(&run_once());
+    assert_eq!(first.lines().count(), 3);
+    assert!(
+        first
+            .lines()
+            .nth(1)
+            .unwrap()
+            .contains(&format!("docs -> {}", xdg.join("azdaja").display()))
+    );
+    let docs = xdg.join("azdaja");
+    assert_eq!(
+        fs::read(docs.join("LICENSE")).unwrap(),
+        include_bytes!("../LICENSE")
+    );
+    assert_eq!(
+        fs::read(docs.join("THIRD-PARTY-NOTICES.md")).unwrap(),
+        include_bytes!("../THIRD-PARTY-NOTICES.md")
+    );
+    let before = tree_identity(&docs);
+    let second = assert_success(&run_once());
+    assert_eq!(second.lines().count(), 3);
+    assert_eq!(tree_identity(&docs), before);
+}
+
+#[test]
+fn late_harness_failure_rolls_back_fresh_documents_and_standalone_surfaces() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let base = format!("{}/good", server.base);
+    let home = scratch.0.join("late-failure-home");
+    fs::create_dir(&home).unwrap();
+    mark_detected(&home, "claude");
+    let before = tree_identity(&home);
+    let state = scratch.0.join("late-failure-state-outside-home");
+    let extra = [
+        ("AZDAJA_LIFECYCLE_TEST_FAIL_AT", OsStr::new("1")),
+        ("AZDAJA_HOME", state.as_os_str()),
+    ];
+    let output = run_installer_with_extra(
+        InstallRun {
+            home: &home,
+            base: &base,
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: Some("claude"),
+            bin_dir: Some(&home.join("bin")),
+            path: "/usr/bin:/bin",
+        },
+        &extra,
+    );
+    assert!(!output.status.success());
+    assert_eq!(tree_identity(&home), before);
+    assert!(!target(&home, "claude").exists());
+    assert!(!home.join(".local/share/azdaja").exists());
 }

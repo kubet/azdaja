@@ -37,6 +37,8 @@ Harnesses can cache their skill registry. In particular, a Jcode session opened 
 
 The standalone curl installer also emits exactly three lines. If its binary directory is off `PATH`, the final line starts with a shell-quoted absolute `azdaja doctor` command that is directly executable even when the path contains spaces, Unicode, or apostrophes; reload/restart and `PATH` guidance follows on that same line.
 
+Before any install surface changes, the standalone installer downloads and checks the selected raw binary plus `LICENSE` and `THIRD-PARTY-NOTICES.md` against the four-payload `SHA256SUMS`. The document digests are additionally bound to the reviewed root bytes. It installs the two documents and exact `.azdaja-managed` ownership marker into `${XDG_DATA_HOME:-$HOME/.local/share}/azdaja`. A set `XDG_DATA_HOME` must be nonempty and absolute; the `AZDAJA_INSTALL_DOC_DIR` override is accepted only with `AZDAJA_INSTALL_TEST_MODE=local`. Existing directories without the exact marker, changed or foreign files, symlinks, and multiply linked files fail before harness or standalone mutation. Reinstall preserves an exact owned set byte-for-byte. Raw platform binaries satisfy this distribution contract only while the exact license and notices stay co-located release assets and the installer fetches them.
+
 ## Provider-free custody doctor
 
 ```bash
@@ -65,8 +67,8 @@ provider canary semantics.
 ```bash
 az uninstall --harness claude   # one managed skill
 az uninstall --harness all      # all five managed skills
-az uninstall --standalone       # curl only: owned PATH surface
-az uninstall --all              # curl only: all skills plus standalone
+az uninstall --standalone       # curl only: owned PATH and document surfaces
+az uninstall --all              # curl only: all skills, standalone, and documents
 az uninstall --help
 ```
 
@@ -82,13 +84,10 @@ installer ownership. Only these owned paths are eligible:
 
 - `azdaja` (the currently executing binary),
 - an exact relative `az -> azdaja` symlink, when present,
-- `azdaja-config.toml`, and
-- `azdaja-config.toml.managed`.
+- `azdaja-config.toml`,
+- `azdaja-config.toml.managed`, and
+- the exact owned document directory containing only `LICENSE`, `THIRD-PARTY-NOTICES.md`, and `.azdaja-managed`.
 
-A foreign `az` alias and unrelated neighboring files are never deleted.
-Incomplete, foreign, or unsafe configuration ownership state causes refusal
-before any selected harness is removed. Unix permits a running process to
-unlink its executable. Platforms with locked running executables fail closed
-with manual-path guidance.
+A foreign `az` alias and unrelated neighboring files are never deleted. Incomplete, foreign, changed, symlinked, or hardlinked document/configuration ownership state causes refusal before any selected harness is removed. Selected paths first move to same-filesystem quarantines; a late pre-commit failure restores them, and deletion begins only after the complete standalone/document/harness set is quarantined. Unix permits a running process to unlink its executable. Platforms with locked running executables fail closed with manual-path guidance.
 
-Successful uninstall output is exactly three concise lines. `--harness` says it removed skill copies only and kept standalone; `--standalone` says it kept harness skills; `--all` names both surfaces. The standalone modes are curl-only: without the curl ownership marker, the executable is left untouched and line 3 tells the user to return to the original installer or run `cargo uninstall azdaja` for a Cargo installation. When skills were removed, the same line also asks the user to reload/restart affected harnesses so cached registries forget them.
+Successful uninstall output is exactly three concise lines. `--harness` says it removed skill copies only and kept standalone plus documents; `--standalone` says it kept harness skills; `--all` names all three surfaces. The standalone modes are curl-only: without the curl ownership marker, the executable and any documents are left untouched and line 3 links the repository notice and directs a Cargo installation through managed-skill removal and `cargo uninstall azdaja`. When skills were removed, the same line also asks the user to reload/restart affected harnesses so cached registries forget them.

@@ -385,6 +385,7 @@ def check_root_layout() -> list[str]:
         "FAILS.md",
         "LICENSE",
         "README.md",
+        "THIRD-PARTY-NOTICES.md",
         "SCOREBOARD.md",
         "WINS.md",
         "azdaja-logo.png",
@@ -435,7 +436,7 @@ def check_root_layout() -> list[str]:
     manifest = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
     package = manifest.get("package", {})
     expected_include = [
-        "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/README.md", "/src/**",
+        "/Cargo.toml", "/Cargo.lock", "/LICENSE", "/THIRD-PARTY-NOTICES.md", "/README.md", "/src/**",
         "/assets/SKILL.md", "/assets/config.toml",
     ]
     if package.get("publish") is not False or package.get("include") != expected_include:

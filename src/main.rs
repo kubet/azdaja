@@ -1779,6 +1779,17 @@ fn preflight_harness_removals(
 }
 
 const STANDALONE_OWNER_MAGIC: &[u8] = b"azdaja-installer-owned-config-v1\n";
+const DOCUMENT_OWNER_MAGIC: &[u8] = b"azdaja-installer-owned-docs-v1\n";
+const DISTRIBUTED_LICENSE: &[u8] = include_bytes!("../LICENSE");
+const DISTRIBUTED_NOTICES: &[u8] = include_bytes!("../THIRD-PARTY-NOTICES.md");
+
+struct DocumentRemoval {
+    directory_path: PathBuf,
+    directory: fs::File,
+    license: PathBuf,
+    notices: PathBuf,
+    marker: PathBuf,
+}
 
 enum StandaloneRemoval {
     Unmanaged,
@@ -1788,6 +1799,7 @@ enum StandaloneRemoval {
         marker: PathBuf,
         alias: PathBuf,
         managed_alias: bool,
+        documents: Box<DocumentRemoval>,
     },
 }
 
@@ -1802,7 +1814,113 @@ fn alias_is_managed(path: &Path) -> Result<bool> {
     }
 }
 
-fn preflight_standalone_removal() -> Result<StandaloneRemoval> {
+fn standalone_document_path(home: &Path) -> Result<PathBuf> {
+    let test_mode = env::var_os("AZDAJA_INSTALL_TEST_MODE");
+    let override_path = env::var_os("AZDAJA_INSTALL_DOC_DIR");
+    match test_mode.as_deref() {
+        None => {
+            if override_path.is_some() {
+                bail!("AZDAJA_INSTALL_DOC_DIR requires AZDAJA_INSTALL_TEST_MODE=local")
+            }
+        }
+        Some(value) if value == "local" => {
+            if let Some(value) = override_path {
+                let path = PathBuf::from(value);
+                if path.as_os_str().is_empty() || !path.is_absolute() {
+                    bail!("AZDAJA_INSTALL_DOC_DIR must be set to a non-empty absolute path")
+                }
+                return Ok(path);
+            }
+        }
+        Some(_) => bail!("invalid AZDAJA_INSTALL_TEST_MODE"),
+    }
+    let data_root = match env::var_os("XDG_DATA_HOME") {
+        Some(value) => {
+            let path = PathBuf::from(value);
+            if path.as_os_str().is_empty() || !path.is_absolute() {
+                bail!("XDG_DATA_HOME must be set to a non-empty absolute path")
+            }
+            path
+        }
+        None => home.join(".local/share"),
+    };
+    Ok(data_root.join("azdaja"))
+}
+
+fn preflight_document_removal(home: &Path) -> Result<DocumentRemoval> {
+    let directory_path = standalone_document_path(home)?;
+    if !path_entry_exists(&directory_path)? {
+        bail!(
+            "refusing standalone uninstall: owned document directory is missing: {}",
+            directory_path.display()
+        )
+    }
+    let directory = open_install_directory(&directory_path)
+        .context("refusing unsafe installer-owned document directory")?;
+    let license = directory_path.join("LICENSE");
+    let notices = directory_path.join("THIRD-PARTY-NOTICES.md");
+    let marker = directory_path.join(".azdaja-managed");
+    let mut names = fs::read_dir(&directory_path)?
+        .map(|entry| entry.map(|entry| entry.file_name()))
+        .collect::<io::Result<Vec<_>>>()?;
+    names.sort();
+    let mut expected = vec![
+        std::ffi::OsString::from(".azdaja-managed"),
+        std::ffi::OsString::from("LICENSE"),
+        std::ffi::OsString::from("THIRD-PARTY-NOTICES.md"),
+    ];
+    expected.sort();
+    if names != expected {
+        bail!(
+            "refusing standalone uninstall: document directory contains foreign or missing entries: {}",
+            directory_path.display()
+        )
+    }
+    if read_install_regular(&marker)? != DOCUMENT_OWNER_MAGIC {
+        bail!("refusing standalone uninstall: document owner marker is not exact")
+    }
+    if read_install_regular(&license)? != DISTRIBUTED_LICENSE {
+        bail!("refusing standalone uninstall: distributed LICENSE changed")
+    }
+    if read_install_regular(&notices)? != DISTRIBUTED_NOTICES {
+        bail!("refusing standalone uninstall: distributed THIRD-PARTY-NOTICES.md changed")
+    }
+    validate_install_directory_binding(&directory, &directory_path)?;
+    Ok(DocumentRemoval {
+        directory_path,
+        directory,
+        license,
+        notices,
+        marker,
+    })
+}
+
+fn revalidate_document_removal(removal: &DocumentRemoval) -> Result<()> {
+    validate_install_directory_binding(&removal.directory, &removal.directory_path)?;
+    if read_install_regular(&removal.marker)? != DOCUMENT_OWNER_MAGIC
+        || read_install_regular(&removal.license)? != DISTRIBUTED_LICENSE
+        || read_install_regular(&removal.notices)? != DISTRIBUTED_NOTICES
+    {
+        bail!("standalone document set changed during uninstall preflight")
+    }
+    let mut names = fs::read_dir(&removal.directory_path)?
+        .map(|entry| entry.map(|entry| entry.file_name()))
+        .collect::<io::Result<Vec<_>>>()?;
+    names.sort();
+    let mut expected = vec![
+        std::ffi::OsString::from(".azdaja-managed"),
+        std::ffi::OsString::from("LICENSE"),
+        std::ffi::OsString::from("THIRD-PARTY-NOTICES.md"),
+    ];
+    expected.sort();
+    if names != expected {
+        bail!("standalone document directory changed during uninstall preflight")
+    }
+    validate_install_directory_binding(&removal.directory, &removal.directory_path)?;
+    Ok(())
+}
+
+fn preflight_standalone_removal(home: &Path) -> Result<StandaloneRemoval> {
     let executable = env::current_exe()?.canonicalize()?;
     let directory = executable
         .parent()
@@ -1839,17 +1957,19 @@ fn preflight_standalone_removal() -> Result<StandaloneRemoval> {
         .context("refusing unsafe currently executing Azdaja binary")?;
     if !cfg!(unix) {
         bail!(
-            "standalone self-uninstall is unsupported on this locked-file platform; remove the four reported installer-owned paths only after Azdaja exits"
+            "standalone self-uninstall is unsupported on this locked-file platform; remove only the reported installer-owned standalone and document paths after Azdaja exits"
         )
     }
     let alias = directory.join("az");
     let managed_alias = alias_is_managed(&alias)?;
+    let documents = preflight_document_removal(home)?;
     Ok(StandaloneRemoval::Owned {
         executable,
         config,
         marker,
         alias,
         managed_alias,
+        documents: Box::new(documents),
     })
 }
 
@@ -1860,6 +1980,7 @@ fn revalidate_standalone(removal: &StandaloneRemoval) -> Result<()> {
         marker,
         alias,
         managed_alias,
+        documents,
     } = removal
     else {
         return Ok(());
@@ -1872,6 +1993,7 @@ fn revalidate_standalone(removal: &StandaloneRemoval) -> Result<()> {
     if alias_is_managed(alias)? != *managed_alias {
         bail!("standalone az alias changed during uninstall preflight")
     }
+    revalidate_document_removal(documents)?;
     Ok(())
 }
 
@@ -1931,7 +2053,7 @@ fn rollback_harness_removals(removals: &mut [QuarantinedRemoval]) -> Result<()> 
     }
 }
 
-fn remove_harnesses_transactionally(removals: Vec<HarnessRemoval>) -> Result<Vec<String>> {
+fn quarantine_harness_removals(removals: Vec<HarnessRemoval>) -> Result<Vec<QuarantinedRemoval>> {
     let mut removals = removals
         .into_iter()
         .map(|removal| QuarantinedRemoval {
@@ -1986,8 +2108,6 @@ fn remove_harnesses_transactionally(removals: Vec<HarnessRemoval>) -> Result<Vec
             validate_install(previous, true)?;
             failpoint.step("after uninstall quarantine rename")?;
         }
-        // Nothing is recursively deleted until all selected bindings have moved
-        // and every quarantine has passed its post-rename validation.
         for removal in &removals {
             if removal.moved {
                 let previous = removal
@@ -2011,7 +2131,10 @@ fn remove_harnesses_transactionally(removals: Vec<HarnessRemoval>) -> Result<Vec
             Err(rollback) => Err(error.context(format!("uninstall rollback failed: {rollback:#}"))),
         };
     }
+    Ok(removals)
+}
 
+fn commit_harness_removals(removals: &mut [QuarantinedRemoval]) -> Result<Vec<String>> {
     let outcomes = removals
         .iter()
         .map(|removal| {
@@ -2022,7 +2145,7 @@ fn remove_harnesses_transactionally(removals: Vec<HarnessRemoval>) -> Result<Vec
             }
         })
         .collect::<Vec<_>>();
-    for removal in &mut removals {
+    for removal in removals {
         if removal.moved {
             let previous = removal
                 .previous
@@ -2044,6 +2167,171 @@ fn remove_harnesses_transactionally(removals: Vec<HarnessRemoval>) -> Result<Vec
     Ok(outcomes)
 }
 
+struct QuarantinedStandaloneFile {
+    original: PathBuf,
+    previous: PathBuf,
+    moved: bool,
+}
+
+struct QuarantinedStandalone {
+    removal: StandaloneRemoval,
+    files: Vec<QuarantinedStandaloneFile>,
+    documents_previous: PathBuf,
+    documents_moved: bool,
+}
+
+fn rollback_standalone_removal(removal: &mut QuarantinedStandalone) -> Result<()> {
+    let mut errors = Vec::new();
+    for file in removal.files.iter_mut().rev() {
+        if file.moved
+            && let Err(error) = (|| -> Result<()> {
+                if path_entry_exists(&file.original)? {
+                    bail!("another entry occupies the original path")
+                }
+                install_rename_noreplace(&file.previous, &file.original)?;
+                file.moved = false;
+                Ok(())
+            })()
+        {
+            errors.push(format!(
+                "could not restore {}: {error:#}",
+                file.original.display()
+            ));
+        }
+    }
+    if removal.documents_moved {
+        let StandaloneRemoval::Owned { documents, .. } = &removal.removal else {
+            unreachable!()
+        };
+        if let Err(error) = (|| -> Result<()> {
+            if path_entry_exists(&documents.directory_path)? {
+                bail!("another entry occupies the original document path")
+            }
+            validate_install_directory_binding(&documents.directory, &removal.documents_previous)?;
+            install_rename_noreplace(&removal.documents_previous, &documents.directory_path)?;
+            validate_install_directory_binding(&documents.directory, &documents.directory_path)?;
+            removal.documents_moved = false;
+            Ok(())
+        })() {
+            errors.push(format!(
+                "could not restore {}: {error:#}",
+                documents.directory_path.display()
+            ));
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        bail!("{}", errors.join("; "))
+    }
+}
+
+fn quarantine_standalone_removal(
+    removal: StandaloneRemoval,
+) -> Result<Option<QuarantinedStandalone>> {
+    let StandaloneRemoval::Owned {
+        executable,
+        config,
+        marker,
+        alias,
+        managed_alias,
+        documents,
+    } = &removal
+    else {
+        return Ok(None);
+    };
+    revalidate_standalone(&removal)?;
+    let executable_parent = executable
+        .parent()
+        .ok_or_else(|| anyhow!("standalone executable has no parent"))?;
+    let suffix = std::process::id();
+    let mut originals = vec![config.clone(), marker.clone(), executable.clone()];
+    if *managed_alias {
+        originals.insert(0, alias.clone());
+    }
+    let mut files = Vec::with_capacity(originals.len());
+    for (index, original) in originals.into_iter().enumerate() {
+        let previous = executable_parent.join(format!(".azdaja-uninstall-{suffix}-{index}"));
+        if path_entry_exists(&previous)? {
+            bail!(
+                "standalone uninstall quarantine already exists: {}",
+                previous.display()
+            )
+        }
+        files.push(QuarantinedStandaloneFile {
+            original,
+            previous,
+            moved: false,
+        });
+    }
+    let documents_parent = documents
+        .directory_path
+        .parent()
+        .ok_or_else(|| anyhow!("document directory has no parent"))?;
+    let documents_previous = documents_parent.join(format!(".azdaja-docs-uninstall-{suffix}"));
+    if path_entry_exists(&documents_previous)? {
+        bail!(
+            "document uninstall quarantine already exists: {}",
+            documents_previous.display()
+        )
+    }
+    let mut quarantined = QuarantinedStandalone {
+        removal,
+        files,
+        documents_previous,
+        documents_moved: false,
+    };
+    let mut failpoint = LifecycleFailpoint::from_env();
+    let result = (|| -> Result<()> {
+        let StandaloneRemoval::Owned { documents, .. } = &quarantined.removal else {
+            unreachable!()
+        };
+        install_rename_noreplace(&documents.directory_path, &quarantined.documents_previous)?;
+        quarantined.documents_moved = true;
+        validate_install_directory_binding(&documents.directory, &quarantined.documents_previous)?;
+        failpoint.step("after document quarantine rename")?;
+        for file in &mut quarantined.files {
+            install_rename_noreplace(&file.original, &file.previous)?;
+            file.moved = true;
+            failpoint.step("after standalone quarantine rename")?;
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        return match rollback_standalone_removal(&mut quarantined) {
+            Ok(()) => Err(error),
+            Err(rollback) => Err(error.context(format!("uninstall rollback failed: {rollback:#}"))),
+        };
+    }
+    Ok(Some(quarantined))
+}
+
+fn commit_standalone_removal(removal: &mut QuarantinedStandalone) -> Result<()> {
+    let StandaloneRemoval::Owned { documents, .. } = &removal.removal else {
+        unreachable!()
+    };
+    validate_install_directory_binding(&documents.directory, &removal.documents_previous)?;
+    let license = removal.documents_previous.join("LICENSE");
+    let notices = removal.documents_previous.join("THIRD-PARTY-NOTICES.md");
+    let marker = removal.documents_previous.join(".azdaja-managed");
+    if read_install_regular(&license)? != DISTRIBUTED_LICENSE
+        || read_install_regular(&notices)? != DISTRIBUTED_NOTICES
+        || read_install_regular(&marker)? != DOCUMENT_OWNER_MAGIC
+    {
+        bail!("quarantined standalone documents changed before removal")
+    }
+    fs::remove_file(marker)?;
+    fs::remove_file(notices)?;
+    fs::remove_file(license)?;
+    fs::remove_dir(&removal.documents_previous)?;
+    removal.documents_moved = false;
+    for file in &mut removal.files {
+        fs::remove_file(&file.previous)?;
+        file.moved = false;
+    }
+    Ok(())
+}
+
 fn uninstall_cmd(args: &[String]) -> Result<()> {
     if args
         .get(1)
@@ -2052,7 +2340,7 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
         exact(args, 2, "uninstall")?;
         println!(
             "Usage: az uninstall [--harness <jcode|claude|codex|gemini|opencode|all> | --standalone | --all]\n\
-             Modes:\n  --harness NAME  remove skill copies only; keep standalone\n  --standalone    remove curl-installer-owned standalone only; keep harness skills\n  --all           remove all five harness skills and curl-installer-owned standalone\n\
+             Modes:\n  --harness NAME  remove skill copies only; keep standalone and installed documents\n  --standalone    remove curl-installer-owned standalone and documents; keep harness skills\n  --all           remove all five harness skills plus curl-installer-owned standalone and documents\n\
              Examples:\n  az uninstall --harness claude\n  az uninstall --harness all\n  az uninstall --standalone\n  az uninstall --all"
         );
         return Ok(());
@@ -2062,7 +2350,7 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
         [_] => {
             let (selected, _) = harnesses(None)?;
             let report = format!(
-                "{} skill{} only (standalone kept)",
+                "{} skill{} only (standalone and documents kept)",
                 selected.join(", "),
                 if selected.len() == 1 { "" } else { "s" }
             );
@@ -2071,20 +2359,20 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
         [_, flag, harness] if flag == "--harness" => {
             let (selected, _) = harnesses(Some(harness))?;
             let report = if harness == "all" {
-                "all five harness skills only (standalone kept)".into()
+                "all five harness skills only (standalone and documents kept)".into()
             } else {
-                format!("{harness} skill only (standalone kept)")
+                format!("{harness} skill only (standalone and documents kept)")
             };
             (selected, report, false)
         }
         [_, flag] if flag == "--standalone" => (
             Vec::new(),
-            "standalone only (harness skills kept)".into(),
+            "standalone and documents only (harness skills kept)".into(),
             true,
         ),
         [_, flag] if flag == "--all" => (
             ALL_HARNESSES.into(),
-            "all five harness skills and standalone".into(),
+            "all five harness skills, standalone, and documents".into(),
             true,
         ),
         _ => return Err(usage_error("uninstall")),
@@ -2095,7 +2383,7 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
     // selected. An unowned refusal therefore cannot create a HOME lock entry.
     let initial_removals = preflight_harness_removals(&selected, &home)?;
     let initial_standalone = if remove_standalone {
-        Some(preflight_standalone_removal()?)
+        Some(preflight_standalone_removal(&home)?)
     } else {
         None
     };
@@ -2106,7 +2394,7 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
     // The locked preflight is authoritative after any prior waiter completes.
     let removals = preflight_harness_removals(&selected, &home)?;
     let standalone = if remove_standalone {
-        Some(preflight_standalone_removal()?)
+        Some(preflight_standalone_removal(&home)?)
     } else {
         None
     };
@@ -2116,34 +2404,40 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
         revalidate_standalone(standalone)?;
     }
 
-    let mut outcomes = remove_harnesses_transactionally(removals)?;
-    if let Some(standalone) = standalone {
-        match standalone {
-            StandaloneRemoval::Unmanaged => {
-                outcomes.push("standalone not installer-managed (left untouched)".into())
+    let mut quarantined_standalone = match standalone {
+        Some(removal) => quarantine_standalone_removal(removal)?,
+        None => None,
+    };
+    let mut quarantined_harnesses = match quarantine_harness_removals(removals) {
+        Ok(removals) => removals,
+        Err(error) => {
+            if let Some(removal) = &mut quarantined_standalone
+                && let Err(rollback) = rollback_standalone_removal(removal)
+            {
+                return Err(error.context(format!(
+                    "standalone uninstall rollback failed: {rollback:#}"
+                )));
             }
-            StandaloneRemoval::Owned {
-                executable,
-                config,
-                marker,
-                alias,
-                managed_alias,
-            } => {
-                if managed_alias {
-                    fs::remove_file(&alias)?;
-                }
-                fs::remove_file(&config)?;
-                fs::remove_file(&marker)?;
-                fs::remove_file(&executable)?;
-                outcomes.push("standalone".into());
-            }
+            return Err(error);
         }
+    };
+
+    // Every selected original path has now moved to a same-filesystem
+    // quarantine. This is the transaction commit point; cleanup touches only
+    // the fully revalidated quarantines and never follows a path supplied by a
+    // foreign owner.
+    let mut outcomes = commit_harness_removals(&mut quarantined_harnesses)?;
+    if let Some(removal) = &mut quarantined_standalone {
+        commit_standalone_removal(removal)?;
+        outcomes.push("standalone and documents".into());
+    } else if standalone_needs_original_installer {
+        outcomes.push("standalone not installer-managed (left untouched)".into());
     }
 
     println!("Selected: {report}");
     println!("Removed: {}", outcomes.join("; "));
     if standalone_needs_original_installer {
-        let removal = "remove the executable with its original installer, or run cargo uninstall azdaja for a Cargo install";
+        let removal = "review https://github.com/kubet/azdaja/blob/main/THIRD-PARTY-NOTICES.md, remove managed harness skills, then run cargo uninstall azdaja for a Cargo install";
         if selected.is_empty() {
             println!("Next: {removal}");
         } else {

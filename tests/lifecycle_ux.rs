@@ -202,7 +202,7 @@ fn custom_jcode_home_is_authoritative_and_next_command_is_shell_quoted() {
     );
     let stdout = assert_success(&uninstall);
     assert_eq!(stdout.lines().count(), 3, "{stdout}");
-    assert!(stdout.contains("skill only (standalone kept)"));
+    assert!(stdout.contains("skill only (standalone and documents kept)"));
     assert!(!target.exists());
 }
 
@@ -234,7 +234,7 @@ fn install_and_uninstall_are_exactly_three_lines_with_harness_reload_guidance() 
             .lines()
             .next()
             .unwrap()
-            .contains("all five harness skills only (standalone kept)")
+            .contains("all five harness skills only (standalone and documents kept)")
     );
     assert!(
         stdout
@@ -293,6 +293,19 @@ fn standalone(home: &Path, name: &str) -> PathBuf {
         "azdaja-installer-owned-config-v1\n",
     )
     .unwrap();
+    let documents = home.join(".local/share/azdaja");
+    fs::create_dir_all(&documents).unwrap();
+    fs::write(documents.join("LICENSE"), include_bytes!("../LICENSE")).unwrap();
+    fs::write(
+        documents.join("THIRD-PARTY-NOTICES.md"),
+        include_bytes!("../THIRD-PARTY-NOTICES.md"),
+    )
+    .unwrap();
+    fs::write(
+        documents.join(".azdaja-managed"),
+        "azdaja-installer-owned-docs-v1\n",
+    )
+    .unwrap();
     binary
 }
 
@@ -310,7 +323,7 @@ fn unmanaged_standalone_uninstall_points_to_original_installer_or_cargo() {
     assert_eq!(stdout.lines().count(), 3, "{stdout}");
     assert!(stdout.contains("standalone not installer-managed (left untouched)"));
     let next = stdout.lines().last().unwrap();
-    assert!(next.contains("original installer"), "{next}");
+    assert!(next.contains("THIRD-PARTY-NOTICES.md"), "{next}");
     assert!(next.contains("cargo uninstall azdaja"), "{next}");
     assert!(
         binary.is_file(),
@@ -334,11 +347,12 @@ fn standalone_and_full_all_self_uninstall_preserve_foreign_neighbors() {
             .lines()
             .next()
             .unwrap()
-            .contains("standalone only (harness skills kept)")
+            .contains("standalone and documents only (harness skills kept)")
     );
     assert!(!binary.exists());
     assert!(!directory.join("azdaja-config.toml").exists());
     assert!(!directory.join("azdaja-config.toml.managed").exists());
+    assert!(!scratch.0.join(".local/share/azdaja").exists());
     assert_eq!(
         fs::read_link(directory.join("az")).unwrap(),
         PathBuf::from("foreign-az")
@@ -356,7 +370,7 @@ fn standalone_and_full_all_self_uninstall_preserve_foreign_neighbors() {
             .lines()
             .next()
             .unwrap()
-            .contains("all five harness skills and standalone")
+            .contains("all five harness skills, standalone, and documents")
     );
     assert!(
         stdout
@@ -647,4 +661,49 @@ fn all_harness_staging_permission_failure_occurs_before_any_commit() {
     assert!(!output.status.success());
     assert_eq!(selected_snapshots(&scratch.0), expected);
     assert!(lifecycle_artifacts(&scratch.0).is_empty());
+}
+
+#[test]
+fn harness_only_uninstall_keeps_exact_owned_documents() {
+    let scratch = Scratch::new("harness-keeps-docs");
+    let binary = standalone(&scratch.0, "bin");
+    install_all_with(&binary, &scratch.0);
+    let documents = scratch.0.join(".local/share/azdaja");
+    let before = surface_snapshot(&documents);
+    let output = run(&binary, &scratch.0, &["uninstall", "--harness", "all"]);
+    let stdout = assert_success(&output);
+    assert!(stdout.contains("standalone and documents kept"));
+    assert_eq!(surface_snapshot(&documents), before);
+    assert!(binary.exists());
+    assert!(targets(&scratch.0).iter().all(|path| !path.exists()));
+}
+
+#[test]
+fn changed_foreign_symlink_and_hardlinked_documents_refuse_all_before_mutation() {
+    for state in ["changed", "foreign", "symlink", "hardlink"] {
+        let scratch = Scratch::new(state);
+        let binary = standalone(&scratch.0, "bin");
+        install_all_with(&binary, &scratch.0);
+        let docs = scratch.0.join(".local/share/azdaja");
+        match state {
+            "changed" => fs::write(docs.join("THIRD-PARTY-NOTICES.md"), b"changed").unwrap(),
+            "foreign" => fs::write(docs.join("foreign"), b"keep").unwrap(),
+            "symlink" => {
+                let notice = docs.join("THIRD-PARTY-NOTICES.md");
+                fs::remove_file(&notice).unwrap();
+                symlink("LICENSE", notice).unwrap();
+            }
+            "hardlink" => {
+                let license = docs.join("LICENSE");
+                fs::hard_link(&license, scratch.0.join("license-second-link")).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let before = surface_snapshot(&scratch.0);
+        let output = run(&binary, &scratch.0, &["uninstall", "--all"]);
+        assert!(!output.status.success(), "state={state}");
+        assert_eq!(surface_snapshot(&scratch.0), before, "state={state}");
+        assert!(binary.exists());
+        assert!(targets(&scratch.0).iter().all(|path| path.exists()));
+    }
 }

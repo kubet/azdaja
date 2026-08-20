@@ -111,8 +111,22 @@ jobs:
             Linux-x86_64) asset=azdaja-v0.1.2-linux-x86_64 ;;
             *) printf 'unsupported CI host: %s-%s\n' "$(uname -s)" "$(uname -m)" >&2; exit 1 ;;
           esac
-          cp "$candidate" "$fixture/$asset"
-          printf '%s  %s\n' "$digest" "$asset" > "$fixture/SHA256SUMS"
+          cp "$candidate" "$fixture/azdaja-v0.1.2-darwin-arm64"
+          cp "$candidate" "$fixture/azdaja-v0.1.2-linux-x86_64"
+          cp LICENSE THIRD-PARTY-NOTICES.md "$fixture/"
+          python3 - "$fixture" "$digest" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+          fixture, binary_digest = pathlib.Path(sys.argv[1]), sys.argv[2]
+          payloads = [
+              ("azdaja-v0.1.2-darwin-arm64", binary_digest),
+              ("azdaja-v0.1.2-linux-x86_64", binary_digest),
+              ("LICENSE", hashlib.sha256((fixture / "LICENSE").read_bytes()).hexdigest()),
+              ("THIRD-PARTY-NOTICES.md", hashlib.sha256((fixture / "THIRD-PARTY-NOTICES.md").read_bytes()).hexdigest()),
+          ]
+          (fixture / "SHA256SUMS").write_text("".join(f"{digest}  {name}\n" for name, digest in payloads))
+          PY
           for tool in jcode claude codex gemini opencode; do
             cat > "$guard/$tool" <<EOF
           #!/bin/sh
@@ -151,6 +165,8 @@ jobs:
           installed="$home/.claude/skills/azdaja/azdaja"
           cmp "$candidate" "$installed"
           test "$(readlink "$bin/az")" = azdaja
+          cmp LICENSE "$home/.local/share/azdaja/LICENSE"
+          cmp THIRD-PARTY-NOTICES.md "$home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
 
           cat > "$scratch/expected-help" <<'EOF'
           AZDAJA v0.1.2 — virtual memory for language models
@@ -215,8 +231,14 @@ jobs:
           payload.mkdir(exist_ok=False)
           target = payload / name
           shutil.copy2(source, target)
+          shutil.copy2("LICENSE", payload / "LICENSE")
+          shutil.copy2("THIRD-PARTY-NOTICES.md", payload / "THIRD-PARTY-NOTICES.md")
           digest = hashlib.sha256(target.read_bytes()).hexdigest()
-          (payload / "SHA256SUMS").write_text(f"{digest}  {name}\n")
+          payload_names = [name, "LICENSE", "THIRD-PARTY-NOTICES.md"]
+          (payload / "SHA256SUMS").write_text("".join(
+              f"{hashlib.sha256((payload / payload_name).read_bytes()).hexdigest()}  {payload_name}\n"
+              for payload_name in payload_names
+          ))
           receipt = {
               "schema_version": 1,
               "record_type": "azdaja_unvalidated_release_candidate",

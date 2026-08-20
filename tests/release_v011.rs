@@ -76,7 +76,7 @@ fn site_install_cta_is_complete_scrollable_and_has_onboarding_boundaries() {
         "$ curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh";
 
     assert_eq!(site.matches(command).count(), 1);
-    assert!(site.contains("Apple Silicon macOS or Linux x86-64"));
+    assert!(site.contains("Apple Silicon macOS 11+ or x86-64 Linux with glibc 2.35 or newer"));
     assert!(site.contains("requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness"));
     assert!(site.contains("otherwise it exits before downloading or writing anything"));
     assert!(site.contains("callable by any agent that can run a command"));

@@ -59,7 +59,7 @@ The result is exactly three lines. Use the prominent short command `az` only whe
 
 Detected harness setup is automatic. It installs the managed Azdaja skill for large-input tasks and explicit questions about Azdaja/`az` availability or use. The third output line prints the doctor command to run before reloading the selected harness's skill registry or starting a fresh session. When the binary directory is off `PATH`, that command is a shell-quoted absolute `azdaja` path; run it first, then follow the reload and `PATH` note. `JCODE_HOME` is authoritative when set. An already-open Jcode session caches its registry: run `skill_manage reload_all`, choose `/skills` -> `Reload all`, or start a fresh Jcode session. The installer makes no provider call.
 
-Standalone route configuration uses installer-owned `azdaja-config.toml` plus `azdaja-config.toml.managed`; an unrelated adjacent `config.toml` is never overwritten. A bare invocation prints an indexed 16-row truecolor half-block banner above the mandated five-line help only on an interactive color terminal; non-TTY output, `NO_COLOR`, and `TERM=dumb` emit only the same exact five-line text through either name.
+Standalone route configuration uses installer-owned `azdaja-config.toml` plus `azdaja-config.toml.managed`; an unrelated adjacent `config.toml` is never overwritten. The installer also verifies and installs the release `LICENSE` and [supported-target third-party notices](THIRD-PARTY-NOTICES.md) in `${XDG_DATA_HOME:-$HOME/.local/share}/azdaja` without overwriting foreign or changed files. Raw platform binaries are compliant release payloads only while those exact notice and license files remain co-located release assets and the installer fetches and verifies them. A bare invocation prints an indexed 16-row truecolor half-block banner above the mandated five-line help only on an interactive color terminal; non-TTY output, `NO_COLOR`, and `TERM=dumb` emit only the same exact five-line text through either name.
 
 Manual alternative with Rust 1.95:
 
@@ -81,7 +81,7 @@ az doctor --harness jcode                   # curl: provider-free custody check
 az uninstall --standalone                   # curl only: keep managed skills
 az uninstall --all                          # curl only: remove skills and standalone
 ```
-Every uninstall preflights all selected targets before deleting anything. Changed binaries/skills, symlinks, and unknown files cause a refusal; harness `config.toml` remains user-editable. Curl standalone removal deletes only its exact owned binary, relative `az -> azdaja` alias, Azdaja config, and marker. Foreign aliases, Azure CLI, configuration, and neighboring files remain untouched. See [Harness lifecycle and custody](docs/harness-lifecycle.md).
+Every uninstall preflights all selected targets before deleting anything. Changed binaries/skills, symlinks, and unknown files cause a refusal; harness `config.toml` remains user-editable. Curl standalone removal deletes only its exact owned binary, relative `az -> azdaja` alias, Azdaja config and marker, and exact owned license/notices document set. Harness-only uninstall keeps the documents. Foreign aliases, Azure CLI, configuration, documents, and neighboring files remain untouched. See [Harness lifecycle and custody](docs/harness-lifecycle.md).
 
 Supported harness names are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation and `doctor --harness` are provider-free; the latter proves only on-disk custody. A passing unqualified `doctor` proves only that the configured harness answered its fixed canary.
 
@@ -131,6 +131,6 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 python3 tools/check_docs.py
 ```
 
-## License
+## License and notices
 
-MIT.
+Azdaja is [MIT licensed](LICENSE). Supported-target third-party license and attribution material is reproduced in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md); the existing font [OFL](site/fonts/Cormorant-Garamond-OFL.txt) remains separately available.
