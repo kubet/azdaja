@@ -11,13 +11,13 @@ The RAH paper ([arXiv:2606.13643](https://arxiv.org/abs/2606.13643)) provides th
 | Source | System | Class | Score |
 |---|---|---|---:|
 | RAH paper | RLM | Model recursion without agent tools | **64.38%** |
-| This repo | Azdaja | Bare RLM layer | **68.64164968987583%** |
+| This repo | Azdaja | Bare RLM layer | **68.64%** |
 | RAH paper | Codex, No Retriever | Coding agent | **71.75%** |
 | RAH paper | RAH, GPT-5 | Recursive agent harness | **81.36%** |
 
 * single-arm diagnostic under the paper's protocol; paper controls not rerun
 
-Within this four-row ladder, Azdaja is **4.26164968987583 percentage points** above the paper's RLM reference and below Codex at **71.75%**.
+Within this four-row ladder, Azdaja is **4.26 percentage points** above the paper's RLM reference and below Codex at **71.75%**.
 
 The release-only scripted gate answered three synthetic UTF-8 inputs of exactly **52,428,800 bytes** each—a build log, repository dump, and transcript—in one root turn, with zero child calls and a root prompt below **65,536 bytes**, inside a 90-second watchdog. The [v0.1.2 product-acceptance receipt](bench/results/v0.1.2-product-acceptance-public.json) binds that test result.
 
