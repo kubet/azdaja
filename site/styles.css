@@ -1,15 +1,15 @@
 @charset "UTF-8";
-@font-face{font-family:Cormorant;src:url('/fonts/cormorant-regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:Cormorant;src:url('/fonts/cormorant-light.woff2') format('woff2');font-weight:300;font-style:normal;font-display:swap}
 :root{--paper:#e8ddc4;--ink:#241c12;--red:#9e2c1f}
 *{box-sizing:border-box}
 html,body{min-height:100%}
 html{background:var(--paper)}
-body{margin:0;color:var(--ink);background:radial-gradient(120% 100% at 50% 24%,#eee4cd 0%,var(--paper) 48%,#d8c8a3 100%) fixed;font-family:Cormorant,Georgia,serif;-webkit-font-smoothing:antialiased}
+body{margin:0;color:var(--ink);background:radial-gradient(120% 100% at 50% 24%,#eee4cd 0%,var(--paper) 48%,#d8c8a3 100%) fixed;font-family:Cormorant,Georgia,serif;font-weight:300;-webkit-font-smoothing:antialiased}
 body::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.035;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 ::selection{background:var(--red);color:var(--paper)}
 main{width:min(100% - 40px,720px);min-height:100svh;margin:auto;padding:clamp(36px,6svh,72px) 0 clamp(36px,5svh,56px);display:flex;flex-direction:column;align-items:center;text-align:center}
 img{width:clamp(108px,16svh,150px);height:auto;margin-bottom:clamp(22px,3.5svh,34px);filter:saturate(.9) contrast(1.03)}
-h1{margin:0;color:var(--red);font-size:clamp(1.3rem,2.6vw,1.7rem);font-weight:400;line-height:1.42;letter-spacing:.2em;text-transform:uppercase}
+h1{margin:0;color:var(--red);font-size:clamp(1.3rem,2.6vw,1.7rem);font-weight:300;line-height:1.42;letter-spacing:.2em;text-transform:uppercase}
 .copy{max-width:31rem;margin-top:clamp(22px,3.5svh,34px);text-align:left}
 .copy p{margin:0;font-size:clamp(1.06rem,1.3vw,1.17rem);line-height:1.52;text-wrap:pretty}
 .copy p+p{margin-top:.9em}

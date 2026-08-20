@@ -8,7 +8,8 @@ platform binaries and co-locate the exact root `LICENSE` and
 exactly one entry for each of those four payloads. Run
 `release/assemble-standalone-assets.sh DIST_DIR` only after both raw binaries
 are present; it verifies the reviewed root document identities, copies their
-bytes, and writes the four-entry manifest.
+bytes, and writes the four-entry manifest. The reviewed notice identity for
+this proposal is SHA-256 `ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6`.
 
 A raw binary is compliant only while the exact license and notice remain
 co-located release assets and the versioned installer fetches and verifies both

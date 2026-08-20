@@ -1,6 +1,6 @@
 # Azdaja third-party notices
 
-**Candidate:** `e88b508db66426180d648f478cdcebc88a348996` (tree `c77431bf7dfcf6300193f9218c85e40c9b8b2c93`)  
+**Candidate:** Azdaja v0.1.2 public content snapshot
 **Supported release targets:** `aarch64-apple-darwin`, `x86_64-unknown-linux-gnu`  
 **Generated:** `2026-08-20T03:44:21Z` by a strictly local/offline audit  
 **Engineering disposition:** supported-target dependency/font notice gate **PASS only when this file accompanies every applicable release artifact**; see obligations and limits below. This is not legal advice.
@@ -242,8 +242,8 @@ The machine manifest records the archive hash, counts, complete relative-path in
 
 ## Bundled font notice
 
-- Font file: `site/fonts/cormorant-regular.woff2` — SHA-256 `ee185375114e22d847ace51ba8fa0293e29c401a541eaccfec6b50448368d755`.
-- Embedded face metadata: **Cormorant Garamond Light**, subfamily Regular, version 4.001. The filename/CSS weight-400 mismatch is a product-accuracy issue, not a license finding.
+- Font file: `site/fonts/cormorant-light.woff2` — SHA-256 `ee185375114e22d847ace51ba8fa0293e29c401a541eaccfec6b50448368d755`.
+- Embedded face metadata: **Cormorant Garamond Light**, subfamily Regular, version 4.001. CSS weight 300 matches the intended Light face.
 - Co-located source notice: `site/fonts/Cormorant-Garamond-OFL.txt` — SHA-256 `60700d351cac4650c51f3f9db318d2a420f8b45052dba2715eb5fec41f0f6956`; its exact copyright is **“Copyright 2015 the Cormorant Project Authors (github.com/CatharsisFonts/Cormorant)”** and its complete SIL OFL 1.1 terms are reproduced once as [text `60700d351cac4650c51f3f9db318d2a420f8b45052dba2715eb5fec41f0f6956`](#text-60700d351cac4650c51f3f9db318d2a420f8b45052dba2715eb5fec41f0f6956). No additional font copyright is inferred.
 
 ## Obligations, unsatisfied cases, and release conditions

@@ -29,7 +29,7 @@ sha256_file() {
   printf '%s\n' 'assemble-standalone-assets: root LICENSE identity mismatch' >&2
   exit 2
 }
-[ "$(sha256_file "$ROOT/THIRD-PARTY-NOTICES.md")" = dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb ] || {
+[ "$(sha256_file "$ROOT/THIRD-PARTY-NOTICES.md")" = ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6 ] || {
   printf '%s\n' 'assemble-standalone-assets: reviewed notice identity mismatch' >&2
   exit 2
 }
