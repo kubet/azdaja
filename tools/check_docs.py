@@ -663,7 +663,8 @@ def check_integration_acceptance_receipt() -> list[str]:
         "tests/product_50mb.rs": "87a66d26b5c82766af03b648540cb45802c1396aa5dd808f875f1b2e1ac279a8",
         "tests/site_installer.rs": "f8a3e0dd43c15e3373d5a668d619a3db318476c3b93a2b62205e7d949cedb004",
         "tools/check_docs.py": "5dbd07133f94e86143c2ec667e3750360168657a4b2f163b58a8e892250f6a87",
-    }    expected_commands = {
+    }
+    expected_commands = {
         "check_docs": "python3 tools/check_docs.py",
         "clippy": "cargo clippy --all-targets --all-features --locked -- -D warnings",
         "fmt": "cargo fmt --all --check",
@@ -722,7 +723,7 @@ def check_integration_acceptance_receipt() -> list[str]:
         receipt.get("schema_version") != 1
         or receipt.get("record_type") != "azdaja_current_source_integration_acceptance_local_receipt"
         or receipt.get("status") != "PASS_PROVIDER_FREE_EXACT_SOURCE"
-        or receipt.get("base_commit") != "193a63b6d73110155ec090d12fbb52f51bb11bfd"
+        or receipt.get("base_commit") != "fe2eb9705266e39d75eef49e85b19e5270ad899d"
         or receipt.get("source_sha256") != expected_hashes
         or receipt.get("commands") != expected_commands
         or receipt.get("results") != expected_results
