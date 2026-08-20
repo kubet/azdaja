@@ -1,0 +1,602 @@
+{
+  "schema_version": 3,
+  "record_type": "azdaja_v0_1_2_sanitized_public_product_acceptance_receipt",
+  "status": "LOCAL_CANDIDATE_ONLY_AWAITING_METADATA_ART_RIGHTS_OWNER_GO",
+  "release_or_publication_performed": false,
+  "publication_authorized": false,
+  "receipt_boundary": "Local engineering acceptance for exact managed-document v2 candidate bytes. This record contains no publication action or authorization.",
+  "runtime_source": {
+    "contract": "The exact local assets were built from the clean pre-receipt runtime snapshot. This receipt and its wording in README.md are refreshed afterward; runtime-defining source and binary bytes are unchanged.",
+    "canonical_manifest_sha256": "4ce246103208bac072d574260ac7ecb58b722db1239db5d468b324bfb5b24e79",
+    "files": [
+      {
+        "path": "Cargo.toml",
+        "bytes": 882,
+        "sha256": "697c17ab55cd9896c243f296fd9a80e72d64b35ce39278ecbaa50cbd2a630b41"
+      },
+      {
+        "path": "Cargo.lock",
+        "bytes": 47841,
+        "sha256": "4e2419eaf2f1cf4818dca37950af56a7aedf6a079567357f4b7b72f8dd72066d"
+      },
+      {
+        "path": "LICENSE",
+        "bytes": 1070,
+        "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+      },
+      {
+        "path": "THIRD-PARTY-NOTICES.md",
+        "bytes": 566087,
+        "sha256": "ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6"
+      },
+      {
+        "path": "assets/SKILL.md",
+        "bytes": 7442,
+        "sha256": "0f6769f32e45b56a172b0d8c4f3d292d70da4d0168716a3f1251ca3f7a62690d"
+      },
+      {
+        "path": "assets/config.toml",
+        "bytes": 481,
+        "sha256": "ca3f153c8a5a80c3727473fea90452ade5c556a24d026fb54084257791fd8eb8"
+      },
+      {
+        "path": "src/banner.rs",
+        "bytes": 4541,
+        "sha256": "dec4128eea89db1c339ebc6b19f68433f6b7c7986c5f0105f334542720137f79"
+      },
+      {
+        "path": "src/lib.rs",
+        "bytes": 223205,
+        "sha256": "96af1f1b57889638fde26e34242f8e8978e12e7ab8ece7b9987f377d6e8fbd93"
+      },
+      {
+        "path": "src/main.rs",
+        "bytes": 159477,
+        "sha256": "f08ef8d4230157084711b2a888ed2e181b6eb7d3455c377b992f7e694a3161ff"
+      }
+    ],
+    "source_binary_change_in_this_refresh": false,
+    "asset_binding_status": "CURRENT_LOCAL_V2_ASSETS_VALIDATED",
+    "canonical_manifest_format": "UTF-8 lines in listed order: <sha256><two spaces><path><LF>",
+    "byte_identical_from_asset_build_through_receipt_refresh": true
+  },
+  "candidate_assets": {
+    "status": "CURRENT_EXACT_LOCAL_V2_CANDIDATE_BYTES_VALIDATED",
+    "directory_entry_count": 5,
+    "directory_exact_names": [
+      "LICENSE",
+      "SHA256SUMS",
+      "THIRD-PARTY-NOTICES.md",
+      "azdaja-v0.1.2-darwin-arm64",
+      "azdaja-v0.1.2-linux-x86_64"
+    ],
+    "regular_non_symlink_files_only": true,
+    "assets": [
+      {
+        "name": "azdaja-v0.1.2-darwin-arm64",
+        "bytes": 7112288,
+        "sha256": "fc7f9ec319926d81dfacb59ee1f3f9f2f1326c9dace8d2c87e1d5f4a8b57dfda",
+        "mode": "0755"
+      },
+      {
+        "name": "azdaja-v0.1.2-linux-x86_64",
+        "bytes": 8638088,
+        "sha256": "5f8847f5f47a72fe49219be483702719ae8b0c6a79d0a58f775c5cd6bc4f9941",
+        "mode": "0755"
+      },
+      {
+        "name": "LICENSE",
+        "bytes": 1070,
+        "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096",
+        "mode": "0600"
+      },
+      {
+        "name": "THIRD-PARTY-NOTICES.md",
+        "bytes": 566087,
+        "sha256": "ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6",
+        "mode": "0600"
+      },
+      {
+        "name": "SHA256SUMS",
+        "bytes": 349,
+        "sha256": "2f7adda9e7bb6b4b52f1c6ae16fe07f82fc95d89b30f7db4df35cfe7c43a90a6",
+        "mode": "0600"
+      }
+    ],
+    "sha256sums_contract": {
+      "bytes": 349,
+      "sha256": "2f7adda9e7bb6b4b52f1c6ae16fe07f82fc95d89b30f7db4df35cfe7c43a90a6",
+      "entry_count": 4,
+      "exact_payload_names": [
+        "azdaja-v0.1.2-darwin-arm64",
+        "azdaja-v0.1.2-linux-x86_64",
+        "LICENSE",
+        "THIRD-PARTY-NOTICES.md"
+      ],
+      "casefold_name_sorted": true
+    },
+    "private_custody_receipt": {
+      "bytes": 14573,
+      "sha256": "eaf63594ca9abbb56d4b20b1ae67d599cb5989ad95373f73fdd89421010f3765",
+      "embedded_in_public_repository": false
+    },
+    "sanitized_summary": {
+      "bytes": 8273,
+      "sha256": "69f7e531f2188ad895ab958bdd3eed4ba4f68f2aee789520a257afc096807601",
+      "embedded_in_public_repository": false
+    },
+    "co_distribution": {
+      "satisfied_for_exact_local_candidate": true,
+      "license_exact_root_bytes": true,
+      "third_party_notices_exact_root_bytes": true,
+      "binaries_embed_exact_license_and_notice_bytes": true,
+      "installer_downloads_verifies_and_installs_both_documents": true,
+      "managed_document_format_current_version": 2,
+      "continuing_condition": "The exact LICENSE and THIRD-PARTY-NOTICES.md above must accompany each applicable binary; changing any bound byte requires fresh assembly and acceptance."
+    }
+  },
+  "platform_acceptance": {
+    "darwin_arm64": {
+      "execution_environment": "local native arm64 macOS host",
+      "full_test_passed": 166,
+      "full_test_failed": 0,
+      "full_test_ignored_release_only": 2,
+      "release_50_mib_gate_passed": 1,
+      "release_50_mib_scenarios": 3,
+      "bytes_each": 52428800,
+      "components": {
+        "lifecycle_ux_passed": 17,
+        "site_installer_passed": 23,
+        "notice_distribution_passed": 4,
+        "process_xdg_security_passed": 8
+      },
+      "binary": {
+        "format": "Mach-O 64-bit thin arm64 PIE",
+        "minimum_macos": "11.0",
+        "stripped_local_symbols": true,
+        "local_defined_symbols": 0,
+        "dwarf_segment": false,
+        "signature": "ad hoc, linker-signed",
+        "codesign_strict_verify": true,
+        "developer_id_signed": false,
+        "notarization_performed_or_claimed": false
+      },
+      "limits": [
+        "Ad-hoc linker signing is not identity signing or notarization.",
+        "The binary declares macOS 11.0 minimum; this acceptance was not executed on a physical macOS 11 host."
+      ]
+    },
+    "linux_x86_64": {
+      "execution_environment": "local isolated linux/amd64 container under host emulation",
+      "full_test_passed": 166,
+      "full_test_failed": 0,
+      "full_test_ignored_release_only": 2,
+      "release_50_mib_gate_passed": 1,
+      "release_50_mib_scenarios": 3,
+      "bytes_each": 52428800,
+      "components": {
+        "lifecycle_ux_passed": 17,
+        "site_installer_passed": 23,
+        "notice_distribution_passed": 4,
+        "process_xdg_security_passed": 8
+      },
+      "binary": {
+        "format": "ELF64 x86-64 PIE dynamically linked stripped",
+        "kernel_abi_report": "GNU/Linux 3.2.0",
+        "maximum_glibc_symbol_version": "2.35",
+        "nm_symbols": 0
+      },
+      "environment": {
+        "local_container": true,
+        "linux_amd64": true,
+        "container_init_reaper": true,
+        "nonroot": true,
+        "network": "none",
+        "source_mount": "read-only",
+        "registry_mount": "read-only",
+        "host_emulation": true,
+        "native_physical_cross_fleet": false
+      },
+      "limits": [
+        "Local linux/amd64 container execution under host emulation is accepted engineering evidence, not a native physical or independent cross-fleet claim.",
+        "The supported installer floor is glibc 2.35; glibc 2.34 and musl are refused before download or HOME mutation."
+      ]
+    },
+    "toolchain": {
+      "rust": "1.95.0 direct/offline",
+      "linux_image": "rust:1.95-bookworm",
+      "linux_image_digest": "sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1",
+      "linux_pull": "never"
+    },
+    "binary_behavior": {
+      "version": "azdaja 0.1.2 (monty 0.0.21)",
+      "plain_help_exact_five_lines": true,
+      "full_help_passed": true,
+      "binary_private_or_credential_string_matches": {
+        "darwin_arm64": 0,
+        "linux_x86_64": 0
+      }
+    }
+  },
+  "installer_acceptance": {
+    "status": "CURRENT_EXACT_LOCAL_V2_ASSETS_VALIDATED",
+    "source_installers_byte_identical": true,
+    "source_installer_sha256": "35d8bc2dcd9a5ccb7c55c62db688a948681279ce2cfc3a43275c42489f61a27c",
+    "exact_candidate_bytes_and_documents": true,
+    "exact_three_line_success_output": true,
+    "exact_four_payload_manifest_required": true,
+    "managed_document_v2": {
+      "marker_fixed_exact_bytes": true,
+      "marker_sha256": "a8ed2cd992574624cedd34c9c64cfee4c4427f52820131f0beede560ef24a835",
+      "fresh_install": true,
+      "current_v2_reinstall": true,
+      "arbitrary_marker_hashes_trusted": false
+    },
+    "legacy_migration": {
+      "only_exact_supported_v1_accepted": true,
+      "supported_v1_notice_sha256": "dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb",
+      "darwin_exact_v1_to_v2_passed": true,
+      "linux_exact_v1_to_v2_passed": true,
+      "mutated_v1_refused_without_state_change": true,
+      "fake_v2_refused_without_state_change": true,
+      "rollback_and_concurrent_lifecycle_passed": true
+    },
+    "darwin": {
+      "download_sets": 18,
+      "loopback_http_requests": 72,
+      "successful_install_invocations": 8,
+      "expected_refusals": 10,
+      "all_harnesses": true,
+      "auto_selector": true,
+      "path_and_off_path": true,
+      "foreign_az_preserved": true,
+      "reinstall_custom_config_preserved": true,
+      "installed_binary_and_documents_exact": true,
+      "self_uninstall_all": true,
+      "late_payload_rollback_exact_state": true,
+      "concurrent_successes": 1,
+      "concurrent_lock_refusals": 7,
+      "provider_guard_calls": 0
+    },
+    "linux": {
+      "download_sets": 8,
+      "loopback_http_requests": 32,
+      "successful_install_invocations": 6,
+      "expected_download_refusals": 2,
+      "glibc_2_34_refused_pre_download": true,
+      "glibc_2_35_accepted": true,
+      "glibc_2_36_accepted": true,
+      "musl_refused_pre_download": true,
+      "all_harnesses": true,
+      "path_and_off_path": true,
+      "foreign_az_preserved": true,
+      "reinstall_custom_config_preserved": true,
+      "installed_binary_and_documents_exact": true,
+      "self_uninstall_all": true,
+      "container_init_reaper": true,
+      "provider_guard_calls": 0
+    },
+    "independent_local_real_install_validation": {
+      "exact_supported_v1_migrated_to_v2": true,
+      "installed_binary_exact": true,
+      "installed_license_exact": true,
+      "installed_third_party_notices_exact": true,
+      "state_or_host_paths_embedded_in_public_receipt": false,
+      "boundary": "Independent real-install state remains in private validation; this public receipt records only the sanitized outcome."
+    },
+    "selectors": {
+      "platforms": [
+        "Darwin-arm64",
+        "Linux-x86_64"
+      ],
+      "routes": [
+        "jcode",
+        "claude",
+        "codex",
+        "gemini",
+        "opencode",
+        "all",
+        "auto-detect"
+      ],
+      "alias_states": [
+        "managed alias on PATH",
+        "managed alias off PATH",
+        "foreign az preserved and alias skipped"
+      ]
+    }
+  },
+  "native_harness_acceptance": {
+    "jcode": {
+      "provider_free_local_discovery": true,
+      "authoritative_custom_home": true,
+      "preexisting_session_list_after_install": true,
+      "reload_all_discovery": true,
+      "managed_skill_awareness_loaded": true,
+      "embedded_start_load_exec_final_list_kill": true,
+      "custody_doctor": true,
+      "uninstall_cache_boundary_preserved": true
+    },
+    "other_managed_targets": {
+      "names": [
+        "claude",
+        "codex",
+        "gemini",
+        "opencode"
+      ],
+      "directory_schema_executable_version_caps_awareness_and_embedded_lifecycle": true,
+      "native_cli_discovery_claimed": false
+    }
+  },
+  "security_acceptance": {
+    "checksum_verified_before_install_mutation": true,
+    "glibc_verified_before_staging_download_or_home_mutation": true,
+    "download_size_caps_and_exact_single_checksum_entry": true,
+    "atomic_destination_update_and_recursive_rollback": true,
+    "all_selected_harness_targets_preflighted_before_mutation": true,
+    "hardlink_symlink_unknown_entry_and_unsafe_path_refusals_preserve_state": true,
+    "foreign_alias_and_unrelated_configuration_preserved": true,
+    "standalone_uninstall_requires_exact_ownership_marker": true,
+    "concurrent_state_updates_serialized_without_residue": true,
+    "invalid_explicit_or_xdg_paths_fail_closed_before_route_entry": true,
+    "provider_process_groups_reaped_on_success_error_timeout_and_unix_signals": true,
+    "prompt_temporary_replacement_not_followed": true,
+    "interrupted_exec_preserves_prior_snapshot": true,
+    "managed_document_v2_marker_compared_as_fixed_bytes": true,
+    "legacy_document_migration_allowlist_exact": true,
+    "marker_declared_hashes_never_parsed_or_trusted": true,
+    "shell_and_rust_document_lifecycle_exclusion": true,
+    "exact_current_v2_marker_required": true,
+    "exact_supported_v1_migration_only": true,
+    "mutated_v1_and_fake_v2_refused_without_state_change": true,
+    "darwin_process_xdg_security_passed": 8,
+    "linux_process_xdg_security_passed": 8
+  },
+  "license_and_notice_acceptance": {
+    "status": "CONDITIONAL_PASS_FOR_EXACT_SUPPORTED_TARGET_V2_ASSETS",
+    "root_license": {
+      "bytes": 1070,
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    "third_party_notices": {
+      "bytes": 566087,
+      "sha256": "ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6"
+    },
+    "supported_targets": [
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "exact_supported_target_registry_package_union": 156,
+    "supported_union_missing_license_metadata": 0,
+    "supported_union_checksum_failures": 0,
+    "former_three_lock_record_blocker": {
+      "status": "CLEARED_AS_OUTSIDE_BOTH_SUPPORTED_TARGET_CLOSURES",
+      "records": [
+        "winapi 0.3.9",
+        "winapi-i686-pc-windows-gnu 0.4.0",
+        "winapi-x86_64-pc-windows-gnu 0.4.0"
+      ],
+      "tracked_presence": "Cargo.lock resolution metadata only; no corresponding source or compiled binary is distributed for the supported targets.",
+      "license_claim_for_these_records": "none",
+      "windows_release_support": false
+    },
+    "distribution_condition": "Conditional engineering pass only while the exact notice and license files accompany every applicable supported-target asset and the fixed managed-document v2 ownership format remains exact.",
+    "legal_boundary": "This inventory and receipt are engineering evidence, not legal advice or an ownership determination.",
+    "notice_source_identity_current": true,
+    "fresh_asset_distribution_current": true,
+    "notice_delta_from_prior_reviewed_bundle": {
+      "prior_bytes": 566187,
+      "prior_sha256": "dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb",
+      "current_bytes": 566087,
+      "current_sha256": "ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6",
+      "changed_logical_lines": 3,
+      "removed_lines": 3,
+      "added_lines": 3,
+      "third_party_legal_text_blocks_byte_identical": true,
+      "scope": "Only the non-corpus candidate identity line and two bundled-font identity/accuracy lines changed; third-party legal text is unchanged."
+    }
+  },
+  "benchmark_evidence_boundary": {
+    "fixed_199_oolong_diagnostic": {
+      "score_percent": 68.64164968987583,
+      "execution_successes": 185,
+      "denominator": 199,
+      "retained_failure_zeros": 14,
+      "status": "frozen, scored exactly once, closed; not rerun for this acceptance",
+      "product_release_gate": false
+    },
+    "offline_unit_evidence": {
+      "ARC": {
+        "passed": 54,
+        "total": 55,
+        "errors": 1,
+        "boundary": "one frozen historical custody drift; not a product gate"
+      },
+      "Oolong": {
+        "passed": 61,
+        "total": 61,
+        "errors": 0
+      },
+      "Ruler": {
+        "passed": 87,
+        "total": 87,
+        "errors": 0
+      },
+      "LongBench": {
+        "passed": 105,
+        "total": 113,
+        "errors": 8,
+        "boundary": "classified frozen adapter/fixture drift in two root causes; not a product gate"
+      }
+    },
+    "new_benchmark_or_provider_run_performed": false,
+    "claim_boundary": "These are diagnostic or offline-test boundaries, not leaderboard, superiority, adoption, cost, or general-capability claims."
+  },
+  "clean_public_content_boundary": {
+    "tracked_allowlisted_files": 54,
+    "allowlist_closed": true,
+    "symlinks_submodules_archives_in_payload": 0,
+    "raw_benchmark_inputs_outputs_logs_fixtures_and_history_included": false,
+    "receipt_contains_raw_prompts_responses_host_paths_private_commit_ids_or_secrets": false,
+    "binary_release_assets_embedded_in_source_repository": false,
+    "installers_byte_identical": true,
+    "media_inventory": [
+      {
+        "path": "azdaja-logo.png",
+        "bytes": 1202817,
+        "sha256": "6d215c24bacade156394da2d5cce8da41543a339f62d62cde2a6da861d867281"
+      },
+      {
+        "path": "docs/token-context-crossover.svg",
+        "bytes": 5561,
+        "sha256": "f7daef549bb77e163dd907c218a08b2854bf3df5c9983131f4f1a4e8d082b1aa"
+      },
+      {
+        "path": "site/apple-touch-icon.png",
+        "bytes": 34976,
+        "sha256": "c73e96d9950dbfeb10043ccc479fe6a9cc3c5fa70298a802e127400a34ba2bdf"
+      },
+      {
+        "path": "site/azdaja-mark.webp",
+        "bytes": 58648,
+        "sha256": "1639344ca58c1b04aaaf2ebd28e80177c8d478a24896ef1f621ce93c7e74beb1"
+      },
+      {
+        "path": "site/fonts/cormorant-light.woff2",
+        "bytes": 24656,
+        "sha256": "ee185375114e22d847ace51ba8fa0293e29c401a541eaccfec6b50448368d755"
+      },
+      {
+        "path": "site/icon-384.png",
+        "bytes": 138495,
+        "sha256": "5bb62dc91da93f267693ac203e8f0020df10e8a7d5c018b03b13a2053eac55d3"
+      },
+      {
+        "path": "site/og-card.jpg",
+        "bytes": 72820,
+        "sha256": "63d0c6d3d7fb05289d4a61a9b971a3749a20b51f0997d3d6ed765b0b86ed81f0"
+      }
+    ],
+    "final_manifests_and_reachable_object_scans": "Recorded outside the source repository after the neutral-placeholder commit to avoid self-referential receipt hashes.",
+    "media_asset_bytes_unchanged": true,
+    "font_path_renamed_without_byte_change": true
+  },
+  "cleared_gates": [
+    {
+      "gate": "cross-platform product acceptance",
+      "status": "CLEARED_FOR_EXACT_LOCAL_CANDIDATE",
+      "evidence": "Darwin and Linux each passed 166 tests with 2 release-only ignores, plus the release 50 MiB gate."
+    },
+    {
+      "gate": "supported-platform managed-document v2 asset rebuild",
+      "status": "CLEARED",
+      "evidence": "Both exact current platform binaries and the exact SHA256SUMS are bound above."
+    },
+    {
+      "gate": "supported-target license and notice distribution",
+      "status": "CLEARED_FOR_EXACT_LOCAL_CANDIDATE",
+      "evidence": "The five-entry asset set and both binaries bind the exact LICENSE and corrected THIRD-PARTY-NOTICES.md."
+    },
+    {
+      "gate": "managed-document v2 fresh install and reinstall",
+      "status": "CLEARED",
+      "evidence": "Both platform matrices installed exact current bytes and passed exact v2 reinstall."
+    },
+    {
+      "gate": "exact supported v1 to v2 migration",
+      "status": "CLEARED",
+      "evidence": "Both platform matrices migrated only the exact supported v1 notice identity; mutated v1 and fake v2 states failed closed."
+    },
+    {
+      "gate": "managed-document rollback, concurrency, and security",
+      "status": "CLEARED",
+      "evidence": "Lifecycle, rollback, refusal-state identity, process/XDG security, and concurrent locking checks passed."
+    },
+    {
+      "gate": "Cormorant Light product identity and route",
+      "status": "CLEARED",
+      "evidence": "The Light filename, weight-300 CSS, current route, notice identity, and stale-Regular absence checks passed."
+    }
+  ],
+  "remaining_gates": [
+    {
+      "gate": "approved public commit metadata",
+      "satisfied": false,
+      "required_action": "Replace neutral placeholder author, committer, timestamp, and message only with owner-approved public metadata."
+    },
+    {
+      "gate": "owner art/media rights attestation for exact hashes",
+      "satisfied": false,
+      "required_action": "Owner must attest creator/source/derivation and publication rights for the five exact owner-controlled art/media hashes in art_media_hashes.",
+      "art_media_hashes": [
+        {
+          "path": "azdaja-logo.png",
+          "sha256": "6d215c24bacade156394da2d5cce8da41543a339f62d62cde2a6da861d867281"
+        },
+        {
+          "path": "site/og-card.jpg",
+          "sha256": "63d0c6d3d7fb05289d4a61a9b971a3749a20b51f0997d3d6ed765b0b86ed81f0"
+        },
+        {
+          "path": "site/apple-touch-icon.png",
+          "sha256": "c73e96d9950dbfeb10043ccc479fe6a9cc3c5fa70298a802e127400a34ba2bdf"
+        },
+        {
+          "path": "site/icon-384.png",
+          "sha256": "5bb62dc91da93f267693ac203e8f0020df10e8a7d5c018b03b13a2053eac55d3"
+        },
+        {
+          "path": "site/azdaja-mark.webp",
+          "sha256": "1639344ca58c1b04aaaf2ebd28e80177c8d478a24896ef1f621ce93c7e74beb1"
+        }
+      ]
+    },
+    {
+      "gate": "explicit owner GO",
+      "satisfied": false,
+      "required_action": "Owner must explicitly authorize publication after the metadata and art/media rights gates are satisfied."
+    }
+  ],
+  "validation_limits": {
+    "external_network_used": false,
+    "loopback_http_only": true,
+    "live_provider_or_model_calls": 0,
+    "push_used": false,
+    "tag_used": false,
+    "release_created": false,
+    "repository_visibility_changed": false,
+    "identity_signing_or_notarization": false,
+    "native_physical_cross_fleet_validation": false,
+    "claim_boundary": "No notarization, physical-fleet, live-provider, external-network installer, release, tag, push, publication, adoption, cost, or general-capability claim is made.",
+    "developer_id_signing": false,
+    "notarization_performed": false,
+    "linux_host_emulation_used": true,
+    "linux_native_physical_cross_fleet": false,
+    "macos_11_physical_execution_claimed": false
+  },
+  "managed_document_format": {
+    "current_version": 2,
+    "marker_schema": "fixed exact bytes; header, schema name, LICENSE SHA-256, and THIRD-PARTY-NOTICES.md SHA-256",
+    "current_license_sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096",
+    "current_notices_sha256": "ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6",
+    "supported_legacy_v1_notices_sha256": "dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb",
+    "arbitrary_marker_declared_hashes_accepted": false,
+    "migration_transactional_and_rollback_tested": true,
+    "exact_v2_reinstall_and_uninstall_tested": true,
+    "exact_supported_v1_uninstall_supported": true,
+    "fresh_v2_install_both_platforms_tested": true,
+    "current_v2_reinstall_both_platforms_tested": true
+  },
+  "font_site_acceptance": {
+    "status": "CLEARED",
+    "font_file": "site/fonts/cormorant-light.woff2",
+    "bytes": 24656,
+    "sha256": "ee185375114e22d847ace51ba8fa0293e29c401a541eaccfec6b50448368d755",
+    "old_regular_file_absent": true,
+    "css_font_face_weight_300": true,
+    "css_body_weight_300": true,
+    "css_h1_weight_300": true,
+    "light_font_route_passed": true,
+    "stale_regular_reference_absent": true,
+    "site_installer_tests_per_platform": 23
+  }
+}

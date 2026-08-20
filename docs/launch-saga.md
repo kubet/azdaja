@@ -98,8 +98,7 @@ The separate transport scout's 0.00/0.00 tie came from 20 pre-inference setup
 failures, with zero successful provider turns and zero agent-class calls. It
 observed no root choice, so it is neither genuine disuse nor a discoverability
 measurement. A repaired activation study is post-launch v0.2 roadmap material
-only; it is not authorized here. The
-[sanitized post-mortem](transport-flip-postmortem.md) records that boundary.
+only; it is not authorized here.
 
 ## The first run became a benchmark
 

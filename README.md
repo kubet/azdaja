@@ -45,6 +45,8 @@ Model-authored code can still select source material for a model call, so this i
 
 Measured in this repository: three synthetic UTF-8 inputs of exactly **52,428,800 bytes** each (build log, repository dump, transcript) answered correctly in **one root turn, zero child calls, root prompt under 65,536 bytes**, inside a 90-second watchdog (`tests/product_50mb.rs`). This performance acceptance is release-only and ignored by the ordinary debug suite; functional debug coverage remains active. The offline scripted gate covers those three cases, not arbitrary-file accuracy, latency, memory use, total provider usage, or savings.
 
+The [local v0.1.2 product-acceptance receipt](bench/results/v0.1.2-product-acceptance-public.json) binds the exact current managed-document v2 candidate assets and evidence boundaries. All product, font, asset, notice, and exact v1-to-v2 migration gates are clear for these local bytes. It remains local-only pending approved public commit metadata, owner art/media rights attestation for the five exact receipt-bound hashes, and explicit owner GO; it is not a release or publication claim.
+
 The [crossover figure](docs/token-context-crossover.svg) is illustrative: it assumes four bytes/token and a constant 64 KiB root envelope, so the crossover is algebraic, not measured. It is not a token or cost-savings claim. Reproduce it with `python3 tools/render_token_crossover.py --check`.
 
 ## Install
@@ -85,7 +87,7 @@ Every uninstall preflights all selected targets before deleting anything. Change
 
 Supported harness names are `jcode`, `claude`, `codex`, `gemini`, `opencode`, and `all`. Installation and `doctor --harness` are provider-free; the latter proves only on-disk custody. A passing unqualified `doctor` proves only that the configured harness answered its fixed canary.
 
-The provider-free [source acceptance receipt](bench/results/integration-acceptance-v0.1.2-local.json) binds the exact older source hashes recorded at its base commit; it does not validate the current managed-document v2 lifecycle and remains immutable historical evidence. The [short-alias delta receipt](bench/results/install-alias-delta-v0.1.2-public.json), [readiness supersession receipt](bench/results/v0.1.2-candidate-readiness-superseded-public.json), historical [matrix](bench/results/install-matrix-v0.1.2-final-public.json), and [real-adapter receipt](bench/results/install-real-adapters-v0.1.2-final-public.json) remain evidence for their old bytes only, not the current source. Local selector coverage is not a native cross-platform or provider validation. All prior platform-asset hashes are invalid after this source change; new native assets and a fresh release matrix are required before release readiness.
+Current-source installer, alias, lifecycle, and 50 MiB coverage is exercised by the provider-free local test suite and read-only CI workflows. Local selector coverage is not native cross-platform or provider validation; no release readiness is asserted by this source snapshot.
 ## Use
 
 ```bash
