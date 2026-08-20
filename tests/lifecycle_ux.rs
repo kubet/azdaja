@@ -2,9 +2,10 @@
 
 use std::{
     fs,
+    io::Write,
     os::unix::fs::{MetadataExt, PermissionsExt, symlink},
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
     sync::{Arc, Barrier},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -277,6 +278,68 @@ fn all_harness_uninstall_preflights_unknown_changed_and_symlink_targets() {
     assert!(all[0].exists(), "symlink refusal happened after mutation");
 }
 
+const DOCUMENT_OWNER_V1: &[u8] = b"azdaja-installer-owned-docs-v1\n";
+const DOCUMENT_OWNER_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
+schema=azdaja-managed-documents-v2\n\
+LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
+THIRD-PARTY-NOTICES.md.sha256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6\n";
+
+fn sha256_bytes(bytes: &[u8]) -> String {
+    for (tool, args) in [("shasum", vec!["-a", "256"]), ("sha256sum", vec![])] {
+        let mut child = match Command::new(tool)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(_) => continue,
+        };
+        child.stdin.take().unwrap().write_all(bytes).unwrap();
+        let output = child.wait_with_output().unwrap();
+        if output.status.success() {
+            return String::from_utf8(output.stdout)
+                .unwrap()
+                .split_whitespace()
+                .next()
+                .unwrap()
+                .to_owned();
+        }
+    }
+    panic!("no SHA-256 utility available")
+}
+
+fn legacy_notices() -> Vec<u8> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let revisions = Command::new("git")
+        .current_dir(root)
+        .args([
+            "log",
+            "--all",
+            "--format=%H",
+            "--",
+            "THIRD-PARTY-NOTICES.md",
+        ])
+        .output()
+        .unwrap();
+    assert!(revisions.status.success());
+    for revision in String::from_utf8(revisions.stdout).unwrap().lines() {
+        let object = format!("{revision}:THIRD-PARTY-NOTICES.md");
+        let candidate = Command::new("git")
+            .current_dir(root)
+            .args(["show", &object])
+            .output()
+            .unwrap();
+        if candidate.status.success()
+            && sha256_bytes(&candidate.stdout)
+                == "dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb"
+        {
+            return candidate.stdout;
+        }
+    }
+    panic!("exact locally supported legacy notice fixture is unavailable")
+}
+
 fn standalone(home: &Path, name: &str) -> PathBuf {
     let directory = home.join(name);
     fs::create_dir_all(&directory).unwrap();
@@ -301,11 +364,15 @@ fn standalone(home: &Path, name: &str) -> PathBuf {
         include_bytes!("../THIRD-PARTY-NOTICES.md"),
     )
     .unwrap();
-    fs::write(
-        documents.join(".azdaja-managed"),
-        "azdaja-installer-owned-docs-v1\n",
-    )
-    .unwrap();
+    fs::write(documents.join(".azdaja-managed"), DOCUMENT_OWNER_V2).unwrap();
+    binary
+}
+
+fn legacy_standalone(home: &Path, name: &str) -> PathBuf {
+    let binary = standalone(home, name);
+    let documents = home.join(".local/share/azdaja");
+    fs::write(documents.join("THIRD-PARTY-NOTICES.md"), legacy_notices()).unwrap();
+    fs::write(documents.join(".azdaja-managed"), DOCUMENT_OWNER_V1).unwrap();
     binary
 }
 
@@ -386,6 +453,131 @@ fn standalone_and_full_all_self_uninstall_preserve_foreign_neighbors() {
             .next()
             .is_none()
     );
+}
+
+#[test]
+fn exact_legacy_v1_standalone_documents_are_safely_removable() {
+    let scratch = Scratch::new("legacy-standalone");
+    let binary = legacy_standalone(&scratch.0, "bin");
+    let output = run(&binary, &scratch.0, &["uninstall", "--standalone"]);
+    assert_success(&output);
+    assert!(!binary.exists());
+    assert!(!scratch.0.join(".local/share/azdaja").exists());
+}
+
+#[test]
+fn fake_v2_and_mutated_legacy_standalone_documents_refuse_before_mutation() {
+    for state in ["fake-v2", "mutated-legacy"] {
+        let scratch = Scratch::new(state);
+        let binary = if state == "fake-v2" {
+            standalone(&scratch.0, "bin")
+        } else {
+            legacy_standalone(&scratch.0, "bin")
+        };
+        let documents = scratch.0.join(".local/share/azdaja");
+        if state == "fake-v2" {
+            fs::write(
+                documents.join(".azdaja-managed"),
+                b"azdaja-installer-owned-docs-v2\nschema=azdaja-managed-documents-v2\nLICENSE.sha256=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\nTHIRD-PARTY-NOTICES.md.sha256=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n",
+            )
+            .unwrap();
+        } else {
+            let mut notices = legacy_notices();
+            notices.extend_from_slice(b"mutated");
+            fs::write(documents.join("THIRD-PARTY-NOTICES.md"), notices).unwrap();
+        }
+        let binary_before = surface_snapshot(binary.parent().unwrap());
+        let documents_before = surface_snapshot(&documents);
+        let output = run(&binary, &scratch.0, &["uninstall", "--standalone"]);
+        assert!(!output.status.success(), "state={state}");
+        assert_eq!(surface_snapshot(binary.parent().unwrap()), binary_before);
+        assert_eq!(surface_snapshot(&documents), documents_before);
+    }
+}
+
+#[test]
+fn standalone_document_quarantine_rolls_back_v2_and_legacy_at_every_injected_step() {
+    for legacy in [false, true] {
+        let scratch = Scratch::new(if legacy { "rollback-v1" } else { "rollback-v2" });
+        let binary = if legacy {
+            legacy_standalone(&scratch.0, "bin")
+        } else {
+            standalone(&scratch.0, "bin")
+        };
+        let documents = scratch.0.join(".local/share/azdaja");
+        let binary_before = surface_snapshot(binary.parent().unwrap());
+        let documents_before = surface_snapshot(&documents);
+        for fail_at in 1..=4 {
+            let fail_at = fail_at.to_string();
+            let output = run_with_lifecycle_env(
+                &binary,
+                &scratch.0,
+                &["uninstall", "--standalone"],
+                &[("AZDAJA_LIFECYCLE_TEST_FAIL_AT", &fail_at)],
+            );
+            assert!(
+                !output.status.success(),
+                "legacy={legacy} fail_at={fail_at}"
+            );
+            assert!(text(&output).1.contains("injected lifecycle failure"));
+            assert_eq!(surface_snapshot(binary.parent().unwrap()), binary_before);
+            assert_eq!(surface_snapshot(&documents), documents_before);
+            assert!(fs::read_dir(&scratch.0).unwrap().all(|entry| {
+                !entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .contains("uninstall")
+            }));
+        }
+    }
+}
+
+#[test]
+fn concurrent_standalone_document_lifecycle_has_one_owner_and_no_quarantine_leak() {
+    let scratch = Scratch::new("concurrent-standalone");
+    let first = standalone(&scratch.0, "first-bin");
+    let second = standalone(&scratch.0, "second-bin");
+    let barrier = Arc::new(Barrier::new(3));
+    let mut workers = Vec::new();
+    for binary in [first.clone(), second.clone()] {
+        let barrier = Arc::clone(&barrier);
+        let home = scratch.0.clone();
+        workers.push(thread::spawn(move || {
+            barrier.wait();
+            run(&binary, &home, &["uninstall", "--standalone"])
+        }));
+    }
+    barrier.wait();
+    let outputs = workers
+        .into_iter()
+        .map(|worker| worker.join().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        outputs
+            .iter()
+            .filter(|output| output.status.success())
+            .count(),
+        1
+    );
+    assert!(!scratch.0.join(".local/share/azdaja").exists());
+    assert_eq!(
+        [first.exists(), second.exists()]
+            .into_iter()
+            .filter(|exists| *exists)
+            .count(),
+        1
+    );
+    for parent in [scratch.0.clone(), scratch.0.join(".local/share")] {
+        if let Ok(entries) = fs::read_dir(parent) {
+            assert!(
+                entries
+                    .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                    .all(|name| !name.contains("docs-uninstall")
+                        && !name.contains("azdaja-uninstall"))
+            );
+        }
+    }
 }
 
 fn install_all_with(binary: &Path, home: &Path) {

@@ -3,9 +3,11 @@
 use std::{
     ffi::OsStr,
     fs,
+    io::Write,
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -13,13 +15,15 @@ use std::{
 struct Scratch(PathBuf);
 impl Scratch {
     fn new() -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "azdaja-site-installer-{}-{nonce}",
-            std::process::id()
+            "azdaja-site-installer-{}-{nonce}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(&path).unwrap();
         Self(path)
@@ -110,6 +114,75 @@ fn sha256(path: &Path) -> String {
         }
     }
     panic!("no SHA-256 utility available");
+}
+
+const DOCUMENT_OWNER_V1: &[u8] = b"azdaja-installer-owned-docs-v1\n";
+const DOCUMENT_OWNER_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
+schema=azdaja-managed-documents-v2\n\
+LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
+THIRD-PARTY-NOTICES.md.sha256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6\n";
+
+fn sha256_bytes(bytes: &[u8]) -> String {
+    for (tool, args) in [("shasum", vec!["-a", "256"]), ("sha256sum", vec![])] {
+        let mut child = match Command::new(tool)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(_) => continue,
+        };
+        child.stdin.take().unwrap().write_all(bytes).unwrap();
+        let output = child.wait_with_output().unwrap();
+        if output.status.success() {
+            return String::from_utf8(output.stdout)
+                .unwrap()
+                .split_whitespace()
+                .next()
+                .unwrap()
+                .to_owned();
+        }
+    }
+    panic!("no SHA-256 utility available")
+}
+
+fn legacy_notices() -> Vec<u8> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let revisions = Command::new("git")
+        .current_dir(root)
+        .args([
+            "log",
+            "--all",
+            "--format=%H",
+            "--",
+            "THIRD-PARTY-NOTICES.md",
+        ])
+        .output()
+        .unwrap();
+    assert!(revisions.status.success());
+    for revision in String::from_utf8(revisions.stdout).unwrap().lines() {
+        let object = format!("{revision}:THIRD-PARTY-NOTICES.md");
+        let candidate = Command::new("git")
+            .current_dir(root)
+            .args(["show", &object])
+            .output()
+            .unwrap();
+        if candidate.status.success()
+            && sha256_bytes(&candidate.stdout)
+                == "dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb"
+        {
+            return candidate.stdout;
+        }
+    }
+    panic!("exact locally supported legacy notice fixture is unavailable")
+}
+
+fn write_managed_documents(directory: &Path, marker: &[u8], notices: &[u8]) {
+    fs::create_dir_all(directory).unwrap();
+    fs::write(directory.join("LICENSE"), include_bytes!("../LICENSE")).unwrap();
+    fs::write(directory.join("THIRD-PARTY-NOTICES.md"), notices).unwrap();
+    fs::write(directory.join(".azdaja-managed"), marker).unwrap();
 }
 
 fn local_candidate(scratch: &Path) -> PathBuf {
@@ -1550,6 +1623,138 @@ fn foreign_document_directory_file_symlink_and_hardlink_refuse_without_mutation(
 }
 
 #[test]
+fn exact_legacy_v1_documents_migrate_to_fixed_v2_and_reinstall_exactly() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let base = format!("{}/good", server.base);
+    let home = scratch.0.join("legacy-home");
+    fs::create_dir(&home).unwrap();
+    mark_detected(&home, "claude");
+    let docs = home.join(".local/share/azdaja");
+    let prior_notices = legacy_notices();
+    write_managed_documents(&docs, DOCUMENT_OWNER_V1, &prior_notices);
+    assert_eq!(
+        sha256(&docs.join("THIRD-PARTY-NOTICES.md")),
+        "dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb"
+    );
+    let run_once = || {
+        run_installer(InstallRun {
+            home: &home,
+            base: &base,
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: Some("claude"),
+            bin_dir: Some(&home.join("bin")),
+            path: "/usr/bin:/bin",
+        })
+    };
+    assert_success(&run_once());
+    assert_eq!(
+        fs::read(docs.join(".azdaja-managed")).unwrap(),
+        DOCUMENT_OWNER_V2
+    );
+    assert_eq!(
+        fs::read(docs.join("THIRD-PARTY-NOTICES.md")).unwrap(),
+        include_bytes!("../THIRD-PARTY-NOTICES.md")
+    );
+    let migrated = tree_identity(&docs);
+    assert_success(&run_once());
+    assert_eq!(tree_identity(&docs), migrated);
+    assert!(fs::read_dir(docs.parent().unwrap()).unwrap().all(|entry| {
+        !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains("azdaja-v1-previous")
+    }));
+}
+
+#[test]
+fn mutated_v1_and_marker_declared_fake_v2_refuse_before_home_mutation() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let base = format!("{}/good", server.base);
+    for state in ["mutated-v1", "fake-v2"] {
+        let home = scratch.0.join(state);
+        fs::create_dir(&home).unwrap();
+        mark_detected(&home, "claude");
+        let docs = home.join(".local/share/azdaja");
+        if state == "mutated-v1" {
+            let mut notices = legacy_notices();
+            notices.extend_from_slice(b"mutated");
+            write_managed_documents(&docs, DOCUMENT_OWNER_V1, &notices);
+        } else {
+            let fake = b"azdaja-installer-owned-docs-v2\nschema=azdaja-managed-documents-v2\nLICENSE.sha256=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\nTHIRD-PARTY-NOTICES.md.sha256=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n";
+            write_managed_documents(&docs, fake, b"foreign notices");
+        }
+        let before = tree_identity(&home);
+        let output = run_installer(InstallRun {
+            home: &home,
+            base: &base,
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: Some("claude"),
+            bin_dir: Some(&home.join("bin")),
+            path: "/usr/bin:/bin",
+        });
+        assert!(!output.status.success(), "state={state}");
+        assert_eq!(tree_identity(&home), before, "state={state}");
+    }
+}
+
+#[test]
+fn legacy_v1_migration_rolls_back_exactly_after_injected_harness_failure() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let base = format!("{}/good", server.base);
+    let home = scratch.0.join("legacy-rollback-home");
+    fs::create_dir(&home).unwrap();
+    mark_detected(&home, "claude");
+    let docs = home.join(".local/share/azdaja");
+    write_managed_documents(&docs, DOCUMENT_OWNER_V1, &legacy_notices());
+    let before = tree_identity(&home);
+    let state = scratch.0.join("state-outside-home");
+    let extra = [
+        ("AZDAJA_LIFECYCLE_TEST_FAIL_AT", OsStr::new("1")),
+        ("AZDAJA_HOME", state.as_os_str()),
+    ];
+    let output = run_installer_with_extra(
+        InstallRun {
+            home: &home,
+            base: &base,
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: Some("claude"),
+            bin_dir: Some(&home.join("bin")),
+            path: "/usr/bin:/bin",
+        },
+        &extra,
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("injected lifecycle failure"));
+    assert_eq!(tree_identity(&home), before);
+    assert_eq!(
+        fs::read(docs.join(".azdaja-managed")).unwrap(),
+        DOCUMENT_OWNER_V1
+    );
+}
+
+#[test]
 fn custom_xdg_unicode_space_apostrophe_reinstall_is_exact_and_idempotent() {
     let scratch = Scratch::new();
     let fixture_root = scratch.0.join("releases");
@@ -1596,6 +1801,10 @@ fn custom_xdg_unicode_space_apostrophe_reinstall_is_exact_and_idempotent() {
     assert_eq!(
         fs::read(docs.join("THIRD-PARTY-NOTICES.md")).unwrap(),
         include_bytes!("../THIRD-PARTY-NOTICES.md")
+    );
+    assert_eq!(
+        fs::read(docs.join(".azdaja-managed")).unwrap(),
+        DOCUMENT_OWNER_V2
     );
     let before = tree_identity(&docs);
     let second = assert_success(&run_once());

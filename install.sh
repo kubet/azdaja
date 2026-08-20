@@ -259,6 +259,10 @@ DOC_OWNER=$DOC_DIR/.azdaja-managed
 DOC_LICENSE_CREATED=false
 DOC_NOTICES_CREATED=false
 DOC_OWNER_CREATED=false
+DOC_MIGRATED=false
+DOC_PREVIOUS=
+DOC_LOCK=
+DOC_LOCK_ACQUIRED=false
 CREATED_DOC_DIRS=
 DOC_STAGE_LICENSE=
 DOC_STAGE_NOTICES=
@@ -273,6 +277,10 @@ rollback() {
   if [ -n "$CREATED_DOC_DIRS" ]; then
     printf '%s\n' "$CREATED_DOC_DIRS" | awk 'NF { line[++n] = $0 } END { for (i = n; i > 0; i--) print line[i] }' |
       while IFS= read -r directory; do rmdir "$directory" 2>/dev/null || :; done
+  fi
+  if [ "$DOC_MIGRATED" = true ] && [ -n "$DOC_PREVIOUS" ] && \
+     [ ! -e "$DOC_DIR" ] && [ ! -L "$DOC_DIR" ]; then
+    mv "$DOC_PREVIOUS" "$DOC_DIR" || :
   fi
   if [ "$ALIAS_CREATED" = true ] && [ -L "$ALIAS" ] && [ "$(readlink "$ALIAS" 2>/dev/null)" = azdaja ]; then
     rm -f "$ALIAS"
@@ -309,6 +317,9 @@ cleanup() {
   [ -z "$DOC_STAGE_LICENSE" ] || rm -f "$DOC_STAGE_LICENSE"
   [ -z "$DOC_STAGE_NOTICES" ] || rm -f "$DOC_STAGE_NOTICES"
   [ -z "$DOC_STAGE_OWNER" ] || rm -f "$DOC_STAGE_OWNER"
+  if [ "$DOC_LOCK_ACQUIRED" = true ] && [ -n "$DOC_LOCK" ]; then
+    rmdir "$DOC_LOCK" 2>/dev/null || :
+  fi
   rm -rf "$TMP"
   exit "$status"
 }
@@ -404,15 +415,29 @@ ALIAS=$BIN_DIR/az
 CONFIG_PATH=$BIN_DIR/azdaja-config.toml
 CONFIG_OWNER=$BIN_DIR/azdaja-config.toml.managed
 OWNER_MAGIC=azdaja-installer-owned-config-v1
-DOC_OWNER_MAGIC=azdaja-installer-owned-docs-v1
+DOC_OWNER_V1_MAGIC=azdaja-installer-owned-docs-v1
+LEGACY_NOTICES_SHA256=dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb
 printf '%s\n' "$OWNER_MAGIC" > "$TMP/config-owner.expected"
-printf '%s\n' "$DOC_OWNER_MAGIC" > "$TMP/doc-owner.expected"
+printf '%s\n' "$DOC_OWNER_V1_MAGIC" > "$TMP/doc-owner-v1.expected"
+cat > "$TMP/doc-owner-v2.expected" <<EOF
+azdaja-installer-owned-docs-v2
+schema=azdaja-managed-documents-v2
+LICENSE.sha256=$ROOT_LICENSE_SHA256
+THIRD-PARTY-NOTICES.md.sha256=$ROOT_NOTICES_SHA256
+EOF
 
 owned_single_link_regular() {
   owned_path=$1
   [ -f "$owned_path" ] && [ ! -L "$owned_path" ] || return 1
   [ "$(find "$owned_path" -prune -type f -links 1 -user "$(id -u)" -print)" = "$owned_path" ]
 }
+
+printf '%s' "$DOC_DIR" > "$TMP/document-lock-key"
+DOC_LOCK_KEY=$(sha256_file "$TMP/document-lock-key")
+DOC_LOCK=${TMPDIR:-/tmp}/azdaja-document-install-$(id -u)-$DOC_LOCK_KEY.lock
+(umask 077 && mkdir "$DOC_LOCK") 2>/dev/null || \
+  fail "another Azdaja document lifecycle is active; retry after it completes"
+DOC_LOCK_ACQUIRED=true
 
 DOC_STATE=fresh
 if [ -e "$DOC_DIR" ] || [ -L "$DOC_DIR" ]; then
@@ -425,10 +450,19 @@ if [ -e "$DOC_DIR" ] || [ -L "$DOC_DIR" ]; then
   owned_single_link_regular "$DOC_LICENSE" || fail "refusing unsafe or unowned Azdaja LICENSE: $DOC_LICENSE"
   owned_single_link_regular "$DOC_NOTICES" || fail "refusing unsafe or unowned Azdaja notices: $DOC_NOTICES"
   owned_single_link_regular "$DOC_OWNER" || fail "refusing unsafe or unowned Azdaja document marker: $DOC_OWNER"
-  cmp -s "$DOC_OWNER" "$TMP/doc-owner.expected" || fail "refusing foreign Azdaja document owner marker: $DOC_OWNER"
-  cmp -s "$DOC_LICENSE" "$TMP/LICENSE" || fail "refusing changed Azdaja LICENSE: $DOC_LICENSE"
-  cmp -s "$DOC_NOTICES" "$TMP/THIRD-PARTY-NOTICES.md" || fail "refusing changed Azdaja notices: $DOC_NOTICES"
-  DOC_STATE=owned
+  if cmp -s "$DOC_OWNER" "$TMP/doc-owner-v2.expected"; then
+    cmp -s "$DOC_LICENSE" "$TMP/LICENSE" || fail "refusing changed Azdaja LICENSE: $DOC_LICENSE"
+    cmp -s "$DOC_NOTICES" "$TMP/THIRD-PARTY-NOTICES.md" || fail "refusing changed Azdaja notices: $DOC_NOTICES"
+    DOC_STATE=owned-v2
+  elif cmp -s "$DOC_OWNER" "$TMP/doc-owner-v1.expected"; then
+    [ "$(sha256_file "$DOC_LICENSE")" = "$ROOT_LICENSE_SHA256" ] || \
+      fail "refusing changed legacy Azdaja LICENSE: $DOC_LICENSE"
+    [ "$(sha256_file "$DOC_NOTICES")" = "$LEGACY_NOTICES_SHA256" ] || \
+      fail "refusing unsupported legacy Azdaja notices: $DOC_NOTICES"
+    DOC_STATE=legacy-v1
+  else
+    fail "refusing foreign Azdaja document owner marker: $DOC_OWNER"
+  fi
 else
   DOC_ANCESTOR=$DOC_DIR
   while [ ! -e "$DOC_ANCESTOR" ] && [ ! -L "$DOC_ANCESTOR" ]; do
@@ -549,6 +583,33 @@ BIN_DIR_WAS_DIR=false
 [ ! -d "$BIN_DIR" ] || BIN_DIR_WAS_DIR=true
 TRANSACTION_ACTIVE=true
 
+if [ "$DOC_STATE" = legacy-v1 ]; then
+  DOC_PREVIOUS=$DOC_DIR.azdaja-v1-previous.$$
+  [ ! -e "$DOC_PREVIOUS" ] && [ ! -L "$DOC_PREVIOUS" ] || \
+    fail "document migration quarantine already exists: $DOC_PREVIOUS"
+  mv "$DOC_DIR" "$DOC_PREVIOUS" || fail "cannot quarantine legacy Azdaja documents for migration: $DOC_DIR"
+  DOC_MIGRATED=true
+  PREVIOUS_LICENSE=$DOC_PREVIOUS/LICENSE
+  PREVIOUS_NOTICES=$DOC_PREVIOUS/THIRD-PARTY-NOTICES.md
+  PREVIOUS_OWNER=$DOC_PREVIOUS/.azdaja-managed
+  [ -d "$DOC_PREVIOUS" ] && [ ! -L "$DOC_PREVIOUS" ] || \
+    fail "legacy Azdaja document directory changed during migration"
+  [ "$(find "$DOC_PREVIOUS" -prune -type d -user "$(id -u)" -print)" = "$DOC_PREVIOUS" ] || \
+    fail "legacy Azdaja document directory ownership changed during migration"
+  PREVIOUS_FOREIGN=$(find "$DOC_PREVIOUS" ! -path "$DOC_PREVIOUS" \
+    ! -path "$PREVIOUS_LICENSE" ! -path "$PREVIOUS_NOTICES" ! -path "$PREVIOUS_OWNER" -print)
+  [ -z "$PREVIOUS_FOREIGN" ] || fail "legacy Azdaja document directory changed during migration"
+  owned_single_link_regular "$PREVIOUS_LICENSE" || fail "legacy Azdaja LICENSE changed during migration"
+  owned_single_link_regular "$PREVIOUS_NOTICES" || fail "legacy Azdaja notices changed during migration"
+  owned_single_link_regular "$PREVIOUS_OWNER" || fail "legacy Azdaja marker changed during migration"
+  cmp -s "$PREVIOUS_OWNER" "$TMP/doc-owner-v1.expected" || fail "legacy Azdaja marker changed during migration"
+  [ "$(sha256_file "$PREVIOUS_LICENSE")" = "$ROOT_LICENSE_SHA256" ] || \
+    fail "legacy Azdaja LICENSE changed during migration"
+  [ "$(sha256_file "$PREVIOUS_NOTICES")" = "$LEGACY_NOTICES_SHA256" ] || \
+    fail "legacy Azdaja notices changed during migration"
+  DOC_STATE=fresh
+fi
+
 if [ "$DOC_STATE" = fresh ]; then
   TO_CREATE=
   CURRENT_DIR=$DOC_DIR
@@ -584,7 +645,7 @@ if [ "$DOC_STATE" = fresh ]; then
   done
   cat "$TMP/LICENSE" > "$DOC_STAGE_LICENSE"
   cat "$TMP/THIRD-PARTY-NOTICES.md" > "$DOC_STAGE_NOTICES"
-  cat "$TMP/doc-owner.expected" > "$DOC_STAGE_OWNER"
+  cat "$TMP/doc-owner-v2.expected" > "$DOC_STAGE_OWNER"
   chmod 600 "$DOC_STAGE_LICENSE" "$DOC_STAGE_NOTICES" "$DOC_STAGE_OWNER"
   ln "$DOC_STAGE_LICENSE" "$DOC_LICENSE" || fail "cannot install LICENSE without overwriting: $DOC_LICENSE"
   DOC_LICENSE_CREATED=true
@@ -695,6 +756,11 @@ TRANSACTION_ACTIVE=false
 if [ "$DEST_BACKUP_CREATED" = true ]; then
   rm -f "$DEST_BACKUP" || :
   DEST_BACKUP_CREATED=false
+fi
+if [ "$DOC_MIGRATED" = true ] && [ -n "$DOC_PREVIOUS" ]; then
+  rm -f "$DOC_PREVIOUS/.azdaja-managed"     "$DOC_PREVIOUS/THIRD-PARTY-NOTICES.md" "$DOC_PREVIOUS/LICENSE" || :
+  rmdir "$DOC_PREVIOUS" 2>/dev/null || :
+  DOC_PREVIOUS=
 fi
 
 ON_PATH=false
