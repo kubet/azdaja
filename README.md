@@ -4,7 +4,7 @@
 
 ## Results
 
-The fixed 199-row RAH-protocol Oolong diagnostic produced 185 valid predictions; 14 failures remained zero in the denominator. The [terminal receipt](bench/results/gpt-rah199-mortality-v3-terminal-public.json) records the frozen accounting; root-token telemetry averaged **5,403.36** across 198 measured rows, with the unmeasured row left unimputed.
+The fixed 199-row RAH-protocol Oolong diagnostic produced 185 valid predictions; 14 failures remained zero in the denominator. The [terminal receipt](bench/results/gpt-rah199-mortality-v3-terminal-public.json) records the frozen accounting.
 
 The RAH paper ([arXiv:2606.13643](https://arxiv.org/abs/2606.13643)) provides the other Oolong-Synthetic values in this class ladder:
 
@@ -17,9 +17,8 @@ The RAH paper ([arXiv:2606.13643](https://arxiv.org/abs/2606.13643)) provides th
 
 * single-arm diagnostic under the paper's protocol; paper controls not rerun
 
-Within this four-row ladder, Azdaja is **4.26 percentage points** above the paper's RLM reference and below Codex at **71.75%**.
+Within this four-row ladder, Azdaja is **4.26 percentage points** above the paper's RLM reference and remains below the two agent configurations shown.
 
-The release-only scripted gate answered three synthetic UTF-8 inputs of exactly **52,428,800 bytes** each—a build log, repository dump, and transcript—in one root turn, with zero child calls and a root prompt below **65,536 bytes**, inside a 90-second watchdog. The [v0.1.2 product-acceptance receipt](bench/results/v0.1.2-product-acceptance-public.json) binds that test result.
 
 ## What it is
 
@@ -87,22 +86,13 @@ Commands: `start`, `load`, `exec`, `final`, `list`, `kill`, `solo`, `doctor`, `i
 
 See the [CLI reference](docs/cli.md) for signatures, process custody, signal behavior, temporary files, and configuration errors.
 
-## ARC appendix
+## Cost
 
-The bounded Claude-lane v9 pilot ran one baseline/Ember pair per game. Each game had an observed zero paired difference in local-shadow RHAE.
-
-| Game | Local-shadow RHAE difference | Baseline unchanged feedback | Ember unchanged feedback |
-|---|---:|---:|---:|
-| `ls20` | 0.0 | 92 | 103 |
-| `ft09` | 0.0 | 186 | 208 |
-| `vc33` | 0.0 | 0 | 0 |
-| `ar25` | 0.0 | 137 | 110 |
-| `wa30` | 0.0 | 231 | 233 |
-| **Total** | — | **646** | **654** |
-
-Ember recorded +8 unchanged-feedback actions (+1.24% of the baseline raw count).
-
-The retained v9 artifacts contain no absolute arm scores, completed levels, total action counts, or independent waste diagnostics. The [ARC benchmark card](bench/arc3/README.md#benchmark-card) documents the method, evidence, and per-game scope.
+- **Constant root economy:** Across 198 measured RAH rows, the mean was **5,403.36 root tokens per item**; in the same fixed-199 fixture family, representative bucket medians were **78,842** and **9,927,812 input characters**, while `load` returned only character and line metadata rather than source content ([cost receipt](bench/results/cost-evidence-public.json)).
+- **50 MiB proof:** The [in-repo test](tests/product_50mb.rs) answered three exact **52,428,800-byte** inputs in one root turn each, with zero child calls, a root prompt below **65,536 bytes**, and a **90-second** watchdog ([acceptance receipt](bench/results/v0.1.2-product-acceptance-public.json)).
+- **Wall-clock shape:** Across 123 sealed diagnostic rows in eight input-size buckets from **32,768 to 4,194,304 tokens**, bucket-median wall time was non-monotonic, with a descriptive slope of **-0.430143 seconds per input doubling** ([cost receipt](bench/results/cost-evidence-public.json)).
+- **Zero exact-overlap hits:** Across **649 distinct scans with surviving structured assertions**, checks for exact input substrings of at least **100 characters** produced **zero matches** ([scan receipt](bench/results/cost-evidence-public.json)).
+- **Measured subscription route:** The default Jcode/OpenAI path used subscription OAuth, requested no separate API key, and failed closed before a model turn when that route was unavailable ([cost receipt](bench/results/cost-evidence-public.json)).
 
 ## Boundaries
 
@@ -110,7 +100,6 @@ The retained v9 artifacts contain no absolute arm scores, completed levels, tota
 - The CLI reads user-supplied paths, and selected context can be sent to the configured provider.
 - Native harnesses keep the user's host permissions; stronger containment requires a separate trusted inference broker.
 - Monty 0.0.21 is experimental and snapshot-format-bound. Snapshots are unencrypted owner-only files, and evaluator memory has no configured ceiling.
-- ARC values are local-shadow observations, not official scores. These diagnostics are not evidence of superiority, equivalence, best-published status, or general capability; they are not a leaderboard result and not an efficiency claim.
 - Use synthetic or sanitized issue reproductions. Never post raw inputs, traces, configuration, host paths, OAuth material, tokens, or secrets.
 
 ## Validate

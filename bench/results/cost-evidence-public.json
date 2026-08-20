@@ -1,0 +1,263 @@
+{
+  "claim_boundary": "Observed local and sealed diagnostic evidence only; no price, savings, throughput, provider-wide, or performance-guarantee claim.",
+  "constant_root_economy": {
+    "authorities": {
+      "sanitized_terminal_receipt": {
+        "bytes": 2273,
+        "sha256": "842475dcc8d3868af782e52716cd11ff4db7709e134b54c7980f00e5c8c26f8b"
+      },
+      "source_results_sha256": "e2f2715dc5e8970ffa69be5f757d7860fa40bfc4a23e5bdcd7cc3dfa7768acc5",
+      "source_terminal_receipt_sha256": "27bbb4da02bf75ff5c3c6b73697bf8518e33566a55f3b9fc8d7012ee5b648e74"
+    },
+    "load_output_contract": {
+      "content_printed_by_load": false,
+      "managed_skill": {
+        "bytes": 7442,
+        "sha256": "0f6769f32e45b56a172b0d8c4f3d292d70da4d0168716a3f1251ca3f7a62690d"
+      },
+      "returned_fields": "character and line metadata",
+      "test": {
+        "bytes": 170297,
+        "name": "lifecycle_is_persistent_and_load_is_metadata_only",
+        "path": "tests/e2e.rs",
+        "sha256": "2b3c62b13ae309407219a8c50f0e166f54c9d29ec9ecaa3a7fd3eb9b1c6b9153"
+      }
+    },
+    "mean_total_root_tokens": 5403.358585858586,
+    "measured_rows": 198,
+    "measured_total_root_tokens": 1069865,
+    "missing_rows_unimputed": 1,
+    "readme_display_mean_total_root_tokens": "5,403.36",
+    "source_size_examples": {
+      "input_token_buckets": [
+        32768,
+        4194304
+      ],
+      "median_input_characters": [
+        78842,
+        9927812
+      ],
+      "scope": "representative bucket medians from the same immutable fixed-199 fixture family, not endpoints of the 198-row usage population"
+    }
+  },
+  "exact_context_overlap_scans": {
+    "all_retained_transcripts_claimed": false,
+    "boundary": "This exact verbatim-overlap result is neither an all-retained denominator nor proof against paraphrase, inference, or other information flow.",
+    "distinct_scan_events_with_surviving_structured_zero_hit_assertions": 649,
+    "inventory_audit_sha256": "b51efa027299be9e78dfe809dcd10183d59a48ddf657bce14b4e198af8014aaf",
+    "matches": 0,
+    "minimum_exact_substring_characters": 100,
+    "raw_transcripts_or_source_text_published": false,
+    "scan_groups": [
+      {
+        "authority": "terminal receipt aggregate",
+        "events": 199,
+        "matches": 0,
+        "receipt_sha256": "2847722dbe3d4ca9cc527b103c481036cabc65dfac868e55bc13fdefd72c70e1",
+        "scan_group": "scan-group-01"
+      },
+      {
+        "authority": "public product receipt aggregate",
+        "events": 3,
+        "matches": 0,
+        "receipt_sha256": "99989d2019db132c63e1d23c294c6b3d20af16762f97d0dc7394e90dccbc346b",
+        "scan_group": "scan-group-02"
+      },
+      {
+        "authority": "public live-smoke receipt",
+        "events": 1,
+        "matches": 0,
+        "receipt_sha256": "c3c0dbb15c612d35a6d3f053896a81a867bd0f346ae70ef6d0e6471955fadd4b",
+        "scan_group": "scan-group-03"
+      },
+      {
+        "authority": "ROW_LEVEL_FULL",
+        "events": 199,
+        "matches": 0,
+        "scan_group": "scan-group-04",
+        "source_sha256": "8fbf6366053b162ecf54b3f863c5da13748e5d979795ed45f569bab5be2b08fb",
+        "terminal_sha256": "096456bc48b8d8deefdce5070a1a4aed1f87576e975f6e22c749fe13e8662382"
+      },
+      {
+        "authority": "ROW_LEVEL_FULL",
+        "events": 15,
+        "matches": 0,
+        "scan_group": "scan-group-05",
+        "source_sha256": "c77f0d46664f198b826ec2c9013d1b5eefc3ff995f687ccef2807ccd8856998a",
+        "terminal_sha256": "3ee434b618e82e74696c80841cb253b34e2abbed3f6c934d58f62fefe3ec8610"
+      },
+      {
+        "authority": "STRUCTURED_REPORT_AGGREGATE",
+        "events": 26,
+        "matches": 0,
+        "scan_group": "scan-group-06",
+        "source_sha256": "71ae91a73e70ffe6a3af9d0aa0e5a007d27a70080bf66d3b2039cca4cde87eb9",
+        "terminal_sha256": "93c67a076ef7045c69723f89e4bd4d7e5ba6dfe5ee008faedd28969f4dc1af5b"
+      },
+      {
+        "authority": "STRUCTURED_REPORT_AGGREGATE",
+        "events": 63,
+        "matches": 0,
+        "scan_group": "scan-group-07",
+        "source_sha256": "96ae71df5299d8c8a394d12531baa208f546d8b8f70e5b2d295e6424128eaa0e",
+        "terminal_sha256": "5997a69808ab4acd8a688245d53d9b468d8bc92ff4f6c86015d63f0905eee13a"
+      },
+      {
+        "audit_sha256": "a91417fbc4184911e9bced3c13f95312c7420273fc82f57595917f23e7920eb8",
+        "authority": "STRUCTURED_RECEIPT_AGGREGATE",
+        "events": 12,
+        "matches": 0,
+        "scan_group": "scan-group-08",
+        "source_sha256": "fba38324ad0fb5366aaf81c1f2156cecef5cc0b7508b8ba28aeed2e000ea6747",
+        "terminal_sha256": "0fc1a4b7f5821c43cf64b1b1e5e5edffd5411ce06617a8aeecb51dccfdb6786e"
+      },
+      {
+        "authority": "STRUCTURED_RECEIPT_AGGREGATE",
+        "events": 12,
+        "matches": 0,
+        "scan_group": "scan-group-09",
+        "source_sha256": "b6f22b7c34640de0d942f5ee7707ed0f5a2d1faa882e1afe43deb7a8f2df638b",
+        "terminal_sha256": "0981effdecd61e96a832ea868b71f516e373026ad2c7aabbc4818190fea5c6e9"
+      },
+      {
+        "authority": "ROW_ASSERTION_SUMMARY",
+        "events": 40,
+        "matches": 0,
+        "scan_group": "scan-group-10",
+        "source_sha256": "db304f60cbfc17f0754ec68e8f15d16ae7acfc9677db2d20e6aa905877d4e285",
+        "taxonomy_sha256": "72c0e3c898f80a6dbb7279eae8ca9b6f90e9302cef3188b173bc2b87e5ba9b2a",
+        "terminal_sha256": "6deded8a1db848daf3fd5d1381eabe9d2322703e4b4b269166dced9dd0360897"
+      },
+      {
+        "authority": "STRUCTURED_REPORT_AGGREGATE",
+        "events": 10,
+        "matches": 0,
+        "scan_group": "scan-group-11",
+        "source_sha256": "71097b9fc901735ff80635d53f690999d9aea5a4075d9aaa6e3f5742e1e03a22",
+        "terminal_sha256": "cbae1e16e6294939405f412b75c7e439f9586d0ed72babe4ea3645a885eb0da9"
+      },
+      {
+        "authority": "STRUCTURED_SUMMARY_SOURCE_LOST",
+        "events": 63,
+        "matches": 0,
+        "scan_group": "scan-group-12",
+        "source_sha256": "d0ef3ef6fc4bcd61f824bb292f1d1960981842c2e43d67da960736b2bd72f42b",
+        "terminal_sha256": "55c999bd9be8771c39ca5672bb72bd9b6217cffa34ce7509b013b569b769802c"
+      },
+      {
+        "authority": "STRUCTURED_RECEIPT_INFERRED_3_CASES_X_2_SUCCESSFUL_JOBS",
+        "events": 6,
+        "matches": 0,
+        "scan_group": "scan-group-13",
+        "terminal_sha256": "00b442e7f7a38357477ebe17ec0e9d4f310b1640b753c50f41ca6f885f9bb1b3"
+      }
+    ]
+  },
+  "fifty_mib_proof": {
+    "acceptance_receipt": {
+      "bytes": 23696,
+      "sha256": "174cfeafdb5c328cf6d29222e9e683776995dbad20e2dcb9d6405c231ac23518"
+    },
+    "bytes_each": 52428800,
+    "child_calls_each": 0,
+    "root_prompt_strictly_below_bytes": 65536,
+    "root_turns_each": 1,
+    "scenarios": 3,
+    "test": {
+      "bytes": 14849,
+      "name": "offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death",
+      "path": "tests/product_50mb.rs",
+      "sha256": "87a66d26b5c82766af03b648540cb45802c1396aa5dd808f875f1b2e1ac279a8"
+    },
+    "watchdog_seconds_each": 90
+  },
+  "publication_or_provider_action_performed_during_this_assembly": false,
+  "raw_inputs_prompts_responses_transcripts_private_paths_credentials_or_sensitive_source_identifiers_in_receipt": false,
+  "record_type": "azdaja_sanitized_public_cost_evidence_receipt",
+  "sanitized": true,
+  "schema_version": 1,
+  "status": "SANITIZED_AGGREGATE_EVIDENCE",
+  "subscription_route": {
+    "authentication": "OpenAI subscription OAuth owned by Jcode",
+    "authorities": {
+      "src_lib": {
+        "bytes": 223205,
+        "sha256": "96af1f1b57889638fde26e34242f8e8978e12e7ab8ece7b9987f377d6e8fbd93"
+      },
+      "src_main": {
+        "bytes": 159477,
+        "sha256": "f08ef8d4230157084711b2a888ed2e181b6eb7d3455c377b992f7e694a3161ff"
+      },
+      "test": {
+        "bytes": 170297,
+        "name": "authoritative_config_failures_never_enter_fallback_provider",
+        "path": "tests/e2e.rs",
+        "sha256": "2b3c62b13ae309407219a8c50f0e166f54c9d29ec9ecaa3a7fd3eb9b1c6b9153"
+      }
+    },
+    "boundary": "Other installed adapters and custom command transports own their own authentication and are outside this route claim.",
+    "configuration": {
+      "bytes": 481,
+      "sha256": "ca3f153c8a5a80c3727473fea90452ade5c556a24d026fb54084257791fd8eb8"
+    },
+    "missing_route_behavior": "fail closed before a model turn",
+    "scope": "measured default Jcode/OpenAI route",
+    "separate_api_key_requested_by_azdaja": false
+  },
+  "wall_clock_shape": {
+    "authorities": {
+      "compressed_results_sha256": "8fbf6366053b162ecf54b3f863c5da13748e5d979795ed45f569bab5be2b08fb",
+      "terminal_receipt_sha256": "2847722dbe3d4ca9cc527b103c481036cabc65dfac868e55bc13fdefd72c70e1"
+    },
+    "boundary": "The eight bucket medians are descriptive and non-monotonic; they establish neither a per-query speedup, a managed-skill activation threshold, nor a full-context control comparison.",
+    "bucket_medians": [
+      {
+        "input_tokens": 32768,
+        "median_wall_seconds": 30.434136957999726,
+        "rows": 15
+      },
+      {
+        "input_tokens": 65536,
+        "median_wall_seconds": 19.333949791499435,
+        "rows": 16
+      },
+      {
+        "input_tokens": 131072,
+        "median_wall_seconds": 28.417945207998855,
+        "rows": 15
+      },
+      {
+        "input_tokens": 262144,
+        "median_wall_seconds": 30.443804833001195,
+        "rows": 15
+      },
+      {
+        "input_tokens": 524288,
+        "median_wall_seconds": 21.496645875000468,
+        "rows": 16
+      },
+      {
+        "input_tokens": 1048576,
+        "median_wall_seconds": 17.401580770999317,
+        "rows": 16
+      },
+      {
+        "input_tokens": 2097152,
+        "median_wall_seconds": 24.935103916002845,
+        "rows": 15
+      },
+      {
+        "input_tokens": 4194304,
+        "median_wall_seconds": 27.27106491700033,
+        "rows": 15
+      }
+    ],
+    "input_buckets": 8,
+    "seconds_per_input_doubling_linear_slope_on_bucket_medians": -0.43014268968426267,
+    "source_scope": "immutable historical fixed-199 product run; aggregate only",
+    "spearman_rank_on_bucket_medians": -0.28571428571428575,
+    "threshold_and_above_rows": 123,
+    "two_sided_spearman_p_value": 0.49272624501695705,
+    "upward_monotonic_growth_observed": false
+  }
+}
