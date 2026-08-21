@@ -227,15 +227,15 @@ fn command_help(args: &[String]) -> Result<bool> {
 }
 
 fn help(interactive_banner: bool) {
-    let term = env::var("TERM").ok();
-    if interactive_banner
-        && banner::color_enabled(
-            io::stdout().is_terminal(),
+    let is_terminal = io::stdout().is_terminal();
+    if interactive_banner && is_terminal {
+        let term = env::var("TERM").ok();
+        let color = banner::color_enabled(
+            is_terminal,
             env::var_os("NO_COLOR").is_some(),
             term.as_deref(),
-        )
-    {
-        print!("{}", banner::banner());
+        );
+        print!("{}", banner::banner(color));
     }
     println!(
         "AZDAJA v{VERSION} — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt"

@@ -1,3 +1,5 @@
+<p align="center"><img src="azdaja-logo.png" alt="Azdaja logo" width="160"></p>
+
 # Azdaja
 
 **Virtual memory for language models: analyze inputs beyond one context window through a bounded model-facing surface and a local evaluator that retains the complete UTF-8 source.**

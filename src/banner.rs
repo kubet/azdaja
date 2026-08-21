@@ -1,79 +1,64 @@
-/// azdaja banner — a serpent around a pole, rendered with half blocks
-const PAL: [(u8, u8, u8); 3] = [
-    (0, 0, 0),      // 0 transparent
-    (200, 160, 80), // 1 pole    #C8A050
-    (162, 28, 28),  // 2 serpent #A21C1C
-];
-
+/// Azdaja banner: a serpent coiled around a pole.
 #[rustfmt::skip]
-const SPRITE: [&str; 32] = [
-    "000000001000000000",
-    "000000001000000000",
-    "000000001000222000",
-    "000000001002222200",
-    "000000001002222000",
-    "000000001022200000",
-    "000000001222000000",
-    "000000002220000000",
-    "000000022200000000",
-    "000000222000000000",
-    "000002221000000000",
-    "000022201000000000",
-    "000222001000000000",
-    "000022201000000000",
-    "000002221000000000",
-    "000000222000000000",
-    "000000022200000000",
-    "000000002220000000",
-    "000000001222000000",
-    "000000001022200000",
-    "000000001002220000",
-    "000000001000222000",
-    "000000001002220000",
-    "000000001022200000",
-    "000000001222000000",
-    "000000002220000000",
-    "000000022200000000",
-    "000000222000000000",
-    "000002221000000000",
-    "000000222000000000",
-    "000000022000000000",
-    "000000001000000000",
+const ART: [&str; 15] = [
+    "      ▂",
+    "     ▐█▌",
+    "   ▄▄▟█▛",
+    "  ▐█▙▄█▖",
+    "   ▝▜██▙▄",
+    "     ▐█▝█▙",
+    "     ▐█ ▐█▌",
+    "     ▐█▗█▛",
+    "   ▄▟██▛▘",
+    "  ▐█▛▀█▖",
+    "   ▀▙▄█▙▄",
+    "     ▐█▝▜█▖",
+    "     ▐█  ▀▘",
+    "     ▐█▌",
+    "      ▔",
 ];
 
-pub fn banner() -> String {
+/// On these rows, the pole passes in front of the serpent.
+#[rustfmt::skip]
+const POLE_FRONT: [bool; 15] = [
+    true, true, false, false, false, true, true, true,
+    false, false, false, true, true, true, true,
+];
+
+const POLE: &str = "\x1b[38;2;92;14;14m"; // blood #5C0E0E
+const SNAKE: &str = "\x1b[38;2;162;28;28m"; // crimson #A21C1C
+const DIM: &str = "\x1b[38;2;120;60;60m"; // wordmark
+const RESET: &str = "\x1b[0m";
+
+pub fn banner(color: bool) -> String {
     let mut out = String::new();
-    for pair in SPRITE.chunks(2) {
-        let (top, bot) = (pair[0].as_bytes(), pair[1].as_bytes());
-        for x in 0..top.len() {
-            let (t, b) = ((top[x] - b'0') as usize, (bot[x] - b'0') as usize);
-            match (t, b) {
-                (0, 0) => out.push(' '),
-                (t, 0) => {
-                    let c = PAL[t];
-                    out.push_str(&format!(
-                        "\x1b[38;2;{};{};{}m\u{2580}\x1b[0m",
-                        c.0, c.1, c.2
-                    ));
+    for (row_index, row) in ART.iter().enumerate() {
+        if color {
+            for (column, character) in row.chars().enumerate() {
+                if character == ' ' {
+                    out.push(' ');
+                    continue;
                 }
-                (0, b) => {
-                    let c = PAL[b];
-                    out.push_str(&format!(
-                        "\x1b[38;2;{};{};{}m\u{2584}\x1b[0m",
-                        c.0, c.1, c.2
-                    ));
-                }
-                (t, b) => {
-                    let (f, g) = (PAL[t], PAL[b]);
-                    out.push_str(&format!(
-                        "\x1b[38;2;{};{};{}m\x1b[48;2;{};{};{}m\u{2580}\x1b[0m",
-                        f.0, f.1, f.2, g.0, g.1, g.2
-                    ));
-                }
+                let pole_is_visible = POLE_FRONT[row_index] && (5..=7).contains(&column);
+                out.push_str(if pole_is_visible { POLE } else { SNAKE });
+                out.push(character);
             }
+            out.push_str(RESET);
+        } else {
+            out.push_str(row);
         }
         out.push('\n');
     }
+
+    if color {
+        out.push_str(DIM);
+    }
+    out.push_str("   azdaja v");
+    out.push_str(env!("CARGO_PKG_VERSION"));
+    if color {
+        out.push_str(RESET);
+    }
+    out.push('\n');
     out
 }
 
@@ -85,44 +70,51 @@ pub fn color_enabled(is_terminal: bool, no_color: bool, term: Option<&str>) -> b
 mod tests {
     use super::*;
 
-    #[test]
-    fn indexed_sprite_dimensions_palette_and_indices_are_exact() {
-        assert_eq!(PAL, [(0, 0, 0), (200, 160, 80), (162, 28, 28)]);
-        assert_eq!(SPRITE.len(), 32);
-        assert!(SPRITE.iter().all(|row| row.len() == 18));
-
-        let mut counts = [0usize; 3];
-        for row in SPRITE {
-            assert!(matches!(row.as_bytes()[8], b'1' | b'2'));
-            for (x, value) in row.bytes().enumerate() {
-                match value {
-                    b'0' => counts[0] += 1,
-                    b'1' => {
-                        assert_eq!(x, 8);
-                        counts[1] += 1;
-                    }
-                    b'2' => counts[2] += 1,
-                    _ => panic!("unexpected sprite index {value}"),
-                }
-            }
-        }
-        assert_eq!(counts, [466, 21, 89]);
+    fn strip_ansi(text: &str) -> String {
+        let bytes = strip_ansi_escapes::strip(text.as_bytes());
+        String::from_utf8(bytes).unwrap()
     }
 
     #[test]
-    fn renderer_has_sixteen_rows_truecolor_and_resets() {
-        let rendered = banner();
-        assert_eq!(rendered.bytes().filter(|value| *value == b'\n').count(), 16);
-        assert_eq!(rendered.lines().count(), 16);
-        assert!(rendered.contains("\x1b[38;2;"));
-        assert!(rendered.contains("\x1b[48;2;"));
-        assert!(rendered.contains("\x1b[0m"));
-        assert!(rendered.contains('▀') || rendered.contains('▄'));
+    fn plain_renderer_is_the_exact_art_and_current_version() {
+        let expected = format!(
+            "{}\n   azdaja v{}\n",
+            ART.join("\n"),
+            env!("CARGO_PKG_VERSION")
+        );
+        assert_eq!(banner(false), expected);
+        assert_eq!(banner(false).lines().count(), 16);
+        assert!(!banner(false).contains('\x1b'));
+    }
+
+    #[test]
+    fn colored_renderer_preserves_the_plain_glyphs_and_depth_palette() {
+        let rendered = banner(true);
+        assert_eq!(strip_ansi(&rendered), banner(false));
+        assert!(rendered.contains(POLE));
+        assert!(rendered.contains(SNAKE));
+        assert!(rendered.contains(DIM));
+        assert!(rendered.contains(RESET));
         assert!(!rendered.contains("\x1b[m"));
     }
 
     #[test]
-    fn color_gate_requires_tty_and_respects_no_color_and_dumb_term() {
+    fn art_and_depth_masks_stay_aligned() {
+        assert_eq!(ART.len(), POLE_FRONT.len());
+        assert!(ART.iter().all(|row| !row.contains('\n')));
+        assert!(
+            ART.iter()
+                .zip(POLE_FRONT)
+                .filter(|(_, pole_front)| *pole_front)
+                .all(|(row, _)| row
+                    .chars()
+                    .enumerate()
+                    .any(|(column, character)| { character != ' ' && (5..=7).contains(&column) }))
+        );
+    }
+
+    #[test]
+    fn color_gate_requires_a_capable_terminal() {
         assert!(color_enabled(true, false, Some("xterm-truecolor")));
         assert!(color_enabled(true, false, None));
         assert!(!color_enabled(false, false, Some("xterm-truecolor")));
