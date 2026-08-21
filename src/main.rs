@@ -891,7 +891,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "opencode" => Some((
             "OpenCode",
-            "Load `azdaja` immediately with OpenCode's native `skill` tool when the description matches. Run the transaction below as exactly one Bash call; load only the raw input once and keep task/schema in the prompt. Do not plan, split, retry, or switch lanes. The template ends with intentional `exit 42` solely to force the handoff turn; it is not a failure and must not be retried. A Bash tool result is not completion: after it returns, the next assistant message must be its stdout JSON unchanged, with no extra tool or prose.",
+            "Load `azdaja` immediately with OpenCode's native `skill` tool when the description matches. Run the transaction below as exactly one Bash call; load only the raw input once and keep task/schema in the prompt. Do not plan, split, retry, or switch lanes. The transaction's Bash stdout is the final JSON. Do not retry, summarize, or add another tool.",
         )),
         _ => None,
     }
@@ -928,15 +928,6 @@ fn render_managed_skill(harness: &str, binary: &Path) -> String {
             "# Azdaja {{VERSION}}
 ",
             &activation,
-            1,
-        );
-    }
-    if harness == "opencode" {
-        skill = skill.replacen(
-            "{{BIN}} final \"$sid\"",
-            r#"answer="$({{BIN}} final "$sid")"
-printf '%s\n' "$answer"
-exit 42 # intentional OpenCode handoff signal; do not retry"#,
             1,
         );
     }
@@ -5318,7 +5309,6 @@ mod tests {
                     )
                 );
                 assert!(rendered.contains("load only the raw input once"));
-                assert!(rendered.contains("stdout JSON unchanged"));
                 assert!(rendered.contains("installed and available local az virtual-memory tool"));
                 assert!(rendered.contains(
                     "Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
@@ -5326,13 +5316,10 @@ mod tests {
                 assert!(rendered.contains("never retry or switch lanes"));
                 if harness == "opencode" {
                     assert!(rendered.contains("before Read, Grep, or Bash inspection"));
-                    assert!(rendered.contains("A Bash tool result is not completion"));
-                    assert!(
-                        rendered.contains(
-                            "the next assistant message must be its stdout JSON unchanged"
-                        )
-                    );
+                    assert!(rendered.contains("The transaction's Bash stdout is the final JSON"));
+                    assert!(!rendered.contains("exit 42"));
                 } else {
+                    assert!(rendered.contains("stdout JSON unchanged"));
                     assert!(rendered.contains("sole assistant response"));
                 }
             } else {
@@ -5358,8 +5345,8 @@ mod tests {
         assert!(rendered.contains("Run this exact wrapper as one Bash call"));
         assert!(rendered.contains("Do not plan, split, retry, or switch lanes."));
         assert!(rendered.contains("trap cleanup EXIT"));
-        assert!(rendered.contains("A Bash tool result is not completion"));
-        assert!(rendered.contains("exit 42 # intentional OpenCode handoff signal; do not retry"));
+        assert!(rendered.contains("The transaction's Bash stdout is the final JSON"));
+        assert!(!rendered.contains("exit 42"));
         assert_eq!(rendered.matches("workers=8").count(), 2);
         assert!(rendered.contains("Its source load is the only `load`"));
         assert!(rendered.contains("discard initial shard boundaries"));
