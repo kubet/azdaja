@@ -142,16 +142,16 @@ mod managed_skill_tests {
             .find_map(|line| line.strip_prefix("description: "))
             .expect("skill frontmatter description");
         for trigger in [
-            "inputs too large",
-            "large logs",
-            "repositories",
-            "transcripts",
-            "diffs",
+            "complete semantic classification",
+            "large file",
+            "over 1 MiB",
+            "over 200 records",
+            "too large for one Read",
             "Azdaja",
             "az virtual-memory tool",
             "installed",
             "available",
-            "how to use",
+            "Invoke before reading or solving natively",
         ] {
             assert!(description.contains(trigger), "missing trigger {trigger:?}");
         }
@@ -164,8 +164,8 @@ mod managed_skill_tests {
         assert!(rendered.contains("## Managed-skill awareness"));
         assert!(rendered.contains("answer **yes**"));
         assert!(rendered.contains("local `az` virtual-memory tool"));
-        assert!(rendered.contains("suggest `az doctor`"));
-        assert!(rendered.contains("`az solo \"summarize this file\" -f ./large.txt`"));
+        assert!(rendered.contains("A matching task means invoke this skill now"));
+        assert!(rendered.contains("OpenCode must not solve a matching task natively"));
         assert!(rendered.contains("Never claim ignorance of Azdaja"));
         assert!(!rendered.contains("{{VERSION}}"));
         assert!(!rendered.contains("{{BIN}}"));

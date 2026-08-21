@@ -44,7 +44,7 @@ Successful `load` and `exec` output is suppressed, so stdout is exactly the fina
 2. Keep complete selected records as evidence. Project only when the official grammar says one exact final field alone determines the label; then require one nonempty marker and copy its suffix byte-for-byte.
 3. Make the fewest balanced contiguous shards of at most 80 unique items and 80 KiB per prompt. When possible, keep `2 * shard_count <= 8` for one worker wave. Every prompt includes the task, exact label domain, stable IDs, evidence, and a strict positional JSON output contract.
 4. For each shard, create blind A and B prompts with reversed items and labels. Submit all in one `llm_batch(..., workers=8)` using the gate's model form; every semantic label must come from a parsed `llm_batch` result; never use keyword, regex, substring, label-name, or hand-written rules.
-5. Validate JSON, exact ID coverage, and label domain. Send only A/B disagreements to one bounded adjudication `llm_batch` with that model argument. Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure. Preflight `3 * shard_count <= 150`.
+5. Validate JSON, exact ID coverage, and label domain. Pack all A/B disagreements into the fewest bounded prompts of at most 80 items, then send one adjudication `llm_batch` with that model argument. Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure. Preflight `3 * shard_count <= 150`.
 6. Expand labels to every occurrence. Validate multiplicity, requested reductions, hashes, and output schema. Use native `sha256(text)` for UTF-8 SHA-256. End with `FINAL(answer_dict)` exactly once, passing the actual dictionary—not `json.dumps(...)` or another string.
 
 Prefer one cell with at most 85 nonblank lines. If the cell budget requires more, add heredoc-fed `exec` cells inside the same Bash transaction and retain one session; do not start over.
@@ -53,15 +53,4 @@ Ordinary `exec` provides `llm`, ordered `llm_batch`, `FINAL`, and `FINAL_VAR`; s
 
 ## Other-host `solo` lane
 
-These helpers exist only inside `solo`:
-
-- `exact_line_records(source, prefix)` returns all complete LF/CRLF records with one exact anchored prefix, preserving order, duplicates, and bytes except the line separator. It fails on ambiguity, no matches, or more than 105,000 records.
-- `exact_line_ledger(ctx, prefix)` returns the immutable complete `(occurrence_id, record)` ledger and rejects fabricated, reordered, truncated, or transformed data.
-- `semantic_manifest_records(items, task, labels)` runs two blind complete-record manifests plus disagreement adjudication with at most 39 representatives and 80 KiB per shard.
-- `semantic_manifest(ledger, selected_ids, target_marker, task, labels)` is the only admitted projection. It requires canonical IDs in source order and one exact nonempty final-suffix marker, then publishes host-attested ledger, projection, and expansion counts.
-- `source_ontology()` returns the detected exact ontology declaration.
-- `lexical_relevance(source, query, max_chars=20000)` is lossy and is never evidence for exact counts, order, multiplicity, or coverage.
-
-Classify complete instances, preserve every occurrence, initialize every label including zero-count labels, and validate the exact domain, coverage, multiplicity, reductions, and schema before `FINAL`. Missing, malformed, failed, or disputed output is an error, never a complement label.
-
-Invoke `solo` once and accept its result or failure. The runtime may make at most three root repair turns only before unsafe child-calling failures; the outer agent must never retry `solo` or switch lanes.
+Use `solo` once only when its exact-line or semantic helpers are required. Classify complete instances, preserve order and every occurrence, initialize zero-count labels, and verify domain, coverage, multiplicity, reductions, hashes, and schema before `FINAL`. Missing, malformed, failed, or disputed semantic output is an error. The runtime may make at most three root repair turns only before unsafe child-calling failures; the outer agent must never retry `solo` or switch lanes.

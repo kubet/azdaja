@@ -879,7 +879,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "claude" => Some((
             "Claude Code",
-            "Claude's always-loaded Azdaja rule invokes this skill before qualifying input access. For a deterministic analysis that fits one `exec`, use the complete transaction below as exactly one Bash tool call; do not split `start`, `load`, `exec`, `final`, or the trapped `kill` across tool calls. Separate Bash calls are only for a genuinely interactive multi-cell workflow. Load each input once; feed cells with a `cat` heredoc, never `python | exec`; choose a source-specific parser from its header and one record; prefer one compact deterministic `exec`; use native `sha256(text)` for hashes. If a full scan risks the cell deadline, initialize aggregates once and batch bounded, disjoint physical-record ranges in one Bash call. Retain only needed aggregates and evidence; never embed filtered or full source rows unless explicitly requested; an explorer does not imply that request. Before shipping, mechanically verify requested JSON types, full-source accounting, and verbatim decisive quotes; call `FINAL` once. The transaction then calls `final` once and its `EXIT` trap calls `kill` once.",
+            "Claude's always-loaded Azdaja rule invokes this skill before qualifying access. Run the transaction below as one Bash call; load only the raw input once and keep task/schema in the prompt. Do not split, retry, or switch lanes. After Bash returns, emit its stdout JSON unchanged as the sole assistant response.",
         )),
         "codex" => Some((
             "Codex",
@@ -891,7 +891,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "opencode" => Some((
             "OpenCode",
-            "Load `azdaja` with OpenCode's native `skill` tool only after its routing rule qualifies the workload. For a deterministic analysis that fits one `exec`, use the complete transaction below as exactly one Bash tool call; do not split `start`, `load`, `exec`, `final`, or the trapped `kill` across tool calls. Separate Bash calls are only for a genuinely interactive multi-cell workflow. Load each input once; feed cells with a `cat` heredoc, never `python | exec`; choose a source-specific parser from its header and one record; prefer one compact deterministic `exec`; use native `sha256(text)` for hashes. If a full scan risks the cell deadline, initialize aggregates once and batch bounded, disjoint physical-record ranges in one shell call. Retain only needed aggregates and evidence; never embed filtered or full source rows unless explicitly requested; an explorer does not imply that request. While extracting, retain the shortest decisive verbatim source span for each reported conclusion in a bounded quote list; copy each span unchanged exactly once into final evidence. Before shipping, fail preflight unless requested JSON types and full-source accounting are correct and every retained quote occurs byte-for-byte in a deliverable; call `FINAL` once. The transaction then calls `final` once and its `EXIT` trap calls `kill` once.",
+            "Load `azdaja` immediately with OpenCode's native `skill` tool when the description matches. Run the transaction below as exactly one Bash call; load only the raw input once and keep task/schema in the prompt. Do not plan, split, retry, or switch lanes. A Bash tool result is not completion: after it returns, the next assistant message must be its stdout JSON unchanged, with no extra tool or prose.",
         )),
         _ => None,
     }
@@ -5308,38 +5308,23 @@ mod tests {
                         "complete semantic coverage spans more than 1 MiB or 200 records"
                     )
                 );
-                if harness == "opencode" {
-                    assert!(rendered.contains("before Read, Grep, or Bash inspection"));
-                    assert!(rendered.contains(
-                        "Use one native Bash call instead only when it can produce the exact answer without semantic judgment"
-                    ));
-                }
-                assert!(rendered.contains("Load each input once"));
-                assert!(rendered.contains("source-specific parser"));
-                assert!(rendered.contains("one compact deterministic `exec`"));
-                assert!(rendered.contains("native `sha256(text)`"));
-                assert!(rendered.contains("`cat` heredoc, never `python | exec`"));
-                assert!(rendered.contains("never embed filtered or full source rows"));
-                assert!(rendered.contains("an explorer does not imply that request"));
-                assert!(rendered.contains("full-source accounting"));
-                assert!(rendered.contains("call `FINAL` once"));
+                assert!(rendered.contains("load only the raw input once"));
+                assert!(rendered.contains("stdout JSON unchanged"));
                 assert!(rendered.contains("installed and available local az virtual-memory tool"));
                 assert!(rendered.contains(
                     "Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
                 ));
                 assert!(rendered.contains("never retry or switch lanes"));
-                assert!(!rendered.contains("quote each governing source phrase"));
-                assert!(!rendered.contains("test pattern"));
-                assert!(!rendered.contains("ASTER-9"));
                 if harness == "opencode" {
-                    assert!(rendered.contains("shortest decisive verbatim source span"));
-                    assert!(rendered.contains("bounded quote list"));
-                    assert!(rendered.contains("copy each span unchanged exactly once"));
-                    assert!(rendered.contains("fail preflight"));
-                    assert!(rendered.contains("occurs byte-for-byte in a deliverable"));
+                    assert!(rendered.contains("before Read, Grep, or Bash inspection"));
+                    assert!(rendered.contains("A Bash tool result is not completion"));
+                    assert!(
+                        rendered.contains(
+                            "the next assistant message must be its stdout JSON unchanged"
+                        )
+                    );
                 } else {
-                    assert!(rendered.contains("mechanically verify requested JSON types"));
-                    assert!(rendered.contains("verbatim decisive quotes"));
+                    assert!(rendered.contains("sole assistant response"));
                 }
             } else {
                 assert!(rendered.contains("proactively before broad manual reading"));
@@ -5362,9 +5347,9 @@ mod tests {
             "Use one native Bash call instead only when it can produce the exact answer without semantic judgment"
         ));
         assert!(rendered.contains("Go directly to this transaction as one Bash tool call."));
-        assert!(rendered.contains("do not split `start`, `load`, `exec`, `final`"));
+        assert!(rendered.contains("Do not plan, split, retry, or switch lanes."));
         assert!(rendered.contains("trap cleanup EXIT"));
-        assert!(rendered.contains("genuinely interactive multi-cell workflow"));
+        assert!(rendered.contains("A Bash tool result is not completion"));
         assert!(rendered.contains(&format!(r#"sid="$({managed} start)""#)));
         assert!(rendered.contains(&format!(r#"{managed} load "$sid" '<input-path>' source"#)));
         assert!(rendered.contains(&format!(r#"cat <<'PY' | {managed} exec "$sid""#)));
@@ -5397,19 +5382,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "2b3db53df642bbbfe22f7a92874d48dc81d802b7c6c2599c8c29b9b465faba72",
+                "5ee26fe9b679977ffa35f7cbadbaffe32214fd36bc98c2b3c15b00f825ae256b",
             ),
             (
                 "jcode",
-                "55c05ca03ab688dfeee5cb3441b1995b1bac78e716947c9ab659994a9d69689f",
+                "c96f9a0027a37c7151f4606f4bf4f116363a7ae84ec3c9e496188c0e92eeaa4c",
             ),
             (
                 "codex",
-                "3d41ea1ae6391ad41efc59ae7ad96ecf68e1a118c6796cb27c5b997ee157d66e",
+                "76404a6b36f994b4bd1cd77bc8092437c28847d039b18314f7d11776ef9fda8a",
             ),
             (
                 "gemini",
-                "1b25af0ba84257e384d369066bb1329deea6dc50ae4b9d594a754cbc3360e82e",
+                "e4e34894782a7e740606588feefb7cf39709000b76255e97c88185a6e05b7a9e",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);
