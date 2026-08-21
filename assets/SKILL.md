@@ -13,6 +13,8 @@ For tool execution, always use the exact embedded binary path in the commands be
 
 Keep the input in Azdaja. Do not `cat` or otherwise read the raw file into your own context after loading it.
 
+Choose exactly one execution lane for a task. Use one `solo` invocation only when the task needs the solo-only exact-line or fused semantic-projection helpers described below. Otherwise use the explicit lifecycle transaction. Never retry `solo`, never invoke it more than once for the same task, and never combine `solo` with `start`/`load`/`exec` fallback. If that one `solo` call fails or times out, stop and report the failure instead of starting another Azdaja or native full-source attempt.
+
 For a deterministic analysis that fits one `exec` cell, send this entire transaction as exactly one Bash tool call. Replace `<input-path>` and the cell, but keep the `EXIT` trap so `kill` runs after success or failure:
 
 ```bash
