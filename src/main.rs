@@ -791,7 +791,7 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
     }
 }
 
-const DEFAULT_SKILL_DESCRIPTION: &str = "Mandatory for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja or the az virtual-memory tool. Invoke before reading or solving natively.";
+const DEFAULT_SKILL_DESCRIPTION: &str = "Mandatory for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja, asks if it is installed or available, or names the az virtual-memory tool. Invoke before reading or solving natively.";
 
 const CLAUDE_ACTIVATION_RULE: &str = r#"For an answer needing complete coverage of input too large for one `Read`, call `Skill` with `azdaja` before broad access. Metadata and one structural sample up to 10 lines, 64 KiB may precede. Those use absolute `/usr/bin/...` or `/bin/...` and literal paths. The managed hook blocks broader `Read`, `Grep`, or `Bash` until activation. Otherwise do not invoke it. Discovery is not invocation.
 "#;
@@ -899,8 +899,8 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
 
 fn harness_skill_description(harness: &str, display: &str) -> String {
     match harness {
-        "claude" => "Mandatory: invoke Azdaja, the installed local az virtual-memory tool, before broad reading when complete semantic coverage spans more than 1 MiB or 200 records, or whenever the prompt names Azdaja. Use native tools only for fitting inputs and bounded deterministic work.".to_owned(),
-        "opencode" => "Mandatory: invoke Azdaja, the installed local az virtual-memory tool, before Read, Grep, or Bash inspection when complete semantic coverage spans more than 1 MiB or 200 records, or whenever the prompt names Azdaja. Use one native Bash call instead only when it can produce the exact answer without semantic judgment.".to_owned(),
+        "claude" => "Mandatory: invoke Azdaja, the installed and available local az virtual-memory tool, before broad reading when complete semantic coverage spans more than 1 MiB or 200 records, or whenever the prompt names Azdaja. Use native tools only for fitting inputs and bounded deterministic work.".to_owned(),
+        "opencode" => "Mandatory: invoke Azdaja, the installed and available local az virtual-memory tool, before Read, Grep, or Bash inspection when complete semantic coverage spans more than 1 MiB or 200 records, or whenever the prompt names Azdaja. Use one native Bash call instead only when it can produce the exact answer without semantic judgment.".to_owned(),
         _ => format!(
             "Use Azdaja, the installed and available local az virtual-memory tool, for inputs too large to read safely such as large logs, archives, repositories, transcripts, dumps, or diffs, whenever the user asks how to use it, and proactively before broad manual reading in {display}."
         ),
@@ -5303,7 +5303,11 @@ mod tests {
             assert!(rendered.contains(&format!("## Harness activation: {display}")));
             assert!(rendered.contains(marker));
             if matches!(harness, "claude" | "opencode") {
-                assert!(rendered.contains("complete semantic coverage spans more than 1 MiB or 200 records"));
+                assert!(
+                    rendered.contains(
+                        "complete semantic coverage spans more than 1 MiB or 200 records"
+                    )
+                );
                 if harness == "opencode" {
                     assert!(rendered.contains("before Read, Grep, or Bash inspection"));
                     assert!(rendered.contains(
@@ -5319,7 +5323,7 @@ mod tests {
                 assert!(rendered.contains("an explorer does not imply that request"));
                 assert!(rendered.contains("full-source accounting"));
                 assert!(rendered.contains("call `FINAL` once"));
-                assert!(rendered.contains("installed local az virtual-memory tool"));
+                assert!(rendered.contains("installed and available local az virtual-memory tool"));
                 assert!(rendered.contains(
                     "Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
                 ));
@@ -5393,7 +5397,7 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "000bef9bac8356ccf0c16c0a679d8cd326cde894eaecd702ead4baab34b5464c",
+                "0352883cc4ca376b6248ebaedc8bc499082c26d6c976d34a58fc15c832b86ffc",
             ),
             (
                 "jcode",
