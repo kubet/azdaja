@@ -879,7 +879,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "claude" => Some((
             "Claude Code",
-            "Claude's always-loaded Azdaja rule invokes this skill before qualifying access. Run the transaction below as one Bash call; load only the raw input once and keep task/schema in the prompt. Do not split, retry, or switch lanes. After Bash returns, emit its stdout JSON unchanged as the sole assistant response.",
+            "Claude's always-loaded Azdaja rule invokes this skill before qualifying access. After Skill, the first and only tool is one Bash call using the exact wrapper below; set that Bash tool call's timeout to 300000 ms. No Read, Grep, inspection, help query, temporary file, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Emit stdout JSON unchanged as the sole response.",
         )),
         "codex" => Some((
             "Codex",
@@ -891,7 +891,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "opencode" => Some((
             "OpenCode",
-            "Load `azdaja` immediately with OpenCode's native `skill` tool when the description matches. Run the transaction below as exactly one Bash call; load only the raw input once and keep task/schema in the prompt. Do not plan, split, retry, or switch lanes. The transaction's Bash stdout is the final JSON. Do not retry, summarize, or add another tool.",
+            "Load `azdaja` immediately with OpenCode's native `skill` tool. After Skill, the first and only tool is one Bash call using the exact wrapper below. No Read, Grep, planning, inspection, help query, temporary file, second lane, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Bash stdout is the final JSON.",
         )),
         _ => None,
     }
@@ -5308,7 +5308,7 @@ mod tests {
                         "complete semantic coverage spans more than 1 MiB or 200 records"
                     )
                 );
-                assert!(rendered.contains("load only the raw input once"));
+                assert!(rendered.contains("Load only the raw input once"));
                 assert!(rendered.contains("installed and available local az virtual-memory tool"));
                 assert!(rendered.contains(
                     "Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
@@ -5316,7 +5316,7 @@ mod tests {
                 assert!(rendered.contains("never retry or switch lanes"));
                 if harness == "opencode" {
                     assert!(rendered.contains("before Read, Grep, or Bash inspection"));
-                    assert!(rendered.contains("The transaction's Bash stdout is the final JSON"));
+                    assert!(rendered.contains("Bash stdout is the final JSON"));
                     assert!(!rendered.contains("exit 42"));
                 } else {
                     assert!(rendered.contains("stdout JSON unchanged"));
@@ -5343,9 +5343,9 @@ mod tests {
             "Use one native Bash call instead only when it can produce the exact answer without semantic judgment"
         ));
         assert!(rendered.contains("Run this exact wrapper as one Bash call"));
-        assert!(rendered.contains("Do not plan, split, retry, or switch lanes."));
+        assert!(rendered.contains("first and only tool is one Bash call"));
         assert!(rendered.contains("trap cleanup EXIT"));
-        assert!(rendered.contains("The transaction's Bash stdout is the final JSON"));
+        assert!(rendered.contains("Bash stdout is the final JSON"));
         assert!(!rendered.contains("exit 42"));
         assert_eq!(rendered.matches("workers=8").count(), 2);
         assert!(rendered.contains("Its source load is the only `load`"));
@@ -5382,19 +5382,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "adb559abf8ab50f5410275bdb5b75a682289d99769be4215e9c76f20a4dc0bff",
+                "a13a38e69ff43fb15c62c44ec88d7517bfc930a25b1b6f3f5496437b9c7fec21",
             ),
             (
                 "jcode",
-                "035dc098f59bf63379b690eccd8c1731691e8a1d77c81a9822c7930ba2e171a6",
+                "2ab6f58928fe694efb3dfb6cc53fe19c1402bcf6b652f1fb0005134782f1372d",
             ),
             (
                 "codex",
-                "63b26ab264fbf2ecefc30ea9fa9d9960dfa8e133ed5193ed617584a51d953b7e",
+                "a15a5b2e5090e300b0e7ee0e2a4f9e9c593575e1797d16c72c0d66b914a7cbeb",
             ),
             (
                 "gemini",
-                "e72376949239ce9827b03ce46e072b9d65e61196a5b140b86e7888aa468db218",
+                "bb6596f9bd23f2520e23b842775f3f22c663f325cbcd1107f106f35e9d7540fe",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);

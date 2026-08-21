@@ -15,7 +15,7 @@ description: Mandatory for complete semantic classification, review, extraction,
 
 ## Claude Code and OpenCode
 
-Run this exact wrapper as one Bash call, changing only `<input-path>` and the Python cell. Its source load is the only `load`; task/schema stay Python literals. No preamble, exploration, temporary script, or second lane.
+Run this exact wrapper as one Bash call, changing only `<input-path>` and the Python cell. Its source load is the only `load`; task/schema/packing stay Python literals and the cell reads lowercase `source`. No preamble, exploration, temporary script, or second lane.
 
 ```bash
 set -euo pipefail
@@ -47,7 +47,7 @@ Successful `load` and `exec` output is suppressed, so stdout is exactly the fina
 5. Validate JSON, exact ID coverage, and label domain. Flatten all A/B disagreements across shards in source order, discard initial shard boundaries, and globally repack them into the fewest prompts of at most 80 items and 80 KiB. Send one adjudication `llm_batch` with that model argument. Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure. Preflight `3 * shard_count <= 150`.
 6. Expand labels to every occurrence. Validate multiplicity, requested reductions, hashes, and output schema. Use native `sha256(text)` for UTF-8 SHA-256. End with `FINAL(answer_dict)` exactly once, passing the actual dictionary—not `json.dumps(...)` or another string.
 
-Prefer one cell with at most 85 nonblank lines. If the cell budget requires more, add heredoc-fed `exec` cells inside the same Bash transaction and retain one session; do not start over.
+Use exactly one inline heredoc cell. Never create a temporary script, add another `exec`, query CLI help, retry, or start over.
 
 Ordinary `exec` provides `llm`, ordered `llm_batch`, `FINAL`, and `FINAL_VAR`; state survives across cells. Reject provider strings containing `azdaja_error`. Solo-only helpers are unavailable. Monty has no host I/O. Use the preloaded `os`, `re`, `json`, `math`, `collections`, and `datetime` modules, explicit loops/maps, and f-strings; avoid imports, generators, `next`, `eval`, `exec`, and introspection.
 

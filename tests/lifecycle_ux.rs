@@ -121,7 +121,7 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
     assert!(opencode_skill.contains("one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle"));
     assert!(opencode_skill.contains("Its source load is the only `load`"));
     assert!(opencode_skill.contains("trap cleanup EXIT"));
-    assert!(opencode_skill.contains("Prefer one cell with at most 85 nonblank lines"));
+    assert!(opencode_skill.contains("Use exactly one inline heredoc cell"));
     assert_eq!(opencode_skill.matches(binary_text).count(), 5);
     assert!(!opencode_skill.contains("{{BIN}}"));
 
