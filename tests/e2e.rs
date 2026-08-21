@@ -4415,21 +4415,19 @@ exit 9
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
     assert!(skill.contains("Azdaja 0.1.2") && skill.contains(dst.join("azdaja").to_str().unwrap()));
-    assert!(skill.contains("exact_line_records(source, prefix)"));
-    assert!(skill.contains("semantic_manifest_records(items, task, labels)"));
-    assert!(skill.contains("capped at 39 representatives and 80 KiB"));
-    assert!(skill.contains("use eight workers"));
-    assert!(skill.contains("at most three root repair turns"));
-    assert!(skill.contains("Source occurrences and multiplicity are preserved"));
-    assert!(skill.contains("every caller occurrence is expanded before reduction"));
-    assert!(skill.contains("Labels are produced by classifying complete instances"));
-    assert!(skill.contains("never by searching for label fields or label words"));
-    assert!(skill.contains("Complete validated coverage is required"));
-    assert!(!skill.contains("For exact semantic counts and aggregates"));
-    assert!(skill.contains("Prefer one root planning turn"));
-    assert!(skill.contains("`yield`/generators"));
-    assert!(skill.contains("`FINAL(answer)` is always defined"));
-    assert!(skill.contains("`csv` and other imports are unavailable"));
+    assert!(skill.contains("one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle"));
+    assert!(skill.contains("llm_batch(prompts, workers=16)"));
+    assert!(skill.contains("Scan the complete loaded source"));
+    assert!(skill.contains("Preserve source order, duplicates, and stable occurrence IDs"));
+    assert!(skill.contains("create blind A and B prompts"));
+    assert!(
+        skill.contains("never use keyword, regex, substring, label-name, or hand-written rules")
+    );
+    assert!(skill.contains("Validate JSON, exact ID coverage, and label domain"));
+    assert!(skill.contains("Use native `sha256(text)`"));
+    assert!(skill.contains("End with `FINAL(answer_dict)` exactly once"));
+    assert!(!skill.contains("workers=8"));
+    assert!(skill.len() < 6_000);
     let edited_config = fs::read_to_string(&cfg).unwrap().replace(
         "sub_llm_cmd = \"cat\"",
         &format!("sub_llm_cmd = {:?}", mock.to_str().unwrap()),
@@ -4730,18 +4728,22 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             .find_map(|line| line.strip_prefix("description: "))
             .expect("installed skill description");
         let size_trigger = match harness {
-            "claude" => "complete coverage of an input too large",
-            "opencode" => "complete coverage exceeds one bounded native read",
+            "claude" | "opencode" => {
+                "complete semantic coverage spans more than 1 MiB or 200 records"
+            }
             _ => "inputs too large",
         };
-        for trigger in [
+        let mut triggers = vec![
             size_trigger,
             "Azdaja",
             "az virtual-memory tool",
             "installed",
             "available",
-            "how to use",
-        ] {
+        ];
+        if !matches!(harness, "claude" | "opencode") {
+            triggers.push("how to use");
+        }
+        for trigger in triggers {
             assert!(
                 description.contains(trigger),
                 "{harness} description is missing trigger {trigger:?}"
@@ -4751,7 +4753,6 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             "## Managed-skill awareness",
             "answer **yes**",
             "local `az` virtual-memory tool",
-            "suggest `az doctor`",
             "Never claim ignorance of Azdaja",
         ] {
             assert!(

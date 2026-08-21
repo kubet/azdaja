@@ -38,12 +38,12 @@ Successful `load` and `exec` output is suppressed, so stdout is exactly the fina
 
 ### Cell contract
 
-**Semantic gate:** build nonempty `prompts`, then run `semantic_rows = llm_batch(prompts, workers=8)`. If the task names an exact model, copy it unchanged to `semantic_model` and add `model=semantic_model` to that call. It must succeed before any label; otherwise fail without `FINAL`. Local classification or model substitution is invalid.
+**Semantic gate:** build nonempty `prompts`, then run `semantic_rows = llm_batch(prompts, workers=16)`. If the task names an exact model, copy it unchanged to `semantic_model` and add `model=semantic_model` to that call. It must succeed before any label; otherwise fail without `FINAL`. Local classification or model substitution is invalid.
 
 1. Scan the complete loaded source using its declared record boundaries. Fail on ambiguous boundaries. Preserve source order, duplicates, and stable occurrence IDs. Apply deterministic selectors to complete immutable records before semantic calls.
 2. Keep complete selected records as evidence. Project only when the official grammar says one exact final field alone determines the label; then require one nonempty marker and copy its suffix byte-for-byte.
-3. Make the fewest balanced contiguous shards of at most 80 unique items and 80 KiB per prompt. When possible, keep `2 * shard_count <= 8` for one worker wave. Every prompt includes the task, exact label domain, stable IDs, evidence, and a strict positional JSON output contract.
-4. For each shard, create blind A and B prompts with reversed items and labels. Submit all in one `llm_batch(..., workers=8)` using the gate's model form; every semantic label must come from a parsed `llm_batch` result; never use keyword, regex, substring, label-name, or hand-written rules.
+3. Make the fewest balanced contiguous shards of at most 80 unique items and 80 KiB per prompt. When possible, keep `2 * shard_count <= 16` for one worker wave. Every prompt includes the task, exact label domain, stable IDs, evidence, and a strict positional JSON output contract.
+4. For each shard, create blind A and B prompts with reversed items and labels. Submit all in one `llm_batch(..., workers=16)` using the gate's model form; every semantic label must come from a parsed `llm_batch` result; never use keyword, regex, substring, label-name, or hand-written rules.
 5. Validate JSON, exact ID coverage, and label domain. Pack all A/B disagreements into the fewest bounded prompts of at most 80 items, then send one adjudication `llm_batch` with that model argument. Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure. Preflight `3 * shard_count <= 150`.
 6. Expand labels to every occurrence. Validate multiplicity, requested reductions, hashes, and output schema. Use native `sha256(text)` for UTF-8 SHA-256. End with `FINAL(answer_dict)` exactly once, passing the actual dictionary—not `json.dumps(...)` or another string.
 
