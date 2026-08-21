@@ -5355,12 +5355,14 @@ mod tests {
         assert!(rendered.contains(
             "Use one native Bash call instead only when it can produce the exact answer without semantic judgment"
         ));
-        assert!(rendered.contains("Go directly to this transaction as one Bash tool call."));
+        assert!(rendered.contains("Run this exact wrapper as one Bash call"));
         assert!(rendered.contains("Do not plan, split, retry, or switch lanes."));
         assert!(rendered.contains("trap cleanup EXIT"));
         assert!(rendered.contains("A Bash tool result is not completion"));
         assert!(rendered.contains("exit 42 # intentional OpenCode handoff signal; do not retry"));
         assert_eq!(rendered.matches("workers=8").count(), 2);
+        assert!(rendered.contains("Its source load is the only `load`"));
+        assert!(rendered.contains("discard initial shard boundaries"));
         assert!(rendered.contains(&format!(r#"sid="$({managed} start)""#)));
         assert!(rendered.contains(&format!(r#"{managed} load "$sid" '<input-path>' source"#)));
         assert!(rendered.contains(&format!(r#"cat <<'PY' | {managed} exec "$sid""#)));
@@ -5393,19 +5395,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "5ee26fe9b679977ffa35f7cbadbaffe32214fd36bc98c2b3c15b00f825ae256b",
+                "adb559abf8ab50f5410275bdb5b75a682289d99769be4215e9c76f20a4dc0bff",
             ),
             (
                 "jcode",
-                "c96f9a0027a37c7151f4606f4bf4f116363a7ae84ec3c9e496188c0e92eeaa4c",
+                "035dc098f59bf63379b690eccd8c1731691e8a1d77c81a9822c7930ba2e171a6",
             ),
             (
                 "codex",
-                "76404a6b36f994b4bd1cd77bc8092437c28847d039b18314f7d11776ef9fda8a",
+                "63b26ab264fbf2ecefc30ea9fa9d9960dfa8e133ed5193ed617584a51d953b7e",
             ),
             (
                 "gemini",
-                "e4e34894782a7e740606588feefb7cf39709000b76255e97c88185a6e05b7a9e",
+                "e72376949239ce9827b03ce46e072b9d65e61196a5b140b86e7888aa468db218",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);

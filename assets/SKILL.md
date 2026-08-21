@@ -15,7 +15,7 @@ description: Mandatory for complete semantic classification, review, extraction,
 
 ## Claude Code and OpenCode
 
-Go directly to this transaction as one Bash tool call. Do not add a planning preamble, exploratory commands, temporary scripts, or a second lane.
+Run this exact wrapper as one Bash call, changing only `<input-path>` and the Python cell. Its source load is the only `load`; task/schema stay Python literals. No preamble, exploration, temporary script, or second lane.
 
 ```bash
 set -euo pipefail
@@ -44,7 +44,7 @@ Successful `load` and `exec` output is suppressed, so stdout is exactly the fina
 2. Keep complete selected records as evidence. Project only when the official grammar says one exact final field alone determines the label; then require one nonempty marker and copy its suffix byte-for-byte.
 3. Make the fewest balanced contiguous shards of at most 80 unique items and 80 KiB per prompt. When possible, keep `2 * shard_count <= 8` for one worker wave. Every prompt includes the task, exact label domain, stable IDs, evidence, and a strict positional JSON output contract.
 4. For each shard, create blind A and B prompts with reversed items and labels. Submit all in one `llm_batch(..., workers=8)` using the gate's model form; every semantic label must come from a parsed `llm_batch` result; never use keyword, regex, substring, label-name, or hand-written rules.
-5. Validate JSON, exact ID coverage, and label domain. Pack all A/B disagreements into the fewest bounded prompts of at most 80 items, then send one adjudication `llm_batch` with that model argument. Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure. Preflight `3 * shard_count <= 150`.
+5. Validate JSON, exact ID coverage, and label domain. Flatten all A/B disagreements across shards in source order, discard initial shard boundaries, and globally repack them into the fewest prompts of at most 80 items and 80 KiB. Send one adjudication `llm_batch` with that model argument. Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure. Preflight `3 * shard_count <= 150`.
 6. Expand labels to every occurrence. Validate multiplicity, requested reductions, hashes, and output schema. Use native `sha256(text)` for UTF-8 SHA-256. End with `FINAL(answer_dict)` exactly once, passing the actual dictionary—not `json.dumps(...)` or another string.
 
 Prefer one cell with at most 85 nonblank lines. If the cell budget requires more, add heredoc-fed `exec` cells inside the same Bash transaction and retain one session; do not start over.
