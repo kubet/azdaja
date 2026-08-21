@@ -13,7 +13,7 @@ For tool execution, always use the exact embedded binary path in the commands be
 
 Keep the input in Azdaja. Do not `cat` or otherwise read the raw file into your own context after loading it.
 
-Choose exactly one execution lane for a task. Use one `solo` invocation only when the task needs the solo-only exact-line or fused semantic-projection helpers described below. Otherwise use the explicit lifecycle transaction. Never retry `solo`, never invoke it more than once for the same task, and never combine `solo` with `start`/`load`/`exec` fallback. If that one `solo` call fails or times out, stop and report the failure instead of starting another Azdaja or native full-source attempt.
+Choose exactly one execution lane for a task. In **Claude Code and OpenCode**, always use the explicit lifecycle transaction: do not invoke `solo`. Those hosts already provide the planning model, so `solo` would add a slow nested root-program generation and repair loop. If a task describes a solo-only helper, preserve its semantic contract with a complete-record scan plus the explicit `llm_batch` workflow below; do not call the unavailable helper from `exec`. In other hosts, use one `solo` invocation only when the task truly requires its exact-line or fused semantic-projection helpers. Never retry `solo`, never invoke it more than once for the same task, and never combine `solo` with `start`/`load`/`exec` fallback. If that one `solo` call fails or times out, stop and report the failure instead of starting another Azdaja or native full-source attempt.
 
 For a deterministic analysis that fits one `exec` cell, send this entire transaction as exactly one Bash tool call. Replace `<input-path>` and the cell, but keep the `EXIT` trap so `kill` runs after success or failure:
 
@@ -34,6 +34,21 @@ PY
 {{BIN}} final "$sid"
 ```
 
+### Claude Code and OpenCode semantic fast path
+
+For semantic classification or extraction in Claude Code or OpenCode, author the deterministic Monty/Python cell yourself and run it through the one-Bash lifecycle transaction above. This removes every nested root-generation and repair turn. Ordinary `exec` does **not** expose `exact_line_ledger`, `semantic_manifest`, `semantic_manifest_records`, `source_ontology`, or `lexical_relevance`; do not call those solo-only names or claim their host-attested projection provenance.
+
+In the cell:
+
+1. Scan the complete loaded source by declared record boundaries. Reject ambiguous boundaries. Assign stable occurrence IDs in source order, preserve duplicates, and apply every deterministic selector to complete immutable records before semantic calls.
+2. Keep complete selected records as evidence unless the official grammar explicitly guarantees that one exact final field alone determines the label. Only then may the cell require one nonempty final marker and project its nonempty suffix byte-for-byte. Deduplicate only byte-identical evidence while retaining the complete ordered occurrence expansion.
+3. Build balanced contiguous shards of at most 39 unique items and 80 KiB per serialized prompt. Put the official task, exact labels, strict positional output contract, and stable IDs in every prompt.
+4. Create blind A and B prompts for every shard, reversing item and label presentation in B, and submit the ordered primary prompts in one `llm_batch(..., workers=8)`. Strictly validate every response, exact ID coverage, and label domain.
+5. Blind-adjudicate every A/B disagreement from its original evidence in one bounded `llm_batch`. Treat `azdaja_error`, malformed output, omission, extra output, or unresolved disagreement as failure—never as a complement label. Preflight `3 * shard_count <= 150` before inference.
+6. Expand labels back to every occurrence. Validate coverage, multiplicity, all requested reductions, and output schema. Use `sha256(text)` for native UTF-8 SHA-256 when needed, then call `FINAL(answer)` exactly once.
+
+If preflight exceeds the cell budget, use multiple heredoc-fed `exec` cells in the same Bash transaction and preserve one session; do not start another session. Do not write the question or source to temporary files, inspect the raw source with host `Read`/`Grep`/`cat`, or make a native full-source fallback attempt. This lane has exact candidate and semantic-call attribution, but its ledger/projection assertions are program-validated rather than the solo lane's host-attested provenance.
+
 For a genuinely interactive multi-cell workflow, start once, retain the session ID, and use later Bash calls for `load` and heredoc-fed `exec` cells as needed. Call `final` only after a cell saves an answer, always call `kill` when done, and keep using the exact embedded binary path for every command.
 
 `start` creates a persistent Monty/Python REPL. `load` places a UTF-8 file in a variable and returns trustworthy character/line metadata only. Each `exec` reads one Python cell on stdin; state survives across cells and capped cell output comes back for inspection. `final` retrieves the saved answer. `kill` deletes the session; `list` shows live session IDs. Monty is a Python subset: prefer explicit lists/loops over generators (`yield` is unsupported), and remember that regex backtracking is bounded.
@@ -41,7 +56,7 @@ For a genuinely interactive multi-cell workflow, start once, retain the session 
 Inside `exec`, use ordinary Python plus:
 
 - `llm(prompt, model=None, ctx="")` — one model call; `ctx` is appended to the prompt.
-- `llm_batch(prompts, model=None, workers=2)` — ordered parallel model calls. `llm` and batch items share the cumulative per-cell call budget (150 by default); submit another cell to continue with preserved state.
+- `llm_batch(prompts, model=None, workers=2)` — ordered parallel model calls whose results match input order. Provider failures are JSON strings containing `azdaja_error`; reject them explicitly. `llm` and batch items share the cumulative per-cell call budget (150 by default); submit another cell to continue with preserved state.
 - `FINAL(answer)` — save the answer.
 - `FINAL_VAR("name")` — save a variable by name.
 
@@ -61,4 +76,4 @@ Semantic invariants:
 - Source occurrences and multiplicity are preserved. Exact duplicate evidence may share a representative only when every caller occurrence is expanded before reduction. Initialize reduction counts for every declared label, including zero-occurrence labels.
 - Omission, malformed output, provider failure, and unresolved disagreement are not complement labels. Complete validated coverage is required before reduction or `FINAL`; assertions validate coverage, type, domain, and format, never a guessed or hard-coded answer literal.
 
-Prefer one root planning turn and one compact `exec` cell. Assign large intermediates to variables because output is capped. Call `FINAL(answer)` only after all invariants pass. A failed cell never commits its tentative answer. If a failed cell made no child call and its typed failure is a repairable protocol/line-limit, compile, ordinary program/extraction, missing/empty-`FINAL`, classification-without-semantic-calls, ontology-mismatch, helper-contract, or projection-boundary error, `solo` may make at most three root repair turns in the same root conversation. A child-calling, timeout/resource/host, or third-repair failure fails closed.
+In Claude Code and OpenCode, prefer one outer-authored compact `exec` cell and zero nested root-planning turns. In other hosts using `solo`, prefer one root planning turn. Assign large intermediates to variables because output is capped. Call `FINAL(answer)` only after all invariants pass. A failed cell never commits its tentative answer. If a failed cell made no child call and its typed failure is a repairable protocol/line-limit, compile, ordinary program/extraction, missing/empty-`FINAL`, classification-without-semantic-calls, ontology-mismatch, helper-contract, or projection-boundary error, `solo` may make at most three root repair turns in the same root conversation. A child-calling, timeout/resource/host, or third-repair failure fails closed.
