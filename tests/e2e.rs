@@ -2575,24 +2575,59 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
         String::from_utf8_lossy(&installed.stderr),
         String::from_utf8_lossy(&installed.stdout)
     );
+    let doctor = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .args(["doctor", "all"])
+        .env("HOME", &t)
+        .env("XDG_CONFIG_HOME", &xdg)
+        .env("AZDAJA_HOME", t.join("state"))
+        .output()
+        .unwrap();
+    assert!(
+        doctor.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&doctor.stderr),
+        String::from_utf8_lossy(&doctor.stdout)
+    );
 
     let targets = [
-        ("jcode", t.join(".jcode/skills/azdaja")),
-        ("claude", t.join(".claude/skills/azdaja")),
-        ("codex", t.join(".agents/skills/azdaja")),
-        ("gemini", t.join(".gemini/skills/azdaja")),
-        ("opencode", xdg.join("opencode/skills/azdaja")),
+        (
+            "jcode",
+            "Jcode",
+            "reload all skills",
+            t.join(".jcode/skills/azdaja"),
+        ),
+        (
+            "claude",
+            "Claude Code",
+            "always-loaded Azdaja rule",
+            t.join(".claude/skills/azdaja"),
+        ),
+        (
+            "codex",
+            "Codex",
+            "In Codex",
+            t.join(".agents/skills/azdaja"),
+        ),
+        (
+            "gemini",
+            "Gemini",
+            "In Gemini",
+            t.join(".gemini/skills/azdaja"),
+        ),
+        (
+            "opencode",
+            "OpenCode",
+            "OpenCode's native `skill` tool",
+            xdg.join("opencode/skills/azdaja"),
+        ),
     ];
     let binary_name = if cfg!(windows) {
         "azdaja.exe"
     } else {
         "azdaja"
     };
-    let expected_normalized = include_str!("../assets/SKILL.md")
-        .replace("{{VERSION}}", env!("CARGO_PKG_VERSION"))
-        .replace("{{BIN}}", "'<MANAGED_BIN>'");
-
-    for (harness, target) in targets {
+    for (harness, display, marker, target) in targets {
         let binary = target.join(binary_name);
         let skill = fs::read_to_string(target.join("SKILL.md")).unwrap();
         let binary_text = binary.to_str().unwrap();
@@ -2604,10 +2639,13 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
         );
         assert!(!skill.contains("{{VERSION}}"));
         assert!(!skill.contains("{{BIN}}"));
-        assert_eq!(
-            skill.replace(binary_text, "<MANAGED_BIN>"),
-            expected_normalized,
-            "{harness} did not receive the canonical rendered skill"
+        assert!(
+            skill.contains(&format!("## Harness activation: {display}")),
+            "{harness} did not receive its harness activation section"
+        );
+        assert!(
+            skill.contains(marker),
+            "{harness} did not receive its harness-specific activation guidance"
         );
 
         let frontmatter = skill
@@ -2621,8 +2659,13 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             .lines()
             .find_map(|line| line.strip_prefix("description: "))
             .expect("installed skill description");
+        let size_trigger = if matches!(harness, "claude" | "opencode") {
+            "complete coverage of an input too large"
+        } else {
+            "inputs too large"
+        };
         for trigger in [
-            "inputs too large",
+            size_trigger,
             "Azdaja",
             "az virtual-memory tool",
             "installed",
@@ -2666,6 +2709,24 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             );
         }
     }
+    let activation = t.join(".claude/skills/azdaja/ACTIVATION.md");
+    let activation_text = fs::read_to_string(&activation).unwrap();
+    assert!(activation_text.len() <= 400);
+    assert!(activation_text.contains("answer needing complete coverage"));
+    assert!(activation_text.contains("managed hook blocks broader"));
+    let plugin =
+        fs::read_to_string(t.join(".claude/skills/azdaja/.claude-plugin/plugin.json")).unwrap();
+    let hooks = fs::read_to_string(t.join(".claude/skills/azdaja/hooks/hooks.json")).unwrap();
+    assert!(plugin.contains("\"name\": \"azdaja\""));
+    assert!(hooks.contains("UserPromptSubmit"));
+    assert!(hooks.contains("PreToolUse"));
+    assert!(hooks.contains("PostToolUse"));
+    assert!(hooks.contains("SessionEnd"));
+    #[cfg(unix)]
+    assert_eq!(
+        fs::read_link(t.join(".claude/rules/azdaja.md")).unwrap(),
+        activation
+    );
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -4609,4 +4670,60 @@ time.sleep(60)
         }
         fs::remove_dir_all(t).unwrap();
     }
+}
+
+#[test]
+fn claude_hook_worker_errors_fail_closed_by_event_without_authorizing_posttool() {
+    let root = temp("claude-hook-fail-closed");
+    let blocked_state = root.join("state-is-a-file");
+    fs::write(&blocked_state, b"not a directory").unwrap();
+    let invoke = |event: serde_json::Value| {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+        child
+            .arg("claude-hook")
+            .env("AZDAJA_HOME", &blocked_state)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut child = child.spawn().unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(event.to_string().as_bytes())
+            .unwrap();
+        child.wait_with_output().unwrap()
+    };
+    let base = serde_json::json!({
+        "session_id": "fail-closed-session",
+        "cwd": root,
+        "tool_input": {}
+    });
+
+    let mut prompt = base.clone();
+    prompt["hook_event_name"] = serde_json::json!("UserPromptSubmit");
+    prompt["user_prompt"] = serde_json::json!("Count every row in the full input.");
+    let output = invoke(prompt);
+    assert!(output.status.success(), "{:?}", output);
+    let decision: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(decision["decision"], "block");
+    assert!(decision["reason"].as_str().unwrap().contains("retry"));
+
+    let mut pretool = base.clone();
+    pretool["hook_event_name"] = serde_json::json!("PreToolUse");
+    pretool["tool_name"] = serde_json::json!("Read");
+    let output = invoke(pretool);
+    assert!(output.status.success(), "{:?}", output);
+    let decision: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(decision["hookSpecificOutput"]["permissionDecision"], "deny");
+
+    let mut posttool = base;
+    posttool["hook_event_name"] = serde_json::json!("PostToolUse");
+    posttool["tool_name"] = serde_json::json!("Skill");
+    posttool["tool_input"] = serde_json::json!({"skill": "azdaja"});
+    let output = invoke(posttool);
+    assert!(output.status.success(), "{:?}", output);
+    assert!(output.stdout.is_empty());
+    assert!(blocked_state.is_file());
+    fs::remove_dir_all(root).unwrap();
 }

@@ -12,12 +12,13 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     env,
     fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{
         Arc, OnceLock,
         atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+        mpsc,
     },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -325,7 +326,7 @@ impl Default for Config {
             max_depth: 1,
             sub_timeout: 300,
             max_sessions: 4,
-            cell_timeout: 30,
+            cell_timeout: 60,
             idle_timeout: 1800,
             clean_patterns: Vec::new(),
             jcode_provider: "openai".into(),
@@ -429,15 +430,18 @@ fn absolute_home() -> Option<PathBuf> {
     })
 }
 
-fn strict_absolute_override(name: &str) -> Result<Option<PathBuf>> {
-    let Some(value) = env::var_os(name) else {
+fn strict_absolute_override_value(name: &str, value: Option<PathBuf>) -> Result<Option<PathBuf>> {
+    let Some(path) = value else {
         return Ok(None);
     };
-    let path = PathBuf::from(value);
     if path.as_os_str().is_empty() || !path.is_absolute() {
         bail!("{name} must be set to a non-empty absolute path")
     }
     Ok(Some(path))
+}
+
+fn strict_absolute_override(name: &str) -> Result<Option<PathBuf>> {
+    strict_absolute_override_value(name, env::var_os(name).map(PathBuf::from))
 }
 
 fn xdg_absolute(name: &str) -> Option<PathBuf> {
@@ -1089,6 +1093,1018 @@ fn fnv1a(bytes: &[u8]) -> u64 {
     h
 }
 
+fn sha256_hex(bytes: &[u8]) -> String {
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
+    ];
+    let mut state = [
+        0x6a09e667u32,
+        0xbb67ae85,
+        0x3c6ef372,
+        0xa54ff53a,
+        0x510e527f,
+        0x9b05688c,
+        0x1f83d9ab,
+        0x5be0cd19,
+    ];
+    let bit_length = (bytes.len() as u64).wrapping_mul(8);
+    let mut padded = Vec::with_capacity((bytes.len() + 72) & !63);
+    padded.extend_from_slice(bytes);
+    padded.push(0x80);
+    while padded.len() % 64 != 56 {
+        padded.push(0);
+    }
+    padded.extend_from_slice(&bit_length.to_be_bytes());
+    for chunk in padded.chunks_exact(64) {
+        let mut words = [0u32; 64];
+        for (index, word) in words[..16].iter_mut().enumerate() {
+            *word = u32::from_be_bytes(chunk[index * 4..index * 4 + 4].try_into().unwrap());
+        }
+        for index in 16..64 {
+            let s0 = words[index - 15].rotate_right(7)
+                ^ words[index - 15].rotate_right(18)
+                ^ (words[index - 15] >> 3);
+            let s1 = words[index - 2].rotate_right(17)
+                ^ words[index - 2].rotate_right(19)
+                ^ (words[index - 2] >> 10);
+            words[index] = words[index - 16]
+                .wrapping_add(s0)
+                .wrapping_add(words[index - 7])
+                .wrapping_add(s1);
+        }
+        let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = state;
+        for index in 0..64 {
+            let sum1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+            let choose = (e & f) ^ ((!e) & g);
+            let temp1 = h
+                .wrapping_add(sum1)
+                .wrapping_add(choose)
+                .wrapping_add(K[index])
+                .wrapping_add(words[index]);
+            let sum0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+            let majority = (a & b) ^ (a & c) ^ (b & c);
+            let temp2 = sum0.wrapping_add(majority);
+            h = g;
+            g = f;
+            f = e;
+            e = d.wrapping_add(temp1);
+            d = c;
+            c = b;
+            b = a;
+            a = temp1.wrapping_add(temp2);
+        }
+        for (value, addition) in state.iter_mut().zip([a, b, c, d, e, f, g, h]) {
+            *value = value.wrapping_add(addition);
+        }
+    }
+    let mut out = String::with_capacity(64);
+    for word in state {
+        out.push_str(&format!("{word:08x}"));
+    }
+    out
+}
+
+const CLAUDE_HOOK_LARGE_BYTES: u64 = 1_000_000;
+const CLAUDE_HOOK_SAMPLE_BYTES: usize = 64 * 1024;
+const CLAUDE_HOOK_MARKER: &[u8] = b"azdaja-claude-hook-v1\n";
+
+fn claude_hook_paths(root: &Path, session_id: &str) -> (PathBuf, PathBuf, PathBuf) {
+    let stem = sha256_hex(session_id.as_bytes());
+    (
+        root.join(format!("{stem}.coverage")),
+        root.join(format!("{stem}.active")),
+        root.join(format!("{stem}.sample")),
+    )
+}
+
+fn claude_hook_marker_present(path: &Path) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if !metadata.file_type().is_file() {
+                bail!("unsafe Claude hook marker: {}", path.display())
+            }
+            let mut file = open_private_file(path, false)?;
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes)?;
+            if bytes != CLAUDE_HOOK_MARKER {
+                bail!("invalid Claude hook marker: {}", path.display())
+            }
+            Ok(true)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn claude_hook_write_marker(path: &Path) -> Result<()> {
+    atomic_write(path, CLAUDE_HOOK_MARKER)
+}
+
+fn claude_hook_claim_sample(path: &Path) -> Result<bool> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    #[cfg(windows)]
+    options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let mut file = match options.open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            claude_hook_marker_present(path)?;
+            return Ok(false);
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if let Err(error) = file
+        .write_all(CLAUDE_HOOK_MARKER)
+        .and_then(|()| file.sync_all())
+    {
+        let _ = fs::remove_file(path);
+        return Err(error.into());
+    }
+    Ok(true)
+}
+
+fn claude_hook_remove_marker(path: &Path) -> Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn claude_hook_coverage_prompt(prompt: &str) -> bool {
+    let lower = prompt.to_lowercase();
+    let bounded_substep = [
+        "only the first",
+        "only first",
+        "only the last",
+        "only last",
+        "small excerpt",
+        "bounded excerpt",
+        "sample of",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle));
+    let words = lower
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect::<HashSet<_>>();
+    let data_noun = [
+        "row",
+        "rows",
+        "record",
+        "records",
+        "line",
+        "lines",
+        "entry",
+        "entries",
+        "observation",
+        "observations",
+        "value",
+        "values",
+        "file",
+        "files",
+        "input",
+        "inputs",
+        "dataset",
+        "datasets",
+        "log",
+        "logs",
+        "event",
+        "events",
+        "item",
+        "items",
+    ]
+    .iter()
+    .any(|word| words.contains(word));
+    let coverage_quantifier = ["all", "every", "full", "complete", "whole", "entire"]
+        .iter()
+        .any(|word| words.contains(word));
+    let explicit_coverage = ["complete coverage", "machine-graded", "clean dataset"]
+        .iter()
+        .any(|needle| lower.contains(needle))
+        || words.contains("aggregate")
+        || (coverage_quantifier && data_noun);
+    let strong_reduction = [
+        "count",
+        "total",
+        "number",
+        "maximum",
+        "minimum",
+        "max",
+        "min",
+        "highest",
+        "lowest",
+        "earliest",
+        "latest",
+        "unique",
+        "distinct",
+        "sum",
+        "average",
+        "median",
+        "frequency",
+        "distribution",
+    ]
+    .iter()
+    .any(|word| words.contains(word))
+        || lower.contains("how many");
+    let positional_reduction = ["first", "last"].iter().any(|word| words.contains(word));
+    let whole_input_digest =
+        words.contains("checksum") || words.contains("sha256") || lower.contains("sha-256");
+    let complete_intent =
+        explicit_coverage || (strong_reduction && data_noun) || whole_input_digest;
+    complete_intent || (!bounded_substep && positional_reduction && data_noun)
+}
+
+fn claude_hook_path_is_large(path: &Path, remaining: &mut usize, depth: usize) -> Result<bool> {
+    let mut total = 0u64;
+    claude_hook_path_is_large_inner(path, remaining, depth, &mut total)
+}
+
+fn claude_hook_path_is_large_inner(
+    path: &Path,
+    remaining: &mut usize,
+    depth: usize,
+    total: &mut u64,
+) -> Result<bool> {
+    if *remaining == 0 || depth > 12 {
+        return Ok(true);
+    }
+    *remaining -= 1;
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(_) => return Ok(true),
+    };
+    if metadata.file_type().is_symlink() {
+        let target = match fs::metadata(path) {
+            Ok(target) => target,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(_) => return Ok(true),
+        };
+        if target.file_type().is_file() {
+            *total = total.saturating_add(target.len());
+            return Ok(*total > CLAUDE_HOOK_LARGE_BYTES);
+        }
+        return Ok(true);
+    }
+    if metadata.file_type().is_file() {
+        *total = total.saturating_add(metadata.len());
+        return Ok(*total > CLAUDE_HOOK_LARGE_BYTES);
+    }
+    if !metadata.file_type().is_dir() {
+        return Ok(true);
+    }
+    let entries = match fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(_) => return Ok(true),
+    };
+    for entry in entries {
+        if *remaining == 0 {
+            return Ok(true);
+        }
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => return Ok(true),
+        };
+        if claude_hook_path_is_large_inner(&entry.path(), remaining, depth + 1, total)? {
+            return Ok(true);
+        }
+    }
+    Ok(*total > CLAUDE_HOOK_LARGE_BYTES)
+}
+
+fn claude_hook_resolve(cwd: &Path, raw: &str) -> PathBuf {
+    let path = PathBuf::from(raw);
+    if path.is_absolute() {
+        path
+    } else {
+        cwd.join(path)
+    }
+}
+
+fn claude_hook_path_or_scope_is_large(path: &Path, cwd: &Path) -> Result<bool> {
+    let path_within_cwd = fs::canonicalize(path)
+        .ok()
+        .zip(fs::canonicalize(cwd).ok())
+        .is_some_and(|(path, cwd)| path.starts_with(cwd));
+    if !path_within_cwd {
+        return Ok(true);
+    }
+    for candidate in [Some(path), Some(cwd), path.parent()].into_iter().flatten() {
+        let mut budget = 10_000usize;
+        if claude_hook_path_is_large(candidate, &mut budget, 0)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn claude_hook_find_large_basename(
+    path: &Path,
+    basename: &str,
+    remaining: &mut usize,
+    depth: usize,
+) -> Result<bool> {
+    if *remaining == 0 || depth > 12 {
+        return Ok(true);
+    }
+    *remaining -= 1;
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(_) => return Ok(true),
+    };
+    if metadata.file_type().is_symlink() {
+        if path.file_name().and_then(|name| name.to_str()) != Some(basename) {
+            return Ok(false);
+        }
+        let target = match fs::metadata(path) {
+            Ok(target) => target,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(_) => return Ok(true),
+        };
+        return Ok(
+            (target.file_type().is_file() && target.len() > CLAUDE_HOOK_LARGE_BYTES)
+                || !target.file_type().is_file(),
+        );
+    }
+    if metadata.file_type().is_file() {
+        return Ok(metadata.len() > CLAUDE_HOOK_LARGE_BYTES
+            && path.file_name().and_then(|name| name.to_str()) == Some(basename));
+    }
+    if !metadata.file_type().is_dir() {
+        return Ok(true);
+    }
+    let entries = match fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(_) => return Ok(true),
+    };
+    for entry in entries {
+        if *remaining == 0 {
+            return Ok(true);
+        }
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => return Ok(true),
+        };
+        if claude_hook_find_large_basename(&entry.path(), basename, remaining, depth + 1)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn claude_hook_has_shell_expansion(value: &str) -> bool {
+    value.chars().any(|character| {
+        matches!(
+            character,
+            '$' | '~' | '{' | '}' | '*' | '?' | '[' | ']' | '!'
+        )
+    })
+}
+
+fn claude_hook_literal_path_operand(value: &str) -> bool {
+    !value.is_empty()
+        && !value.starts_with('-')
+        && !claude_hook_has_shell_expansion(value)
+        && !value.contains(['\n', '\r', '\0'])
+}
+
+fn claude_hook_trusted_system_program(token: &str, expected: &str) -> bool {
+    token == format!("/usr/bin/{expected}") || token == format!("/bin/{expected}")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaudeHookBashAccess {
+    None,
+    Sample,
+    Broad,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ClaudeHookSample {
+    program: String,
+    count: usize,
+    path: String,
+}
+
+fn claude_hook_bounded_sample(command: &str) -> Option<Vec<ClaudeHookSample>> {
+    if command.contains("$(")
+        || command.contains('`')
+        || command.contains('<')
+        || command.contains('>')
+        || command.contains('|')
+        || command.contains('&')
+    {
+        return None;
+    }
+    let mut total = 0usize;
+    let mut samples = Vec::new();
+    for segment in command.split([';', '\n']) {
+        let segment = segment.trim();
+        if segment.is_empty() {
+            continue;
+        }
+        let tokens = shlex::split(segment)?;
+        let program_token = tokens.first()?;
+        let program = Path::new(program_token)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(program_token)
+            .to_ascii_lowercase();
+        if !matches!(program.as_str(), "head" | "tail")
+            || !claude_hook_trusted_system_program(program_token, &program)
+        {
+            return None;
+        }
+        let mut count = 10usize;
+        let mut operands = Vec::new();
+        let mut index = 1usize;
+        let mut options_done = false;
+        while index < tokens.len() {
+            let token = &tokens[index];
+            if !options_done && token == "--" {
+                options_done = true;
+                index += 1;
+                continue;
+            }
+            if !options_done && matches!(token.as_str(), "-n" | "--lines") {
+                let value = tokens.get(index + 1)?;
+                if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+                    return None;
+                }
+                count = value.parse().ok()?;
+                index += 2;
+                continue;
+            }
+            if !options_done {
+                if let Some(value) = token.strip_prefix("--lines=") {
+                    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+                        return None;
+                    }
+                    count = value.parse().ok()?;
+                    index += 1;
+                    continue;
+                }
+                if let Some(value) = token.strip_prefix('-') {
+                    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+                        return None;
+                    }
+                    count = value.parse().ok()?;
+                    index += 1;
+                    continue;
+                }
+            }
+            options_done = true;
+            operands.push(token.clone());
+            index += 1;
+        }
+        if operands.len() != 1 || !claude_hook_literal_path_operand(&operands[0]) {
+            return None;
+        }
+        total = total.checked_add(count)?;
+        if total > 10 {
+            return None;
+        }
+        samples.push(ClaudeHookSample {
+            program,
+            count,
+            path: operands.remove(0),
+        });
+    }
+    if samples.is_empty() {
+        None
+    } else {
+        Some(samples)
+    }
+}
+
+fn claude_hook_open_sample_file(path: &Path) -> Option<File> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    #[cfg(windows)]
+    options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    let file = options.open(path).ok()?;
+    file.metadata().ok()?.is_file().then_some(file)
+}
+
+fn claude_hook_head_sample_bytes(path: &Path, count: usize, limit: usize) -> Result<Option<usize>> {
+    if count == 0 {
+        return Ok(Some(0));
+    }
+    let Some(file) = claude_hook_open_sample_file(path) else {
+        return Ok(None);
+    };
+    let mut bytes = Vec::new();
+    file.take((limit + 1) as u64).read_to_end(&mut bytes)?;
+    let mut lines = 0usize;
+    for (index, byte) in bytes.iter().enumerate() {
+        if *byte == b'\n' {
+            lines += 1;
+            if lines == count {
+                return Ok((index < limit).then_some(index + 1));
+            }
+        }
+    }
+    if bytes.len() <= limit {
+        Ok(Some(bytes.len()))
+    } else {
+        Ok(None)
+    }
+}
+
+fn claude_hook_tail_sample_bytes(path: &Path, count: usize, limit: usize) -> Result<Option<usize>> {
+    if count == 0 {
+        return Ok(Some(0));
+    }
+    let Some(mut file) = claude_hook_open_sample_file(path) else {
+        return Ok(None);
+    };
+    let metadata = file.metadata()?;
+    let size = metadata.len();
+    if size <= limit as u64 {
+        return Ok(Some(size as usize));
+    }
+    let window = (limit + 1) as u64;
+    file.seek(SeekFrom::End(-(window as i64)))?;
+    let mut bytes = Vec::with_capacity(window as usize);
+    file.take(window).read_to_end(&mut bytes)?;
+    let search_end = if bytes.last() == Some(&b'\n') {
+        bytes.len().saturating_sub(1)
+    } else {
+        bytes.len()
+    };
+    let mut lines = 0usize;
+    for index in (0..search_end).rev() {
+        if bytes[index] == b'\n' {
+            lines += 1;
+            if lines == count {
+                let output = bytes.len() - index - 1;
+                return Ok((output <= limit).then_some(output));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn claude_hook_is_line_text(path: &Path) -> bool {
+    let rejected_extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "pdf"
+                    | "ipynb"
+                    | "png"
+                    | "jpg"
+                    | "jpeg"
+                    | "gif"
+                    | "webp"
+                    | "bmp"
+                    | "ico"
+                    | "tif"
+                    | "tiff"
+                    | "zip"
+                    | "gz"
+                    | "bz2"
+                    | "xz"
+                    | "7z"
+                    | "tar"
+                    | "doc"
+                    | "docx"
+                    | "xls"
+                    | "xlsx"
+                    | "ppt"
+                    | "pptx"
+                    | "parquet"
+                    | "arrow"
+                    | "sqlite"
+                    | "db"
+                    | "wasm"
+            )
+        });
+    if rejected_extension {
+        return false;
+    }
+    let Some(file) = claude_hook_open_sample_file(path) else {
+        return false;
+    };
+    let mut prefix = Vec::new();
+    if file.take(8 * 1024).read_to_end(&mut prefix).is_err()
+        || prefix.contains(&0)
+        || std::str::from_utf8(&prefix).is_err()
+    {
+        return false;
+    }
+    !prefix.starts_with(b"%PDF-")
+        && !prefix.starts_with(b"\x89PNG\r\n\x1a\n")
+        && !prefix.starts_with(b"GIF87a")
+        && !prefix.starts_with(b"GIF89a")
+        && !prefix.starts_with(b"RIFF")
+        && !prefix.starts_with(b"PK\x03\x04")
+}
+
+fn claude_hook_samples_are_byte_bounded(samples: &[ClaudeHookSample], cwd: &Path) -> Result<bool> {
+    let mut remaining = CLAUDE_HOOK_SAMPLE_BYTES;
+    for sample in samples {
+        let path = claude_hook_resolve(cwd, &sample.path);
+        let bytes = match sample.program.as_str() {
+            "head" => claude_hook_head_sample_bytes(&path, sample.count, remaining)?,
+            "tail" => claude_hook_tail_sample_bytes(&path, sample.count, remaining)?,
+            _ => None,
+        };
+        let Some(bytes) = bytes else {
+            return Ok(false);
+        };
+        remaining = remaining.saturating_sub(bytes);
+    }
+    Ok(true)
+}
+
+fn claude_hook_bash_metadata_only(command: &str) -> bool {
+    if command.contains("$(")
+        || command.contains('`')
+        || command.contains('<')
+        || command.contains('>')
+        || command.contains('|')
+        || command.contains('&')
+    {
+        return false;
+    }
+    let mut commands = 0usize;
+    for segment in command.split([';', '\n']) {
+        let segment = segment.trim();
+        if segment.is_empty() {
+            continue;
+        }
+        commands += 1;
+        let Some(tokens) = shlex::split(segment) else {
+            return false;
+        };
+        let Some(program_token) = tokens.first() else {
+            return false;
+        };
+        let program = Path::new(program_token)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(program_token)
+            .to_ascii_lowercase();
+        if !claude_hook_trusted_system_program(program_token, &program) {
+            return false;
+        }
+        let arguments = &tokens[1..];
+        if arguments
+            .iter()
+            .any(|argument| claude_hook_has_shell_expansion(argument))
+        {
+            return false;
+        }
+        let safe = match program.as_str() {
+            "pwd" | "true" => arguments.is_empty(),
+            "wc" => {
+                let mut operands = Vec::new();
+                let options_safe = arguments.iter().all(|argument| {
+                    if matches!(
+                        argument.as_str(),
+                        "-l" | "-c"
+                            | "-w"
+                            | "-m"
+                            | "--lines"
+                            | "--bytes"
+                            | "--words"
+                            | "--chars"
+                            | "--"
+                    ) {
+                        true
+                    } else if argument.starts_with('-') {
+                        false
+                    } else {
+                        operands.push(argument);
+                        operands.len() <= 1
+                    }
+                });
+                options_safe && operands.len() == 1 && claude_hook_literal_path_operand(operands[0])
+            }
+            "stat" | "file" => {
+                arguments.len() == 1 && claude_hook_literal_path_operand(&arguments[0])
+            }
+            "du" => {
+                let mut operands = Vec::new();
+                let options_safe = arguments.iter().all(|argument| {
+                    if matches!(argument.as_str(), "-h" | "-s" | "-sh" | "-hs" | "--") {
+                        true
+                    } else if argument.starts_with('-') {
+                        false
+                    } else {
+                        operands.push(argument);
+                        operands.len() <= 1
+                    }
+                });
+                options_safe && operands.len() == 1 && claude_hook_literal_path_operand(operands[0])
+            }
+            "ls" => {
+                let mut operands = Vec::new();
+                let options_safe = arguments.iter().all(|argument| {
+                    if matches!(
+                        argument.as_str(),
+                        "-l" | "-a" | "-la" | "-al" | "-d" | "-ld" | "-dl" | "--"
+                    ) {
+                        true
+                    } else if argument.starts_with('-') {
+                        false
+                    } else {
+                        operands.push(argument);
+                        operands.len() <= 1
+                    }
+                });
+                options_safe
+                    && operands
+                        .first()
+                        .is_none_or(|operand| claude_hook_literal_path_operand(operand))
+            }
+            _ => false,
+        };
+        if !safe {
+            return false;
+        }
+    }
+    commands > 0
+}
+
+fn claude_hook_argument_is_large(raw: &str, cwd: &Path) -> Result<bool> {
+    let raw = raw.trim_matches(|character: char| matches!(character, ';' | ',' | '(' | ')'));
+    if raw.is_empty() {
+        return Ok(false);
+    }
+    if claude_hook_has_shell_expansion(raw) {
+        return Ok(true);
+    }
+    if raw.starts_with('-') {
+        return Ok(false);
+    }
+    let path = claude_hook_resolve(cwd, raw);
+    if claude_hook_path_or_scope_is_large(&path, cwd)? {
+        return Ok(true);
+    }
+    if !raw.contains('/') {
+        let mut budget = 10_000usize;
+        return claude_hook_find_large_basename(cwd, raw, &mut budget, 0);
+    }
+    Ok(false)
+}
+
+fn claude_hook_bash_access(command: &str, cwd: &Path) -> Result<ClaudeHookBashAccess> {
+    if claude_hook_bash_metadata_only(command) {
+        return Ok(ClaudeHookBashAccess::None);
+    }
+    if let Some(samples) = claude_hook_bounded_sample(command) {
+        let mut samples_large = false;
+        for sample in &samples {
+            if claude_hook_argument_is_large(&sample.path, cwd)? {
+                samples_large = true;
+            }
+        }
+        if samples_large {
+            return if claude_hook_samples_are_byte_bounded(&samples, cwd)? {
+                Ok(ClaudeHookBashAccess::Sample)
+            } else {
+                Ok(ClaudeHookBashAccess::Broad)
+            };
+        }
+        return Ok(ClaudeHookBashAccess::None);
+    }
+    Ok(ClaudeHookBashAccess::Broad)
+}
+
+fn claude_hook_denial() -> String {
+    serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": "Azdaja is required before broad access to this large input. Call the Skill tool with azdaja, then retry through its managed binary."
+        }
+    })
+    .to_string()
+}
+
+fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
+    let event: serde_json::Value =
+        serde_json::from_str(input).context("invalid Claude hook JSON")?;
+    let session_id = event
+        .get("session_id")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow!("Claude hook input lacks session_id"))?;
+    secure_dir(root)?;
+    let (coverage, active, sample) = claude_hook_paths(root, session_id);
+    match event
+        .get("hook_event_name")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+    {
+        "UserPromptSubmit"
+            if event
+                .get("user_prompt")
+                .or_else(|| event.get("prompt"))
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(claude_hook_coverage_prompt) =>
+        {
+            claude_hook_remove_marker(&sample)?;
+            claude_hook_write_marker(&coverage)?;
+        }
+        "UserPromptSubmit" if !claude_hook_marker_present(&active)? => {
+            claude_hook_remove_marker(&coverage)?;
+            claude_hook_remove_marker(&sample)?;
+        }
+        "UserPromptSubmit" => {}
+        "PostToolUse" => {
+            let skill = event
+                .get("tool_input")
+                .and_then(|input| input.get("skill").or_else(|| input.get("name")))
+                .and_then(serde_json::Value::as_str);
+            if event.get("tool_name").and_then(serde_json::Value::as_str) == Some("Skill")
+                && skill == Some("azdaja")
+            {
+                claude_hook_write_marker(&active)?;
+            }
+        }
+        "PreToolUse" => {
+            if !claude_hook_marker_present(&coverage)? || claude_hook_marker_present(&active)? {
+                return Ok(None);
+            }
+            let tool = event
+                .get("tool_name")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let tool_input = event.get("tool_input").unwrap_or(&serde_json::Value::Null);
+            let cwd = event
+                .get("cwd")
+                .and_then(serde_json::Value::as_str)
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("."));
+            let access = match tool {
+                "Read" => {
+                    let object = tool_input.as_object();
+                    let path = tool_input
+                        .get("file_path")
+                        .or_else(|| tool_input.get("path"))
+                        .and_then(serde_json::Value::as_str);
+                    let fields_safe = object.is_some_and(|object| {
+                        object.keys().all(|key| {
+                            matches!(key.as_str(), "file_path" | "path" | "offset" | "limit")
+                        }) && !(object.contains_key("file_path") && object.contains_key("path"))
+                    });
+                    if let Some(path) = path {
+                        if claude_hook_has_shell_expansion(path) {
+                            ClaudeHookBashAccess::Broad
+                        } else {
+                            let resolved = claude_hook_resolve(&cwd, path);
+                            if claude_hook_path_or_scope_is_large(&resolved, &cwd)? {
+                                let limit =
+                                    tool_input.get("limit").and_then(serde_json::Value::as_u64);
+                                let offset_safe = match tool_input.get("offset") {
+                                    None => true,
+                                    Some(offset) => offset.as_u64() == Some(0),
+                                };
+                                if fields_safe
+                                    && offset_safe
+                                    && limit.is_some_and(|limit| (1..=10).contains(&limit))
+                                    && claude_hook_is_line_text(&resolved)
+                                    && claude_hook_head_sample_bytes(
+                                        &resolved,
+                                        limit.unwrap_or(0) as usize,
+                                        CLAUDE_HOOK_SAMPLE_BYTES,
+                                    )
+                                    .ok()
+                                    .flatten()
+                                    .is_some()
+                                {
+                                    ClaudeHookBashAccess::Sample
+                                } else {
+                                    ClaudeHookBashAccess::Broad
+                                }
+                            } else {
+                                ClaudeHookBashAccess::None
+                            }
+                        }
+                    } else {
+                        ClaudeHookBashAccess::Broad
+                    }
+                }
+                "Grep" => {
+                    let raw_path = tool_input.get("path").and_then(serde_json::Value::as_str);
+                    if raw_path.is_some_and(claude_hook_has_shell_expansion) {
+                        ClaudeHookBashAccess::Broad
+                    } else {
+                        let path = raw_path
+                            .map(|path| claude_hook_resolve(&cwd, path))
+                            .unwrap_or_else(|| cwd.clone());
+                        if claude_hook_path_or_scope_is_large(&path, &cwd)? {
+                            ClaudeHookBashAccess::Broad
+                        } else {
+                            ClaudeHookBashAccess::None
+                        }
+                    }
+                }
+                "Bash" => tool_input
+                    .get("command")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|command| {
+                        claude_hook_bash_access(command, &cwd)
+                            .unwrap_or(ClaudeHookBashAccess::Broad)
+                    })
+                    .unwrap_or(ClaudeHookBashAccess::None),
+                _ => ClaudeHookBashAccess::None,
+            };
+            if access == ClaudeHookBashAccess::Broad
+                || (access == ClaudeHookBashAccess::Sample
+                    && !claude_hook_claim_sample(&sample).unwrap_or(false))
+            {
+                return Ok(Some(claude_hook_denial()));
+            }
+        }
+        "SessionEnd" => {
+            for path in [&coverage, &active, &sample] {
+                claude_hook_remove_marker(path)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(None)
+}
+
+fn claude_hook_prompt_denial() -> String {
+    serde_json::json!({
+        "decision": "block",
+        "reason": "Azdaja hook classification timed out or failed; retry the prompt."
+    })
+    .to_string()
+}
+
+fn claude_hook_failure_decision(hook_event_name: &str) -> Option<String> {
+    match hook_event_name {
+        "UserPromptSubmit" => Some(claude_hook_prompt_denial()),
+        "PreToolUse" => Some(claude_hook_denial()),
+        "PostToolUse" | "SessionEnd" => None,
+        _ => Some(claude_hook_denial()),
+    }
+}
+
+fn claude_hook_with_deadline<F>(
+    hook_event_name: &str,
+    deadline: Duration,
+    task: F,
+) -> Option<String>
+where
+    F: FnOnce() -> Result<Option<String>> + Send + 'static,
+{
+    let fallback = || claude_hook_failure_decision(hook_event_name);
+    let (sender, receiver) = mpsc::sync_channel(1);
+    let worker = thread::Builder::new()
+        .name("azdaja-claude-hook".to_owned())
+        .spawn(move || {
+            let _ = sender.send(task());
+        });
+    if worker.is_err() {
+        return fallback();
+    }
+    match receiver.recv_timeout(deadline) {
+        Ok(Ok(result)) => result,
+        Ok(Err(_))
+        | Err(mpsc::RecvTimeoutError::Timeout)
+        | Err(mpsc::RecvTimeoutError::Disconnected) => fallback(),
+    }
+}
+
+pub fn claude_hook(input: &str) -> Result<Option<String>> {
+    let event: serde_json::Value =
+        serde_json::from_str(input).context("invalid Claude hook JSON")?;
+    let hook_event_name = event
+        .get("hook_event_name")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let input = input.to_owned();
+    Ok(claude_hook_with_deadline(
+        &hook_event_name,
+        Duration::from_secs(2),
+        move || claude_hook_with_root(&input, &state_home()?.join("claude-hook-markers")),
+    ))
+}
+
 pub fn load(sid: &str, path: &Path, var: &str, cfg: &Config) -> Result<String> {
     let ident = Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*$").unwrap();
     if !ident.is_match(var) {
@@ -1589,6 +2605,15 @@ fn external(
             *state.final_out = Some(Final::Var(name));
             Ok(MontyObject::None)
         }
+        "sha256" => {
+            if args.len() != 1 || !kwargs.is_empty() {
+                bail!("sha256 requires exactly one string")
+            }
+            let MontyObject::String(text) = &args[0] else {
+                bail!("sha256 requires exactly one string")
+            };
+            Ok(MontyObject::String(sha256_hex(text.as_bytes())))
+        }
         "lexical_relevance" if capabilities.allow_relevance => {
             if args.len() < 2 || args.len() > 3 {
                 bail!("lexical_relevance requires source, query, and optional max_chars")
@@ -1731,7 +2756,14 @@ fn run_cell(
 ) -> RunCellOutcome {
     repl.tracker_mut()
         .set_max_duration(Duration::from_secs(cfg.cell_timeout));
-    let mut input_names = vec!["llm", "llm_batch", "llm_batch_fresh", "FINAL", "FINAL_VAR"];
+    let mut input_names = vec![
+        "llm",
+        "llm_batch",
+        "llm_batch_fresh",
+        "sha256",
+        "FINAL",
+        "FINAL_VAR",
+    ];
     if allow_relevance {
         input_names.push("lexical_relevance");
     }
@@ -3062,6 +4094,7 @@ struct BridgePaths {
     home: PathBuf,
     run: PathBuf,
     marker: PathBuf,
+    credential_profile: PathBuf,
 }
 #[cfg(unix)]
 fn stable_path_hash(path: &Path) -> u64 {
@@ -3600,6 +4633,7 @@ fn bridge_paths() -> Result<BridgePaths> {
     Ok(BridgePaths {
         socket,
         pidfile: private.join("bridge.pid"),
+        credential_profile: home.join("credential-target"),
         home,
         run,
         marker,
@@ -3609,6 +4643,83 @@ fn bridge_paths() -> Result<BridgePaths> {
 fn socket_alive(path: &Path) -> bool {
     UnixStream::connect(path).is_ok()
 }
+#[cfg(unix)]
+fn jcode_auth_path(user_home: &Path, explicit_home: Option<PathBuf>) -> Result<PathBuf> {
+    let source_home = strict_absolute_override_value("JCODE_HOME", explicit_home)?
+        .unwrap_or_else(|| user_home.join(".jcode"));
+    Ok(source_home.join("openai-auth.json"))
+}
+
+#[cfg(unix)]
+fn validate_jcode_auth(auth: &Path) -> Result<PathBuf> {
+    if !auth.is_file() {
+        bail!(
+            "OpenAI subscription OAuth login missing: {}",
+            auth.display()
+        )
+    }
+    use std::os::unix::fs::MetadataExt;
+    let auth_meta = fs::metadata(auth)?;
+    if auth_meta.mode() & 0o077 != 0 || auth_meta.uid() != unsafe { libc::geteuid() } {
+        bail!("OpenAI OAuth credential must be owner-only and owned by the current user")
+    }
+    fs::canonicalize(auth).context("could not canonicalize selected Jcode OAuth credential")
+}
+
+#[cfg(unix)]
+fn jcode_bridge_profile_matches(paths: &BridgePaths, canonical_auth: &Path) -> Result<bool> {
+    use std::os::unix::ffi::OsStrExt;
+    let auth_link = paths.home.join("openai-auth.json");
+    let metadata = match fs::symlink_metadata(&auth_link) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
+    if !metadata.file_type().is_symlink() {
+        bail!("refusing non-symlink credential in private Jcode home")
+    }
+    if fs::canonicalize(&auth_link)? != canonical_auth {
+        return Ok(false);
+    }
+    let Some(profile) = read_regular_nofollow(&paths.credential_profile)? else {
+        return Ok(false);
+    };
+    Ok(profile == canonical_auth.as_os_str().as_bytes())
+}
+
+#[cfg(unix)]
+fn prepare_jcode_bridge_profile(
+    paths: &BridgePaths,
+    auth: &Path,
+    canonical_auth: &Path,
+) -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let auth_link = paths.home.join("openai-auth.json");
+    match fs::symlink_metadata(&auth_link) {
+        Ok(metadata) => {
+            if !metadata.file_type().is_symlink() {
+                bail!("refusing non-symlink credential in private Jcode home")
+            }
+            if fs::canonicalize(&auth_link)? != canonical_auth {
+                fs::remove_file(&auth_link)?;
+                std::os::unix::fs::symlink(auth, &auth_link)?;
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            std::os::unix::fs::symlink(auth, &auth_link)?;
+        }
+        Err(error) => return Err(error.into()),
+    }
+    if fs::canonicalize(&auth_link)? != canonical_auth {
+        bail!("private Jcode OAuth link does not target the selected credential")
+    }
+    atomic_write(
+        &paths.credential_profile,
+        canonical_auth.as_os_str().as_bytes(),
+    )?;
+    Ok(())
+}
+
 #[cfg(unix)]
 fn ensure_jcode_bridge(cfg: &Config) -> Result<PathBuf> {
     if let Some(path) = env::var_os("AZDAJA_JCODE_API_SOCKET") {
@@ -3621,41 +4732,31 @@ fn ensure_jcode_bridge(cfg: &Config) -> Result<PathBuf> {
     if cfg.jcode_provider != "openai" {
         bail!("jcode-api currently requires subscription provider 'openai'")
     }
-    let paths = bridge_paths()?;
-    if socket_alive(&paths.socket) {
-        return Ok(paths.socket);
-    }
-    let _guard = lock_path(&state_home()?.join("jcode-api.lock"))?;
-    if socket_alive(&paths.socket) {
-        return Ok(paths.socket);
-    }
-    let _ = fs::remove_file(&paths.socket);
     let user_home = env::var_os("HOME")
         .map(PathBuf::from)
         .ok_or_else(|| anyhow!("HOME is required for subscription OAuth"))?;
-    let auth = user_home.join(".jcode/openai-auth.json");
-    if !auth.is_file() {
-        bail!(
-            "OpenAI subscription OAuth login missing: {}",
-            auth.display()
-        )
-    }
-    use std::os::unix::fs::MetadataExt;
-    let auth_meta = fs::metadata(&auth)?;
-    if auth_meta.mode() & 0o077 != 0 || auth_meta.uid() != unsafe { libc::geteuid() } {
-        bail!("OpenAI OAuth credential must be owner-only and owned by the current user")
-    }
-    let auth_link = paths.home.join("openai-auth.json");
-    if let Ok(meta) = fs::symlink_metadata(&auth_link) {
-        if !meta.file_type().is_symlink() {
-            bail!("refusing non-symlink credential in private Jcode home")
+    let auth = jcode_auth_path(&user_home, env::var_os("JCODE_HOME").map(PathBuf::from))?;
+    let canonical_auth = validate_jcode_auth(&auth)?;
+    let paths = bridge_paths()?;
+    if socket_alive(&paths.socket) {
+        if jcode_bridge_profile_matches(&paths, &canonical_auth)? {
+            return Ok(paths.socket);
         }
-        if fs::canonicalize(&auth_link)? != fs::canonicalize(&auth)? {
-            bail!("private Jcode OAuth link targets a different credential")
-        }
-    } else {
-        std::os::unix::fs::symlink(&auth, &auth_link)?
+        bail!("live private Jcode API bridge belongs to a different credential profile")
     }
+    let _guard = lock_path(&state_home()?.join("jcode-api.lock"))?;
+    if socket_alive(&paths.socket) {
+        if jcode_bridge_profile_matches(&paths, &canonical_auth)? {
+            return Ok(paths.socket);
+        }
+        bail!("live private Jcode API bridge belongs to a different credential profile")
+    }
+    match fs::remove_file(&paths.socket) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+    prepare_jcode_bridge_profile(&paths, &auth, &canonical_auth)?;
     let mut cmd = Command::new("jcode");
     cmd.args(["api-bridge", "--api-socket"])
         .arg(&paths.socket)
@@ -5216,6 +6317,82 @@ mod unit_tests {
     use super::*;
 
     #[test]
+    fn shipped_default_config_matches_sixty_second_evaluator_cap() {
+        let shipped: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
+        assert_eq!(Config::default().cell_timeout, 60);
+        assert_eq!(shipped.cell_timeout, Config::default().cell_timeout);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn explicit_absolute_jcode_home_is_authoritative_and_relative_values_fail_closed() {
+        let user_home = Path::new("/private/test-home-a");
+        let explicit = PathBuf::from("/private/test-home-b");
+        assert_eq!(
+            jcode_auth_path(user_home, Some(explicit.clone())).unwrap(),
+            explicit.join("openai-auth.json")
+        );
+        assert_eq!(
+            jcode_auth_path(user_home, None).unwrap(),
+            user_home.join(".jcode/openai-auth.json")
+        );
+        for invalid in [PathBuf::new(), PathBuf::from("relative-jcode-home")] {
+            let error = jcode_auth_path(user_home, Some(invalid)).unwrap_err();
+            assert!(error.to_string().contains("non-empty absolute path"));
+        }
+
+        let root = env::temp_dir().join(format!(
+            "azdaja-jcode-auth-routing-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let home_a = root.join("a");
+        let home_b = root.join("b");
+        fs::create_dir_all(home_a.join(".jcode")).unwrap();
+        fs::create_dir_all(&home_b).unwrap();
+        fs::write(home_a.join(".jcode/openai-auth.json"), b"owner-a").unwrap();
+        let selected = jcode_auth_path(&home_a, Some(home_b.clone())).unwrap();
+        assert_eq!(selected, home_b.join("openai-auth.json"));
+        assert!(
+            !selected.exists(),
+            "must not fall back across Jcode profiles"
+        );
+        fs::write(&selected, b"owner-b").unwrap();
+        assert_eq!(fs::read(&selected).unwrap(), b"owner-b");
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&selected, fs::Permissions::from_mode(0o600)).unwrap();
+        let auth_a = home_a.join(".jcode/openai-auth.json");
+        fs::set_permissions(&auth_a, fs::Permissions::from_mode(0o600)).unwrap();
+        let canonical_a = validate_jcode_auth(&auth_a).unwrap();
+        let canonical_b = validate_jcode_auth(&selected).unwrap();
+        let bridge_home = root.join("bridge-home");
+        fs::create_dir(&bridge_home).unwrap();
+        fs::set_permissions(&bridge_home, fs::Permissions::from_mode(0o700)).unwrap();
+        let paths = BridgePaths {
+            socket: root.join("api.sock"),
+            pidfile: root.join("bridge.pid"),
+            home: bridge_home.clone(),
+            run: root.join("run"),
+            marker: root.join("runtime-dir"),
+            credential_profile: bridge_home.join("credential-target"),
+        };
+        prepare_jcode_bridge_profile(&paths, &auth_a, &canonical_a).unwrap();
+        assert!(jcode_bridge_profile_matches(&paths, &canonical_a).unwrap());
+        assert!(!jcode_bridge_profile_matches(&paths, &canonical_b).unwrap());
+        prepare_jcode_bridge_profile(&paths, &selected, &canonical_b).unwrap();
+        assert!(jcode_bridge_profile_matches(&paths, &canonical_b).unwrap());
+        assert!(!jcode_bridge_profile_matches(&paths, &canonical_a).unwrap());
+        assert_eq!(
+            fs::canonicalize(bridge_home.join("openai-auth.json")).unwrap(),
+            canonical_b
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn monty_failure_kinds_separate_program_bugs_from_resource_and_host_classes() {
         for ordinary in [
             ExcType::IndexError,
@@ -5977,6 +7154,769 @@ mod unit_tests {
         let result = session.exec("FINAL('wrong')\n1/0", &cfg).unwrap();
         assert!(!result.success && !result.finalized);
         assert!(session.final_answer(&cfg).is_err());
+    }
+}
+
+#[cfg(test)]
+mod claude_hook_tests {
+    use super::*;
+
+    fn event(
+        session: &str,
+        hook_event_name: &str,
+        cwd: &Path,
+        tool_name: Option<&str>,
+        tool_input: serde_json::Value,
+        prompt: Option<&str>,
+    ) -> String {
+        let mut value = serde_json::json!({
+            "session_id": session,
+            "hook_event_name": hook_event_name,
+            "cwd": cwd,
+            "tool_input": tool_input
+        });
+        if let Some(tool_name) = tool_name {
+            value["tool_name"] = serde_json::Value::String(tool_name.to_owned());
+        }
+        if let Some(prompt) = prompt {
+            value["user_prompt"] = serde_json::Value::String(prompt.to_owned());
+        }
+        value.to_string()
+    }
+
+    fn unique_temp_dir(label: &str) -> PathBuf {
+        let path = env::temp_dir().join(format!(
+            "{label}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    #[test]
+    fn claude_hook_internal_deadline_fails_closed_before_the_worker_finishes() {
+        let started = Instant::now();
+        let prompt_block =
+            claude_hook_with_deadline("UserPromptSubmit", Duration::from_millis(1), || {
+                thread::sleep(Duration::from_millis(100));
+                Ok(None)
+            })
+            .unwrap();
+        let prompt_block: serde_json::Value = serde_json::from_str(&prompt_block).unwrap();
+        assert_eq!(prompt_block["decision"], "block");
+        assert!(prompt_block["reason"].as_str().unwrap().contains("retry"));
+        assert!(started.elapsed() < Duration::from_secs(1));
+
+        let pretool_denial =
+            claude_hook_with_deadline("PreToolUse", Duration::from_secs(1), || {
+                Err(anyhow!("forced worker error"))
+            })
+            .unwrap();
+        let pretool_denial: serde_json::Value = serde_json::from_str(&pretool_denial).unwrap();
+        assert_eq!(
+            pretool_denial["hookSpecificOutput"]["permissionDecision"],
+            "deny"
+        );
+        let panic_denial = claude_hook_with_deadline(
+            "PreToolUse",
+            Duration::from_secs(1),
+            || -> Result<Option<String>> { panic!("forced worker panic") },
+        )
+        .unwrap();
+        let panic_denial: serde_json::Value = serde_json::from_str(&panic_denial).unwrap();
+        assert_eq!(
+            panic_denial["hookSpecificOutput"]["permissionDecision"],
+            "deny"
+        );
+        assert_eq!(
+            claude_hook_with_deadline("PostToolUse", Duration::from_secs(1), || {
+                Err(anyhow!("forced worker error"))
+            }),
+            None
+        );
+        assert_eq!(
+            claude_hook_with_deadline("PreToolUse", Duration::from_secs(1), || {
+                Ok(Some("decision".to_owned()))
+            }),
+            Some("decision".to_owned())
+        );
+    }
+
+    #[test]
+    fn claude_hook_coverage_terms_use_word_boundaries_and_common_reductions() {
+        for prompt in [
+            "Determine the total ERROR entries in observations.csv.",
+            "What is the number of ERROR rows?",
+            "Find the earliest event in the log.",
+            "Compute the exact count for these records.",
+            "Analyze the full dataset.",
+            "Scan the entire log.",
+            "List all events.",
+            "Inspect only the first line to learn the schema, then compute the total number of rows across all records.",
+        ] {
+            assert!(claude_hook_coverage_prompt(prompt), "not routed: {prompt}");
+        }
+        for prompt in [
+            "Update account settings.",
+            "Apply the discount policy.",
+            "Raise the minimum pipeline version.",
+            "Make this exact small function change.",
+            "Show only the first five records.",
+        ] {
+            assert!(
+                !claude_hook_coverage_prompt(prompt),
+                "false route: {prompt}"
+            );
+        }
+    }
+
+    #[test]
+    fn claude_hook_blocks_only_broad_large_access_until_successful_activation() {
+        let base = env::temp_dir().join(format!(
+            "azdaja-claude-hook-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let root = base.join("markers");
+        fs::create_dir(&base).unwrap();
+        let large = base.join("observations.csv");
+        let small = base.join("small.csv");
+        let extensionless = base.join("observations");
+        let spaced = base.join("space name.data");
+        let unicode = base.join("観測資料");
+        let long_line = base.join("one-line.blob");
+        let short_lines = b"id,value\n".repeat(CLAUDE_HOOK_LARGE_BYTES as usize / 9 + 2);
+        fs::write(&large, &short_lines).unwrap();
+        fs::write(&extensionless, &short_lines).unwrap();
+        fs::write(&spaced, &short_lines).unwrap();
+        fs::write(&unicode, &short_lines).unwrap();
+        fs::write(&long_line, vec![b'x'; CLAUDE_HOOK_LARGE_BYTES as usize + 1]).unwrap();
+        fs::write(&small, b"id,value\n1,2\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for name in ["head", "file"] {
+                let executable = base.join(name);
+                fs::write(&executable, b"#!/bin/sh\ncat observations.csv\n").unwrap();
+                fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+            }
+            std::os::unix::fs::symlink(&large, base.join("large-link.csv")).unwrap();
+        }
+        let session = "session-one";
+
+        let prompt = event(
+            session,
+            "UserPromptSubmit",
+            &base,
+            None,
+            serde_json::Value::Null,
+            Some("Compute the exact aggregate over every record."),
+        );
+        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
+
+        let metadata = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Bash"),
+            serde_json::json!({"command": "/usr/bin/wc -l observations.csv"}),
+            None,
+        );
+        assert_eq!(claude_hook_with_root(&metadata, &root).unwrap(), None);
+        let sample = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Bash"),
+            serde_json::json!({"command": "/usr/bin/head -6 observations.csv; /usr/bin/tail -3 observations.csv"}),
+            None,
+        );
+        assert_eq!(claude_hook_with_root(&sample, &root).unwrap(), None);
+        let oversized_sample = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Bash"),
+            serde_json::json!({"command": "/usr/bin/head -6 observations.csv; /usr/bin/tail -5 observations.csv"}),
+            None,
+        );
+        assert!(
+            claude_hook_with_root(&oversized_sample, &root)
+                .unwrap()
+                .is_some()
+        );
+        for command in [
+            "/usr/bin/head -c 1000001 observations.csv",
+            "cp observations.csv /dev/stdout",
+            "/usr/bin/head -10 observations.csv observations.csv",
+            "/usr/bin/head -1 observations.csv; nl observations.csv",
+            "/usr/bin/head -1 observations.csv",
+            "/usr/bin/head -1 one-line.blob",
+            "/usr/bin/tail -1 one-line.blob",
+            "cat observations",
+            "cat 'space name.data'",
+            "cat 観測資料",
+            "/usr/bin/file -f observations.csv",
+            "/usr/bin/head -1 {observations.csv,small.csv}",
+            "/usr/bin/head -1 ~/outside-large",
+            "/usr/bin/head -1 $TARGET",
+            "/usr/bin/wc -l *.csv",
+            "/usr/bin/file *",
+            "/usr/bin/du -sh *",
+            "head -1 observations.csv",
+            "file observations.csv",
+            "./head -1 observations.csv",
+            "./file observations.csv",
+            "./unknown-reader-with-hardcoded-path",
+        ] {
+            let bypass = event(
+                session,
+                "PreToolUse",
+                &base,
+                Some("Bash"),
+                serde_json::json!({"command": command}),
+                None,
+            );
+            assert!(
+                claude_hook_with_root(&bypass, &root).unwrap().is_some(),
+                "bypass was not denied: {command}"
+            );
+        }
+        let small_scan = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Bash"),
+            serde_json::json!({"command": "python3 scan.py small.csv"}),
+            None,
+        );
+        assert!(
+            claude_hook_with_root(&small_scan, &root).unwrap().is_some(),
+            "unknown broad Bash is fail-closed while a complete large-input task is pending"
+        );
+
+        let broad = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Bash"),
+            serde_json::json!({"command": "python3 scan.py observations.csv"}),
+            None,
+        );
+        let denial = claude_hook_with_root(&broad, &root)
+            .unwrap()
+            .expect("broad large scan must be denied");
+        assert!(denial.contains("permissionDecision"));
+        assert!(denial.contains("Call the Skill tool with azdaja"));
+
+        let bounded_read = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Read"),
+            serde_json::json!({"file_path": large, "limit": 5}),
+            None,
+        );
+        assert!(
+            claude_hook_with_root(&bounded_read, &root)
+                .unwrap()
+                .is_some(),
+            "a second structural sample in one task must be denied"
+        );
+        let broad_read = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Read"),
+            serde_json::json!({"file_path": large}),
+            None,
+        );
+        assert!(claude_hook_with_root(&broad_read, &root).unwrap().is_some());
+        #[cfg(unix)]
+        {
+            let symlink_read = event(
+                session,
+                "PreToolUse",
+                &base,
+                Some("Read"),
+                serde_json::json!({"file_path": base.join("large-link.csv")}),
+                None,
+            );
+            assert!(
+                claude_hook_with_root(&symlink_read, &root)
+                    .unwrap()
+                    .is_some()
+            );
+        }
+
+        let unrelated_prompt = event(
+            session,
+            "UserPromptSubmit",
+            &base,
+            None,
+            serde_json::Value::Null,
+            Some("Summarize this small excerpt only."),
+        );
+        assert_eq!(
+            claude_hook_with_root(&unrelated_prompt, &root).unwrap(),
+            None
+        );
+        assert_eq!(claude_hook_with_root(&broad, &root).unwrap(), None);
+        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
+
+        let unrelated_skill = event(
+            session,
+            "PostToolUse",
+            &base,
+            Some("Skill"),
+            serde_json::json!({"skill": "other"}),
+            None,
+        );
+        assert_eq!(
+            claude_hook_with_root(&unrelated_skill, &root).unwrap(),
+            None
+        );
+        assert!(claude_hook_with_root(&broad, &root).unwrap().is_some());
+        let activation = event(
+            session,
+            "PostToolUse",
+            &base,
+            Some("Skill"),
+            serde_json::json!({"skill": "azdaja"}),
+            None,
+        );
+        assert_eq!(claude_hook_with_root(&activation, &root).unwrap(), None);
+        assert_eq!(claude_hook_with_root(&broad, &root).unwrap(), None);
+        assert_eq!(
+            claude_hook_with_root(&unrelated_prompt, &root).unwrap(),
+            None
+        );
+        assert_eq!(claude_hook_with_root(&broad, &root).unwrap(), None);
+
+        let end = event(
+            session,
+            "SessionEnd",
+            &base,
+            None,
+            serde_json::Value::Null,
+            None,
+        );
+        assert_eq!(claude_hook_with_root(&end, &root).unwrap(), None);
+        assert_eq!(claude_hook_with_root(&broad, &root).unwrap(), None);
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn claude_hook_directories_accumulate_and_traversal_limits_fail_closed() {
+        let base = env::temp_dir().join(format!(
+            "azdaja-claude-hook-directory-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let cumulative = base.join("cumulative");
+        let budgeted = base.join("budgeted");
+        let leaf_scope = base.join("leaf-scope");
+        fs::create_dir_all(&cumulative).unwrap();
+        fs::create_dir_all(&budgeted).unwrap();
+        fs::create_dir_all(&leaf_scope).unwrap();
+        fs::write(leaf_scope.join("a"), vec![b'a'; 600_001]).unwrap();
+        fs::write(leaf_scope.join("b"), vec![b'b'; 600_001]).unwrap();
+        for index in 0..2_000 {
+            fs::write(cumulative.join(format!("part-{index:04}")), vec![b'x'; 600]).unwrap();
+        }
+        for index in 0..10_001 {
+            fs::write(budgeted.join(format!("empty-{index:05}")), b"").unwrap();
+        }
+        let mut deep = base.join("deep");
+        fs::create_dir_all(&deep).unwrap();
+        for index in 0..13 {
+            deep = deep.join(format!("level-{index:02}"));
+            fs::create_dir(&deep).unwrap();
+        }
+        let mut budget = 10_000usize;
+        assert!(claude_hook_path_is_large(&cumulative, &mut budget, 0).unwrap());
+        let mut budget = 10_000usize;
+        assert!(claude_hook_path_is_large(&budgeted, &mut budget, 0).unwrap());
+        let mut budget = 10_000usize;
+        assert!(claude_hook_path_is_large(&base.join("deep"), &mut budget, 0).unwrap());
+
+        let root = base.join("markers");
+        let prompt = event(
+            "session-directory",
+            "UserPromptSubmit",
+            &base,
+            None,
+            serde_json::Value::Null,
+            Some("Compute the exact count for these records."),
+        );
+        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
+        let grep = event(
+            "session-directory",
+            "PreToolUse",
+            &base,
+            Some("Grep"),
+            serde_json::json!({"path": cumulative}),
+            None,
+        );
+        assert!(claude_hook_with_root(&grep, &root).unwrap().is_some());
+        for leaf in [leaf_scope.join("a"), leaf_scope.join("b")] {
+            let read_leaf = event(
+                "session-directory",
+                "PreToolUse",
+                &base,
+                Some("Read"),
+                serde_json::json!({"file_path": leaf, "limit": 1}),
+                None,
+            );
+            assert!(claude_hook_with_root(&read_leaf, &root).unwrap().is_some());
+            let grep_leaf = event(
+                "session-directory",
+                "PreToolUse",
+                &base,
+                Some("Grep"),
+                serde_json::json!({"path": leaf}),
+                None,
+            );
+            assert!(claude_hook_with_root(&grep_leaf, &root).unwrap().is_some());
+        }
+        let aggregate_head = event(
+            "session-directory",
+            "PreToolUse",
+            &base,
+            Some("Bash"),
+            serde_json::json!({"command": "/usr/bin/head -5 leaf-scope/a; /usr/bin/head -5 leaf-scope/b"}),
+            None,
+        );
+        assert!(
+            claude_hook_with_root(&aggregate_head, &root)
+                .unwrap()
+                .is_some()
+        );
+        let expanding_grep = event(
+            "session-directory",
+            "PreToolUse",
+            &base,
+            Some("Grep"),
+            serde_json::json!({"path": "~/outside-large"}),
+            None,
+        );
+        assert!(
+            claude_hook_with_root(&expanding_grep, &root)
+                .unwrap()
+                .is_some()
+        );
+
+        let small_cwd = unique_temp_dir("azdaja-claude-small-cwd");
+        let external_a = unique_temp_dir("azdaja-claude-external-a");
+        let external_b = unique_temp_dir("azdaja-claude-external-b");
+        let disjoint_a = external_a.join("a");
+        let disjoint_b = external_b.join("b");
+        fs::write(&disjoint_a, vec![b'a'; 600_001]).unwrap();
+        fs::write(&disjoint_b, vec![b'b'; 600_001]).unwrap();
+        let disjoint_prompt = event(
+            "session-disjoint",
+            "UserPromptSubmit",
+            &small_cwd,
+            None,
+            serde_json::Value::Null,
+            Some("Aggregate all records from both inputs."),
+        );
+        assert_eq!(
+            claude_hook_with_root(&disjoint_prompt, &root).unwrap(),
+            None
+        );
+        for leaf in [&disjoint_a, &disjoint_b] {
+            let read_leaf = event(
+                "session-disjoint",
+                "PreToolUse",
+                &small_cwd,
+                Some("Read"),
+                serde_json::json!({"file_path": leaf, "limit": 1}),
+                None,
+            );
+            assert!(claude_hook_with_root(&read_leaf, &root).unwrap().is_some());
+            let grep_leaf = event(
+                "session-disjoint",
+                "PreToolUse",
+                &small_cwd,
+                Some("Grep"),
+                serde_json::json!({"path": leaf}),
+                None,
+            );
+            assert!(claude_hook_with_root(&grep_leaf, &root).unwrap().is_some());
+        }
+        let disjoint_head = event(
+            "session-disjoint",
+            "PreToolUse",
+            &small_cwd,
+            Some("Bash"),
+            serde_json::json!({
+                "command": format!(
+                    "/usr/bin/head -5 '{}'; /usr/bin/head -5 '{}'",
+                    disjoint_a.display(),
+                    disjoint_b.display()
+                )
+            }),
+            None,
+        );
+        assert!(
+            claude_hook_with_root(&disjoint_head, &root)
+                .unwrap()
+                .is_some()
+        );
+        fs::remove_dir_all(small_cwd).unwrap();
+        fs::remove_dir_all(external_a).unwrap();
+        fs::remove_dir_all(external_b).unwrap();
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn claude_hook_allows_only_one_byte_bounded_read_sample_per_prompt() {
+        let base = env::temp_dir().join(format!(
+            "azdaja-claude-hook-read-sample-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let root = base.join("markers");
+        fs::create_dir(&base).unwrap();
+        let large = base.join("rows");
+        let long_line = base.join("long-row");
+        let pdf = base.join("large.pdf");
+        let notebook = base.join("large.ipynb");
+        let image = base.join("large.png");
+        let inaccessible = base.join("inaccessible.txt");
+        let short_text =
+            b"short structural row\n".repeat(CLAUDE_HOOK_LARGE_BYTES as usize / 21 + 2);
+        fs::write(&large, &short_text).unwrap();
+        fs::write(&long_line, vec![b'x'; CLAUDE_HOOK_LARGE_BYTES as usize + 1]).unwrap();
+        fs::write(
+            &pdf,
+            [
+                b"%PDF-1.7\n".as_slice(),
+                vec![b'x'; CLAUDE_HOOK_LARGE_BYTES as usize].as_slice(),
+            ]
+            .concat(),
+        )
+        .unwrap();
+        fs::write(
+            &notebook,
+            b"{\"cells\":[]}\n".repeat(CLAUDE_HOOK_LARGE_BYTES as usize / 13 + 2),
+        )
+        .unwrap();
+        fs::write(
+            &image,
+            [
+                b"\x89PNG\r\n\x1a\n".as_slice(),
+                vec![b'x'; CLAUDE_HOOK_LARGE_BYTES as usize].as_slice(),
+            ]
+            .concat(),
+        )
+        .unwrap();
+        fs::write(&inaccessible, &short_text).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&inaccessible, fs::Permissions::from_mode(0o000)).unwrap();
+        }
+        let long_prompt = event(
+            "session-long-read",
+            "UserPromptSubmit",
+            &base,
+            None,
+            serde_json::Value::Null,
+            Some("Compute the exact aggregate over every row."),
+        );
+        assert_eq!(claude_hook_with_root(&long_prompt, &root).unwrap(), None);
+        let long_sample = event(
+            "session-long-read",
+            "PreToolUse",
+            &base,
+            Some("Read"),
+            serde_json::json!({"file_path": long_line, "limit": 1}),
+            None,
+        );
+        assert!(
+            claude_hook_with_root(&long_sample, &root)
+                .unwrap()
+                .is_some()
+        );
+
+        let session = "session-read-sample";
+        let prompt = event(
+            session,
+            "UserPromptSubmit",
+            &base,
+            None,
+            serde_json::Value::Null,
+            Some("Compute the exact aggregate over every row."),
+        );
+        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
+        for invalid_input in [
+            serde_json::json!({"file_path": large, "limit": 0}),
+            serde_json::json!({"file_path": large, "offset": -1, "limit": 5}),
+            serde_json::json!({"file_path": large, "offset": "0", "limit": 5}),
+            serde_json::json!({"file_path": large, "limit": 5, "pages": "1"}),
+            serde_json::json!({"file_path": large, "path": large, "limit": 5}),
+            serde_json::json!({"file_path": "~/outside-large", "limit": 5}),
+            serde_json::json!({"file_path": pdf, "limit": 5}),
+            serde_json::json!({"file_path": notebook, "limit": 5}),
+            serde_json::json!({"file_path": image, "limit": 5}),
+            serde_json::json!({"file_path": inaccessible, "limit": 5}),
+        ] {
+            let invalid = event(
+                session,
+                "PreToolUse",
+                &base,
+                Some("Read"),
+                invalid_input,
+                None,
+            );
+            assert!(claude_hook_with_root(&invalid, &root).unwrap().is_some());
+        }
+        let first = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Read"),
+            serde_json::json!({"file_path": large, "limit": 5}),
+            None,
+        );
+        assert_eq!(claude_hook_with_root(&first, &root).unwrap(), None);
+        let changed_offset = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Read"),
+            serde_json::json!({"file_path": large, "offset": 5, "limit": 5}),
+            None,
+        );
+        assert!(
+            claude_hook_with_root(&changed_offset, &root)
+                .unwrap()
+                .is_some()
+        );
+        assert!(claude_hook_with_root(&first, &root).unwrap().is_some());
+
+        let unrelated = event(
+            session,
+            "UserPromptSubmit",
+            &base,
+            None,
+            serde_json::Value::Null,
+            Some("Summarize this small excerpt only."),
+        );
+        assert_eq!(claude_hook_with_root(&unrelated, &root).unwrap(), None);
+        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
+        assert_eq!(claude_hook_with_root(&first, &root).unwrap(), None);
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn claude_hook_does_not_force_large_bounded_or_noncoverage_work() {
+        let base = env::temp_dir().join(format!(
+            "azdaja-claude-hook-negative-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let root = base.join("markers");
+        fs::create_dir(&base).unwrap();
+        fs::write(
+            base.join("large.jsonl"),
+            vec![b'x'; CLAUDE_HOOK_LARGE_BYTES as usize + 1],
+        )
+        .unwrap();
+        let prompt = event(
+            "session-negative",
+            "UserPromptSubmit",
+            &base,
+            None,
+            serde_json::Value::Null,
+            Some("Show only the first five records."),
+        );
+        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
+        let tool = event(
+            "session-negative",
+            "PreToolUse",
+            &base,
+            Some("Bash"),
+            serde_json::json!({"command": "python3 scan.py large.jsonl"}),
+            None,
+        );
+        assert_eq!(claude_hook_with_root(&tool, &root).unwrap(), None);
+        let small_exact = event(
+            "session-negative",
+            "UserPromptSubmit",
+            &base,
+            None,
+            serde_json::Value::Null,
+            Some("Make this exact small function change."),
+        );
+        assert_eq!(claude_hook_with_root(&small_exact, &root).unwrap(), None);
+        assert_eq!(claude_hook_with_root(&tool, &root).unwrap(), None);
+
+        let installed_prompt = serde_json::json!({
+            "session_id": "session-installed-prompt",
+            "hook_event_name": "UserPromptSubmit",
+            "cwd": base,
+            "tool_input": {},
+            "prompt": "Count every row in the full input."
+        })
+        .to_string();
+        assert_eq!(
+            claude_hook_with_root(&installed_prompt, &root).unwrap(),
+            None
+        );
+        let installed_tool = event(
+            "session-installed-prompt",
+            "PreToolUse",
+            &base,
+            Some("Bash"),
+            serde_json::json!({"command": "python3 scan.py large.jsonl"}),
+            None,
+        );
+        assert!(
+            claude_hook_with_root(&installed_tool, &root)
+                .unwrap()
+                .is_some()
+        );
+        fs::remove_dir_all(base).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod native_hash_tests {
+    use super::*;
+
+    #[test]
+    fn sha256_matches_standard_vectors() {
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        assert_eq!(
+            sha256_hex("🦀é".as_bytes()),
+            "4fe0ad378bf371e07cf31e6a27beb70e31ccf4bff60ae9897e83ffdb9dcef354"
+        );
     }
 }
 

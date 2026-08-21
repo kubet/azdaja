@@ -33,7 +33,7 @@ Azdaja is a recursive language model layer, not a model or agent harness. It kee
 - **Context virtualization:** the root works through variables and computed excerpts instead of receiving the complete source in every request.
 - **Deterministic reduction:** Python handles exact operations before the model handles ambiguous language.
 - **Bare recursion:** subcalls are model calls rather than new agent environments.
-- **Tool adapters:** one managed integration supports Jcode, Claude, Codex, Gemini, and OpenCode.
+- **Tool adapters:** one managed integration supports Jcode, Claude, Codex, Gemini, and OpenCode. Every copy derives from the same default skill contract and adds only tool-specific activation and reload guidance.
 
 ## Install
 

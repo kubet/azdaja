@@ -86,7 +86,15 @@ assert re.findall(r"(?<=alpha=)\d+", text) == ["12", "56"]
 assert re.findall(r"(\w+) \1", "go go stop") == ["go"]
 assert [m.group(0) for m in re.finditer(r"\d+", text)] == ["12", "34", "56"]
 assert re.findall(r"(?i)ALPHA", text) == ["alpha", "alpha"]
-# host error is a catchable Python error
+# native deterministic hash and host errors
+assert sha256("") == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+assert sha256("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+caught = False
+try:
+    sha256(123)
+except RuntimeError:
+    caught = True
+assert caught
 caught = False
 try:
     llm(123)

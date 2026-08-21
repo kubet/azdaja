@@ -38,5 +38,5 @@ toml = "0.9"
 [profile.release]
 lto = "thin"
 strip = true
-panic = "abort"
+panic = "unwind"
 codegen-units = 1

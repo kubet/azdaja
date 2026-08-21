@@ -154,6 +154,110 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
 }
 
 #[test]
+fn claude_activation_rule_is_owned_checked_removed_and_never_clobbers_foreign_content() {
+    let binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
+    let scratch = Scratch::new("claude-rule");
+    let link = scratch.0.join(".claude/rules/azdaja.md");
+    let target = scratch.0.join(".claude/skills/azdaja/ACTIVATION.md");
+    let plugin = scratch
+        .0
+        .join(".claude/skills/azdaja/.claude-plugin/plugin.json");
+    let hooks = scratch.0.join(".claude/skills/azdaja/hooks/hooks.json");
+
+    assert_success(&run(binary, &scratch.0, &["install", "claude"]));
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(fs::read_link(&link).unwrap(), target);
+    let rule = fs::read_to_string(&target).unwrap();
+    assert!(rule.len() <= 400, "rule grew to {} bytes", rule.len());
+    assert!(rule.contains("answer needing complete coverage"));
+    assert!(rule.contains("managed hook blocks broader"));
+    let plugin_text = fs::read_to_string(&plugin).unwrap();
+    let hook_bytes = fs::read(&hooks).unwrap();
+    let hook_text = std::str::from_utf8(&hook_bytes).unwrap();
+    assert!(plugin_text.contains("\"name\": \"azdaja\""));
+    for marker in [
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PostToolUse",
+        "SessionEnd",
+        "${CLAUDE_PLUGIN_ROOT}/azdaja",
+    ] {
+        assert!(hook_text.contains(marker), "missing hook marker {marker}");
+    }
+    assert_success(&run(binary, &scratch.0, &["doctor", "claude"]));
+
+    fs::remove_file(&link).unwrap();
+    let doctor = run(binary, &scratch.0, &["doctor", "claude"]);
+    assert!(!doctor.status.success());
+    assert!(
+        text(&doctor)
+            .0
+            .contains("activation-rule symlink is missing")
+    );
+    assert_success(&run(binary, &scratch.0, &["install", "claude"]));
+    assert_eq!(fs::read_link(&link).unwrap(), target);
+    fs::remove_file(&hooks).unwrap();
+    let doctor = run(binary, &scratch.0, &["doctor", "claude"]);
+    assert!(!doctor.status.success());
+    assert!(text(&doctor).0.contains("managed file missing"));
+    fs::write(&hooks, &hook_bytes).unwrap();
+    assert_success(&run(binary, &scratch.0, &["doctor", "claude"]));
+
+    assert_success(&run(binary, &scratch.0, &["uninstall", "claude"]));
+    assert!(fs::symlink_metadata(&link).is_err());
+    assert!(!target.parent().unwrap().exists());
+
+    fs::create_dir_all(link.parent().unwrap()).unwrap();
+    symlink(&target, &link).unwrap();
+    assert_success(&run(binary, &scratch.0, &["uninstall", "claude"]));
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(fs::read_link(&link).unwrap(), target);
+    fs::remove_file(&link).unwrap();
+
+    fs::write(
+        &link,
+        b"foreign rule
+",
+    )
+    .unwrap();
+    let install = run(binary, &scratch.0, &["install", "claude"]);
+    assert!(!install.status.success());
+    assert_eq!(
+        fs::read(&link).unwrap(),
+        b"foreign rule
+"
+    );
+    assert!(!target.parent().unwrap().exists());
+
+    fs::remove_file(&link).unwrap();
+    assert_success(&run(binary, &scratch.0, &["install", "claude"]));
+    fs::remove_file(&link).unwrap();
+    fs::write(
+        &link,
+        b"foreign replacement
+",
+    )
+    .unwrap();
+    assert_success(&run(binary, &scratch.0, &["uninstall", "claude"]));
+    assert_eq!(
+        fs::read(&link).unwrap(),
+        b"foreign replacement
+"
+    );
+    assert!(!target.parent().unwrap().exists());
+}
+
+#[test]
 fn legacy_target_flag_remains_compatible_but_hidden_from_help() {
     let scratch = Scratch::new("legacy-target-compatibility");
     let binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
@@ -843,6 +947,46 @@ fn late_unknown_and_changed_targets_abort_without_touching_other_selected_surfac
     assert!(!output.status.success());
     assert!(text(&output).1.contains("changed file"));
     assert_eq!(selected_snapshots(&scratch.0), expected);
+    assert!(lifecycle_artifacts(&scratch.0).is_empty());
+}
+
+#[test]
+fn late_foreign_claude_rule_aborts_before_managed_target_commit() {
+    let scratch = Scratch::new("late-claude-rule-change");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_azdaja"));
+    assert_success(&run(&binary, &scratch.0, &["install", "claude"]));
+    let target = scratch.0.join(".claude/skills/azdaja");
+    let skill = target.join("SKILL.md");
+    let link = scratch.0.join(".claude/rules/azdaja.md");
+    let target_inode = fs::symlink_metadata(&target).unwrap().ino();
+    let skill_inode = fs::symlink_metadata(&skill).unwrap().ino();
+    let skill_bytes = fs::read(&skill).unwrap();
+
+    let barrier = scratch.0.join("claude-rule-late");
+    let barrier_value = barrier.to_string_lossy().into_owned();
+    let ready = PathBuf::from(format!("{barrier_value}.ready"));
+    let go = PathBuf::from(format!("{barrier_value}.go"));
+    let home = scratch.0.clone();
+    let install_binary = binary.clone();
+    let install = thread::spawn(move || {
+        run_with_lifecycle_env(
+            &install_binary,
+            &home,
+            &["install", "claude"],
+            &[("AZDAJA_LIFECYCLE_TEST_BARRIER", &barrier_value)],
+        )
+    });
+    wait_for_barrier(&ready);
+    fs::remove_file(&link).unwrap();
+    fs::write(&link, b"foreign replacement").unwrap();
+    fs::write(&go, b"go").unwrap();
+    let output = install.join().unwrap();
+    assert!(!output.status.success());
+    assert!(text(&output).1.contains("activation-rule"));
+    assert_eq!(fs::read(&link).unwrap(), b"foreign replacement");
+    assert_eq!(fs::symlink_metadata(&target).unwrap().ino(), target_inode);
+    assert_eq!(fs::symlink_metadata(&skill).unwrap().ino(), skill_inode);
+    assert_eq!(fs::read(&skill).unwrap(), skill_bytes);
     assert!(lifecycle_artifacts(&scratch.0).is_empty());
 }
 

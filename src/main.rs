@@ -4,7 +4,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use azdaja::{
     Config, DEFAULT_CONFIG, EnteredTurnBudget, ExecFailureKind, MONTY_VERSION, RootDriver,
     SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS, SKILL, SoloSession, VERSION, call_model,
-    capability_check, config_error_report, exec, final_answer, kill, list, load,
+    capability_check, claude_hook, config_error_report, exec, final_answer, kill, list, load,
     model_trace_request_id, model_transport_error_category, model_transport_error_is_transient,
     provider_interrupt_exit_status, provider_interrupted, start,
 };
@@ -13,6 +13,7 @@ use monty::MontyRun;
 use monty_types::CompileOptions;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeSet,
     env, fs,
     io::{self, IsTerminal, Read, Write},
     path::{Path, PathBuf},
@@ -375,6 +376,14 @@ fn run() -> Result<bool> {
             println!("killed {}", args[1])
         }
         "doctor" => return doctor(&args),
+        "claude-hook" => {
+            exact(&args, 1, "claude-hook")?;
+            let mut input = String::new();
+            io::stdin().read_to_string(&mut input)?;
+            if let Some(decision) = claude_hook(&input)? {
+                print!("{decision}");
+            }
+        }
         "install" => install_cmd(&args)?,
         "uninstall" => uninstall_cmd(&args)?,
         "solo" => {
@@ -405,7 +414,7 @@ fn doctor(args: &[String]) -> Result<bool> {
         exact(args, 2, "doctor")?;
         println!(
             "{}",
-            serde_json::json!({"azdaja":VERSION,"monty":MONTY_VERSION,"dump_version":monty::DUMP_VERSION,"capabilities":["persistent-repl","snapshots","external-functions","re","json","datetime","monty-os-calls-denied"]})
+            serde_json::json!({"azdaja":VERSION,"monty":MONTY_VERSION,"dump_version":monty::DUMP_VERSION,"capabilities":["persistent-repl","snapshots","external-functions","native-sha256","re","json","datetime","monty-os-calls-denied"]})
         );
         return Ok(true);
     }
@@ -590,6 +599,184 @@ fn target(home: &Path, h: &str) -> Result<PathBuf> {
         _ => xdg_config_root(home).join("opencode/skills/azdaja"),
     })
 }
+fn claude_rule_link(home: &Path) -> PathBuf {
+    home.join(".claude/rules/azdaja.md")
+}
+
+fn claude_rule_target(home: &Path) -> Result<PathBuf> {
+    Ok(target(home, "claude")?.join("ACTIVATION.md"))
+}
+
+struct ClaudeRuleLinkPlan {
+    link: PathBuf,
+    target: PathBuf,
+    existing: bool,
+    existing_ancestor: (PathBuf, fs::File),
+}
+
+fn validate_claude_rule_symlink(link: &Path, target: &Path) -> Result<bool> {
+    match fs::symlink_metadata(link) {
+        Ok(metadata) => {
+            if !metadata.file_type().is_symlink() {
+                bail!(
+                    "refusing occupied Claude activation-rule path: {}",
+                    link.display()
+                )
+            }
+            if fs::read_link(link)? != target {
+                bail!(
+                    "refusing Claude activation-rule symlink with a foreign target: {}",
+                    link.display()
+                )
+            }
+            Ok(true)
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn preflight_claude_rule_link(home: &Path) -> Result<ClaudeRuleLinkPlan> {
+    let link = claude_rule_link(home);
+    let target = claude_rule_target(home)?;
+    let existing = validate_claude_rule_symlink(&link, &target)?;
+    let existing_ancestor = nearest_existing_install_ancestor(&link)?;
+    Ok(ClaudeRuleLinkPlan {
+        link,
+        target,
+        existing,
+        existing_ancestor,
+    })
+}
+
+fn ensure_claude_rule_parent(
+    plan: &ClaudeRuleLinkPlan,
+    created: &mut CreatedInstallParents,
+) -> Result<fs::File> {
+    let parent = plan
+        .link
+        .parent()
+        .ok_or_else(|| anyhow!("Claude rule link has no parent"))?;
+    let (ancestor_path, ancestor_directory) = &plan.existing_ancestor;
+    validate_install_directory_binding(ancestor_directory, ancestor_path)?;
+    let mut missing = Vec::new();
+    let mut current = parent.to_path_buf();
+    while current != *ancestor_path {
+        missing.push(current.clone());
+        current = current
+            .parent()
+            .ok_or_else(|| anyhow!("Claude rule ancestry changed before staging"))?
+            .to_path_buf();
+    }
+    for path in missing.into_iter().rev() {
+        if path_entry_exists(&path)? {
+            if created.validate_owned(&path)? {
+                continue;
+            }
+            bail!(
+                "Claude rule ancestry changed before staging: {}",
+                path.display()
+            )
+        }
+        created.push(OwnedInstallDirectory::create_exact(path, false)?);
+    }
+    validate_install_directory_binding(ancestor_directory, ancestor_path)?;
+    open_install_directory(parent).context("refusing unsafe Claude rule parent")
+}
+
+fn revalidate_claude_rule_plan(plan: &ClaudeRuleLinkPlan) -> Result<()> {
+    validate_install_directory_binding(&plan.existing_ancestor.1, &plan.existing_ancestor.0)?;
+    let current = validate_claude_rule_symlink(&plan.link, &plan.target)?;
+    if current != plan.existing {
+        bail!("Claude activation-rule path changed during lifecycle preflight")
+    }
+    Ok(())
+}
+
+fn validate_claude_rule_commit_state(plan: &ClaudeRuleLinkPlan) -> Result<()> {
+    validate_install_directory_binding(&plan.existing_ancestor.1, &plan.existing_ancestor.0)?;
+    if !validate_claude_rule_symlink(&plan.link, &plan.target)? {
+        bail!("Claude activation-rule symlink disappeared during install")
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn create_claude_rule_symlink(target: &Path, link: &Path) -> Result<()> {
+    std::os::unix::fs::symlink(target, link)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn create_claude_rule_symlink(target: &Path, link: &Path) -> Result<()> {
+    std::os::windows::fs::symlink_file(target, link)?;
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn create_claude_rule_symlink(_: &Path, _: &Path) -> Result<()> {
+    bail!("Claude activation-rule symlinks are unsupported on this platform")
+}
+
+fn stage_claude_rule_link(
+    plan: &ClaudeRuleLinkPlan,
+    created: &mut CreatedInstallParents,
+) -> Result<bool> {
+    let parent = ensure_claude_rule_parent(plan, created)?;
+    revalidate_claude_rule_plan(plan)?;
+    if plan.existing {
+        return Ok(false);
+    }
+    validate_install_directory_binding(
+        &parent,
+        plan.link.parent().expect("Claude rule link has a parent"),
+    )?;
+    create_claude_rule_symlink(&plan.target, &plan.link)?;
+    if !validate_claude_rule_symlink(&plan.link, &plan.target)? {
+        bail!("Claude activation-rule symlink was not created")
+    }
+    Ok(true)
+}
+
+fn rollback_claude_rule_link(plan: &ClaudeRuleLinkPlan, created: bool) -> Result<()> {
+    if !created {
+        return Ok(());
+    }
+    if !validate_claude_rule_symlink(&plan.link, &plan.target)? {
+        bail!("Claude activation-rule symlink disappeared during rollback")
+    }
+    fs::remove_file(&plan.link)?;
+    Ok(())
+}
+
+fn validate_claude_rule_install(home: &Path) -> Result<()> {
+    let link = claude_rule_link(home);
+    let target = claude_rule_target(home)?;
+    if !validate_claude_rule_symlink(&link, &target)? {
+        bail!(
+            "Claude activation-rule symlink is missing: {}",
+            link.display()
+        )
+    }
+    if read_install_regular(&target)? != render_claude_activation_rule().as_bytes() {
+        bail!("Claude activation-rule content is not exact")
+    }
+    let integration = target
+        .parent()
+        .ok_or_else(|| anyhow!("Claude activation-rule target has no parent"))?;
+    if read_install_regular(&integration.join(".claude-plugin/plugin.json"))?
+        != render_claude_plugin_manifest().as_bytes()
+    {
+        bail!("Claude plugin manifest content is not exact")
+    }
+    if read_install_regular(&integration.join("hooks/hooks.json"))?
+        != render_claude_hooks().as_bytes()
+    {
+        bail!("Claude hook configuration is not exact")
+    }
+    Ok(())
+}
+
 fn adapter(h: &str) -> (&'static str, &'static str) {
     match h {
         "claude" => ("claude -p --model {model}", "haiku"),
@@ -602,6 +789,151 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
         _ => ("jcode-api", "gpt-5.6-luna"),
     }
 }
+
+const DEFAULT_SKILL_DESCRIPTION: &str = "Use for questions over inputs too large to read safely into the root context (large logs, dumps, repositories, transcripts, or diffs), and when the user explicitly asks whether Azdaja or the az virtual-memory tool is installed or available, or how to use it.";
+
+const CLAUDE_ACTIVATION_RULE: &str = r#"For an answer needing complete coverage of input too large for one `Read`, call `Skill` with `azdaja` before broad access. Metadata and one structural sample up to 10 lines, 64 KiB may precede. Those use absolute `/usr/bin/...` or `/bin/...` and literal paths. The managed hook blocks broader `Read`, `Grep`, or `Bash` until activation. Otherwise do not invoke it. Discovery is not invocation.
+"#;
+
+const CLAUDE_HOOKS: &str = r#"{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/azdaja",
+            "args": ["claude-hook"],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/azdaja",
+            "args": ["claude-hook"],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/azdaja",
+            "args": ["claude-hook"],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/azdaja",
+            "args": ["claude-hook"],
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+"#;
+
+fn render_claude_activation_rule() -> String {
+    CLAUDE_ACTIVATION_RULE.to_owned()
+}
+
+fn render_claude_plugin_manifest() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "name": "azdaja",
+        "version": VERSION,
+        "description": "Deterministically routes broad large-input work through the managed Azdaja skill."
+    }))
+    .expect("static Claude plugin manifest")
+        + "
+"
+}
+
+fn render_claude_hooks() -> String {
+    CLAUDE_HOOKS.to_owned()
+}
+
+fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> {
+    match harness {
+        "jcode" => Some((
+            "Jcode",
+            "In Jcode, select the `azdaja` skill before broad manual reads. If this skill was installed after the session started, reload all skills from `/skills` or restart Jcode, then select `azdaja`.",
+        )),
+        "claude" => Some((
+            "Claude Code",
+            "Claude's always-loaded Azdaja rule invokes this skill before qualifying input access. Load each input once; feed cells with a `cat` heredoc, never `python | exec`; choose a source-specific parser from its header and one record; prefer one compact deterministic `exec`; use native `sha256(text)` for hashes. If a full scan risks the cell deadline, initialize aggregates once and batch bounded, disjoint physical-record ranges in one Bash call. Retain only needed aggregates and evidence; never embed filtered or full source rows unless explicitly requested; an explorer does not imply that request. Before shipping, mechanically verify requested JSON types, full-source accounting, and verbatim decisive quotes; call `FINAL` once, then `final` and `kill` once each.",
+        )),
+        "codex" => Some((
+            "Codex",
+            "In Codex, activate the `azdaja` skill before broad manual reads or shell sampling. Use the exact managed binary path below for every Azdaja command.",
+        )),
+        "gemini" => Some((
+            "Gemini",
+            "In Gemini, activate the `azdaja` skill before broad manual reads or shell sampling. Use the exact managed binary path below for every Azdaja command.",
+        )),
+        "opencode" => Some((
+            "OpenCode",
+            "Load `azdaja` with OpenCode's native `skill` tool before qualifying input access. Load each input once; feed cells with a `cat` heredoc, never `python | exec`; choose a source-specific parser from its header and one record; prefer one compact deterministic `exec`; use native `sha256(text)` for hashes. If a full scan risks the cell deadline, initialize aggregates once and batch bounded, disjoint physical-record ranges in one shell call. Retain only needed aggregates and evidence; never embed filtered or full source rows unless explicitly requested; an explorer does not imply that request. While extracting, retain the shortest decisive verbatim source span for each reported conclusion in a bounded quote list; copy each span unchanged exactly once into final evidence. Before shipping, fail preflight unless requested JSON types and full-source accounting are correct and every retained quote occurs byte-for-byte in a deliverable; call `FINAL` once, then `final` and `kill` once each.",
+        )),
+        _ => None,
+    }
+}
+
+fn harness_skill_description(harness: &str, display: &str) -> String {
+    match harness {
+        "claude" | "opencode" => "Uses Azdaja, the installed local az virtual-memory tool, when an answer needs complete coverage of an input too large for one normal tool read, such as exact counts or aggregation over a multi-megabyte or high-row-count file. Also use when asked whether Azdaja is installed or available, or how to use it. Do not use for fitting inputs, bounded excerpts, or ordinary repository work.".to_owned(),
+        _ => format!(
+            "Use Azdaja, the installed and available local az virtual-memory tool, for inputs too large to read safely such as large logs, archives, repositories, transcripts, dumps, or diffs, whenever the user asks how to use it, and proactively before broad manual reading in {display}."
+        ),
+    }
+}
+
+fn render_managed_skill(harness: &str, binary: &Path) -> String {
+    let default_description = format!("description: {DEFAULT_SKILL_DESCRIPTION}");
+    let mut skill = SKILL.to_owned();
+    if let Some((display, guidance)) = harness_skill_profile(harness) {
+        let description = format!(
+            "description: {}",
+            harness_skill_description(harness, display)
+        );
+        skill = skill.replacen(&default_description, &description, 1);
+        let activation = format!(
+            "# Azdaja {{{{VERSION}}}}
+
+## Harness activation: {display}
+
+{guidance}
+"
+        );
+        skill = skill.replacen(
+            "# Azdaja {{VERSION}}
+",
+            &activation,
+            1,
+        );
+    }
+    skill
+        .replace("{{VERSION}}", VERSION)
+        .replace("{{BIN}}", &shell_quote(binary))
+}
+
 fn harness_display_name(harness: &str) -> &'static str {
     match harness {
         "jcode" => "Jcode",
@@ -627,6 +959,7 @@ fn harness_reload_instruction(selected: &[&str]) -> String {
             "in Jcode run skill_manage reload_all or /skills -> Reload all (or restart Jcode)"
                 .into()
         }
+        "claude" => "restart Claude to load its skill, user rule, and hook".into(),
         harness => format!(
             "restart {} to reload its skills",
             harness_display_name(harness)
@@ -965,6 +1298,16 @@ impl CreatedInstallParents {
         self.0.push(directory);
     }
 
+    fn validate_owned(&self, path: &Path) -> Result<bool> {
+        for directory in &self.0 {
+            if directory.path == path {
+                directory.validate_at(path)?;
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     fn disarm(&mut self) {
         for directory in &mut self.0 {
             directory.disarm();
@@ -1190,6 +1533,9 @@ fn ensure_install_parent(
         }
         for path in missing.into_iter().rev() {
             if path_entry_exists(&path)? {
+                if created.validate_owned(&path)? {
+                    continue;
+                }
                 bail!(
                     "install ancestry changed before staging: {}",
                     path.display()
@@ -1266,9 +1612,7 @@ fn stage_install(
     let final_bin = plan
         .dst
         .join(bin.file_name().expect("staged binary has a name"));
-    let skill = SKILL
-        .replace("{{VERSION}}", VERSION)
-        .replace("{{BIN}}", &shell_quote(&final_bin));
+    let skill = render_managed_skill(plan.harness, &final_bin);
     fs::write(stage_path.join("SKILL.md"), skill)?;
     fs::write(
         stage_path.join("config.toml"),
@@ -1276,7 +1620,7 @@ fn stage_install(
             .clone()
             .unwrap_or(toml::to_string_pretty(&plan.cfg)?.into_bytes()),
     )?;
-    let files = [
+    let mut files = vec![
         bin.file_name()
             .expect("staged binary has a name")
             .to_string_lossy()
@@ -1284,6 +1628,24 @@ fn stage_install(
         "SKILL.md".into(),
         "config.toml".into(),
     ];
+    if plan.harness == "claude" {
+        fs::write(
+            stage_path.join("ACTIVATION.md"),
+            render_claude_activation_rule(),
+        )?;
+        fs::create_dir(stage_path.join(".claude-plugin"))?;
+        fs::write(
+            stage_path.join(".claude-plugin/plugin.json"),
+            render_claude_plugin_manifest(),
+        )?;
+        fs::create_dir(stage_path.join("hooks"))?;
+        fs::write(stage_path.join("hooks/hooks.json"), render_claude_hooks())?;
+        files.extend([
+            "ACTIVATION.md".into(),
+            ".claude-plugin/plugin.json".into(),
+            "hooks/hooks.json".into(),
+        ]);
+    }
     let manifest = Manifest {
         files: files
             .iter()
@@ -1384,7 +1746,10 @@ fn make_prior_install_removable(directory: &fs::File, path: &Path) -> Result<()>
     validate_install_directory_binding(directory, path)
 }
 
-fn commit_install_transaction(staged: &mut [StagedInstall]) -> Result<()> {
+fn commit_install_transaction(
+    staged: &mut [StagedInstall],
+    claude_rule: Option<&ClaudeRuleLinkPlan>,
+) -> Result<()> {
     // Allocate every same-filesystem quarantine before the first target rename.
     for install in staged.iter_mut() {
         if install.plan.existing_directory.is_some() {
@@ -1404,6 +1769,9 @@ fn commit_install_transaction(staged: &mut [StagedInstall]) -> Result<()> {
     for install in staged.iter() {
         revalidate_install_plan(&install.plan)?;
         install.stage.validate_at(&install.stage.path)?;
+    }
+    if let Some(plan) = claude_rule {
+        validate_claude_rule_commit_state(plan)?;
     }
 
     let mut failpoint = LifecycleFailpoint::from_env();
@@ -1435,6 +1803,12 @@ fn commit_install_transaction(staged: &mut [StagedInstall]) -> Result<()> {
         for install in staged.iter() {
             install.stage.validate_at(&install.plan.dst)?;
             validate_install(&install.plan.dst, true)?;
+        }
+        if let Some(plan) = claude_rule {
+            validate_claude_rule_commit_state(plan)?;
+            if read_install_regular(&plan.target)? != render_claude_activation_rule().as_bytes() {
+                bail!("Claude activation-rule content does not match the installed profile")
+            }
         }
         Ok(())
     })();
@@ -1513,11 +1887,17 @@ fn install_cmd(args: &[String]) -> Result<()> {
     for &harness in &selected {
         initial_plans.push(preflight_install(&home, harness)?);
     }
+    let initial_claude_rule = if selected.contains(&"claude") {
+        Some(preflight_claude_rule_link(&home)?)
+    } else {
+        None
+    };
     if preflight_only {
         return Ok(());
     }
 
     drop(initial_plans);
+    drop(initial_claude_rule);
     let _lifecycle_lock = acquire_lifecycle_lock(&home)?;
     // A waiting concurrent invocation may have changed the selected set. The
     // locked preflight is authoritative and the lock remains held through
@@ -1526,6 +1906,11 @@ fn install_cmd(args: &[String]) -> Result<()> {
     for &harness in &selected {
         plans.push(preflight_install(&home, harness)?);
     }
+    let claude_rule = if selected.contains(&"claude") {
+        Some(preflight_claude_rule_link(&home)?)
+    } else {
+        None
+    };
     for plan in &plans {
         capability_check(&plan.cfg)?;
     }
@@ -1537,8 +1922,23 @@ fn install_cmd(args: &[String]) -> Result<()> {
         staged.push(stage_install(plan, &exe, &mut created_parents)?);
     }
     // No selected target has been renamed until every selected target is
-    // successfully preflighted, capability-checked, and fully staged.
-    commit_install_transaction(&mut staged)?;
+    // successfully preflighted, capability-checked, and fully staged. The
+    // Claude rule is a symlink to the staged integration's stable final path;
+    // create it inside the same rollback boundary.
+    let claude_rule_created = match &claude_rule {
+        Some(plan) => stage_claude_rule_link(plan, &mut created_parents)?,
+        None => false,
+    };
+    if let Err(error) = commit_install_transaction(&mut staged, claude_rule.as_ref()) {
+        if let Some(plan) = &claude_rule
+            && let Err(rollback) = rollback_claude_rule_link(plan, claude_rule_created)
+        {
+            return Err(error.context(format!(
+                "Claude activation-rule rollback failed: {rollback:#}"
+            )));
+        }
+        return Err(error);
+    }
     created_parents.disarm();
 
     let written = staged
@@ -1652,13 +2052,69 @@ fn read_manifest(dst: &Path) -> Result<Manifest> {
         .map(|(name, _)| name.as_str())
         .collect();
     names.sort_unstable();
-    let mut expected = vec![binary, "SKILL.md", "config.toml"];
-    expected.sort_unstable();
-    if names != expected {
-        bail!("managed marker does not name exactly the Azdaja skill files")
+    let mut base = vec![binary, "SKILL.md", "config.toml"];
+    base.sort_unstable();
+    let mut with_claude_rule = base.clone();
+    with_claude_rule.push("ACTIVATION.md");
+    with_claude_rule.sort_unstable();
+    let mut with_claude_plugin = with_claude_rule.clone();
+    with_claude_plugin.extend([".claude-plugin/plugin.json", "hooks/hooks.json"]);
+    with_claude_plugin.sort_unstable();
+    if names != base && names != with_claude_rule && names != with_claude_plugin {
+        bail!("managed marker does not name exactly a supported Azdaja skill file set")
     }
     Ok(manifest)
 }
+fn managed_entry_set(root: &Path) -> Result<BTreeSet<PathBuf>> {
+    fn visit(root: &Path, directory: &Path, entries: &mut BTreeSet<PathBuf>) -> Result<()> {
+        for entry in fs::read_dir(directory)? {
+            let entry = entry?;
+            let path = entry.path();
+            let relative = path
+                .strip_prefix(root)
+                .context("managed entry escaped its root")?
+                .to_path_buf();
+            let metadata = fs::symlink_metadata(&path)?;
+            if metadata.file_type().is_symlink() {
+                bail!("managed directory contains a symlink: {}", path.display())
+            }
+            if metadata.file_type().is_dir() {
+                entries.insert(relative);
+                visit(root, &path, entries)?;
+            } else if metadata.file_type().is_file() {
+                entries.insert(relative);
+            } else {
+                bail!(
+                    "managed directory contains a special file: {}",
+                    path.display()
+                )
+            }
+        }
+        Ok(())
+    }
+
+    let mut entries = BTreeSet::new();
+    visit(root, root, &mut entries)?;
+    Ok(entries)
+}
+
+fn expected_managed_entry_set(manifest: &Manifest) -> BTreeSet<PathBuf> {
+    let mut expected = BTreeSet::from([PathBuf::from(".azdaja-managed")]);
+    for (name, _) in &manifest.files {
+        let file = PathBuf::from(name);
+        expected.insert(file.clone());
+        let mut parent = file.parent();
+        while let Some(directory) = parent {
+            if directory.as_os_str().is_empty() {
+                break;
+            }
+            expected.insert(directory.to_path_buf());
+            parent = directory.parent();
+        }
+    }
+    expected
+}
+
 fn validate_install(dst: &Path, allow_config_change: bool) -> Result<()> {
     let _directory = open_install_directory(dst)
         .context("refusing to modify unowned or unsafe skill directory")?;
@@ -1673,10 +2129,9 @@ fn validate_install(dst: &Path, allow_config_change: bool) -> Result<()> {
             bail!("refusing to modify changed file: {}", path.display())
         }
     }
-    let entries = fs::read_dir(dst)?.collect::<io::Result<Vec<_>>>()?;
-    if entries.len() != manifest.files.len() + 1 {
+    if managed_entry_set(dst)? != expected_managed_entry_set(&manifest) {
         bail!(
-            "refusing to modify directory with unknown files: {}",
+            "refusing to modify directory with unknown files or missing managed entries: {}",
             dst.display()
         )
     }
@@ -1755,12 +2210,31 @@ fn validate_skill_custody(dst: &Path) -> Result<()> {
     Ok(())
 }
 
+fn validate_harness_skill_profile(dst: &Path, harness: &str) -> Result<()> {
+    let skill = String::from_utf8(read_install_regular(&dst.join("SKILL.md"))?)
+        .context("managed SKILL.md is not UTF-8")?;
+    let (display, guidance) = harness_skill_profile(harness)
+        .ok_or_else(|| anyhow!("unknown harness profile {harness}"))?;
+    if !skill.contains(&format!("## Harness activation: {display}")) || !skill.contains(guidance) {
+        bail!("managed SKILL.md lacks the {display} activation profile")
+    }
+    Ok(())
+}
+
 fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
     let home = home()?;
     let mut passed = true;
     for &harness in selected {
         let dst = target(&home, harness)?;
-        match validate_skill_custody(&dst) {
+        match validate_skill_custody(&dst)
+            .and_then(|()| validate_harness_skill_profile(&dst, harness))
+            .and_then(|()| {
+                if harness == "claude" {
+                    validate_claude_rule_install(&home)
+                } else {
+                    Ok(())
+                }
+            }) {
             Ok(()) => println!(
                 "PASS {harness}: managed Azdaja skill is installed on disk at {}",
                 dst.display()
@@ -1773,6 +2247,10 @@ fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
         if harness == "jcode" {
             println!(
                 "INFO jcode: an already-open Jcode session may cache the old registry; run skill_manage reload_all or /skills -> Reload all, or start a fresh Jcode session"
+            );
+        } else if harness == "claude" {
+            println!(
+                "INFO claude: restart Claude after install to load the managed skill, user rule, and hook plugin"
             );
         } else {
             println!(
@@ -1788,6 +2266,105 @@ struct HarnessRemoval {
     harness: &'static str,
     path: PathBuf,
     directory: Option<fs::File>,
+}
+
+struct ClaudeRuleRemoval {
+    link: PathBuf,
+    target: PathBuf,
+    parent: fs::File,
+}
+
+struct QuarantinedClaudeRule {
+    removal: ClaudeRuleRemoval,
+    quarantine: OwnedInstallDirectory,
+    previous: PathBuf,
+    moved: bool,
+}
+
+fn preflight_claude_rule_removal(home: &Path) -> Result<Option<ClaudeRuleRemoval>> {
+    let link = claude_rule_link(home);
+    let target = claude_rule_target(home)?;
+    let metadata = match fs::symlink_metadata(&link) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    // A foreign entry is not ours to remove. Doctor reports it, while
+    // uninstall leaves it byte-for-byte untouched.
+    if !metadata.file_type().is_symlink() || fs::read_link(&link)? != target {
+        return Ok(None);
+    }
+    let Some(integration) = target.parent() else {
+        return Ok(None);
+    };
+    if validate_install(integration, true).is_err() {
+        return Ok(None);
+    }
+    let parent_path = link
+        .parent()
+        .ok_or_else(|| anyhow!("Claude rule link has no parent"))?;
+    let parent = open_install_directory(parent_path)
+        .context("refusing unsafe Claude activation-rule parent")?;
+    Ok(Some(ClaudeRuleRemoval {
+        link,
+        target,
+        parent,
+    }))
+}
+
+fn quarantine_claude_rule(
+    removal: Option<ClaudeRuleRemoval>,
+) -> Result<Option<QuarantinedClaudeRule>> {
+    let Some(removal) = removal else {
+        return Ok(None);
+    };
+    let parent_path = removal
+        .link
+        .parent()
+        .expect("Claude rule link has a parent");
+    validate_install_directory_binding(&removal.parent, parent_path)?;
+    if !validate_claude_rule_symlink(&removal.link, &removal.target)? {
+        bail!("Claude activation-rule symlink disappeared before uninstall")
+    }
+    let quarantine = OwnedInstallDirectory::create(parent_path, "azdaja-backup", false)?;
+    let previous = quarantine.path.join("previous");
+    install_rename_noreplace(&removal.link, &previous)?;
+    if fs::read_link(&previous)? != removal.target {
+        let _ = install_rename_noreplace(&previous, &removal.link);
+        bail!("Claude activation-rule target changed during uninstall")
+    }
+    Ok(Some(QuarantinedClaudeRule {
+        removal,
+        quarantine,
+        previous,
+        moved: true,
+    }))
+}
+
+fn rollback_claude_rule_removal(removal: &mut QuarantinedClaudeRule) -> Result<()> {
+    if !removal.moved {
+        return Ok(());
+    }
+    if path_entry_exists(&removal.removal.link)? {
+        bail!("another entry occupies the Claude activation-rule path")
+    }
+    if fs::read_link(&removal.previous)? != removal.removal.target {
+        bail!("quarantined Claude activation-rule target changed")
+    }
+    install_rename_noreplace(&removal.previous, &removal.removal.link)?;
+    removal.moved = false;
+    removal.quarantine.remove_now()?;
+    Ok(())
+}
+
+fn commit_claude_rule_removal(removal: &mut QuarantinedClaudeRule) -> Result<()> {
+    if fs::read_link(&removal.previous)? != removal.removal.target {
+        bail!("quarantined Claude activation-rule target changed")
+    }
+    fs::remove_file(&removal.previous)?;
+    removal.moved = false;
+    removal.quarantine.remove_now()?;
+    Ok(())
 }
 
 fn preflight_harness_removals(
@@ -2636,12 +3213,18 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
     // First complete preflight is read-only, including standalone custody when
     // selected. An unowned refusal therefore cannot create a HOME lock entry.
     let initial_removals = preflight_harness_removals(&selected, &home)?;
+    let initial_claude_rule = if selected.contains(&"claude") {
+        preflight_claude_rule_removal(&home)?
+    } else {
+        None
+    };
     let initial_standalone = if remove_standalone {
         Some(preflight_standalone_removal(&home)?)
     } else {
         None
     };
     drop(initial_removals);
+    drop(initial_claude_rule);
     drop(initial_standalone);
     let _lifecycle_lock = acquire_lifecycle_lock(&home)?;
     let _document_lifecycle_lock = if remove_standalone {
@@ -2652,6 +3235,11 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
 
     // The locked preflight is authoritative after any prior waiter completes.
     let removals = preflight_harness_removals(&selected, &home)?;
+    let claude_rule_removal = if selected.contains(&"claude") {
+        preflight_claude_rule_removal(&home)?
+    } else {
+        None
+    };
     let standalone = if remove_standalone {
         Some(preflight_standalone_removal(&home)?)
     } else {
@@ -2680,12 +3268,46 @@ fn uninstall_cmd(args: &[String]) -> Result<()> {
             return Err(error);
         }
     };
+    let mut quarantined_claude_rule = match quarantine_claude_rule(claude_rule_removal) {
+        Ok(removal) => removal,
+        Err(error) => {
+            if let Err(rollback) = rollback_harness_removals(&mut quarantined_harnesses) {
+                return Err(error.context(format!(
+                    "tool-integration uninstall rollback failed: {rollback:#}"
+                )));
+            }
+            if let Some(removal) = &mut quarantined_standalone
+                && let Err(rollback) = rollback_standalone_removal(removal)
+            {
+                return Err(error.context(format!(
+                    "standalone uninstall rollback failed: {rollback:#}"
+                )));
+            }
+            return Err(error);
+        }
+    };
 
     // Every selected original path has now moved to a same-filesystem
     // quarantine. This is the transaction commit point; cleanup touches only
     // the fully revalidated quarantines and never follows a path supplied by a
     // foreign owner.
-    let mut outcomes = commit_harness_removals(&mut quarantined_harnesses)?;
+    let mut outcomes = match commit_harness_removals(&mut quarantined_harnesses) {
+        Ok(outcomes) => outcomes,
+        Err(error) => {
+            if let Some(removal) = &mut quarantined_claude_rule
+                && let Err(rollback) = rollback_claude_rule_removal(removal)
+            {
+                return Err(error.context(format!(
+                    "Claude activation-rule rollback failed: {rollback:#}"
+                )));
+            }
+            return Err(error);
+        }
+    };
+    if let Some(removal) = &mut quarantined_claude_rule {
+        commit_claude_rule_removal(removal)?;
+        outcomes.push("claude activation rule".into());
+    }
     if let Some(removal) = &mut quarantined_standalone {
         commit_standalone_removal(removal)?;
         outcomes.push("standalone and documents".into());
@@ -3874,6 +4496,111 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn managed_skill_profiles_are_harness_specific_and_default_is_reset_source() {
+        let binary = Path::new("/managed/azdaja");
+        let default_rendered = SKILL
+            .replace("{{VERSION}}", VERSION)
+            .replace("{{BIN}}", &shell_quote(binary));
+        assert_eq!(render_managed_skill("default", binary), default_rendered);
+
+        for (harness, display, marker) in [
+            ("jcode", "Jcode", "reload all skills"),
+            ("claude", "Claude Code", "always-loaded Azdaja rule"),
+            ("codex", "Codex", "In Codex"),
+            ("gemini", "Gemini", "In Gemini"),
+            ("opencode", "OpenCode", "OpenCode's native `skill` tool"),
+        ] {
+            let rendered = render_managed_skill(harness, binary);
+            assert!(rendered.contains(&format!("## Harness activation: {display}")));
+            assert!(rendered.contains(marker));
+            if matches!(harness, "claude" | "opencode") {
+                assert!(rendered.contains("complete coverage of an input too large"));
+                assert!(rendered.contains("Load each input once"));
+                assert!(rendered.contains("source-specific parser"));
+                assert!(rendered.contains("one compact deterministic `exec`"));
+                assert!(rendered.contains("native `sha256(text)`"));
+                assert!(rendered.contains("`cat` heredoc, never `python | exec`"));
+                assert!(rendered.contains("never embed filtered or full source rows"));
+                assert!(rendered.contains("an explorer does not imply that request"));
+                assert!(rendered.contains("full-source accounting"));
+                assert!(rendered.contains("call `FINAL` once"));
+                assert!(rendered.contains("installed local az virtual-memory tool"));
+                assert!(!rendered.contains("quote each governing source phrase"));
+                assert!(!rendered.contains("test pattern"));
+                assert!(!rendered.contains("ASTER-9"));
+                if harness == "opencode" {
+                    assert!(rendered.contains("shortest decisive verbatim source span"));
+                    assert!(rendered.contains("bounded quote list"));
+                    assert!(rendered.contains("copy each span unchanged exactly once"));
+                    assert!(rendered.contains("fail preflight"));
+                    assert!(rendered.contains("occurs byte-for-byte in a deliverable"));
+                } else {
+                    assert!(rendered.contains("mechanically verify requested JSON types"));
+                    assert!(rendered.contains("verbatim decisive quotes"));
+                }
+            } else {
+                assert!(rendered.contains("proactively before broad manual reading"));
+                assert!(rendered.contains("installed and available"));
+            }
+            assert!(rendered.contains("az virtual-memory tool"));
+            assert!(rendered.contains(&shell_quote(binary)));
+            assert!(!rendered.contains("{{VERSION}}"));
+            assert!(!rendered.contains("{{BIN}}"));
+            assert_ne!(rendered, default_rendered);
+        }
+    }
+
+    #[test]
+    fn unchanged_harness_profiles_are_byte_golden() {
+        let binary = Path::new("/managed/azdaja");
+        for (harness, expected) in [
+            (
+                "default",
+                "a43fb9d419e2860e0a5e575916b89b3168b64dd546c31afe36cb5e2d7e11f007",
+            ),
+            (
+                "jcode",
+                "fd7191ffc7f32866137e81d98e60cf79c1cfa26ffdbe1994f4b9cfd613c8db42",
+            ),
+            (
+                "codex",
+                "ad96989d5d6b8e77ec8469f9246f3d1e07cb75f845d5c3b233c3526e50b3d53d",
+            ),
+            (
+                "gemini",
+                "920e533436d5fb335f95441e936fd9a70dcf8f0b5e1591c7531af5f20c4abf08",
+            ),
+        ] {
+            let rendered = render_managed_skill(harness, binary);
+            let digest = sha256_digest(rendered.as_bytes())
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>();
+            assert_eq!(digest, expected, "{harness} profile changed");
+        }
+    }
+
+    #[test]
+    fn claude_activation_rule_is_short_and_conjunctive() {
+        let rule = render_claude_activation_rule();
+        assert!(
+            rule.len() <= 400,
+            "activation rule grew to {} bytes",
+            rule.len()
+        );
+        assert!(rule.contains("answer needing complete coverage"));
+        assert!(rule.contains("too large for one `Read`"));
+        assert!(rule.contains("one structural sample up to 10 lines"));
+        assert!(rule.contains("managed hook blocks broader"));
+        assert!(rule.contains("Otherwise do not invoke it"));
+        assert!(rule.contains("Discovery is not invocation"));
+        assert_eq!(CLAUDE_HOOKS.matches("\"timeout\": 30").count(), 4);
+        assert!(!CLAUDE_HOOKS.contains("\"timeout\": 5"));
+        assert!(!rule.contains("20,000"));
+        assert!(!rule.contains("test pattern"));
+    }
 
     #[test]
     fn managed_skill_repair_claim_matches_turn_cap_and_eligibility() {
