@@ -4823,7 +4823,7 @@ fn cumulative_llm_budget_stops_repeated_calls_in_one_cell() {
 }
 
 #[test]
-fn command_transport_trace_keeps_unknown_route_and_usage_null() {
+fn command_transport_trace_keeps_requested_model_and_unknown_provider_usage() {
     let t = temp("unknown-trace");
     let cfg = config(&t, "cat", 2048, 1, 3, 4);
     let id = sid(&t, &cfg);
@@ -4856,7 +4856,7 @@ fn command_transport_trace_keeps_unknown_route_and_usage_null() {
     assert_eq!(row["outcome"], "succeeded");
     assert_eq!(row["entered_turn"], 1);
     assert!(row.get("provider").is_none());
-    assert!(row.get("model").is_none());
+    assert_eq!(row["model"], "mock");
     assert!(row.get("input_tokens").is_none());
     assert!(row.get("output_tokens").is_none());
     assert!(row.get("cache_read_tokens").is_none());

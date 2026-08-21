@@ -6503,6 +6503,10 @@ fn trace_model_reply_attempt(
     usage_observed: bool,
 ) {
     let known_provider = !reply.provider.trim().is_empty();
+    // Command transports cannot report a provider, but `reply.model` still holds the
+    // exact requested model substituted into the managed command. Preserve it so
+    // semantic-worker parity is auditable without claiming provider-side identity.
+    let known_model = !reply.model.trim().is_empty();
     let known_usage = known_provider && usage_observed;
     record_model_trace(&ModelTrace {
         schema_version: MODEL_TRACE_SCHEMA_VERSION,
@@ -6520,7 +6524,7 @@ fn trace_model_reply_attempt(
         stage: None,
         setup_substage: None,
         provider: known_provider.then(|| reply.provider.clone()),
-        model: known_provider.then(|| reply.model.clone()),
+        model: known_model.then(|| reply.model.clone()),
         input_tokens: known_usage.then_some(reply.usage.input),
         output_tokens: known_usage.then_some(reply.usage.output),
         cache_read_tokens: known_usage.then_some(reply.usage.cache_read),
@@ -6562,6 +6566,7 @@ fn trace_model_repair_reply(
     usage_observed: bool,
 ) {
     let known_provider = !reply.provider.trim().is_empty();
+    let known_model = !reply.model.trim().is_empty();
     let known_usage = known_provider && usage_observed;
     record_model_trace(&ModelTrace {
         schema_version: MODEL_TRACE_SCHEMA_VERSION,
@@ -6579,7 +6584,7 @@ fn trace_model_repair_reply(
         stage: Some("repair".into()),
         setup_substage: None,
         provider: known_provider.then(|| reply.provider.clone()),
-        model: known_provider.then(|| reply.model.clone()),
+        model: known_model.then(|| reply.model.clone()),
         input_tokens: known_usage.then_some(reply.usage.input),
         output_tokens: known_usage.then_some(reply.usage.output),
         cache_read_tokens: known_usage.then_some(reply.usage.cache_read),
