@@ -5395,19 +5395,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "6c73cbde91d258917b2e9df2f4b061e6c49d18f72f322914261a4dcea0c9dca8",
+                "9b641bfa815848737584213cac7cb6787e81b33c1cf7fd13f995b59bf469b68c",
             ),
             (
                 "jcode",
-                "b294477afcfd938e65b2e348a55c5aae7f5a6c9c2c4eb31020da9dae976680e4",
+                "ac79ab853979ce6c80bcc59ed1a143a34d2949e89a99a22be827288e13908222",
             ),
             (
                 "codex",
-                "f41f7bbc0caa5d213a9f806af3674b914d1f5275ba5dcb7266aa1d1cd8cfd23f",
+                "4313547035846beb96381dbceaa790a34efb9714954cc80966803b1b50417fe6",
             ),
             (
                 "gemini",
-                "f54cd0c4353f39aa5bf5e06ef7f32f97eae86aa6aa86d16646acdc3742748db9",
+                "2d21eb84c963ae155279a8a9ae44b985328f5d0eed50627264d12068890d55bd",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);
@@ -5441,7 +5441,7 @@ mod tests {
 
     #[test]
     fn managed_skill_repair_claim_matches_turn_cap_and_eligibility() {
-        const CLAIM: &str = "A failed cell never commits its tentative answer. If a failed cell made no child call and its typed failure is a repairable protocol/line-limit, compile, ordinary program/extraction, missing/empty-`FINAL`, classification-without-semantic-calls, ontology-mismatch, helper-contract, or projection-boundary error, `solo` may make at most three root repair turns in the same root conversation. A child-calling, timeout/resource/host, or third-repair failure fails closed.";
+        const CLAIM: &str = "The runtime may make at most three root repair turns only before unsafe child-calling failures; the outer agent must never retry `solo` or switch lanes.";
         let rendered = SKILL
             .replace("{{VERSION}}", VERSION)
             .replace("{{BIN}}", "/managed/azdaja");
