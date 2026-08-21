@@ -34,6 +34,8 @@ PY
 {{BIN}} final "$sid"
 ```
 
+When this transaction succeeds in Claude Code or OpenCode, the `final` command's JSON value is the task answer. Return that exact value as the sole assistant response. Do not omit it, summarize it, wrap it in markdown, or replace it with a completion notice. Ignore the preceding `load` metadata and empty successful `exec` output when selecting the final value.
+
 ### Claude Code and OpenCode semantic fast path
 
 For semantic classification or extraction in Claude Code or OpenCode, author the deterministic Monty/Python cell yourself and run it through the one-Bash lifecycle transaction above. This removes every nested root-generation and repair turn. Ordinary `exec` does **not** expose `exact_line_ledger`, `semantic_manifest`, `semantic_manifest_records`, `source_ontology`, or `lexical_relevance`; do not call those solo-only names or claim their host-attested projection provenance.
