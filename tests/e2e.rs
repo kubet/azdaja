@@ -64,6 +64,31 @@ fn run(home: &Path, cfg: &Path, args: &[&str], input: &str) -> Output {
         .unwrap();
     child.wait_with_output().unwrap()
 }
+fn run_with_solo_trace(
+    home: &Path,
+    cfg: &Path,
+    args: &[&str],
+    input: &str,
+    trace: &Path,
+) -> Output {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+    c.env_remove("RLM_DEPTH")
+        .args(args)
+        .env("AZDAJA_HOME", home.join("state"))
+        .env("AZDAJA_CONFIG", cfg)
+        .env("AZDAJA_SOLO_TRACE", trace)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = c.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
 fn ok(o: Output) -> String {
     assert!(
         o.status.success(),
@@ -100,37 +125,37 @@ case = case[0]
 
 root_code = {
     "id-original": '''items=[{"id":"caller-left","evidence":"semantic-alpha review-me"},{"id":"caller-right","evidence":"semantic-beta stable"}]
-labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+labels=semantic_manifest_records(items,"synthetic scripted-oracle framing",["class-a","class-b"])
 FINAL(labels["caller-left"]+":"+labels["caller-right"])''',
     "id-renamed": '''items=[{"id":"renamed-red","evidence":"semantic-alpha review-me"},{"id":"renamed-blue","evidence":"semantic-beta stable"}]
-labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+labels=semantic_manifest_records(items,"synthetic scripted-oracle framing",["class-a","class-b"])
 FINAL(labels["renamed-red"]+":"+labels["renamed-blue"])''',
     "records-forward": '''items=[{"id":"forward-alpha-0","evidence":"semantic-alpha review-me"},{"id":"forward-alpha-1","evidence":"semantic-alpha review-me"},{"id":"forward-beta-0","evidence":"semantic-beta stable"}]
-labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+labels=semantic_manifest_records(items,"synthetic scripted-oracle framing",["class-a","class-b"])
 counts={"class-a":0,"class-b":0}
 for item in items:
     counts[labels[item["id"]]]+=1
 FINAL(str(counts["class-a"])+":"+str(counts["class-b"]))''',
     "records-reversed": '''items=[{"id":"forward-beta-0","evidence":"semantic-beta stable"},{"id":"forward-alpha-1","evidence":"semantic-alpha review-me"},{"id":"forward-alpha-0","evidence":"semantic-alpha review-me"}]
-labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+labels=semantic_manifest_records(items,"synthetic scripted-oracle framing",["class-a","class-b"])
 counts={"class-a":0,"class-b":0}
 for item in items:
     counts[labels[item["id"]]]+=1
 FINAL(str(counts["class-a"])+":"+str(counts["class-b"]))''',
     "labels-forward": '''items=[{"id":"label-alpha","evidence":"semantic-alpha review-me"},{"id":"label-beta","evidence":"semantic-beta stable"}]
-labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+labels=semantic_manifest_records(items,"synthetic scripted-oracle framing",["class-a","class-b"])
 FINAL(labels["label-alpha"]+":"+labels["label-beta"])''',
     "labels-reversed": '''items=[{"id":"label-alpha","evidence":"semantic-alpha review-me"},{"id":"label-beta","evidence":"semantic-beta stable"}]
-labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-b","class-a"])
+labels=semantic_manifest_records(items,"synthetic scripted-oracle framing",["class-b","class-a"])
 FINAL(labels["label-alpha"]+":"+labels["label-beta"])''',
     "evidence-plain": '''items=[{"id":"plain-alpha","evidence":"semantic-alpha review-me"},{"id":"plain-beta","evidence":"semantic-beta stable"}]
-labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+labels=semantic_manifest_records(items,"synthetic scripted-oracle framing",["class-a","class-b"])
 FINAL(labels["plain-alpha"]+":"+labels["plain-beta"])''',
     "evidence-noisy": '''items=[{"id":"noisy-alpha","evidence":"meta=semantic-beta semantic-alpha   review-me\\nmeta=trace-77"},{"id":"noisy-beta","evidence":"meta=noop\\nsemantic-beta\\tstable meta=semantic-alpha"}]
-labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+labels=semantic_manifest_records(items,"synthetic scripted-oracle framing",["class-a","class-b"])
 FINAL(labels["noisy-alpha"]+":"+labels["noisy-beta"])''',
     "duplicates-one": '''items=[{"id":"occ-alpha-0","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-1","evidence":"semantic-alpha review-me"},{"id":"occ-beta-0","evidence":"semantic-beta stable"}]
-labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+labels=semantic_manifest_records(items,"synthetic scripted-oracle framing",["class-a","class-b"])
 counts={"class-a":0,"class-b":0}
 expanded=[]
 for item in items:
@@ -139,7 +164,7 @@ for item in items:
     expanded.append(item["id"]+"="+value)
 FINAL(str(len(labels))+":"+str(counts["class-a"])+":"+str(counts["class-b"])+"|"+",".join(expanded))''',
     "duplicates-three": '''items=[{"id":"occ-alpha-0","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-1","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-2","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-3","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-4","evidence":"semantic-alpha review-me"},{"id":"occ-alpha-5","evidence":"semantic-alpha review-me"},{"id":"occ-beta-0","evidence":"semantic-beta stable"},{"id":"occ-beta-1","evidence":"semantic-beta stable"},{"id":"occ-beta-2","evidence":"semantic-beta stable"}]
-labels=semantic_manifest(items,"synthetic scripted-oracle framing",["class-a","class-b"])
+labels=semantic_manifest_records(items,"synthetic scripted-oracle framing",["class-a","class-b"])
 counts={"class-a":0,"class-b":0}
 expanded=[]
 for item in items:
@@ -157,23 +182,29 @@ if "annotator A" in prompt:
     role = "a"
 elif "annotator B" in prompt:
     role = "b"
-elif "final blind source-annotation adjudicator" in prompt:
+elif "Blind final source-annotation adjudicator" in prompt:
     role = "j"
 else:
     raise AssertionError("unexpected semantic prompt")
-allowed_match = re.search(r"^Allowed labels: (.+)$", prompt, re.MULTILINE)
-assert allowed_match is not None
-allowed = allowed_match.group(1).split(", ")
+tag_match = re.search(r"return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed", prompt)
+assert tag_match is not None
+response_prefix = tag_match.group(1)
+legend_text = prompt.split("LABEL CODES", 1)[1].split("ROWS are", 1)[0]
+legend = []
+for line in legend_text.splitlines()[1:]:
+    code, value = line.split("\t", 1)
+    legend.append([code, json.loads(value)])
+allowed = [row[1] for row in legend]
 assert set(allowed) == {"class-a", "class-b"}
+rows_text = prompt.split("no whitespace, prose, markdown, omission, or extra character.\n", 1)[1]
 rows = []
-for line in prompt.splitlines():
-    if re.match(r"^R[0-9]{8} \|\| ", line):
-        rid, evidence = line.split(" || ", 1)
-        rows.append([rid, evidence])
+for line in rows_text.splitlines():
+    rid, evidence = line.split("\t", 1)
+    rows.append([rid, json.loads(evidence)])
 assert rows
 
 def canonical_label(evidence):
-    without_metadata = re.sub(r"\bmeta=[^ ]+", "", evidence)
+    without_metadata = " ".join(word for word in evidence.split() if not word.startswith("meta="))
     semantic = " ".join(without_metadata.split())
     has_alpha = "semantic-alpha" in semantic
     has_beta = "semantic-beta" in semantic
@@ -190,7 +221,8 @@ record = {"allowed": allowed, "manifest": manifest, "prompt": prompt, "rows": ro
 path = logs / (case + "-" + role + ".json")
 assert not path.exists(), "unexpected retry or duplicate semantic call"
 path.write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
-print("\n".join(rid + "|" + label for rid, label in manifest))
+code_by_label = {label: code for code, label in legend}
+print(response_prefix + "".join(code_by_label[label] for rid, label in manifest))
 "#,
     )
     .unwrap();
@@ -208,7 +240,7 @@ fn semantic_metamorphic_config(dir: &Path, script: &Path, logs: &Path) -> PathBu
     );
     let text = fs::read_to_string(&cfg)
         .unwrap()
-        .replace("max_calls_per_cell = 64", "max_calls_per_cell = 5");
+        .replace("max_calls_per_cell = 64", "max_calls_per_cell = 6");
     fs::write(&cfg, text).unwrap();
     cfg
 }
@@ -273,7 +305,8 @@ fn assert_exact_semantic_trace(
     let j = semantic_log(logs, case, "j");
     let expected_a = rows
         .iter()
-        .map(|(rid, evidence)| vec![(*rid).to_string(), (*evidence).to_string()])
+        .enumerate()
+        .map(|(index, (_, evidence))| vec![index.to_string(), (*evidence).to_string()])
         .collect::<Vec<_>>();
     let scripted_class_is_a = |evidence: &str| {
         evidence
@@ -281,12 +314,12 @@ fn assert_exact_semantic_trace(
             .filter(|word| !word.starts_with("meta="))
             .any(|word| word == "semantic-alpha")
     };
-    let expected_a_manifest = rows
+    let expected_a_manifest = expected_a
         .iter()
-        .map(|(rid, evidence)| {
+        .map(|row| {
             vec![
-                (*rid).to_string(),
-                if scripted_class_is_a(evidence) {
+                row[0].clone(),
+                if scripted_class_is_a(&row[1]) {
                     "class-a".to_string()
                 } else {
                     "class-b".to_string()
@@ -294,16 +327,21 @@ fn assert_exact_semantic_trace(
             ]
         })
         .collect::<Vec<_>>();
-    let mut expected_b = expected_a.clone();
-    expected_b.reverse();
+    let expected_b = rows
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(index, (_, evidence))| vec![index.to_string(), (*evidence).to_string()])
+        .collect::<Vec<_>>();
     let expected_b_manifest = expected_b
         .iter()
         .map(|row| vec![row[0].clone(), "class-b".to_string()])
         .collect::<Vec<_>>();
-    let expected_j = expected_a
+    let expected_j = rows
         .iter()
-        .filter(|row| scripted_class_is_a(&row[1]))
-        .cloned()
+        .filter(|(_, evidence)| scripted_class_is_a(evidence))
+        .enumerate()
+        .map(|(index, (_, evidence))| vec![index.to_string(), (*evidence).to_string()])
         .collect::<Vec<_>>();
     let expected_j_manifest = expected_j
         .iter()
@@ -331,6 +369,481 @@ fn assert_exact_semantic_trace(
             );
         }
     }
+}
+
+// Offline scripted transport for the count-derived semantic budget. It never opens benchmark
+// material or a network connection; the generated evidence only matches the measured row lengths.
+fn write_semantic_scale_oracle(dir: &Path) -> (PathBuf, PathBuf) {
+    let logs = dir.join("scale-logs");
+    fs::create_dir(&logs).unwrap();
+    let script = dir.join("scale-oracle.py");
+    fs::write(
+        &script,
+        r####"import json, os, pathlib, re, sys, time
+
+logs = pathlib.Path(sys.argv[1])
+prompt = sys.stdin.read()
+cases = (
+    "semantic-scale/102158", "semantic-scale/100000",
+    "semantic-projection/102158",
+)
+matched = [value for value in cases if value in prompt]
+assert len(matched) == 1, matched
+case = matched[0]
+count = 102158 if case.endswith("102158") else 100000
+projected = case.startswith("semantic-projection/")
+
+if os.getenv("RLM_DEPTH") == "0":
+    if projected:
+        root = (
+            "ledger=exact_line_ledger(ctx,\"Row: \")\n"
+            "assert len(ledger.entries)==" + str(count) + "\n"
+            "selected=[]\n"
+            "for entry in ledger.entries:\n"
+            "    selected.append(entry.id)\n"
+            "labels=semantic_manifest(ledger,selected,\" || Target: \",\"classify every final Target under the two-label ontology; metadata is aggregation-only\",[\"class-a\",\"class-b\"])\n"
+            "FINAL(str(len(labels))+\":\"+labels[\"O0\"]+\":\"+labels[\"O" + str(count - 1) + "\"])"
+        )
+    else:
+        root = (
+            "items=[]\n"
+            "i=0\n"
+            "while i<" + str(count) + ":\n"
+            "    items.append({\"id\":\"i\"+str(i),\"evidence\":\"Instance: synthetic semantic row \"+str(i)+\" \"+(\"x\"*55)})\n"
+            "    i+=1\n"
+            "labels=semantic_manifest_records(items,\"classify every synthetic instance under the two-label ontology\",[\"class-a\",\"class-b\"])\n"
+            "FINAL(str(len(labels))+\":\"+labels[\"i0\"]+\":\"+labels[\"i\"+str(" + str(count - 1) + ")])"
+        )
+    print("```python\n" + root + "\n```")
+    raise SystemExit(0)
+
+tag_match = re.search(r"return only (AZM1-([ABJ])-([0-9]+)-([0-9]+)-([0-9]+):) followed", prompt)
+assert tag_match is not None
+prefix, role, shard, item_count, code_width = tag_match.groups()
+item_count = int(item_count)
+code_width = int(code_width)
+legend_text = prompt.split("LABEL CODES", 1)[1].split("ROWS are", 1)[0]
+legend = []
+for line in legend_text.splitlines()[1:]:
+    code, value = line.split("\t", 1)
+    legend.append((code, json.loads(value)))
+code_by_label = {label: code for code, label in legend}
+rows_text = prompt.split("no whitespace, prose, markdown, omission, or extra character.\n", 1)[1]
+rows = []
+for line in rows_text.splitlines():
+    local_id, evidence = line.split("\t", 1)
+    rows.append((local_id, json.loads(evidence)))
+assert len(rows) == item_count
+assert len(prefix) + item_count * code_width <= 8192
+started_ns = time.monotonic_ns()
+time.sleep(0.05)
+ended_ns = time.monotonic_ns()
+record = {
+    "case": case,
+    "role": role,
+    "shard": int(shard),
+    "item_count": item_count,
+    "prompt_chars": len(prompt),
+    "first_local": rows[0][0],
+    "last_local": rows[-1][0],
+    "first_evidence": rows[0][1],
+    "last_evidence": rows[-1][1],
+    "started_ns": started_ns,
+    "ended_ns": ended_ns,
+}
+marker = logs / (case.rsplit("/", 1)[1] + "-" + prefix[:-1] + ".first")
+malformed = False
+if malformed:
+    marker.write_text("first", encoding="utf-8")
+    record["phase"] = "malformed"
+else:
+    record["phase"] = "valid"
+line = (json.dumps(record, sort_keys=True) + "\n").encode()
+fd = os.open(logs / (case.rsplit("/", 1)[1] + ".jsonl"), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+os.write(fd, line)
+os.close(fd)
+if malformed:
+    print("malformed")
+    raise SystemExit(0)
+label = "class-a"
+print(prefix + code_by_label[label] * item_count)
+"####,
+    )
+    .unwrap();
+    (script, logs)
+}
+
+fn semantic_scale_config(dir: &Path, script: &Path, logs: &Path) -> PathBuf {
+    let cfg = config(
+        dir,
+        &format!("python3 {} {}", script.display(), logs.display()),
+        8192,
+        1,
+        30,
+        4,
+    );
+    let text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("cell_timeout = 2", "cell_timeout = 120");
+    fs::write(&cfg, text).unwrap();
+    cfg
+}
+
+fn read_json_lines(path: &Path) -> Vec<serde_json::Value> {
+    fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+fn peak_logged_concurrency(calls: &[serde_json::Value]) -> usize {
+    let mut events = Vec::new();
+    for call in calls {
+        events.push((call["started_ns"].as_u64().unwrap(), 1_i32));
+        events.push((call["ended_ns"].as_u64().unwrap(), -1_i32));
+    }
+    events.sort_by_key(|(at, delta)| (*at, -*delta));
+    let mut active = 0_i32;
+    let mut peak = 0_i32;
+    for (_, delta) in events {
+        active += delta;
+        peak = peak.max(active);
+    }
+    usize::try_from(peak).unwrap()
+}
+
+#[test]
+fn semantic_manifest_102158_rows_uses_fixed_39_item_shards() {
+    let t = temp("semantic-scale-102158");
+    let (script, logs) = write_semantic_scale_oracle(&t);
+    let cfg = semantic_scale_config(&t, &script, &logs);
+    let input = t.join("input.txt");
+    fs::write(&input, "synthetic classification scale fixture; no gold").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "semantic-scale/102158 classification",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "102158:class-a:class-a"
+    );
+    let calls = read_json_lines(&logs.join("102158.jsonl"));
+    let shards = 2_620;
+    assert_eq!(calls.len(), 2 * shards);
+    assert_eq!(peak_logged_concurrency(&calls), 8);
+    for role in ["A", "B"] {
+        let role_calls = calls
+            .iter()
+            .filter(|value| value["role"] == role)
+            .collect::<Vec<_>>();
+        assert_eq!(role_calls.len(), shards);
+        assert_eq!(
+            role_calls
+                .iter()
+                .map(|value| value["shard"].as_u64().unwrap())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            shards
+        );
+    }
+    assert_eq!(calls.iter().filter(|value| value["role"] == "J").count(), 0);
+    assert!(calls.iter().all(
+        |value| matches!(value["item_count"].as_u64(), Some(38 | 39))
+            && value["prompt_chars"].as_u64().unwrap() + 128 <= 81_920
+    ));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn semantic_manifest_exact_target_projection_preserves_102158_occurrences() {
+    let t = temp("semantic-projection-102158");
+    let (script, logs) = write_semantic_scale_oracle(&t);
+    let cfg = semantic_scale_config(&t, &script, &logs);
+    let input = t.join("input.txt");
+    let mut source = String::from(
+        "The allowed labels are \"class-a\" and \"class-b\". Each Row is one complete physical line; after deterministic metadata selection, its label is solely a function of the final Target field.\n",
+    );
+    for index in 0..102_158usize {
+        source.push_str(&format!(
+            "Row: occurrence={index} || Target: exact designated target payload {}\n",
+            index % 4_151
+        ));
+    }
+    fs::write(&input, source).unwrap();
+    let trace_path = t.join("solo.trace");
+    let output = run_with_solo_trace(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "semantic-projection/102158 classification",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+        &trace_path,
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "102158:class-a:class-a"
+    );
+    let calls = read_json_lines(&logs.join("102158.jsonl"));
+    let unique_targets = 4_151_u64;
+    let shards = 107;
+    assert_eq!(calls.len(), 2 * shards);
+    assert_eq!(peak_logged_concurrency(&calls), 8);
+    for role in ["A", "B"] {
+        let role_calls = calls
+            .iter()
+            .filter(|value| value["role"] == role)
+            .collect::<Vec<_>>();
+        assert_eq!(role_calls.len(), shards);
+        assert_eq!(
+            role_calls
+                .iter()
+                .map(|value| value["item_count"].as_u64().unwrap())
+                .sum::<u64>(),
+            unique_targets
+        );
+        assert_eq!(
+            role_calls
+                .iter()
+                .map(|value| value["shard"].as_u64().unwrap())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            shards
+        );
+    }
+    assert_eq!(calls.iter().filter(|value| value["role"] == "J").count(), 0);
+    assert!(calls.iter().all(
+        |value| matches!(value["item_count"].as_u64(), Some(38 | 39))
+            && value["prompt_chars"].as_u64().unwrap() + 128 <= 81_920
+    ));
+    let trace = fs::read_to_string(trace_path).unwrap();
+    let runtime: serde_json::Value = trace
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .next_back()
+        .unwrap();
+    assert_eq!(runtime["projection_ledger_calls"], 1);
+    assert_eq!(runtime["projection_calls"], 1);
+    assert_eq!(runtime["projection_ledger_occurrences"], 102_158);
+    assert_eq!(runtime["projection_selected_occurrences"], 102_158);
+    assert_eq!(runtime["projection_unique_targets"], 4_151);
+    assert_eq!(runtime["projection_manifest_callers"], 102_158);
+    assert_eq!(runtime["projection_expanded_outputs"], 102_158);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn semantic_manifest_100000_rows_uses_fixed_39_item_shards() {
+    let t = temp("semantic-scale-100000");
+    let (script, logs) = write_semantic_scale_oracle(&t);
+    let cfg = semantic_scale_config(&t, &script, &logs);
+    let input = t.join("input.txt");
+    fs::write(&input, "synthetic classification scale fixture; no gold").unwrap();
+    let started = std::time::Instant::now();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "semantic-scale/100000 classification",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    let elapsed = started.elapsed();
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "100000:class-a:class-a"
+    );
+    let calls = read_json_lines(&logs.join("100000.jsonl"));
+    let shards = 2_565;
+    assert_eq!(calls.len(), 2 * shards);
+    assert_eq!(peak_logged_concurrency(&calls), 8);
+    for role in ["A", "B"] {
+        let role_calls = calls
+            .iter()
+            .filter(|value| value["role"] == role)
+            .collect::<Vec<_>>();
+        assert_eq!(role_calls.len(), shards);
+        assert_eq!(
+            role_calls
+                .iter()
+                .map(|value| value["shard"].as_u64().unwrap())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            shards
+        );
+    }
+    assert_eq!(calls.iter().filter(|value| value["role"] == "J").count(), 0);
+    assert!(calls.iter().all(
+        |value| matches!(value["item_count"].as_u64(), Some(38 | 39))
+            && value["prompt_chars"].as_u64().unwrap() + 128 <= 81_920
+    ));
+    assert!(
+        elapsed < Duration::from_secs(1_800),
+        "100K fixed-shard run took {elapsed:?}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+fn run_semantic_zero_call_rejection(case: &str, root: &str) {
+    let t = temp(case);
+    let calls = t.join("depth-one-calls");
+    let mock = t.join("preflight.py");
+    fs::write(
+        &mock,
+        format!(
+            r####"import os, pathlib, sys
+prompt=sys.stdin.read()
+if os.getenv("RLM_DEPTH") == "0":
+    print("```python\n" + {root:?} + "\n```")
+else:
+    pathlib.Path({calls:?}).write_text("unexpected semantic call", encoding="utf-8")
+    print("unexpected")
+"####,
+            root = root,
+            calls = calls.to_string_lossy(),
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 8192, 1, 30, 4);
+    let text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("cell_timeout = 2", "cell_timeout = 120")
+        .replace("max_calls_per_cell = 64", "max_calls_per_cell = 150");
+    fs::write(&cfg, text).unwrap();
+    let input = t.join("input.txt");
+    fs::write(&input, "synthetic classification preflight; no gold").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "synthetic classification preflight",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(!output.status.success());
+    assert!(
+        !calls.exists(),
+        "preflight rejection launched a semantic child"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn semantic_manifest_105001_occurrences_reject_before_child_calls() {
+    run_semantic_zero_call_rejection(
+        "semantic-over-count",
+        "items=[]\ni=0\nwhile i<105001:\n    items.append({\"id\":str(i),\"evidence\":\"synthetic row\"})\n    i+=1\nlabels=semantic_manifest_records(items,\"binary synthetic classification\",[\"a\",\"b\"])\nFINAL(str(len(labels)))",
+    );
+}
+
+#[test]
+fn exact_line_records_external_boundary_accepts_105000_and_rejects_105001() {
+    use std::fmt::Write as _;
+    for (count, succeeds) in [(105_000usize, true), (105_001usize, false)] {
+        let t = temp(&format!("exact-line-boundary-{count}"));
+        let child_marker = t.join("child-called");
+        let mock = t.join("mock.py");
+        fs::write(
+            &mock,
+            format!(
+                r#"import os,pathlib
+if os.getenv("RLM_DEPTH") == "0":
+    print('```python\nrecords=exact_line_records(ctx,"Row: ")\nFINAL(str(len(records)))\n```')
+else:
+    pathlib.Path({child_marker:?}).write_text("unexpected child",encoding="utf-8")
+    print("unexpected")
+"#,
+                child_marker = child_marker,
+            ),
+        )
+        .unwrap();
+        let cfg = config(&t, &format!("python3 {}", mock.display()), 8192, 1, 30, 4);
+        let text = fs::read_to_string(&cfg)
+            .unwrap()
+            .replace("cell_timeout = 2", "cell_timeout = 120");
+        fs::write(&cfg, text).unwrap();
+        let input = t.join("input.txt");
+        let mut source = String::with_capacity(count * 16);
+        for i in 0..count {
+            writeln!(&mut source, "Row: {i}").unwrap();
+        }
+        fs::write(&input, source).unwrap();
+        let output = run(
+            &t,
+            &cfg,
+            &[
+                "solo",
+                "Count every exact Row record.",
+                "-f",
+                input.to_str().unwrap(),
+            ],
+            "",
+        );
+        if succeeds {
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "105000");
+        } else {
+            assert!(!output.status.success());
+            assert!(
+                String::from_utf8_lossy(&output.stderr)
+                    .contains("exact_line_records record limit exceeded"),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        assert!(
+            !child_marker.exists(),
+            "boundary path launched a child call"
+        );
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
+fn semantic_manifest_oversized_evidence_rejects_before_child_calls() {
+    run_semantic_zero_call_rejection(
+        "semantic-over-prompt",
+        "items=[{\"id\":\"x\",\"evidence\":\"z\"*360000}]\nlabels=semantic_manifest_records(items,\"binary synthetic classification\",[\"a\",\"b\"])\nFINAL(labels[\"x\"])",
+    );
 }
 
 #[test]
@@ -462,6 +975,57 @@ esac
         String::from_utf8_lossy(&single.stdout).contains("intentional"),
         "{}",
         String::from_utf8_lossy(&single.stdout)
+    );
+    ok(run(&t, &cfg, &["kill", &id], ""));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn cell_timeout_excludes_suspended_host_call_wall() {
+    let t = temp("cell-host-wall");
+    let script = t.join("slow-success.sh");
+    fs::write(
+        &script,
+        "#!/bin/sh
+sleep 1.1
+cat
+",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let cfg = config(&t, script.to_str().unwrap(), 2048, 1, 3, 4);
+    let text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("cell_timeout = 2", "cell_timeout = 1");
+    fs::write(&cfg, text).unwrap();
+    let id = sid(&t, &cfg);
+    let started = Instant::now();
+    let output = run(
+        &t,
+        &cfg,
+        &["exec", &id],
+        "first=llm('first')
+second=llm('second')
+FINAL(first+second)
+",
+    );
+    let elapsed = started.elapsed();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert!(
+        elapsed >= Duration::from_secs(2),
+        "host wait was not exercised: {elapsed:?}"
+    );
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "unexpected host wall: {elapsed:?}"
     );
     ok(run(&t, &cfg, &["kill", &id], ""));
     fs::remove_dir_all(t).unwrap();
@@ -662,12 +1226,18 @@ fn solo_fixed_manifest_prelude_owns_dual_provider_plumbing() {
     let mock = t.join("semantic.py");
     fs::write(
         &mock,
-        r#"import os,sys
+        r#"import json,os,re,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    print('```python\nitems=[{"id":"R1","evidence":"ordinary note"},{"id":"R2","evidence":"ambiguous service"}]\nlabels=semantic_manifest(items,"binary annotation",["ham","spam"])\nFINAL(labels["R1"]+":"+labels["R2"])\n```')
+    print('```python\nitems=[{"id":"R1","evidence":"ordinary note"},{"id":"R2","evidence":"ambiguous service"}]\nlabels=semantic_manifest_records(items,"binary annotation",["ham","spam"])\nFINAL(labels["R1"]+":"+labels["R2"])\n```')
 else:
-    print('R00000000|ham\nR00000001|spam')
+    prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed',p).group(1)
+    legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+    codes={json.loads(line.split('\t',1)[1]):line.split('\t',1)[0] for line in legend}
+    rows=p.split('extra character.\n',1)[1].splitlines()
+    evidence=[json.loads(line.split('\t',1)[1]) for line in rows]
+    labels=['spam' if 'ambiguous' in value else 'ham' for value in evidence]
+    print(prefix+''.join(codes[label] for label in labels))
 "#,
     )
     .unwrap();
@@ -696,22 +1266,28 @@ fn solo_dual_manifest_blindly_adjudicates_every_disagreement() {
     let mock = t.join("semantic.py");
     fs::write(
         &mock,
-        r#"import os,sys
+        r#"import json,os,re,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    print('```python\nitems=[{"id":"x","evidence":"first raw"},{"id":"y","evidence":"second raw"}]\nlabels=semantic_manifest(items,"official binary task",["ham","spam"])\nFINAL(labels["x"]+":"+labels["y"])\n```')
-elif 'annotator A' in p:
-    print('R00000000|ham\nR00000001|ham')
-elif 'annotator B' in p:
-    assert 'Allowed labels: spam, ham' in p
-    print('R00000000|ham\nR00000001|spam')
-elif 'final blind source-annotation adjudicator' in p:
-    assert 'R00000001 || second raw' in p
-    assert 'R00000000 || first raw' not in p
-    assert 'annotator A' not in p and 'annotator B' not in p
-    print('R00000001|spam')
+    print('```python\nitems=[{"id":"x","evidence":"first raw"},{"id":"y","evidence":"second raw"}]\nlabels=semantic_manifest_records(items,"official binary task",["ham","spam"])\nFINAL(labels["x"]+":"+labels["y"])\n```')
 else:
-    raise SystemExit('unexpected prompt')
+    prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed',p).group(1)
+    legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+    codes={json.loads(line.split('\t',1)[1]):line.split('\t',1)[0] for line in legend}
+    rows=p.split('extra character.\n',1)[1].splitlines()
+    evidence=[json.loads(line.split('\t',1)[1]) for line in rows]
+    if 'annotator A' in p:
+        labels=['ham' for value in evidence]
+    elif 'annotator B' in p:
+        assert [json.loads(line.split('\t',1)[1]) for line in legend] == ['spam','ham']
+        labels=['spam' if value == 'second raw' else 'ham' for value in evidence]
+    elif 'Blind final source-annotation adjudicator' in p:
+        assert evidence == ['second raw']
+        assert 'annotator A' not in p and 'annotator B' not in p
+        labels=['spam']
+    else:
+        raise SystemExit('unexpected prompt')
+    print(prefix+''.join(codes[label] for label in labels))
 "#,
     )
     .unwrap();
@@ -736,6 +1312,60 @@ else:
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham:spam");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_dual_manifest_retries_malformed_adjudication_once_within_envelope() {
+    let t = temp("solo-judge-contract-retry");
+    let marker = t.join("judge-seen");
+    let calls = t.join("calls");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,pathlib,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[{{"id":"x","evidence":"complete raw"}}]\nlabels=semantic_manifest_records(items,"official binary task",["ham","spam"])\nFINAL(labels["x"])\n```')
+else:
+    with open({calls:?}, 'a') as f: f.write('x')
+    prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed',p).group(1)
+    legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+    codes={{json.loads(line.split('\t',1)[1]):line.split('\t',1)[0] for line in legend}}
+    if 'annotator A' in p: label='ham'
+    elif 'annotator B' in p: label='spam'
+    elif not pathlib.Path({marker:?}).exists():
+        pathlib.Path({marker:?}).write_text('seen');print('malformed');raise SystemExit
+    else: label='ham'
+    print(prefix+codes[label])
+"#,
+            calls = calls,
+            marker = marker,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "official binary task",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham");
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 4);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -773,7 +1403,7 @@ fn solo_manifest_is_invariant_to_caller_item_id_renaming() {
     assert_eq!(
         string_pairs(&semantic_log(&logs, "id-original", "j"), "rows"),
         vec![vec![
-            "R00000000".to_string(),
+            "0".to_string(),
             "semantic-alpha review-me".to_string()
         ]]
     );
@@ -811,11 +1441,11 @@ fn solo_manifest_reversal_preserves_order_invariant_reduction() {
     );
     assert_eq!(
         string_pairs(&semantic_log(&logs, "records-forward", "j"), "manifest"),
-        vec![vec!["R00000000".to_string(), "class-a".to_string()]]
+        vec![vec!["0".to_string(), "class-a".to_string()]]
     );
     assert_eq!(
         string_pairs(&semantic_log(&logs, "records-reversed", "j"), "manifest"),
-        vec![vec!["R00000001".to_string(), "class-a".to_string()]]
+        vec![vec!["0".to_string(), "class-a".to_string()]]
     );
     fs::remove_dir_all(t).unwrap();
 }
@@ -879,11 +1509,11 @@ fn solo_manifest_scripted_oracle_ignores_harmless_metadata_and_whitespace() {
         &[
             (
                 "R00000000",
-                "meta=semantic-beta semantic-alpha   review-me meta=trace-77",
+                "meta=semantic-beta semantic-alpha   review-me\nmeta=trace-77",
             ),
             (
                 "R00000001",
-                "meta=noop semantic-beta\tstable meta=semantic-alpha",
+                "meta=noop\nsemantic-beta\tstable meta=semantic-alpha",
             ),
         ],
         &["class-a", "class-b"],
@@ -947,14 +1577,14 @@ fn solo_manifest_scales_duplicate_multiplicity_and_expands_every_occurrence() {
 }
 
 #[test]
-fn solo_manifest_normalizes_integer_ids_and_singleton_labels_without_child_call() {
-    let t = temp("solo-manifest-ids");
+fn solo_manifest_rejects_duplicate_singleton_labels_before_child_call() {
+    let t = temp("solo-manifest-duplicate-labels");
     let mock = t.join("semantic.py");
     fs::write(
         &mock,
-        r#"import os,sys
+        r#"import os
 if os.getenv('RLM_DEPTH') == '0':
-    print('```python\nitems=[{"id":7,"evidence":"one"},{"id":8,"evidence":"one"}]\nlabels=semantic_manifest(items,"deterministic inclusion",["include","include"])\nFINAL(str(labels[7])+":"+str(labels[8]))\n```')
+    print('```python\nitems=[{"id":7,"evidence":"one"},{"id":8,"evidence":"one"}]\nlabels=semantic_manifest_records(items,"deterministic inclusion",["include","include"])\nFINAL(str(labels[7])+":"+str(labels[8]))\n```')
 else:
     print('UNEXPECTED_CHILD_CALL')
 "#,
@@ -974,16 +1604,54 @@ else:
         ],
         "",
     );
+    assert!(!output.status.success());
     assert!(
-        output.status.success(),
+        String::from_utf8_lossy(&output.stderr).contains("duplicate semantic label"),
         "stdout={} stderr={}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout).trim(),
-        "include:include"
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("UNEXPECTED_CHILD_CALL"));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_rejects_one_unique_label_before_child_call() {
+    let t = temp("solo-manifest-one-label");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        r#"import os
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[{"id":"x","evidence":"one"}]\nlabels=semantic_manifest_records(items,"deterministic inclusion",["include"])\nFINAL(labels["x"])\n```')
+else:
+    print('UNEXPECTED_CHILD_CALL')
+"#,
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "deterministic inclusion",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
     );
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("semantic_manifest requires at least two distinct labels"),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("UNEXPECTED_CHILD_CALL"));
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -996,17 +1664,20 @@ fn solo_dual_manifest_retries_only_malformed_primary_shard() {
     fs::write(
         &mock,
         format!(
-            r#"import os,sys,pathlib
+            r#"import json,os,re,sys,pathlib
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    print('```python\nitems=[{{"id":"x","evidence":"raw"}}]\nlabels=semantic_manifest(items,"official binary task",["ham","spam"])\nFINAL(labels["x"])\n```')
+    print('```python\nitems=[{{"id":"x","evidence":"raw"}}]\nlabels=semantic_manifest_records(items,"official binary task",["ham","spam"])\nFINAL(labels["x"])\n```')
 else:
     with open({calls:?}, 'a') as f: f.write('x')
     if 'annotator A' in p and not pathlib.Path({a_seen:?}).exists():
         pathlib.Path({a_seen:?}).write_text('seen')
         print('malformed')
     else:
-        print('R00000000|ham')
+        prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed',p).group(1)
+        legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+        code=next(line.split('\t',1)[0] for line in legend if json.loads(line.split('\t',1)[1]) == 'ham')
+        print(prefix+code)
 "#,
             calls = calls,
             a_seen = a_seen,
@@ -1038,23 +1709,632 @@ else:
 }
 
 #[test]
-fn solo_dual_manifest_never_contract_retries_provider_errors() {
+fn solo_manifest_adjudicates_malformed_primary_after_bounded_retry() {
+    let t = temp("solo-malformed-primary-adjudication");
+    let calls = t.join("calls");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[{{"id":"x","evidence":"raw"}}]\nlabels=semantic_manifest_records(items,"official binary task",["ham","spam"])\nFINAL(labels["x"])\n```')
+else:
+    with open({calls:?}, 'a') as f: f.write('x')
+    role=re.search(r'return only AZM1-([ABJ])-',p).group(1)
+    if role == 'A':
+        print('malformed-after-bounded-retry')
+    else:
+        prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed',p).group(1)
+        legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+        code=next(line.split('\t',1)[0] for line in legend if json.loads(line.split('\t',1)[1]) == 'ham')
+        print(prefix+code)
+"#,
+            calls = calls,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 6, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "official binary task",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham");
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 4);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_continues_a_valid_short_positional_prefix() {
+    let t = temp("solo-positional-prefix-continuation");
+    let a_seen = t.join("a-seen");
+    let counts = t.join("counts");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,pathlib,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[]\ni=0\nwhile i<39:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nlabels=semantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL(labels["0"]+":"+labels["38"])\n```')
+else:
+    prefix=re.search(r'return only (AZM1-([ABJ])-[0-9]+-([0-9]+)-[0-9]+:) followed',p).group(1)
+    role=re.search(r'return only AZM1-([ABJ])-',p).group(1)
+    count=int(prefix[:-1].split('-')[3])
+    legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+    code=next(line.split('\t',1)[0] for line in legend if json.loads(line.split('\t',1)[1]) == 'ham')
+    with open({counts:?},'a') as f:f.write(str(count)+'\n')
+    if role == 'A' and count == 39 and not pathlib.Path({a_seen:?}).exists():
+        pathlib.Path({a_seen:?}).write_text('seen');print(prefix+code*38)
+    else: print(prefix+code*count)
+"#,
+            a_seen = a_seen,
+            counts = counts,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "binary task", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham:ham");
+    let observed = fs::read_to_string(&counts).unwrap();
+    assert_eq!(observed.lines().filter(|line| *line == "39").count(), 2);
+    assert_eq!(observed.lines().filter(|line| *line == "1").count(), 1);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_normalizes_only_unambiguous_positional_frames() {
+    let t = temp("solo-positional-frame-normalization");
+    let calls = t.join("calls");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nlabels=[]\ni=0\nwhile i<63:\n    labels.append("l"+str(i))\n    i+=1\nitems=[]\ni=0\nwhile i<4:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nmapping=semantic_manifest_records(items,"multi label task",labels)\nFINAL(mapping["0"]+":"+mapping["3"])\n```')
+else:
+    with open({calls:?},'a') as f:f.write('x')
+    prefix=re.search(r'return only (AZM1-([ABJ])-[0-9]+-([0-9]+)-[0-9]+:) followed',p).group(1)
+    role=re.search(r'return only AZM1-([ABJ])-',p).group(1)
+    count=int(prefix[:-1].split('-')[3])
+    legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+    code=next(line.split('\t',1)[0] for line in legend if json.loads(line.split('\t',1)[1]) == 'l62')
+    if role == 'A':
+        print(prefix+' '.join([code]*count)+' provider-tail')
+    else:
+        print(prefix[:-1]+code*count)
+"#,
+            calls = calls,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "multi label task", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "l62:l62");
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 2);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_rejects_ambiguous_short_frame_before_retry() {
+    let t = temp("solo-ambiguous-short-frame");
+    let a_seen = t.join("a-seen");
+    let calls = t.join("calls");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,pathlib,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[]\ni=0\nwhile i<4:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nlabels=semantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL(labels["0"]+":"+labels["3"])\n```')
+else:
+    with open({calls:?},'a') as f:f.write('x')
+    prefix=re.search(r'return only (AZM1-([ABJ])-[0-9]+-([0-9]+)-[0-9]+:) followed',p).group(1)
+    role=re.search(r'return only AZM1-([ABJ])-',p).group(1)
+    count=int(prefix[:-1].split('-')[3])
+    legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+    code=next(line.split('\t',1)[0] for line in legend if json.loads(line.split('\t',1)[1]) == 'spam')
+    if role == 'A' and not pathlib.Path({a_seen:?}).exists():
+        pathlib.Path({a_seen:?}).write_text('seen')
+        short=prefix.rsplit('-',1)[0]+'-'
+        print(short+code*count)
+    else:
+        print(prefix+code*count)
+"#,
+            calls = calls,
+            a_seen = a_seen,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "binary task", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "spam:spam");
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 3);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_uses_leftover_primary_reserve_for_one_second_suffix_retry() {
+    let t = temp("solo-primary-second-suffix-retry");
+    let calls = t.join("calls");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[]\ni=0\nwhile i<313:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nlabels=semantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL(labels["0"]+":"+labels["312"])\n```')
+else:
+    with open({calls:?},'a') as f:f.write('x')
+    prefix=re.search(r'return only (AZM1-([ABJ])-([0-9]+)-([0-9]+)-[0-9]+:) followed',p).group(1)
+    role=re.search(r'return only AZM1-([ABJ])-',p).group(1)
+    shard=int(prefix[:-1].split('-')[2]);count=int(prefix[:-1].split('-')[3])
+    legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+    code=next(line.split('\t',1)[0] for line in legend if json.loads(line.split('\t',1)[1]) == 'ham')
+    if role == 'A' and shard == 0 and count == 35:
+        print(prefix+code*(count-3))
+    elif role == 'A' and shard == 0 and count == 3:
+        print(prefix+code*(count-1))
+    else:
+        print(prefix+code*count)
+"#,
+            calls = calls,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "binary task", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham:ham");
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 20);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_uses_leftover_adjudication_reserve_for_one_second_suffix_retry() {
+    let t = temp("solo-adjudication-second-suffix-retry");
+    let calls = t.join("calls");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[]\ni=0\nwhile i<313:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nlabels=semantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL(labels["0"]+":"+labels["1"]+":"+labels["2"]+":"+labels["312"])\n```')
+else:
+    with open({calls:?},'a') as f:f.write('x')
+    prefix=re.search(r'return only (AZM1-([ABJ])-([0-9]+)-([0-9]+)-[0-9]+:) followed',p).group(1)
+    role=re.search(r'return only AZM1-([ABJ])-',p).group(1)
+    count=int(prefix[:-1].split('-')[3])
+    legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+    codes={{json.loads(line.split('\t',1)[1]):line.split('\t',1)[0] for line in legend}}
+    rows=p.rsplit('extra character.\n',1)[1].splitlines()
+    evidence=[json.loads(line.split('\t',1)[1]) for line in rows]
+    if role == 'B':
+        labels=['spam' if value in ['row 0','row 1','row 2'] else 'ham' for value in evidence]
+        print(prefix+''.join(codes[label] for label in labels))
+    elif role == 'J' and count == 3:
+        print(prefix+codes['ham'])
+    elif role == 'J' and count == 2:
+        print(prefix+codes['ham'])
+    else:
+        print(prefix+codes['ham']*count)
+"#,
+            calls = calls,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "binary task", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "ham:ham:ham:ham"
+    );
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 21);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_uses_adjudication_instead_of_a_third_primary_retry_round() {
+    let t = temp("solo-no-third-primary-retry");
+    let calls = t.join("calls");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[]\ni=0\nwhile i<313:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nsemantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL("unreachable")\n```')
+else:
+    with open({calls:?},'a') as f:f.write('x')
+    prefix=re.search(r'return only (AZM1-([ABJ])-([0-9]+)-([0-9]+)-[0-9]+:) followed',p).group(1)
+    role=re.search(r'return only AZM1-([ABJ])-',p).group(1)
+    shard=int(prefix[:-1].split('-')[2]);count=int(prefix[:-1].split('-')[3])
+    legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+    code=next(line.split('\t',1)[0] for line in legend if json.loads(line.split('\t',1)[1]) == 'ham')
+    if role == 'A' and shard == 0 and count == 35:
+        print(prefix+code*(count-3))
+    elif role == 'A' and shard == 0 and count == 3:
+        print(prefix+code*(count-1))
+    elif role == 'A' and shard == 0 and count == 1:
+        print(prefix)
+    else:
+        print(prefix+code*count)
+"#,
+            calls = calls,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "binary task", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "unreachable"
+    );
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 21);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_blocks_fragmented_second_judge_retry_before_provider_entry() {
+    let t = temp("solo-fragmented-judge-retry-block");
+    let calls = t.join("calls");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[]\ni=0\nwhile i<157:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nsemantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL("unreachable")\n```')
+else:
+    with open({calls:?},'a') as f:f.write('x')
+    prefix=re.search(r'return only (AZM1-([ABJ])-([0-9]+)-([0-9]+)-[0-9]+:) followed',p).group(1)
+    role=re.search(r'return only AZM1-([ABJ])-',p).group(1)
+    count=int(prefix[:-1].split('-')[3])
+    legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+    codes={{json.loads(line.split('\t',1)[1]):line.split('\t',1)[0] for line in legend}}
+    if role == 'J':
+        print(prefix)
+    elif role == 'B':
+        rows=p.rsplit('extra character.\n',1)[1].splitlines()
+        evidence=[json.loads(line.split('\t',1)[1]) for line in rows]
+        labels=['spam' if value == 'row 0' else 'ham' for value in evidence]
+        print(prefix+''.join(codes[label] for label in labels))
+    else:
+        print(prefix+codes['ham']*count)
+"#,
+            calls = calls,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "binary task", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("semantic adjudication retry reserve envelope"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 12);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn semantic_phase_reserves_are_host_enforced_before_provider_entry() {
+    for (phase, calls, expected) in [
+        (
+            "classification",
+            5,
+            "semantic classification call budget exceeded",
+        ),
+        (
+            "adjudication",
+            3,
+            "semantic adjudication call budget exceeded",
+        ),
+    ] {
+        let t = temp(&format!("semantic-host-phase-{phase}"));
+        let marker = t.join("provider-entered");
+        let mock = t.join("mock.py");
+        fs::write(
+            &mock,
+            format!(
+                r#"import os,pathlib
+if os.getenv('RLM_DEPTH') == '0':
+ print('```python\n_az_llm_batch_fresh_once(["x"]*{calls},None,8,6,"{phase}")\nFINAL("bad")\n```')
+else:
+ pathlib.Path({marker:?}).write_text('entered')
+ print('unexpected')
+"#,
+                calls = calls,
+                phase = phase,
+                marker = marker,
+            ),
+        )
+        .unwrap();
+        let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 10, 4);
+        let input = t.join("input.txt");
+        fs::write(&input, "phase test").unwrap();
+        let output = run(
+            &t,
+            &cfg,
+            &["solo", "phase budget", "-f", input.to_str().unwrap()],
+            "",
+        );
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains(expected));
+        assert!(!marker.exists());
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
+fn solo_manifest_reserves_all_six_primary_and_adjudication_phases() {
+    let t = temp("semantic-six-phase-reserve");
+    let calls = t.join("calls.jsonl");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[]\ni=0\nwhile i<188:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nlabels=semantic_manifest_records(items,"binary task",["class-a","class-b"])\nFINAL(labels["0"]+":"+labels["187"])\n```')
+else:
+    m=re.search(r'return only (AZM1-([ABJ])-([0-9]+)-([0-9]+)-([0-9]+):) followed',p)
+    prefix,role,shard,count,width=m.groups();count=int(count)
+    legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+    wanted='class-b' if role == 'B' else 'class-a'
+    code=next(line.split('\t',1)[0] for line in legend if json.loads(line.split('\t',1)[1]) == wanted)
+    retry='RETRY:' in p
+    with open({calls:?},'a') as f:f.write(json.dumps({{'role':role,'shard':int(shard),'count':count,'retry':retry}})+'\n')
+    print(prefix+code*(count if retry else count-1))
+"#,
+            calls = calls,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 30, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "schema row").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "binary task", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "class-a:class-a"
+    );
+    let observed = read_json_lines(&calls);
+    assert_eq!(observed.len(), 30);
+    for role in ["A", "B", "J"] {
+        assert_eq!(
+            observed
+                .iter()
+                .filter(|value| value["role"] == role)
+                .count(),
+            10
+        );
+        assert_eq!(
+            observed
+                .iter()
+                .filter(|value| value["role"] == role && value["retry"] == false)
+                .count(),
+            5
+        );
+        assert_eq!(
+            observed
+                .iter()
+                .filter(|value| value["role"] == role && value["retry"] == true)
+                .count(),
+            5
+        );
+    }
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_positional_manifest_rejects_wrong_tag_order_length_and_code() {
+    for mode in ["wrong-tag", "wrong-order", "wrong-length", "wrong-code"] {
+        let t = temp(&format!("semantic-contract-{mode}"));
+        let calls = t.join("calls");
+        let mock = t.join("semantic.py");
+        fs::write(
+            &mock,
+            format!(
+                r####"import json, os, re, sys
+prompt=sys.stdin.read()
+mode={mode:?}
+if os.getenv("RLM_DEPTH") == "0":
+    if mode == "wrong-order":
+        root="items=[]\ni=0\nwhile i<40:\n    items.append({{\"id\":str(i),\"evidence\":\"row \"+str(i)}})\n    i+=1\nlabels=semantic_manifest_records(items,\"binary synthetic classification\",[\"a\",\"b\"])\nFINAL(labels[\"0\"])"
+    else:
+        root="items=[{{\"id\":\"x\",\"evidence\":\"raw\"}}]\nlabels=semantic_manifest_records(items,\"binary synthetic classification\",[\"a\",\"b\"])\nFINAL(labels[\"x\"])"
+    print("```python\n"+root+"\n```")
+else:
+    with open({calls:?}, "a") as handle:
+        handle.write("x")
+    found=re.search(r"return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed",prompt)
+    prefix=found.group(1)
+    count=int(prefix[:-1].split("-")[3])
+    if mode == "wrong-tag":
+        response=prefix.replace("AZM1-", "AZM2-", 1)+("0"*count)
+    elif mode == "wrong-order":
+        parts=prefix[:-1].split("-")
+        parts[2]="1" if parts[2] == "0" else "0"
+        response="-".join(parts)+":"+("0"*count)
+    elif mode == "wrong-length":
+        response=prefix+("0"*(count-1))
+    else:
+        response=prefix+("!"*count)
+    print(response)
+"####,
+                mode = mode,
+                calls = calls,
+            ),
+        )
+        .unwrap();
+        let cfg = config(&t, &format!("python3 {}", mock.display()), 8192, 1, 10, 4);
+        let text = fs::read_to_string(&cfg)
+            .unwrap()
+            .replace("cell_timeout = 2", "cell_timeout = 30");
+        fs::write(&cfg, text).unwrap();
+        let input = t.join("input.txt");
+        fs::write(&input, "synthetic classification; no gold").unwrap();
+        let output = run(
+            &t,
+            &cfg,
+            &[
+                "solo",
+                "synthetic classification",
+                "-f",
+                input.to_str().unwrap(),
+            ],
+            "",
+        );
+        assert!(!output.status.success(), "mode {mode} unexpectedly passed");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("positional manifest")
+                || stderr.contains("positional label code")
+                || stderr.contains("semantic classification retry call envelope")
+                || stderr.contains("semantic adjudication retry reserve envelope"),
+            "mode={mode} stderr={stderr}"
+        );
+        assert!(fs::read_to_string(&calls).unwrap().len() >= 4);
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
+fn solo_dual_manifest_provider_errors_never_exceed_fragmented_retry_reserve() {
     let t = temp("solo-dual-provider-error");
     let calls = t.join("calls");
     let mock = t.join("semantic.py");
     fs::write(
         &mock,
         format!(
-            r#"import os,sys
+            r#"import json,os,re,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    print('```python\nitems=[{{"id":"x","evidence":"raw"}}]\nsemantic_manifest(items,"official binary task",["ham","spam"])\nFINAL("unreachable")\n```')
+    print('```python\nitems=[{{"id":"x","evidence":"raw"}}]\nsemantic_manifest_records(items,"official binary task",["ham","spam"])\nFINAL("unreachable")\n```')
 else:
     with open({calls:?}, 'a') as f: f.write('x')
     if 'annotator A' in p:
         print('{{"azdaja_error":"provider_call_failed_retry_item"}}')
     else:
-        print('R00000000|ham')
+        prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed',p).group(1)
+        legend=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0].splitlines()[1:]
+        code=next(line.split('\t',1)[0] for line in legend if json.loads(line.split('\t',1)[1]) == 'ham')
+        print(prefix+code)
 "#,
             calls = calls,
         ),
@@ -1075,25 +2355,111 @@ else:
         "",
     );
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("semantic provider failure"));
-    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 2);
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("semantic provider failure after bounded retry")
+    );
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 3);
     fs::remove_dir_all(t).unwrap();
 }
 
 #[test]
-fn solo_dual_manifest_preflights_worst_case_call_budget() {
-    let t = temp("solo-dual-budget");
+fn source_ontology_extracts_unquoted_coarse_label_list() {
+    let t = temp("source-ontology-unquoted-list");
+    let mock = t.join("root.py");
+    fs::write(
+        &mock,
+        r#"print('```python\nlabels=source_ontology()\nFINAL("|".join(labels))\n```')"#,
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(
+        &input,
+        "Each question can be classified into one coarse label: abbreviation, entity, description and abstract concept, human being, location, or numeric value.\nUser: 300 || Question: Where?\n",
+    )
+    .unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "return the declaration",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "abbreviation|entity|description and abstract concept|human being|location|numeric value"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_manifest_rejects_ham_harm_ontology_typo_before_children() {
+    let t = temp("solo-ontology-ham-harm");
+    let marker = t.join("depth-one-called");
+    let mock = t.join("semantic.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import os,pathlib
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nitems=[{{"id":"x","evidence":"complete message"}}]\nsemantic_manifest_records(items,"classify spam or harm",["spam","harm"])\nFINAL("unreachable")\n```')
+else:
+    pathlib.Path({marker:?}).write_text('unexpected')
+    print('unexpected')
+"#,
+            marker = marker,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(
+        &input,
+        "The following lines contain text messages. Each text message can be classified as spam or ham (i.e., not spam).\n\nDate: Jan 1, 2025 || User: 7 || Instance: complete message\n",
+    )
+    .unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", "classify messages", "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("semantic labels do not match source-declared ontology")
+    );
+    assert!(!marker.exists(), "ontology mismatch launched a child");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn semantic_private_budget_is_isolated_from_ordinary_call_cap() {
+    let t = temp("solo-semantic-private-budget");
     let marker = t.join("child-called");
     let mock = t.join("semantic.py");
     fs::write(
         &mock,
         format!(
-            r#"import os,sys,pathlib
+            r#"import os,sys,pathlib,re
+p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    print('```python\nitems=[{{"id":"x","evidence":"raw"}}]\nsemantic_manifest(items,"official binary task",["ham","spam"])\nFINAL("unreachable")\n```')
+    print('```python\nitems=[{{"id":"x","evidence":"raw"}}]\nlabels=semantic_manifest_records(items,"official binary task",["ham","spam"])\nFINAL(labels["x"])\n```')
 else:
-    pathlib.Path({marker:?}).write_text('called')
-    print('R00000000|ham')
+    with open({marker:?},'a') as f:f.write('x')
+    prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-([0-9]+)-[0-9]+:) followed',p).group(1)
+    count=int(prefix[:-1].split('-')[3])
+    print(prefix+('0'*count))
 "#,
             marker = marker,
         ),
@@ -1117,12 +2483,13 @@ else:
         ],
         "",
     );
-    assert!(!output.status.success());
     assert!(
+        output.status.success(),
+        "{}",
         String::from_utf8_lossy(&output.stderr)
-            .contains("semantic dual/adjudication call envelope")
     );
-    assert!(!marker.exists(), "preflight must precede every child call");
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ham");
+    assert_eq!(fs::read_to_string(&marker).unwrap().len(), 3);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -1141,20 +2508,59 @@ if os.getenv('RLM_DEPTH') == '0':
     required = ('full ctx is the original raw input string',
                 'not the sample encoding and not json unless the input itself is json',
                 'inspect and parse complete ctx', 'preserve source occurrences',
-                'semantic_manifest(items, task, labels) exactly once',
-                'nonempty list of exactly two-key dicts named id and evidence',
-                'nonempty unique string', 'complete faithful nonempty item evidence',
-                'never silently truncated', 'source occurrences and weights preserved',
+                'exact line-record axiom',
+                'use an exact line helper on complete authoritative ctx',
+                'never the structural sample, a lexical_relevance view, a synthetic value',
+                'unambiguous common marker for every relevant record and no non-record line',
+                'exact_line_records(ctx, prefix)',
+                'exact_line_ledger(ctx, prefix)',
+                'frozen `entries`', 'immutable `.id` and `.record`',
+                'apply every deterministic metadata/date/user/range selector',
+                'append each selected `.id` exactly once in original order',
+                'semantic_manifest(ledger, selected_ids, target_marker, task, labels)',
+                'do not call, alias, shadow, or rebind the complete-record manifest',
+                'one designated final suffix target field',
+                'occur exactly once in every selected complete record, counting overlaps',
+                'must leave a nonempty suffix',
+                'byte-identical suffixes alone may share wire representatives',
+                'byte-for-byte with loaded ctx',
+                'runtime provenance records ledger, selected, representative, manifest-caller',
+                'semantic_manifest_records(items, task, labels) exactly once',
+                'source_ontology',
+                'exactly matching any source-declared ontology',
+                'broad ontology labels remain broad',
+                'inferred subject subtypes are never new labels',
+                'nonempty list of at most 105000 parsed source occurrences',
+                'each an exactly two-key dict named id and evidence',
+                'nonempty unique string',
+                'separately admitted final-suffix projection axiom',
+                'complete relevant record', 'never normalized or silently truncated',
+                'markers for answer/label fields',
+                'repeated or payload-colliding markers',
+                'neighboring-record or cross-field dependence',
+                'use complete records or abstain',
+                'source occurrences and weights preserved',
+                'never trust a count claimed by source text',
                 'task concisely frames', 'at least two distinct actual labels',
-                'leave conservative room below the 45000-character envelope',
-                'complete id-to-label mapping', 'two blind validated manifests',
-                'blind disagreement adjudication', 'every source item has exactly one result',
+                'balanced contiguous shards with at most 39 representatives',
+                'at most 81920 serialized prompt bytes',
+                'exact positional base62 response contract capped at',
+                '4*s classification calls', 'separate 2*s blind-adjudication allowance',
+                'hard-capped at 16158', 'bounded fresh missing-suffix',
+                'complete caller-id-to-label mapping',
+                'two fresh blind validated full manifests',
+                'blind raw-evidence adjudication of every disagreement',
+                'every source occurrence has exactly one result',
                 'reduce with preserved multiplicity',
                 'never infer semantic labels by searching evidence for label words',
                 'do not call llm, llm_batch, or llm_batch_fresh directly',
                 'os, re, json, math, collections, datetime',
-                'globals/locals/callable', 'dict.get', 'below 50 nonblank lines',
-                'fail closed: assert a nonempty verified answer',
+                'globals/locals/callable', 'dict.get', 'dict.__getitem__',
+                'initialize reduction counts for every declared label',
+                'including labels with zero occurrences', 'direct counts[key]',
+                'booleans are not integers', 'below 50 nonblank lines',
+                'assert complete semantic coverage plus a nonempty, domain-valid',
+                'never assert equality to a guessed or hard-coded answer label/value',
                 'exactly one unconditional top-level final(answer)',
                 'never guard final',
                 'agent tools', 'provider-native tools', 'shell commands', 'filesystem actions',
@@ -1168,7 +2574,8 @@ if os.getenv('RLM_DEPTH') == '0':
     sample_ok = ('schema-canary' in sample and 'TAIL_NOT_IN_SAMPLE' in sample
                  and '[HEAD chars 0..' in sample and '[TAIL chars ' in sample
                  and len(sample.encode('utf-8')) <= 4096)
-    if not sample_ok or not all(x in p.lower() for x in required): print('```python\nFINAL("missing bounded sample or exact aggregation playbook")\n```')
+    missing=[x for x in required if x not in p.lower()]
+    if not sample_ok or missing: print('```python\nFINAL("missing: '+ '|'.join(missing) +'")\n```')
     else: print('```python\nFINAL("done:" + llm("classify"))\n```')
 else: print('SUB_OK')
 "#,
@@ -1212,6 +2619,480 @@ else: print('SUB_OK')
         })
         .count();
     assert_eq!(sessions, 0, "solo should retain Monty only in-process");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_exact_line_records_preserves_complete_record_occurrences() {
+    let t = temp("solo-exact-line-records-probe");
+    let marker = t.join("children");
+    let mock = t.join("line_records.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    code='''records=exact_line_records(ctx,"Date: ")
+assert len(records)==6
+ledger=[]
+for record in records:
+    ledger.append(record)
+assert len(ledger)==len(records)
+labels=source_ontology()
+items=[]
+i=0
+for record in ledger:
+    items.append({{"id":"r"+str(i),"evidence":record}})
+    i+=1
+manifest=semantic_manifest_records(items,"Classify every complete designated message instance as spam or ham for the official count question.",labels)
+assert len(items)==len(records) and len(manifest)==len(records)
+counts={{}}
+for label in labels:
+    counts[label]=0
+for item in items:
+    value=manifest[item["id"]]
+    counts[value]=counts[value]+1
+answer="Answer: "+str(counts["ham"])
+assert answer.startswith("Answer: ")
+FINAL(answer)'''
+    print('```python\n'+code+'\n```')
+else:
+    prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-([0-9]+)-[0-9]+:) followed',p).group(1)
+    with open({marker:?},'a') as f:f.write(prefix+'\n')
+    contract=p.rsplit('no whitespace, prose, markdown, omission, or extra character.\n',1)[1]
+    rows=re.findall(r'(?m)^[0-9a-zA-Z]+\t(".*")$',contract)
+    legend={{}}
+    legend_part=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0]
+    for code,label_json in re.findall(r'(?m)^([0-9a-zA-Z]+)\t(".*")$',legend_part):
+        legend[json.loads(label_json)]=code
+    out=''
+    for evidence_json in rows:
+        evidence=json.loads(evidence_json)
+        label='ham' if 'project meeting' in evidence.lower() else 'spam'
+        out+=legend[label]
+    print(prefix+out)
+"#,
+            marker = marker,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(
+        &input,
+        concat!(
+            "The following lines contain text messages. Each line has a date, user ID, and message instance. Each message can be classified as spam or ham.\n",
+            "Date: Jan 01, 2024 || User: 100 || Instance: Exclusive loan offer! Apply now for instant cash.\n",
+            "Date: Jan 02, 2024 || User: 101 || Instance: Exclusive loan offer! Apply now for instant cash.\n",
+            "Date: Jan 03, 2024 || User: 102 || Instance: Exclusive loan offer! Apply now for instant cash.\n",
+            "Date: Jan 04, 2024 || User: 103 || Instance: The project meeting starts at ten.\n",
+            "Date: Jan 05, 2024 || User: 104 || Instance: The project meeting starts at ten.\n",
+            "Date: Jan 06, 2024 || User: 105 || Instance: You have been selected for a free holiday. Call this premium number.\n",
+        ),
+    )
+    .unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "In the above data, how many data points should be classified as label 'ham'? Give your final answer in the form 'Answer: number'.",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "Answer: 2");
+    let tags = fs::read_to_string(marker).unwrap();
+    assert!(tags.contains("AZM1-A-0-6-1:"), "{tags}");
+    assert!(tags.contains("AZM1-B-0-6-1:"), "{tags}");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_exact_line_ledger_projects_and_expands_duplicate_probe_occurrences() {
+    let t = temp("solo-exact-line-ledger-probe");
+    let marker = t.join("children");
+    let mock = t.join("line_ledger.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    code='''ledger=exact_line_ledger(ctx,"Date: ")
+assert len(ledger.entries)==6
+selected=[]
+for entry in ledger.entries:
+    selected.append(entry.id)
+labels=source_ontology()
+manifest=semantic_manifest(ledger,selected," || Instance: ","Classify every complete designated message instance as spam or ham for the official count question.",labels)
+assert len(manifest)==6
+counts={{}}
+for label in labels:
+    counts[label]=0
+for entry in ledger.entries:
+    value=manifest[entry.id]
+    counts[value]=counts[value]+1
+answer="Answer: "+str(counts["ham"])
+assert answer.startswith("Answer: ")
+FINAL(answer)'''
+    print('```python\n'+code+'\n```')
+else:
+    prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-([0-9]+)-[0-9]+:) followed',p).group(1)
+    with open({marker:?},'a') as f:f.write(prefix+'\n')
+    contract=p.rsplit('no whitespace, prose, markdown, omission, or extra character.\n',1)[1]
+    rows=re.findall(r'(?m)^[0-9a-zA-Z]+\t(".*")$',contract)
+    legend={{}}
+    legend_part=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0]
+    for code,label_json in re.findall(r'(?m)^([0-9a-zA-Z]+)\t(".*")$',legend_part):
+        legend[json.loads(label_json)]=code
+    out=''
+    for evidence_json in rows:
+        evidence=json.loads(evidence_json)
+        label='ham' if 'project meeting' in evidence.lower() else 'spam'
+        out+=legend[label]
+    print(prefix+out)
+"#,
+            marker = marker,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(
+        &input,
+        concat!(
+            "The following lines contain text messages. Each line has a date, user ID, and message instance. Each message can be classified as spam or ham.\n",
+            "Date: Jan 01, 2024 || User: 100 || Instance: Exclusive loan offer! Apply now for instant cash.\n",
+            "Date: Jan 02, 2024 || User: 101 || Instance: The project meeting starts at ten.\n",
+            "Date: Jan 03, 2024 || User: 102 || Instance: Exclusive loan offer! Apply now for instant cash.\n",
+            "Date: Jan 04, 2024 || User: 103 || Instance: You have been selected for a free holiday. Call this premium number.\n",
+            "Date: Jan 05, 2024 || User: 104 || Instance: The project meeting starts at ten.\n",
+            "Date: Jan 06, 2024 || User: 105 || Instance: Exclusive loan offer! Apply now for instant cash.\n",
+        ),
+    )
+    .unwrap();
+    let trace_path = t.join("solo.trace");
+    let output = run_with_solo_trace(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "In the above data, how many data points should be classified as label 'ham'? Give your final answer in the form 'Answer: number'.",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+        &trace_path,
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "Answer: 2");
+    let tags = fs::read_to_string(marker).unwrap();
+    assert!(tags.contains("AZM1-A-0-3-1:"), "{tags}");
+    assert!(tags.contains("AZM1-B-0-3-1:"), "{tags}");
+    let trace = fs::read_to_string(trace_path).unwrap();
+    assert!(trace.contains("\"schema_version\":2"), "{trace}");
+    assert!(trace.contains("\"projection_ledger_calls\":1"), "{trace}");
+    assert!(trace.contains("\"projection_calls\":1"), "{trace}");
+    assert!(
+        trace.contains("\"projection_ledger_occurrences\":6"),
+        "{trace}"
+    );
+    assert!(
+        trace.contains("\"projection_selected_occurrences\":6"),
+        "{trace}"
+    );
+    assert!(trace.contains("\"projection_unique_targets\":3"), "{trace}");
+    assert!(
+        trace.contains("\"projection_manifest_callers\":6"),
+        "{trace}"
+    );
+    assert!(
+        trace.contains("\"projection_expanded_outputs\":6"),
+        "{trace}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_projection_provenance_rejects_gameable_three_caller_path() {
+    let t = temp("solo-exact-line-ledger-partial");
+    let marker = t.join("children");
+    let mock = t.join("line_ledger_partial.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    code='''ledger=exact_line_ledger(ctx,"Date: ")
+assert len(ledger.entries)==6
+selected=[ledger.entries[0].id,ledger.entries[1].id,ledger.entries[3].id]
+labels=source_ontology()
+manifest=semantic_manifest(ledger,selected," || Instance: ","Classify every complete designated message instance as spam or ham for the official count question.",labels)
+assert len(manifest)==3
+counts={{}}
+for label in labels:
+    counts[label]=0
+for selected_id in selected:
+    value=manifest[selected_id]
+    counts[value]=counts[value]+1
+answer="Answer: "+str(counts["ham"])
+assert answer.startswith("Answer: ")
+FINAL(answer)'''
+    print('```python\n'+code+'\n```')
+else:
+    prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-([0-9]+)-[0-9]+:) followed',p).group(1)
+    with open({marker:?},'a') as f:f.write(prefix+'\n')
+    contract=p.rsplit('no whitespace, prose, markdown, omission, or extra character.\n',1)[1]
+    rows=re.findall(r'(?m)^[0-9a-zA-Z]+\t(".*")$',contract)
+    legend={{}}
+    legend_part=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0]
+    for code,label_json in re.findall(r'(?m)^([0-9a-zA-Z]+)\t(".*")$',legend_part):
+        legend[json.loads(label_json)]=code
+    out=''
+    for evidence_json in rows:
+        evidence=json.loads(evidence_json)
+        label='ham' if 'project meeting' in evidence.lower() else 'spam'
+        out+=legend[label]
+    print(prefix+out)
+"#,
+            marker = marker,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(
+        &input,
+        concat!(
+            "The following lines contain text messages. Each line has a date, user ID, and message instance. Each message can be classified as spam or ham.\n",
+            "Date: Jan 01, 2024 || User: 100 || Instance: Exclusive loan offer! Apply now for instant cash.\n",
+            "Date: Jan 02, 2024 || User: 101 || Instance: The project meeting starts at ten.\n",
+            "Date: Jan 03, 2024 || User: 102 || Instance: Exclusive loan offer! Apply now for instant cash.\n",
+            "Date: Jan 04, 2024 || User: 103 || Instance: You have been selected for a free holiday. Call this premium number.\n",
+            "Date: Jan 05, 2024 || User: 104 || Instance: The project meeting starts at ten.\n",
+            "Date: Jan 06, 2024 || User: 105 || Instance: Exclusive loan offer! Apply now for instant cash.\n",
+        ),
+    )
+    .unwrap();
+    let trace_path = t.join("solo.trace");
+    let output = run_with_solo_trace(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "In the above data, how many data points should be classified as label 'ham'? Give your final answer in the form 'Answer: number'.",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+        &trace_path,
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "Answer: 1");
+    let tags = fs::read_to_string(marker).unwrap();
+    assert!(tags.contains("AZM1-A-0-3-1:"), "{tags}");
+    assert!(tags.contains("AZM1-B-0-3-1:"), "{tags}");
+    let trace = fs::read_to_string(trace_path).unwrap();
+    assert!(trace.contains("\"schema_version\":2"), "{trace}");
+    assert!(trace.contains("\"projection_ledger_calls\":1"), "{trace}");
+    assert!(trace.contains("\"projection_calls\":1"), "{trace}");
+    assert!(
+        trace.contains("\"projection_ledger_occurrences\":6"),
+        "{trace}"
+    );
+    assert!(
+        trace.contains("\"projection_selected_occurrences\":3"),
+        "{trace}"
+    );
+    assert!(trace.contains("\"projection_unique_targets\":3"), "{trace}");
+    assert!(
+        trace.contains("\"projection_manifest_callers\":3"),
+        "{trace}"
+    );
+    assert!(
+        trace.contains("\"projection_expanded_outputs\":3"),
+        "{trace}"
+    );
+    let runtime_row: serde_json::Value = trace
+        .lines()
+        .find_map(|line| serde_json::from_str(line).ok())
+        .unwrap();
+    let required_duplicate_path = runtime_row["projection_ledger_calls"] == 1
+        && runtime_row["projection_calls"] == 1
+        && runtime_row["projection_ledger_occurrences"] == 6
+        && runtime_row["projection_selected_occurrences"] == 6
+        && runtime_row["projection_unique_targets"] == 3
+        && runtime_row["projection_manifest_callers"] == 6
+        && runtime_row["projection_expanded_outputs"] == 6;
+    assert!(
+        !required_duplicate_path,
+        "three representatives cannot prove six-caller multiplicity"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_exact_line_ledger_filters_noncontiguous_ids_before_fused_projection() {
+    let t = temp("solo-exact-line-ledger-filter");
+    let marker = t.join("child-tags");
+    let mock = t.join("filtered_line_ledger.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    code='''ledger=exact_line_ledger(ctx,"Date: ")
+assert len(ledger.entries)==4
+selected=[]
+for entry in ledger.entries:
+    fields=entry.record.split(" || ")
+    assert len(fields)==3
+    date_field=fields[0]
+    user_field=fields[1]
+    if user_field=="User: 7" and (date_field=="Date: Jan 02" or date_field=="Date: Jan 03"):
+        selected.append(entry.id)
+assert selected==["O1","O2"]
+labels=source_ontology()
+manifest=semantic_manifest(ledger,selected," || Instance: ","Classify the designated final Instance for selected User 7 records on Jan 02 through Jan 03 as include or exclude.",labels)
+assert len(manifest)==len(selected)
+count=0
+for selected_id in selected:
+    if manifest[selected_id]=="include":
+        count+=1
+FINAL("Answer: "+str(count))'''
+    print('```python\n'+code+'\n```')
+else:
+    prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-([0-9]+)-[0-9]+:) followed',p).group(1)
+    legend_part=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0]
+    legend={{}}
+    for code,label_json in re.findall(r'(?m)^([0-9a-zA-Z]+)\t(".*")$',legend_part):
+        legend[json.loads(label_json)]=code
+    count=int(prefix[:-1].split('-')[3])
+    with open({marker:?},'a') as f:f.write(prefix+'\n')
+    print(prefix+(legend['include']*count))
+"#,
+            marker = marker,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(
+        &input,
+        concat!(
+            "Each complete record is one line with date, user, and final Instance. After date/user selection, each label is solely a function of Instance and is classified as include or exclude.\n",
+            "Date: Jan 01 || User: 7 || Instance: outside date\n",
+            "Date: Jan 02 || User: 7 || Instance: exact first target\n",
+            "Date: Jan 03 || User: 7 || Instance: exact second target\n",
+            "Date: Jan 030 || User: 70 || Instance: prefix-collision control\n",
+        ),
+    )
+    .unwrap();
+    let trace_path = t.join("solo.trace");
+    let output = run_with_solo_trace(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "For User 7 on Jan 02 through Jan 03, how many Instances are label 'include'? Give your final answer in the form 'Answer: number'.",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+        &trace_path,
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "Answer: 2");
+    let tags = fs::read_to_string(marker).unwrap();
+    assert!(tags.contains("AZM1-A-0-2-1:"), "{tags}");
+    assert!(tags.contains("AZM1-B-0-2-1:"), "{tags}");
+    let trace = fs::read_to_string(trace_path).unwrap();
+    let runtime: serde_json::Value = trace
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .next_back()
+        .unwrap();
+    assert_eq!(runtime["projection_ledger_occurrences"], 4);
+    assert_eq!(runtime["projection_selected_occurrences"], 2);
+    assert_eq!(runtime["projection_unique_targets"], 2);
+    assert_eq!(runtime["projection_manifest_callers"], 2);
+    assert_eq!(runtime["projection_expanded_outputs"], 2);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_exact_line_records_invalid_prefix_fails_before_final_or_children() {
+    let t = temp("solo-exact-line-records-invalid");
+    let marker = t.join("child-called");
+    let mock = t.join("invalid_line_records.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import os
+if os.getenv('RLM_DEPTH') == '0':
+    print('```python\nrecords=exact_line_records(ctx,"Date:\\n")\nFINAL("UNEXPECTED")\n```')
+else:
+    open({marker:?},'w').write('called')
+    print('UNEXPECTED_CHILD')
+"#,
+            marker = marker,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(
+        &input,
+        "Each complete record is one line.\nDate: one\nDate: two\n",
+    )
+    .unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "Classify every record",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("exact_line_records requires a nonempty literal prefix without CR or LF"),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("UNEXPECTED"));
+    assert!(!marker.exists());
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -1359,6 +3240,141 @@ else:
         );
         assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), *expected);
     }
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_rejects_zero_call_classification_final_and_repairs_with_the_axiom() {
+    let t = temp("solo-classification-final-gate");
+    let calls = t.join("root.calls");
+    let trace = t.join("solo.trace");
+    let mock = t.join("semantic-gate.py");
+    fs::write(
+        &mock,
+        r#"import json, os, pathlib, re, sys
+calls = pathlib.Path(sys.argv[1])
+prompt = sys.stdin.read()
+if os.getenv("RLM_DEPTH") == "0":
+    count = len(calls.read_text().splitlines()) if calls.exists() else 0
+    calls.open("a").write("root\n")
+    if count == 0:
+        assert "Classification axiom: labels are produced by classifying instances" in prompt
+        print('```python\nFINAL("Label: spam")\n```')
+    else:
+        assert "Labels are produced by classifying instances, never found by searching for label fields." in prompt
+        assert "Parse the exact text that is present" not in prompt
+        print('''```python
+items=[{"id":"item-0","evidence":ctx}]
+labels=semantic_manifest_records(items,"classify the synthetic message",["spam","ham"])
+assert len(labels)==1
+FINAL("Label: "+labels["item-0"])
+```''')
+else:
+    assert "complete JSON evidence" in prompt
+    prefix=re.search(r"return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed",prompt).group(1)
+    legend=prompt.split("LABEL CODES",1)[1].split("ROWS are",1)[0].splitlines()[1:]
+    code=next(line.split("\t",1)[0] for line in legend if json.loads(line.split("\t",1)[1]) == "spam")
+    print(prefix+code)
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "Date: Jan 01, 2025 || Instance: synthetic message").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_SOLO_TRACE", &trace)
+        .args([
+            "solo",
+            "Which of the labels is most common? Return Label: answer.",
+            "-f",
+            input.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "Label: spam"
+    );
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
+    let retained = fs::read_to_string(&trace).unwrap();
+    assert!(
+        retained.contains("trigger=ClassificationWithoutSemanticCalls"),
+        "{retained}"
+    );
+    assert!(retained.contains("sub_call_count\":2"), "{retained}");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_never_accepts_a_zero_call_classification_final_across_all_repairs() {
+    let t = temp("solo-classification-final-gate-terminal");
+    let calls = t.join("root.calls");
+    let trace = t.join("solo.trace");
+    let mock = t.join("semantic-gate-terminal.py");
+    fs::write(
+        &mock,
+        r#"import pathlib, sys
+calls = pathlib.Path(sys.argv[1])
+prompt = sys.stdin.read()
+count = len(calls.read_text().splitlines()) if calls.exists() else 0
+calls.open("a").write("root\n")
+if count:
+    assert "Labels are produced by classifying instances, never found by searching for label fields." in prompt
+    assert "Parse the exact text that is present" not in prompt
+print('```python\nFINAL("Answer: 0")\n```')
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "Date: Jan 01, 2025 || Instance: synthetic message").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_SOLO_TRACE", &trace)
+        .args([
+            "solo",
+            "How many data points should be classified as label 'ham'?",
+            "-f",
+            input.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 4);
+    let retained = fs::read_to_string(&trace).unwrap();
+    assert!(
+        retained
+            .matches("ClassificationWithoutSemanticCalls")
+            .count()
+            >= 4
+    );
+    assert!(retained.contains("sub_call_count\":0"), "{retained}");
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -1631,7 +3647,7 @@ fn solo_repair_trace_rename_replacement_prevents_second_turn() {
     let trace = t.join("solo.trace");
     let hidden = t.join("solo.hidden");
     let mock = t.join("replace-trace.py");
-    fs::write(&mock, r#"import os, pathlib, sys
+    fs::write(&mock, r#"import json, os, pathlib, re, sys
 calls = pathlib.Path(sys.argv[1]); trace = pathlib.Path(sys.argv[2]); hidden = pathlib.Path(sys.argv[3])
 calls.open("a").write("root\n")
 trace.rename(hidden)
@@ -1792,7 +3808,7 @@ print('```python\nFINAL(" " * 1000)\n```')
     );
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 3);
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 4);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -1888,7 +3904,55 @@ else:
 }
 
 #[test]
-fn solo_repair_fails_closed_after_exactly_three_root_turns() {
+fn solo_third_repair_recovers_after_two_failed_repairs() {
+    let t = temp("solo-third-repair");
+    let calls = t.join("calls");
+    let mock = t.join("repair-three.py");
+    fs::write(&mock, r#"import pathlib, sys
+calls = pathlib.Path(sys.argv[1]); count = len(calls.read_text().splitlines()) if calls.exists() else 0
+calls.open("a").write("root\n")
+if count == 0:
+    print("invalid prose")
+elif count == 1:
+    print('```python\n' + '\n'.join('x = 1' for _ in range(51)) + '\n```')
+elif count == 2:
+    print('```python\nassert False\n```')
+else:
+    print('```python\nassert ctx == "original"\nFINAL("THIRD")\n```')
+"#).unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {} {}", mock.display(), calls.display()),
+        4096,
+        1,
+        3,
+        4,
+    );
+    let input = t.join("input.txt");
+    fs::write(&input, "original").unwrap();
+    let trace = t.join("solo.trace");
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_SOLO_TRACE", &trace)
+        .args(["solo", "generic question", "-f", input.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "THIRD");
+    assert_eq!(fs::read_to_string(calls).unwrap().lines().count(), 4);
+    let retained = fs::read_to_string(trace).unwrap();
+    assert!(retained.contains("repair_index=3"));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_repair_fails_closed_after_exactly_four_root_turns() {
     let t = temp("solo-root-repair-fail-closed");
     let calls = t.join("calls");
     let mock = t.join("bad.py");
@@ -1917,7 +3981,7 @@ print("invalid prose")
         "",
     );
     assert_eq!(output.status.code(), Some(2));
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 3);
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 4);
     assert!(String::from_utf8_lossy(&output.stderr).contains("repair failed"));
     fs::remove_dir_all(t).unwrap();
 }
@@ -1966,12 +4030,12 @@ else:
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 6);
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 8);
     fs::remove_dir_all(t).unwrap();
 }
 
 #[test]
-fn solo_fails_closed_after_two_repair_turns() {
+fn solo_fails_closed_after_three_repair_turns() {
     let t = temp("solo-turn-limit");
     let calls = t.join("root-calls");
     let mock = t.join("never-final.py");
@@ -2004,7 +4068,7 @@ else:
     );
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stderr).contains("did not call FINAL"));
-    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 3);
+    assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 4);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -2357,6 +4421,14 @@ exit 9
     assert!(skill.contains("Omission is unresolved"));
     assert!(skill.contains("two independent complete manifests"));
     assert!(skill.contains("Blindly adjudicate every A/B disagreement"));
+    assert!(skill.contains("azdaja 0.1.0") && skill.contains(dst.join("azdaja").to_str().unwrap()));
+    assert!(skill.contains("Source occurrences and multiplicity are preserved"));
+    assert!(skill.contains("every caller occurrence is expanded before reduction"));
+    assert!(skill.contains("Labels are produced by classifying complete instances"));
+    assert!(skill.contains("never by searching for label fields or label words"));
+    assert!(skill.contains("Complete validated coverage is required"));
+    assert!(!skill.contains("For exact semantic counts and aggregates"));
+    assert!(!skill.contains("Prefer one root planning turn"));
     assert!(skill.contains("`yield`/generators"));
     assert!(skill.contains("`FINAL(answer)` is always defined"));
     assert!(skill.contains("`csv` and other imports are unavailable"));
@@ -3681,7 +5753,7 @@ fn solo_root_retries_explicit_typed_transient_errors_with_separate_budgets() {
     );
     let runtime: serde_json::Value =
         serde_json::from_str(solo_lines[solo_lines.len() - 2]).unwrap();
-    assert_eq!(runtime["schema_version"], 1);
+    assert_eq!(runtime["schema_version"], 2);
     assert_eq!(runtime["event"], "solo_runtime");
     assert_eq!(runtime["request_id"], traced_request_id);
     assert_eq!(runtime["outcome"], "succeeded");
@@ -4726,4 +6798,166 @@ fn claude_hook_worker_errors_fail_closed_by_event_without_authorizing_posttool()
     assert!(output.stdout.is_empty());
     assert!(blocked_state.is_file());
     fs::remove_dir_all(root).unwrap();
+}
+#[test]
+fn solo_projected_manifest_rejects_invalid_capability_paths_before_children() {
+    let t = temp("solo-projected-negative-paths");
+    let marker = t.join("unexpected-child");
+    let mock = t.join("projection_negative.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import os,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    if 'case-cropped' in p:
+        code='ledger=exact_line_ledger(ctx[:-1],"Row: ")'
+    elif 'case-synthetic' in p:
+        code='ledger=exact_line_ledger("Row: meta=0 target=alpha\\n","Row: ")'
+    elif 'case-duplicate-id' in p:
+        code='''ledger=exact_line_ledger(ctx,"Row: ")
+semantic_manifest(ledger,["O0","O0"]," target=","task",["a","b"])'''
+    elif 'case-wrapper-arity' in p:
+        code='''ledger=exact_line_ledger(ctx,"Row: ")
+semantic_manifest(ledger,["O0"]," target=","task")'''
+    elif 'case-second-ledger' in p:
+        code='''exact_line_ledger(ctx,"Row: ")
+exact_line_ledger(ctx,"Row: ")'''
+    elif 'case-private' in p:
+        code='_az_project_selected(None,[],"x")'
+    elif 'case-shadow' in p:
+        code='semantic_manifest = semantic_manifest_records'
+    else:
+        raise AssertionError('missing case')
+    print('```python\n'+code+'\n```')
+else:
+    with open({marker:?},'a') as f:f.write('child\n')
+    print('unexpected')
+"#,
+            marker = marker,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 2, 2);
+    let input = t.join("input.txt");
+    fs::write(
+        &input,
+        concat!(
+            "Each record is classified as a or b solely from its final target field.\n",
+            "Row: meta=0 target=alpha\n",
+            "Row: meta=1 target=beta\n",
+        ),
+    )
+    .unwrap();
+    for case in [
+        "case-cropped",
+        "case-synthetic",
+        "case-duplicate-id",
+        "case-wrapper-arity",
+        "case-second-ledger",
+        "case-private",
+        "case-shadow",
+    ] {
+        let output = run(&t, &cfg, &["solo", case, "-f", input.to_str().unwrap()], "");
+        assert!(
+            !output.status.success(),
+            "case={case} stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!marker.exists(), "case={case}");
+    }
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_cross_field_labels_keep_complete_records_and_emit_no_projection_provenance() {
+    let t = temp("solo-cross-field-no-projection");
+    let marker = t.join("evidence");
+    let mock = t.join("cross_field.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json,os,re,sys
+p=sys.stdin.read()
+if os.getenv('RLM_DEPTH') == '0':
+    code='''records=exact_line_records(ctx,"Row: ")
+items=[]
+i=0
+for record in records:
+    items.append({{"id":"r"+str(i),"evidence":record}})
+    i+=1
+labels=["allow","deny"]
+manifest=semantic_manifest_records(items,"Classify each complete record as allow or deny using its User field; the repeated final Message field alone is insufficient.",labels)
+counts={{"allow":0,"deny":0}}
+for item in items:
+    value=manifest[item["id"]]
+    counts[value]=counts[value]+1
+FINAL("Answer: "+str(counts["allow"]))'''
+    print('```python\n'+code+'\n```')
+else:
+    prefix=re.search(r'return only (AZM1-[ABJ]-[0-9]+-([0-9]+)-[0-9]+:) followed',p).group(1)
+    contract=p.rsplit('no whitespace, prose, markdown, omission, or extra character.\n',1)[1]
+    rows=re.findall(r'(?m)^[0-9a-zA-Z]+\t(".*")$',contract)
+    legend={{}}
+    legend_part=p.split('LABEL CODES',1)[1].split('ROWS are',1)[0]
+    for code,label_json in re.findall(r'(?m)^([0-9a-zA-Z]+)\t(".*")$',legend_part):
+        legend[json.loads(label_json)]=code
+    out=''
+    with open({marker:?},'a') as f:
+        for evidence_json in rows:
+            evidence=json.loads(evidence_json)
+            assert 'User: ' in evidence and ' || Message: repeated' in evidence
+            f.write(evidence+'\n')
+            out+=legend['allow' if 'User: privileged' in evidence else 'deny']
+    print(prefix+out)
+"#,
+            marker = marker,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(
+        &input,
+        concat!(
+            "Each complete record is classified as 'allow' or 'deny'. The label depends on User; Message alone is insufficient.\n",
+            "Row: User: privileged || Message: repeated\n",
+            "Row: User: ordinary || Message: repeated\n",
+            "Row: User: privileged || Message: repeated\n",
+            "Row: User: ordinary || Message: repeated\n",
+        ),
+    )
+    .unwrap();
+    let trace_path = t.join("solo.trace");
+    let output = run_with_solo_trace(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "How many complete records should be classified as allow? Give Answer: number.",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+        &trace_path,
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "Answer: 2");
+    assert_eq!(fs::read_to_string(marker).unwrap().lines().count(), 4);
+    let trace = fs::read_to_string(trace_path).unwrap();
+    let runtime: serde_json::Value = trace
+        .lines()
+        .find_map(|line| serde_json::from_str(line).ok())
+        .unwrap();
+    assert!(runtime["projection_ledger_calls"].is_null());
+    assert!(runtime["projection_calls"].is_null());
+    assert!(runtime["projection_ledger_occurrences"].is_null());
+    assert!(runtime["projection_expanded_outputs"].is_null());
+    fs::remove_dir_all(t).unwrap();
 }

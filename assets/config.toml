@@ -10,5 +10,5 @@ sub_timeout = 300
 max_sessions = 4
 cell_timeout = 60
 idle_timeout = 1800
-max_calls_per_cell = 64
+max_calls_per_cell = 150
 clean_patterns = []

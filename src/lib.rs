@@ -42,7 +42,14 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const MONTY_VERSION: &str = "0.0.21";
 pub const SKILL: &str = include_str!("../assets/SKILL.md");
 pub const DEFAULT_CONFIG: &str = include_str!("../assets/config.toml");
-pub const SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS: usize = 45_000;
+pub const SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS: usize = 360_000;
+pub const SEMANTIC_MANIFEST_RESPONSE_ENVELOPE_CHARS: usize = 8_192;
+pub const MAX_CALLS_PER_CELL: usize = 150;
+pub const SEMANTIC_MANIFEST_MAX_CALLS: usize = 16_158;
+pub const SEMANTIC_MANIFEST_WORKERS: usize = 8;
+pub const SEMANTIC_PER_CALL_P95_SECONDS: u64 = 27;
+pub const SEMANTIC_WALL_SAFETY_SECONDS: u64 = 60;
+pub const SEMANTIC_MIN_WALL_SECONDS: u64 = 240;
 
 static PROVIDER_INTERRUPTED: AtomicBool = AtomicBool::new(false);
 #[cfg(unix)]
@@ -331,7 +338,7 @@ impl Default for Config {
             clean_patterns: Vec::new(),
             jcode_provider: "openai".into(),
             jcode_reasoning: "medium".into(),
-            max_calls_per_cell: 64,
+            max_calls_per_cell: MAX_CALLS_PER_CELL,
         }
     }
 }
@@ -396,6 +403,9 @@ impl Config {
         }
         if self.max_sessions == 0 || self.max_calls_per_cell == 0 {
             bail!("session and call limits must be positive")
+        }
+        if self.max_calls_per_cell > MAX_CALLS_PER_CELL {
+            bail!("max_calls_per_cell cannot exceed {MAX_CALLS_PER_CELL}")
         }
         for p in &self.clean_patterns {
             Regex::new(p).with_context(|| format!("invalid clean pattern: {p}"))?;
@@ -2159,6 +2169,7 @@ pub struct ExecResult {
     pub external_calls: usize,
     /// Gross monotonic wall spent inside logical model-call batches during this cell.
     pub sub_call_wall_ns: u128,
+    pub semantic_projection: Option<SemanticProjectionProvenance>,
     pub failure_kind: ExecFailureKind,
     pub failure_line: Option<String>,
 }
@@ -2550,16 +2561,339 @@ fn relevance_object(view: RelevanceView) -> Result<MontyObject> {
     ))
 }
 
+const EXACT_LINE_RECORD_MAX_ITEMS: usize = 105_000;
+const EXACT_LINE_RECORD_MAX_PREFIX_BYTES: usize = 1_024;
+const EXACT_LINE_LEDGER_TYPE_ID: u64 = 0x415a_4c45_4447_4552;
+const EXACT_LINE_LEDGER_NAME: &str = "AzdajaExactLineLedger";
+const EXACT_TARGET_MARKER_MAX_BYTES: usize = 1_024;
+
+fn exact_line_record_strings(source: &str, prefix: &str) -> Result<Vec<String>> {
+    if prefix.is_empty()
+        || prefix.len() > EXACT_LINE_RECORD_MAX_PREFIX_BYTES
+        || prefix.contains(['\r', '\n'])
+    {
+        bail!("exact_line_records requires a nonempty literal prefix without CR or LF")
+    }
+    let bytes = source.as_bytes();
+    for (index, byte) in bytes.iter().enumerate() {
+        if *byte == b'\r' && bytes.get(index + 1) != Some(&b'\n') {
+            bail!("exact_line_records rejects bare CR record boundaries")
+        }
+    }
+    let mut records = Vec::new();
+    for raw in source.split('\n') {
+        let line = raw.strip_suffix('\r').unwrap_or(raw);
+        if line.starts_with(prefix) {
+            if records.len() >= EXACT_LINE_RECORD_MAX_ITEMS {
+                bail!("exact_line_records record limit exceeded")
+            }
+            records.push(line.to_owned());
+        }
+    }
+    if records.is_empty() {
+        bail!("exact_line_records found no anchored records")
+    }
+    Ok(records)
+}
+
+fn exact_line_records(source: &str, prefix: &str) -> Result<MontyObject> {
+    Ok(MontyObject::List(
+        exact_line_record_strings(source, prefix)?
+            .into_iter()
+            .map(MontyObject::String)
+            .collect(),
+    ))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SemanticProjectionProvenance {
+    pub ledger_calls: usize,
+    pub projection_calls: usize,
+    pub ledger_occurrences: usize,
+    pub selected_occurrences: usize,
+    pub unique_targets: usize,
+    pub manifest_caller_occurrences: usize,
+    pub expanded_outputs: usize,
+}
+
+#[derive(Default)]
+struct ExactLineLedgerRegistry {
+    next_handle: u64,
+    ledgers: BTreeMap<u64, Vec<String>>,
+    pending: Option<(SemanticProjectionProvenance, Vec<String>)>,
+    projection: Option<SemanticProjectionProvenance>,
+}
+
+impl ExactLineLedgerRegistry {
+    fn create(&mut self, records: Vec<String>) -> Result<MontyObject> {
+        if !self.ledgers.is_empty() {
+            bail!("exact_line_ledger may be called only once per cell")
+        }
+        let handle = self.next_handle;
+        self.next_handle = self
+            .next_handle
+            .checked_add(1)
+            .ok_or_else(|| anyhow!("exact line ledger handle overflow"))?;
+        let mut entries = Vec::with_capacity(records.len());
+        for (ordinal, record) in records.iter().enumerate() {
+            entries.push(MontyObject::NamedTuple {
+                type_name: "ExactLineEntry".into(),
+                field_names: vec!["id".into(), "record".into()],
+                values: vec![
+                    MontyObject::String(format!("O{ordinal}")),
+                    MontyObject::String(record.clone()),
+                ],
+            });
+        }
+        self.ledgers.insert(handle, records);
+        Ok(MontyObject::Dataclass {
+            name: EXACT_LINE_LEDGER_NAME.into(),
+            type_id: EXACT_LINE_LEDGER_TYPE_ID,
+            field_names: vec!["entries".into()],
+            attrs: vec![
+                (
+                    MontyObject::String("entries".into()),
+                    MontyObject::Tuple(entries),
+                ),
+                (
+                    MontyObject::String("_az_handle".into()),
+                    MontyObject::Int(i64::try_from(handle).context("exact line ledger handle")?),
+                ),
+            ]
+            .into(),
+            frozen: true,
+        })
+    }
+
+    fn validate_ledger(&self, value: &MontyObject) -> Result<u64> {
+        let MontyObject::Dataclass {
+            name,
+            type_id,
+            field_names,
+            attrs,
+            frozen,
+        } = value
+        else {
+            bail!("semantic_manifest_projected requires an exact line ledger")
+        };
+        if name != EXACT_LINE_LEDGER_NAME
+            || *type_id != EXACT_LINE_LEDGER_TYPE_ID
+            || field_names != &["entries"]
+            || !*frozen
+            || attrs.len() != 2
+        {
+            bail!("semantic_manifest_projected requires an exact line ledger")
+        }
+        let pairs: Vec<_> = attrs.into_iter().collect();
+        let (MontyObject::String(entries_key), MontyObject::Tuple(entries)) =
+            (&pairs[0].0, &pairs[0].1)
+        else {
+            bail!("invalid exact line ledger shape")
+        };
+        if entries_key != "entries" {
+            bail!("invalid exact line ledger shape")
+        }
+        let (MontyObject::String(handle_key), MontyObject::Int(handle)) =
+            (&pairs[1].0, &pairs[1].1)
+        else {
+            bail!("invalid exact line ledger handle")
+        };
+        if handle_key != "_az_handle" {
+            bail!("invalid exact line ledger handle")
+        }
+        let handle = u64::try_from(*handle).context("invalid exact line ledger handle")?;
+        let records = self
+            .ledgers
+            .get(&handle)
+            .ok_or_else(|| anyhow!("unknown exact line ledger"))?;
+        if entries.len() != records.len() {
+            bail!("invalid exact line ledger entries")
+        }
+        for (ordinal, (entry, record)) in entries.iter().zip(records).enumerate() {
+            let MontyObject::NamedTuple {
+                type_name,
+                field_names,
+                values,
+            } = entry
+            else {
+                bail!("invalid exact line ledger entry")
+            };
+            let [MontyObject::String(id), MontyObject::String(entry_record)] = values.as_slice()
+            else {
+                bail!("invalid exact line ledger entry")
+            };
+            if type_name != "ExactLineEntry"
+                || field_names != &["id", "record"]
+                || id != &format!("O{ordinal}")
+                || entry_record != record
+            {
+                bail!("invalid exact line ledger entry")
+            }
+        }
+        Ok(handle)
+    }
+
+    fn unique_marker_offset(record: &str, marker: &str) -> Result<usize> {
+        let record_bytes = record.as_bytes();
+        let marker_bytes = marker.as_bytes();
+        let mut found = None;
+        if marker_bytes.len() <= record_bytes.len() {
+            for start in 0..=record_bytes.len() - marker_bytes.len() {
+                if &record_bytes[start..start + marker_bytes.len()] == marker_bytes {
+                    if found.is_some() {
+                        bail!("exact target marker must occur exactly once per record")
+                    }
+                    found = Some(start);
+                }
+            }
+        }
+        found.ok_or_else(|| anyhow!("exact target marker must occur exactly once per record"))
+    }
+
+    fn project(
+        &mut self,
+        ledger: &MontyObject,
+        selected_ids: &MontyObject,
+        marker: &str,
+    ) -> Result<MontyObject> {
+        if self.pending.is_some() || self.projection.is_some() {
+            bail!("semantic_manifest_projected may be called only once per cell")
+        }
+        if marker.is_empty()
+            || marker.len() > EXACT_TARGET_MARKER_MAX_BYTES
+            || marker.contains(['\r', '\n'])
+        {
+            bail!("invalid exact target marker")
+        }
+        let handle = self.validate_ledger(ledger)?;
+        let records = self
+            .ledgers
+            .get(&handle)
+            .ok_or_else(|| anyhow!("unknown exact line ledger"))?;
+        let MontyObject::List(selected) = selected_ids else {
+            bail!("semantic_manifest_projected selected IDs must be a list")
+        };
+        if selected.is_empty() || selected.len() > records.len() {
+            bail!("semantic_manifest_projected requires selected occurrence IDs")
+        }
+        let mut ordinals = Vec::with_capacity(selected.len());
+        let mut previous = None;
+        for selected_id in selected {
+            let MontyObject::String(selected_id) = selected_id else {
+                bail!("semantic_manifest_projected selected IDs must be strings")
+            };
+            let raw = selected_id
+                .strip_prefix('O')
+                .ok_or_else(|| anyhow!("invalid projected occurrence ID"))?;
+            let ordinal = raw
+                .parse::<usize>()
+                .map_err(|_| anyhow!("invalid projected occurrence ID"))?;
+            if format!("O{ordinal}") != *selected_id || ordinal >= records.len() {
+                bail!("invalid projected occurrence ID")
+            }
+            if previous.is_some_and(|value| ordinal <= value) {
+                bail!("projected occurrence IDs must be unique and in source order")
+            }
+            previous = Some(ordinal);
+            ordinals.push(ordinal);
+        }
+        let mut items = Vec::with_capacity(ordinals.len());
+        let mut expected_ids = Vec::with_capacity(ordinals.len());
+        let mut unique_targets = HashSet::new();
+        for ordinal in ordinals {
+            let record = &records[ordinal];
+            let offset = Self::unique_marker_offset(record, marker)?;
+            let target_start = offset + marker.len();
+            if target_start >= record.len() {
+                bail!("exact target marker must leave a nonempty suffix")
+            }
+            let target = &record[target_start..];
+            unique_targets.insert(target.to_owned());
+            expected_ids.push(format!("O{ordinal}"));
+            items.push(MontyObject::Dict(
+                vec![
+                    (
+                        MontyObject::String("id".into()),
+                        MontyObject::String(format!("O{ordinal}")),
+                    ),
+                    (
+                        MontyObject::String("evidence".into()),
+                        MontyObject::String(target.to_owned()),
+                    ),
+                ]
+                .into(),
+            ));
+        }
+        self.pending = Some((
+            SemanticProjectionProvenance {
+                ledger_calls: 1,
+                projection_calls: 1,
+                ledger_occurrences: records.len(),
+                selected_occurrences: items.len(),
+                unique_targets: unique_targets.len(),
+                manifest_caller_occurrences: items.len(),
+                expanded_outputs: 0,
+            },
+            expected_ids,
+        ));
+        Ok(MontyObject::List(items))
+    }
+
+    fn permits_semantic_calls(&self) -> bool {
+        self.ledgers.is_empty() || (self.pending.is_some() && self.projection.is_none())
+    }
+
+    fn complete(&mut self, manifest: &MontyObject) -> Result<MontyObject> {
+        if self.projection.is_some() {
+            bail!("projected semantic manifest completion may be recorded only once")
+        }
+        let (mut provenance, expected_ids) = self
+            .pending
+            .take()
+            .ok_or_else(|| anyhow!("projected semantic manifest has no pending projection"))?;
+        let MontyObject::Dict(entries) = manifest else {
+            bail!("projected semantic manifest must return a dictionary")
+        };
+        if entries.len() != expected_ids.len() {
+            bail!("projected semantic manifest expansion coverage mismatch")
+        }
+        let expected: HashSet<&str> = expected_ids.iter().map(String::as_str).collect();
+        let mut observed = HashSet::with_capacity(entries.len());
+        for (key, value) in entries {
+            let (MontyObject::String(id), MontyObject::String(_label)) = (key, value) else {
+                bail!("projected semantic manifest has invalid output entries")
+            };
+            if !expected.contains(id.as_str()) || !observed.insert(id.as_str()) {
+                bail!("projected semantic manifest expansion coverage mismatch")
+            }
+        }
+        if observed.len() != expected.len() {
+            bail!("projected semantic manifest expansion coverage mismatch")
+        }
+        provenance.expanded_outputs = expected_ids.len();
+        self.projection = Some(provenance);
+        Ok(manifest.clone())
+    }
+}
+
 #[derive(Clone, Copy)]
 struct CellCapabilities<'a> {
     default_model: &'a str,
     allow_relevance: bool,
+    authoritative_source: Option<&'a str>,
 }
 
 struct ExternalState<'a> {
     final_out: &'a mut Option<Final>,
     call_count: &'a mut usize,
     sub_call_wall: &'a mut Duration,
+    semantic_wall_started: &'a mut Option<Instant>,
+    semantic_wall_budget: &'a mut Option<Duration>,
+    semantic_declared_calls: &'a mut Option<usize>,
+    semantic_call_count: &'a mut usize,
+    semantic_classification_call_count: &'a mut usize,
+    semantic_adjudication_call_count: &'a mut usize,
+    exact_line_ledgers: &'a mut ExactLineLedgerRegistry,
 }
 
 type RunCellOutcome = (
@@ -2571,7 +2905,37 @@ type RunCellOutcome = (
     Duration,
     Option<ExcType>,
     Option<String>,
+    Option<SemanticProjectionProvenance>,
 );
+
+fn model_call_entered_turn_limit(name: &str) -> u32 {
+    if name == "_az_llm_batch_fresh_once" {
+        1
+    } else {
+        2
+    }
+}
+
+fn semantic_wall_budget(required_calls: usize) -> Result<Duration> {
+    if required_calls == 0
+        || required_calls > SEMANTIC_MANIFEST_MAX_CALLS
+        || !required_calls.is_multiple_of(6)
+    {
+        bail!("invalid semantic declared call allowance")
+    }
+    let shards = required_calls / 6;
+    let waves = (2 * shards).div_ceil(SEMANTIC_MANIFEST_WORKERS)
+        + (2 * shards).div_ceil(SEMANTIC_MANIFEST_WORKERS)
+        + shards.div_ceil(SEMANTIC_MANIFEST_WORKERS)
+        + shards.div_ceil(SEMANTIC_MANIFEST_WORKERS);
+    let seconds = u64::try_from(waves)
+        .ok()
+        .and_then(|waves| waves.checked_mul(SEMANTIC_PER_CALL_P95_SECONDS))
+        .and_then(|seconds| seconds.checked_add(SEMANTIC_WALL_SAFETY_SECONDS))
+        .ok_or_else(|| anyhow!("semantic wall budget overflow"))?
+        .max(SEMANTIC_MIN_WALL_SECONDS);
+    Ok(Duration::from_secs(seconds))
+}
 
 fn external(
     name: &str,
@@ -2614,6 +2978,52 @@ fn external(
             };
             Ok(MontyObject::String(sha256_hex(text.as_bytes())))
         }
+        "exact_line_ledger" if capabilities.allow_relevance => {
+            if *state.semantic_call_count != 0 {
+                bail!("exact line projection must begin before semantic calls")
+            }
+            if args.len() != 2 || !kwargs.is_empty() {
+                bail!("exact_line_ledger requires source and prefix")
+            }
+            let MontyObject::String(source) = &args[0] else {
+                bail!("exact_line_ledger source must be a string")
+            };
+            let MontyObject::String(prefix) = &args[1] else {
+                bail!("exact_line_ledger prefix must be a string")
+            };
+            if capabilities.authoritative_source != Some(source.as_str()) {
+                bail!("exact_line_ledger source must be the authoritative loaded context")
+            }
+            let records = exact_line_record_strings(source, prefix)?;
+            state.exact_line_ledgers.create(records)
+        }
+        "_az_project_selected" if capabilities.allow_relevance => {
+            if args.len() != 3 || !kwargs.is_empty() {
+                bail!("private exact projection requires ledger, selected IDs, and marker")
+            }
+            let MontyObject::String(marker) = &args[2] else {
+                bail!("exact target marker must be a string")
+            };
+            state.exact_line_ledgers.project(&args[0], &args[1], marker)
+        }
+        "_az_projection_complete" if capabilities.allow_relevance => {
+            if args.len() != 1 || !kwargs.is_empty() {
+                bail!("private projected semantic completion requires one manifest")
+            }
+            state.exact_line_ledgers.complete(&args[0])
+        }
+        "exact_line_records" if capabilities.allow_relevance => {
+            if args.len() != 2 || !kwargs.is_empty() {
+                bail!("exact_line_records requires source and prefix")
+            }
+            let MontyObject::String(source) = &args[0] else {
+                bail!("exact_line_records source must be a string")
+            };
+            let MontyObject::String(prefix) = &args[1] else {
+                bail!("exact_line_records prefix must be a string")
+            };
+            exact_line_records(source, prefix)
+        }
         "lexical_relevance" if capabilities.allow_relevance => {
             if args.len() < 2 || args.len() > 3 {
                 bail!("lexical_relevance requires source, query, and optional max_chars")
@@ -2637,16 +3047,91 @@ fn external(
             };
             relevance_object(build_relevance_view(&source, &query, budget)?)
         }
-        "llm" | "llm_batch" | "llm_batch_fresh" => {
+        "llm" | "llm_batch" | "llm_batch_fresh" | "_az_llm_batch_fresh_once" => {
             let batch = name != "llm";
-            let use_shared = name != "llm_batch_fresh";
+            let use_shared = !matches!(name, "llm_batch_fresh" | "_az_llm_batch_fresh_once");
+            let max_entered_turns = model_call_entered_turn_limit(name);
+            let semantic_phase = if name == "_az_llm_batch_fresh_once" {
+                if !state.exact_line_ledgers.permits_semantic_calls() {
+                    bail!("semantic calls must be consumed by the active projected manifest")
+                }
+                if args.len() != 5 || !kwargs.is_empty() {
+                    bail!(
+                        "semantic batch requires prompts, model, workers, declared call allowance, and phase"
+                    )
+                }
+                let required_calls = match &args[3] {
+                    MontyObject::Int(value) => usize::try_from(*value)
+                        .map_err(|_| anyhow!("invalid semantic declared call allowance"))?,
+                    _ => bail!("semantic declared call allowance must be an integer"),
+                };
+                let phase = match &args[4] {
+                    MontyObject::String(value) if value == "classification" => true,
+                    MontyObject::String(value) if value == "adjudication" => false,
+                    _ => bail!("semantic phase must be classification or adjudication"),
+                };
+                let budget = semantic_wall_budget(required_calls)?;
+                match (*state.semantic_declared_calls, *state.semantic_wall_budget) {
+                    (None, None) => {
+                        *state.semantic_declared_calls = Some(required_calls);
+                        *state.semantic_wall_budget = Some(budget);
+                        *state.semantic_wall_started = Some(Instant::now());
+                    }
+                    (Some(existing_calls), Some(existing_budget))
+                        if existing_calls == required_calls && existing_budget == budget => {}
+                    _ => bail!("semantic declared call allowance changed within one cell"),
+                }
+                let started = state
+                    .semantic_wall_started
+                    .ok_or_else(|| anyhow!("semantic wall deadline absent"))?;
+                if started.elapsed() > budget {
+                    bail!("semantic wall budget exceeded before provider batch")
+                }
+                Some(phase)
+            } else {
+                None
+            };
             let (prompts, model, workers) = parse_call(args, kwargs, batch)?;
             let model = model
                 .as_deref()
                 .filter(|s| !s.is_empty())
                 .unwrap_or(capabilities.default_model);
             *state.call_count = (*state.call_count).saturating_add(prompts.len());
-            if *state.call_count > cfg.max_calls_per_cell {
+            if let Some(classification) = semantic_phase {
+                let required_calls = state
+                    .semantic_declared_calls
+                    .ok_or_else(|| anyhow!("semantic declared call allowance absent"))?;
+                *state.semantic_call_count =
+                    state.semantic_call_count.saturating_add(prompts.len());
+                if *state.semantic_call_count > required_calls {
+                    bail!(
+                        "semantic total call budget exceeded: {} > {}",
+                        *state.semantic_call_count,
+                        required_calls
+                    )
+                }
+                let (phase_count, phase_limit, phase_name) = if classification {
+                    (
+                        &mut *state.semantic_classification_call_count,
+                        required_calls / 3 * 2,
+                        "classification",
+                    )
+                } else {
+                    (
+                        &mut *state.semantic_adjudication_call_count,
+                        required_calls / 3,
+                        "adjudication",
+                    )
+                };
+                *phase_count = phase_count.saturating_add(prompts.len());
+                if *phase_count > phase_limit {
+                    bail!(
+                        "semantic {phase_name} call budget exceeded: {} > {}",
+                        *phase_count,
+                        phase_limit
+                    )
+                }
+            } else if *state.call_count > cfg.max_calls_per_cell {
                 bail!(
                     "llm call budget exceeded: {} > {}",
                     *state.call_count,
@@ -2654,8 +3139,32 @@ fn external(
                 )
             }
             let sub_call_started = Instant::now();
-            let values = call_many_items(&prompts, model, workers, cfg, batch, use_shared);
+            let values = call_many_items(
+                &prompts,
+                model,
+                workers,
+                cfg,
+                CallManyPolicy {
+                    call_limit: semantic_phase
+                        .and(*state.semantic_declared_calls)
+                        .unwrap_or(cfg.max_calls_per_cell),
+                    batch,
+                    use_shared,
+                    max_entered_turns,
+                },
+            );
             *state.sub_call_wall += sub_call_started.elapsed();
+            if name == "_az_llm_batch_fresh_once" {
+                let started = state
+                    .semantic_wall_started
+                    .ok_or_else(|| anyhow!("semantic wall deadline absent"))?;
+                let budget = state
+                    .semantic_wall_budget
+                    .ok_or_else(|| anyhow!("semantic wall budget absent"))?;
+                if started.elapsed() > budget {
+                    bail!("semantic wall budget exceeded after provider batch")
+                }
+            }
             let values = values?;
             if batch {
                 Ok(MontyObject::List(
@@ -2753,6 +3262,8 @@ fn run_cell(
     cfg: &Config,
     default_model: &str,
     allow_relevance: bool,
+    allow_projection_private: bool,
+    authoritative_source: Option<&str>,
 ) -> RunCellOutcome {
     repl.tracker_mut()
         .set_max_duration(Duration::from_secs(cfg.cell_timeout));
@@ -2765,7 +3276,14 @@ fn run_cell(
         "FINAL_VAR",
     ];
     if allow_relevance {
+        input_names.push("exact_line_records");
+        input_names.push("exact_line_ledger");
+        if allow_projection_private {
+            input_names.push("_az_project_selected");
+            input_names.push("_az_projection_complete");
+        }
         input_names.push("lexical_relevance");
+        input_names.push("_az_llm_batch_fresh_once");
     }
     let inputs = input_names
         .into_iter()
@@ -2783,6 +3301,13 @@ fn run_cell(
     let mut final_out = None;
     let mut call_count = 0usize;
     let mut sub_call_wall = Duration::ZERO;
+    let mut semantic_wall_started = None;
+    let mut semantic_wall_budget = None;
+    let mut semantic_declared_calls = None;
+    let mut semantic_call_count = 0usize;
+    let mut semantic_classification_call_count = 0usize;
+    let mut semantic_adjudication_call_count = 0usize;
+    let mut exact_line_ledgers = ExactLineLedgerRegistry::default();
     let mut progress = match repl.feed_start(code, inputs, PrintWriter::Callback(&mut printed)) {
         Ok(p) => p,
         Err(e) => {
@@ -2798,6 +3323,7 @@ fn run_cell(
                 sub_call_wall,
                 Some(exception),
                 failure_line,
+                exact_line_ledgers.projection,
             );
         }
     };
@@ -2824,6 +3350,7 @@ fn run_cell(
                     sub_call_wall,
                     None,
                     None,
+                    exact_line_ledgers.projection,
                 );
             }
             ReplProgress::FunctionCall(call) => {
@@ -2835,11 +3362,19 @@ fn run_cell(
                     CellCapabilities {
                         default_model,
                         allow_relevance,
+                        authoritative_source,
                     },
                     ExternalState {
                         final_out: &mut final_out,
                         call_count: &mut call_count,
                         sub_call_wall: &mut sub_call_wall,
+                        semantic_wall_started: &mut semantic_wall_started,
+                        semantic_wall_budget: &mut semantic_wall_budget,
+                        semantic_declared_calls: &mut semantic_declared_calls,
+                        semantic_call_count: &mut semantic_call_count,
+                        semantic_classification_call_count: &mut semantic_classification_call_count,
+                        semantic_adjudication_call_count: &mut semantic_adjudication_call_count,
+                        exact_line_ledgers: &mut exact_line_ledgers,
                     },
                 )
                 .map_err(MontyException::runtime_error);
@@ -2868,6 +3403,7 @@ fn run_cell(
                             sub_call_wall,
                             Some(exception),
                             failure_line,
+                            exact_line_ledgers.projection,
                         );
                     }
                 }
@@ -2896,6 +3432,7 @@ fn run_cell(
                         sub_call_wall,
                         Some(exception),
                         failure_line,
+                        exact_line_ledgers.projection,
                     );
                 }
             },
@@ -2923,6 +3460,7 @@ fn run_cell(
                         sub_call_wall,
                         Some(exception),
                         failure_line,
+                        exact_line_ledgers.projection,
                     );
                 }
             },
@@ -2937,6 +3475,7 @@ fn run_cell(
                     sub_call_wall,
                     None,
                     None,
+                    exact_line_ledgers.projection,
                 );
             }
         }
@@ -3274,6 +3813,7 @@ pub struct SoloSession {
     sub_model: String,
     answer: Option<String>,
     structural_sample: Option<String>,
+    authoritative_source: Option<String>,
 }
 impl SoloSession {
     pub fn new(cfg: &Config, sub_model: Option<String>) -> Result<Self> {
@@ -3288,11 +3828,13 @@ impl SoloSession {
             sub_model: sub_model.unwrap_or_else(|| cfg.default_model.clone()),
             answer: None,
             structural_sample: None,
+            authoritative_source: None,
         })
     }
     pub fn load(&mut self, path: &Path, var: &str, cfg: &Config) -> Result<String> {
         // Every load attempt invalidates prior prompt evidence before validation or I/O.
         self.structural_sample = None;
+        self.authoritative_source = None;
         if !Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*$")
             .unwrap()
             .is_match(var)
@@ -3304,6 +3846,7 @@ impl SoloSession {
         let chars = text.chars().count();
         let lines = text.lines().count();
         let sample = structural_sample(&text, chars)?;
+        let authoritative_source = text.clone();
         let repl = self
             .repl
             .as_mut()
@@ -3316,6 +3859,7 @@ impl SoloSession {
             PrintWriter::Disabled,
         )?;
         self.structural_sample = Some(sample);
+        self.authoritative_source = Some(authoritative_source);
         Ok(format!(
             "loaded '{var}' : str, {chars} chars, {lines} lines"
         ))
@@ -3342,6 +3886,17 @@ impl SoloSession {
         Ok(())
     }
     pub fn exec(&mut self, code: &str, cfg: &Config) -> Result<ExecResult> {
+        self.exec_inner(code, cfg, false)
+    }
+    pub fn exec_projection_prelude(&mut self, code: &str, cfg: &Config) -> Result<ExecResult> {
+        self.exec_inner(code, cfg, true)
+    }
+    fn exec_inner(
+        &mut self,
+        code: &str,
+        cfg: &Config,
+        allow_projection_private: bool,
+    ) -> Result<ExecResult> {
         let repl = self
             .repl
             .take()
@@ -3355,7 +3910,16 @@ impl SoloSession {
             sub_call_wall,
             mut exception,
             mut failure_line,
-        ) = run_cell(repl, code, cfg, &self.sub_model, true);
+            semantic_projection,
+        ) = run_cell(
+            repl,
+            code,
+            cfg,
+            &self.sub_model,
+            true,
+            allow_projection_private,
+            self.authoritative_source.as_deref(),
+        );
         if provider_interrupted() {
             self.repl = Some(repl);
             bail!("provider interrupted")
@@ -3397,6 +3961,7 @@ impl SoloSession {
             finalized,
             external_calls,
             sub_call_wall_ns: sub_call_wall.as_nanos(),
+            semantic_projection,
             failure_kind: exec_failure_kind(exception),
             failure_line,
         })
@@ -3432,7 +3997,8 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         sub_call_wall,
         mut exception,
         mut failure_line,
-    ) = run_cell(repl, code, cfg, model, false);
+        semantic_projection,
+    ) = run_cell(repl, code, cfg, model, false, false, None);
     if provider_interrupted() {
         bail!("provider interrupted")
     }
@@ -3474,6 +4040,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         finalized,
         external_calls,
         sub_call_wall_ns: sub_call_wall.as_nanos(),
+        semantic_projection,
         failure_kind: exec_failure_kind(exception),
         failure_line,
     })
@@ -3543,14 +4110,24 @@ fn batch_item_value(result: CallItemResult) -> String {
     }
 }
 
+#[derive(Clone, Copy)]
+struct CallManyPolicy {
+    call_limit: usize,
+    batch: bool,
+    use_shared: bool,
+    max_entered_turns: u32,
+}
+
 fn call_many_items(
     prompts: &[String],
     model: &str,
     workers: usize,
     cfg: &Config,
-    batch: bool,
-    use_shared: bool,
+    policy: CallManyPolicy,
 ) -> Result<Vec<CallItemResult>> {
+    if policy.max_entered_turns == 0 {
+        bail!("entered-turn budget must be positive")
+    }
     let depth = env::var("RLM_DEPTH")
         .ok()
         .and_then(|s| s.parse::<u32>().ok())
@@ -3561,11 +4138,11 @@ fn call_many_items(
     if prompts.is_empty() {
         return Ok(Vec::new());
     }
-    if prompts.len() > cfg.max_calls_per_cell {
+    if prompts.len() > policy.call_limit {
         bail!(
             "llm call budget exceeded: {} > {}",
             prompts.len(),
-            cfg.max_calls_per_cell
+            policy.call_limit
         )
     }
     if !(1..=32).contains(&workers) {
@@ -3573,8 +4150,8 @@ fn call_many_items(
     }
     preflight_model_trace_sink()?;
     #[cfg(unix)]
-    if batch && !use_shared && cfg.sub_llm_cmd == "jcode-api" {
-        // A fresh/independent batch must not leave the root subscription session occupying
+    if policy.batch && !policy.use_shared && cfg.sub_llm_cmd == "jcode-api" {
+        // A fresh/independent policy.batch must not leave the root subscription session occupying
         // provider capacity or accidentally reuse its conversation. Archive it before any
         // annotator setup begins.
         drop(SOLO_SHARED_JCODE.lock().unwrap().take());
@@ -3599,17 +4176,18 @@ fn call_many_items(
                         i
                     };
                     let request_id = model_trace_request_id();
-                    let entered_turn_budget = Arc::new(EnteredTurnBudget::new(2));
+                    let entered_turn_budget =
+                        Arc::new(EnteredTurnBudget::new(policy.max_entered_turns));
                     #[cfg(unix)]
                     let result: Result<String> = (|| {
-                        if batch && cfg.sub_llm_cmd == "jcode-api" {
+                        if policy.batch && cfg.sub_llm_cmd == "jcode-api" {
                         let wire = format!(
                             "[azdaja recursion depth {}/{}: do not invoke azdaja recursively.]\n\n{}",
                             depth + 1,
                             cfg.max_depth,
                             prompts[i]
                         );
-                        let shared = if use_shared {
+                        let shared = if policy.use_shared {
                             SOLO_SHARED_JCODE.lock().unwrap().take()
                         } else {
                             None
@@ -3708,13 +4286,15 @@ fn call_many_items(
                             }
                         } else {
                             // Setup and entered-turn budgets are independent: up to four setup
-                            // failures, but never more than two physical provider turns.
+                            // failures, but never more physical turns than this call policy allows.
                             let mut result = None;
                             let mut physical_attempt = 0u32;
                             let mut setup_attempts = 0u32;
                             let mut setup_elapsed = Duration::ZERO;
                             let mut retry_delay = Duration::ZERO;
-                            while setup_attempts < 4 && entered_turn_budget.entered() < 2 {
+                            while setup_attempts < 4
+                                && entered_turn_budget.entered() < policy.max_entered_turns
+                            {
                                 physical_attempt += 1;
                                 if physical_attempt > 1 {
                                     thread::sleep(retry_delay);
@@ -3838,10 +4418,21 @@ pub fn call_many(
     workers: usize,
     cfg: &Config,
 ) -> Result<Vec<String>> {
-    Ok(call_many_items(prompts, model, workers, cfg, true, true)?
-        .into_iter()
-        .map(batch_item_value)
-        .collect())
+    Ok(call_many_items(
+        prompts,
+        model,
+        workers,
+        cfg,
+        CallManyPolicy {
+            call_limit: cfg.max_calls_per_cell,
+            batch: true,
+            use_shared: true,
+            max_entered_turns: 2,
+        },
+    )?
+    .into_iter()
+    .map(batch_item_value)
+    .collect())
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -4013,7 +4604,9 @@ fn jcode_frame_error(frame: &serde_json::Value) -> anyhow::Error {
         .or_else(|| frame.get("class"))
         .and_then(serde_json::Value::as_str)
         .map(str::to_owned);
-    // Provider text is never retry authority. Only these protocol-supplied typed values are.
+    // Provider text is never retry authority. Only these protocol-supplied typed values are,
+    // plus the bridge's own retryable-stream wrapper: the released bridge types those
+    // errors as code="internal" while self-declaring retryability in its message prefix.
     let transient = code.as_deref().is_some_and(|value| {
         matches!(
             value,
@@ -4024,7 +4617,7 @@ fn jcode_frame_error(frame: &serde_json::Value) -> anyhow::Error {
                 | "connection_reset"
                 | "server_timeout"
         )
-    });
+    }) || message.starts_with("Retryable stream error");
     anyhow::Error::new(JcodeApiError {
         message,
         code,
@@ -5504,8 +6097,8 @@ impl RootDriver {
 
     pub fn repair_turn(&mut self, prompt: &str, repair_index: u32) -> Result<ModelReply> {
         preflight_model_trace_sink()?;
-        if !(1..=2).contains(&repair_index) {
-            bail!("root repair index must be 1 or 2")
+        if !(1..=3).contains(&repair_index) {
+            bail!("root repair index must be between 1 and 3")
         }
         let repair_request_id = format!("{}-repair-{repair_index}", self.request_id);
         #[cfg(unix)]
@@ -7075,6 +7668,41 @@ mod unit_tests {
     }
 
     #[test]
+    fn semantic_batch_policy_allows_exactly_one_physical_provider_turn() {
+        assert_eq!(model_call_entered_turn_limit("_az_llm_batch_fresh_once"), 1);
+        assert_eq!(model_call_entered_turn_limit("llm_batch_fresh"), 2);
+        assert_eq!(model_call_entered_turn_limit("llm_batch"), 2);
+        let budget =
+            EnteredTurnBudget::new(model_call_entered_turn_limit("_az_llm_batch_fresh_once"));
+        assert_eq!(budget.try_enter().unwrap(), 1);
+        assert!(budget.try_enter().is_err());
+        assert_eq!(budget.entered(), 1);
+    }
+
+    #[test]
+    fn semantic_wall_budget_scales_with_phase_waves_at_eight_workers() {
+        assert_eq!(SEMANTIC_MANIFEST_WORKERS, 8);
+        assert_eq!(semantic_wall_budget(6).unwrap(), Duration::from_secs(240));
+        // The frozen latest scout's 3,182-item boundary uses 82 fixed shards.
+        assert_eq!(
+            semantic_wall_budget(492).unwrap(),
+            Duration::from_secs(1_788)
+        );
+        // 105,000 / 39 rounds up to 2,693 shards and honestly reserves all six phases.
+        assert_eq!(
+            semantic_wall_budget(16_158).unwrap(),
+            Duration::from_secs(54_654)
+        );
+        assert!(semantic_wall_budget(0).is_err());
+        assert!(semantic_wall_budget(5).is_err());
+        assert!(semantic_wall_budget(16_159).is_err());
+        let s = 82_u64;
+        let hypothetical_two_worker_seconds =
+            ((2 * s).div_ceil(2) * 2 + s.div_ceil(2) * 2) * 27 + 60;
+        assert_eq!(hypothetical_two_worker_seconds, 6_702);
+    }
+
+    #[test]
     fn entered_turn_budget_is_atomic_and_transport_retry_classes_are_explicit() {
         let budget = Arc::new(EnteredTurnBudget::new(2));
         let successes = AtomicU32::new(0);
@@ -7107,6 +7735,18 @@ mod unit_tests {
             "ev":"error", "code":"service_unavailable", "message":"try later"
         }));
         assert!(model_transport_error_is_transient(&explicit_transient));
+        let retryable_stream = jcode_frame_error(&serde_json::json!({
+            "ev": "error",
+            "code": "internal",
+            "message": "Retryable stream error: {\"type\":\"error\"}",
+        }));
+        assert!(model_transport_error_is_transient(&retryable_stream));
+        let plain_internal = jcode_frame_error(&serde_json::json!({
+            "ev": "error",
+            "code": "internal",
+            "message": "unrelated internal failure",
+        }));
+        assert!(!model_transport_error_is_transient(&plain_internal));
         let typed_permanent = jcode_frame_error(&serde_json::json!({
             "ev":"error", "code":"invalid_request", "message":"bad request"
         }));
@@ -7154,6 +7794,13 @@ mod unit_tests {
         let result = session.exec("FINAL('wrong')\n1/0", &cfg).unwrap();
         assert!(!result.success && !result.finalized);
         assert!(session.final_answer(&cfg).is_err());
+    }
+
+    #[test]
+    fn reliability_two_default_call_cap_is_measured_headroom() {
+        assert_eq!(Config::default().max_calls_per_cell, 150);
+        assert_eq!(MAX_CALLS_PER_CELL, 150);
+        assert_eq!(SEMANTIC_MANIFEST_MAX_CALLS, 16_158);
     }
 }
 
@@ -8020,12 +8667,14 @@ mod lexical_relevance_tests {
         let cfg = Config::default();
         let mut session = SoloSession::new(&cfg, None).unwrap();
         let repl = session.repl.take().unwrap();
-        let (_, _, success, _, calls, _, failure, _) = run_cell(
+        let (_, _, success, _, calls, _, failure, _, _) = run_cell(
             repl,
             "lexical_relevance('source', 'query', 4000)",
             &cfg,
             &cfg.default_model,
             false,
+            false,
+            None,
         );
         assert!(!success);
         assert_eq!(calls, 0);
@@ -8050,5 +8699,556 @@ mod lexical_relevance_tests {
         assert!(view.complete);
         assert_eq!(view.ranges, vec![(0, source.chars().count())]);
         assert!(view.evidence.contains(source));
+    }
+}
+
+#[cfg(test)]
+mod exact_line_record_tests {
+    use super::*;
+
+    fn strings(value: MontyObject) -> Vec<String> {
+        let MontyObject::List(values) = value else {
+            panic!("exact_line_records did not return a list")
+        };
+        values
+            .into_iter()
+            .map(|value| match value {
+                MontyObject::String(value) => value,
+                _ => panic!("exact_line_records returned a non-string"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn exact_line_records_preserves_order_duplicates_and_all_nonseparator_bytes() {
+        let source = concat!(
+            "header\n",
+            "Row: α\t  \0tail\n",
+            "row: wrong-case\n",
+            " Row: leading-space\n",
+            "RowX: wrong-prefix\n",
+            "Row: α\t  \0tail\n",
+            "Row: unicode\u{2028}and\u{2029}payload",
+        );
+        assert_eq!(
+            strings(exact_line_records(source, "Row: ").unwrap()),
+            vec![
+                "Row: α\t  \0tail",
+                "Row: α\t  \0tail",
+                "Row: unicode\u{2028}and\u{2029}payload",
+            ]
+        );
+    }
+
+    #[test]
+    fn exact_line_records_defines_lf_crlf_mixed_and_terminal_behavior() {
+        assert_eq!(
+            strings(exact_line_records("Row: a\nRow: b\n", "Row: ").unwrap()),
+            vec!["Row: a", "Row: b"]
+        );
+        assert_eq!(
+            strings(exact_line_records("Row: a\r\nRow: b\r\n", "Row: ").unwrap()),
+            vec!["Row: a", "Row: b"]
+        );
+        assert_eq!(
+            strings(
+                exact_line_records("head\nRow: lf\r\nRow: mixed\nRow:\nRow: terminal", "Row:")
+                    .unwrap()
+            ),
+            vec!["Row: lf", "Row: mixed", "Row:", "Row: terminal"]
+        );
+    }
+
+    #[test]
+    fn exact_line_records_rejects_every_bare_cr_shape() {
+        for source in ["\rRow: x", "Row: x\ry", "Row: x\r", "Row: x\r\r\n"] {
+            let error = exact_line_records(source, "Row:").unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("rejects bare CR record boundaries"),
+                "{source:?}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn exact_line_records_enforces_prefix_utf8_byte_contract() {
+        let one_byte = "x";
+        assert_eq!(
+            strings(exact_line_records(one_byte, one_byte).unwrap()),
+            vec![one_byte]
+        );
+        let multibyte = "é";
+        assert_eq!(
+            strings(exact_line_records(multibyte, multibyte).unwrap()),
+            vec![multibyte]
+        );
+        let exact_ascii = "a".repeat(EXACT_LINE_RECORD_MAX_PREFIX_BYTES);
+        assert_eq!(
+            strings(exact_line_records(&exact_ascii, &exact_ascii).unwrap()),
+            vec![exact_ascii.clone()]
+        );
+        let exact_multibyte = "é".repeat(EXACT_LINE_RECORD_MAX_PREFIX_BYTES / 2);
+        assert_eq!(exact_multibyte.len(), EXACT_LINE_RECORD_MAX_PREFIX_BYTES);
+        assert_eq!(
+            strings(exact_line_records(&exact_multibyte, &exact_multibyte).unwrap()),
+            vec![exact_multibyte]
+        );
+        for prefix in [
+            String::new(),
+            "x\n".to_owned(),
+            "x\r".to_owned(),
+            format!("{}é", "a".repeat(EXACT_LINE_RECORD_MAX_PREFIX_BYTES - 1)),
+        ] {
+            let error = exact_line_records("anything", &prefix).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("requires a nonempty literal prefix"),
+                "prefix bytes={}: {error}",
+                prefix.len()
+            );
+        }
+    }
+
+    #[test]
+    fn exact_line_records_fails_closed_on_missing_record() {
+        let error = exact_line_records("header\nother", "Row:").unwrap_err();
+        assert!(error.to_string().contains("found no anchored records"));
+    }
+
+    #[test]
+    fn exact_line_records_supports_metadata_selection_after_full_ledger() {
+        let cfg = Config::default();
+        let mut session = SoloSession::new(&cfg, None).unwrap();
+        let code = r#"rows=exact_line_records("header\nDate: Jan 01 || User: 1 || Instance: a\nDate: Jan 02 || User: 2 || Instance: b\nDate: Jan 03 || User: 1 || Instance: c","Date: ")
+ledger=[]
+for row in rows:
+    ledger.append(row)
+selected=[]
+for row in ledger:
+    if "User: 1" in row and "Jan 03" in row:
+        selected.append(row)
+assert len(ledger)==3
+assert len(selected)==1
+assert selected[0].endswith("Instance: c")
+FINAL(len(selected))"#;
+        let result = session.exec(code, &cfg).unwrap();
+        assert!(result.success, "{}", result.output);
+        assert_eq!(result.external_calls, 0);
+        assert_eq!(session.final_answer(&cfg).unwrap(), "1");
+    }
+
+    #[test]
+    fn exact_line_records_dispatch_rejects_arity_kwargs_and_types() {
+        let cfg = Config::default();
+        for (code, expected) in [
+            ("exact_line_records()", "requires source and prefix"),
+            ("exact_line_records('Row: x')", "requires source and prefix"),
+            (
+                "exact_line_records('Row: x','Row:',3)",
+                "requires source and prefix",
+            ),
+            (
+                "exact_line_records(source='Row: x',prefix='Row:')",
+                "requires source and prefix",
+            ),
+            ("exact_line_records(3,'Row:')", "source must be a string"),
+            ("exact_line_records('Row: x',3)", "prefix must be a string"),
+        ] {
+            let mut session = SoloSession::new(&cfg, None).unwrap();
+            let result = session.exec(code, &cfg).unwrap();
+            assert!(!result.success, "{code}");
+            assert!(
+                result.output.contains(expected),
+                "{code}: {}",
+                result.output
+            );
+            assert_eq!(result.external_calls, 0);
+            assert!(!result.finalized);
+        }
+    }
+
+    #[test]
+    fn exact_line_records_enforces_occurrence_limit_boundaries() {
+        let source = "Row: x\n".repeat(EXACT_LINE_RECORD_MAX_ITEMS);
+        assert_eq!(
+            strings(exact_line_records(&source, "Row: ").unwrap()).len(),
+            EXACT_LINE_RECORD_MAX_ITEMS
+        );
+        let too_many = format!("{source}Row: x\n");
+        let error = exact_line_records(&too_many, "Row: ").unwrap_err();
+        assert!(error.to_string().contains("record limit exceeded"));
+    }
+
+    #[test]
+    fn exact_line_records_is_absent_from_ordinary_cells() {
+        let cfg = Config::default();
+        let mut session = SoloSession::new(&cfg, None).unwrap();
+        let repl = session.repl.take().unwrap();
+        let (_, _, success, _, calls, _, failure, _, _) = run_cell(
+            repl,
+            "exact_line_records('Row: x', 'Row: ')",
+            &cfg,
+            &cfg.default_model,
+            false,
+            false,
+            None,
+        );
+        assert!(!success);
+        assert_eq!(calls, 0);
+        assert_eq!(failure, Some(ExcType::RuntimeError));
+    }
+}
+
+#[cfg(test)]
+mod exact_line_ledger_projection_tests {
+    use super::*;
+
+    fn ids(values: &[&str]) -> MontyObject {
+        MontyObject::List(
+            values
+                .iter()
+                .map(|value| MontyObject::String((*value).to_owned()))
+                .collect(),
+        )
+    }
+
+    fn manifest(values: &[(&str, &str)]) -> MontyObject {
+        MontyObject::Dict(
+            values
+                .iter()
+                .map(|(id, label)| {
+                    (
+                        MontyObject::String((*id).to_owned()),
+                        MontyObject::String((*label).to_owned()),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .into(),
+        )
+    }
+
+    #[test]
+    fn projects_original_occurrences_and_completes_full_expansion() {
+        let records = vec![
+            "Row: meta=0 :: target=alpha".to_owned(),
+            "Row: meta=1 :: target=alpha".to_owned(),
+            "Row: meta=2 :: target=beta".to_owned(),
+            "Row: meta=3 :: target=gamma".to_owned(),
+            "Row: meta=4 :: target=beta".to_owned(),
+            "Row: meta=5 :: target=alpha".to_owned(),
+        ];
+        let mut registry = ExactLineLedgerRegistry::default();
+        let ledger = registry.create(records).unwrap();
+        let items = registry
+            .project(
+                &ledger,
+                &ids(&["O0", "O1", "O2", "O3", "O4", "O5"]),
+                " :: target=",
+            )
+            .unwrap();
+        assert!(matches!(items, MontyObject::List(ref values) if values.len() == 6));
+        assert!(registry.projection.is_none());
+        let complete = registry
+            .complete(&manifest(&[
+                ("O0", "left"),
+                ("O1", "left"),
+                ("O2", "right"),
+                ("O3", "left"),
+                ("O4", "right"),
+                ("O5", "left"),
+            ]))
+            .unwrap();
+        assert!(matches!(complete, MontyObject::Dict(ref values) if values.len() == 6));
+        assert_eq!(
+            registry.projection,
+            Some(SemanticProjectionProvenance {
+                ledger_calls: 1,
+                projection_calls: 1,
+                ledger_occurrences: 6,
+                selected_occurrences: 6,
+                unique_targets: 3,
+                manifest_caller_occurrences: 6,
+                expanded_outputs: 6,
+            })
+        );
+        assert!(
+            registry
+                .complete(&manifest(&[("O0", "left")]))
+                .unwrap_err()
+                .to_string()
+                .contains("only once")
+        );
+    }
+
+    #[test]
+    fn filters_by_canonical_ids_without_losing_source_order() {
+        let mut registry = ExactLineLedgerRegistry::default();
+        let ledger = registry
+            .create(vec![
+                "Row: keep=no :: target=zero".to_owned(),
+                "Row: keep=yes :: target=one".to_owned(),
+                "Row: keep=no :: target=two".to_owned(),
+                "Row: keep=yes :: target=three".to_owned(),
+            ])
+            .unwrap();
+        registry
+            .project(&ledger, &ids(&["O1", "O3"]), " :: target=")
+            .unwrap();
+        registry
+            .complete(&manifest(&[("O1", "a"), ("O3", "b")]))
+            .unwrap();
+        let provenance = registry.projection.unwrap();
+        assert_eq!(provenance.ledger_occurrences, 4);
+        assert_eq!(provenance.selected_occurrences, 2);
+        assert_eq!(provenance.expanded_outputs, 2);
+    }
+
+    #[test]
+    fn rejects_forged_ledgers_bad_selectors_and_ambiguous_markers() {
+        let records = vec![
+            "Row: n=0 :: target=alpha".to_owned(),
+            "Row: n=1 :: target=beta".to_owned(),
+        ];
+        let mut registry = ExactLineLedgerRegistry::default();
+        let ledger = registry.create(records).unwrap();
+
+        let mut wrong_type = ledger.clone();
+        if let MontyObject::Dataclass { type_id, .. } = &mut wrong_type {
+            *type_id += 1;
+        }
+        for bad in [
+            MontyObject::Tuple(vec![]),
+            MontyObject::Dict(Vec::new().into()),
+            wrong_type,
+        ] {
+            assert!(
+                registry
+                    .project(&bad, &ids(&["O0"]), " :: target=")
+                    .is_err()
+            );
+        }
+        let mut mutable = ledger.clone();
+        if let MontyObject::Dataclass { frozen, .. } = &mut mutable {
+            *frozen = false;
+        }
+        assert!(
+            registry
+                .project(&mutable, &ids(&["O0"]), " :: target=")
+                .is_err()
+        );
+
+        for selected in [
+            ids(&[]),
+            ids(&["O0", "O0"]),
+            ids(&["O1", "O0"]),
+            ids(&["O2"]),
+            ids(&["O00"]),
+            MontyObject::Tuple(vec![MontyObject::String("O0".into())]),
+            MontyObject::List(vec![MontyObject::Int(0)]),
+        ] {
+            assert!(registry.project(&ledger, &selected, " :: target=").is_err());
+        }
+        for marker in ["", "\n", "missing", "alpha", " :: target=alpha"] {
+            assert!(registry.project(&ledger, &ids(&["O0"]), marker).is_err());
+        }
+
+        let mut overlap_registry = ExactLineLedgerRegistry::default();
+        let overlap = overlap_registry
+            .create(vec!["Row: aaaa-tail".to_owned()])
+            .unwrap();
+        assert!(
+            overlap_registry
+                .project(&overlap, &ids(&["O0"]), "aa")
+                .unwrap_err()
+                .to_string()
+                .contains("exactly once")
+        );
+
+        let mut terminal_registry = ExactLineLedgerRegistry::default();
+        let terminal = terminal_registry
+            .create(vec!["Row: target=".to_owned()])
+            .unwrap();
+        assert!(
+            terminal_registry
+                .project(&terminal, &ids(&["O0"]), "target=")
+                .unwrap_err()
+                .to_string()
+                .contains("nonempty suffix")
+        );
+    }
+
+    #[test]
+    fn validates_expansion_coverage_independent_of_dictionary_order() {
+        for bad in [
+            manifest(&[("O0", "a")]),
+            manifest(&[("O0", "a"), ("O9", "b")]),
+            MontyObject::List(vec![]),
+        ] {
+            let mut registry = ExactLineLedgerRegistry::default();
+            let ledger = registry
+                .create(vec![
+                    "Row: 0 :: target=a".to_owned(),
+                    "Row: 1 :: target=b".to_owned(),
+                ])
+                .unwrap();
+            registry
+                .project(&ledger, &ids(&["O0", "O1"]), " :: target=")
+                .unwrap();
+            assert!(registry.complete(&bad).is_err());
+            assert!(registry.projection.is_none());
+        }
+        let mut registry = ExactLineLedgerRegistry::default();
+        let ledger = registry
+            .create(vec![
+                "Row: 0 :: target=a".to_owned(),
+                "Row: 1 :: target=b".to_owned(),
+            ])
+            .unwrap();
+        registry
+            .project(&ledger, &ids(&["O0", "O1"]), " :: target=")
+            .unwrap();
+        registry
+            .complete(&manifest(&[("O1", "b"), ("O0", "a")]))
+            .unwrap();
+        assert_eq!(registry.projection.unwrap().expanded_outputs, 2);
+    }
+
+    #[test]
+    fn exact_line_ledger_is_absent_from_ordinary_exec_cells() {
+        let cfg = Config::default();
+        let tracker = ResourceTracker::new(ResourceLimits::default());
+        let mut repl = MontyRepl::new("ordinary", tracker, CompileOptions::default());
+        repl.feed_run(PRELUDE, vec![], PrintWriter::Disabled)
+            .unwrap();
+        let (_, _, success, _, calls, _, failure, _, provenance) = run_cell(
+            repl,
+            "exact_line_ledger('Row: x', 'Row: ')",
+            &cfg,
+            &cfg.default_model,
+            false,
+            false,
+            None,
+        );
+        assert!(!success);
+        assert_eq!(calls, 0);
+        assert_eq!(failure, Some(ExcType::RuntimeError));
+        assert!(provenance.is_none());
+    }
+
+    #[test]
+    fn authenticates_full_loaded_context_and_hides_private_callbacks() {
+        let root = std::env::temp_dir().join(format!(
+            "azdaja-ledger-auth-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("ctx.txt");
+        fs::write(&path, "header\nRow: one\nRow: two\n").unwrap();
+        let cfg = Config::default();
+
+        let mut accepted = SoloSession::new(&cfg, None).unwrap();
+        accepted.load(&path, "ctx", &cfg).unwrap();
+        let result = accepted
+            .exec(
+                "ledger=exact_line_ledger(ctx, 'Row: ')\nassert len(ledger.entries)==2\nFINAL('ok')",
+                &cfg,
+            )
+            .unwrap();
+        assert!(result.success);
+        assert_eq!(result.external_calls, 0);
+
+        let mut cropped = SoloSession::new(&cfg, None).unwrap();
+        cropped.load(&path, "ctx", &cfg).unwrap();
+        let result = cropped
+            .exec("exact_line_ledger('Row: one\\n', 'Row: ')", &cfg)
+            .unwrap();
+        assert!(!result.success);
+        assert!(
+            result
+                .output
+                .contains("source must be the authoritative loaded context")
+        );
+        assert_eq!(result.external_calls, 0);
+
+        let mut private = SoloSession::new(&cfg, None).unwrap();
+        private.load(&path, "ctx", &cfg).unwrap();
+        let result = private
+            .exec("_az_project_selected(None, [], 'x')", &cfg)
+            .unwrap();
+        assert!(!result.success);
+        assert_eq!(result.external_calls, 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn marker_byte_boundaries_and_suffix_bytes_are_exact() {
+        let marker = "m".repeat(EXACT_TARGET_MARKER_MAX_BYTES);
+        let mut boundary = ExactLineLedgerRegistry::default();
+        let ledger = boundary
+            .create(vec![format!("Row: {marker}payload")])
+            .unwrap();
+        boundary.project(&ledger, &ids(&["O0"]), &marker).unwrap();
+        boundary.complete(&manifest(&[("O0", "label")])).unwrap();
+        assert_eq!(boundary.projection.unwrap().unique_targets, 1);
+
+        let mut oversized = ExactLineLedgerRegistry::default();
+        let oversized_marker = "m".repeat(EXACT_TARGET_MARKER_MAX_BYTES + 1);
+        let ledger = oversized
+            .create(vec![format!("Row: {oversized_marker}payload")])
+            .unwrap();
+        assert!(
+            oversized
+                .project(&ledger, &ids(&["O0"]), &oversized_marker)
+                .is_err()
+        );
+
+        let mut exact = ExactLineLedgerRegistry::default();
+        let ledger = exact
+            .create(vec![
+                "Row: <T>e\u{301}\0 tail  ".to_owned(),
+                "Row: <T>é\0 tail  ".to_owned(),
+            ])
+            .unwrap();
+        let items = exact.project(&ledger, &ids(&["O0", "O1"]), "<T>").unwrap();
+        let MontyObject::List(items) = items else {
+            panic!("projected items must be a list")
+        };
+        let mut evidence = Vec::new();
+        for item in items {
+            let MontyObject::Dict(values) = item else {
+                panic!("projected item must be a dictionary")
+            };
+            let (_, MontyObject::String(value)) = values.into_iter().nth(1).unwrap() else {
+                panic!("projected evidence must be a string")
+            };
+            evidence.push(value);
+        }
+        assert_eq!(evidence, vec!["e\u{301}\0 tail  ", "é\0 tail  "]);
+        assert_eq!(exact.pending.as_ref().unwrap().0.unique_targets, 2);
+    }
+
+    #[test]
+    fn ledger_supports_exactly_one_hundred_five_thousand_records() {
+        let records: Vec<_> = (0..EXACT_LINE_RECORD_MAX_ITEMS)
+            .map(|index| format!("Row: {index} :: target=same"))
+            .collect();
+        let mut registry = ExactLineLedgerRegistry::default();
+        let ledger = registry.create(records).unwrap();
+        registry
+            .project(&ledger, &ids(&["O104999"]), " :: target=")
+            .unwrap();
+        registry
+            .complete(&manifest(&[("O104999", "label")]))
+            .unwrap();
+        let provenance = registry.projection.unwrap();
+        assert_eq!(provenance.ledger_occurrences, 105_000);
+        assert_eq!(provenance.unique_targets, 1);
     }
 }
