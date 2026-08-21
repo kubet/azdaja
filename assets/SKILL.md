@@ -38,6 +38,8 @@ Successful `load` and `exec` output is suppressed, so stdout is exactly the fina
 
 ### Cell contract
 
+**Semantic gate:** for every semantic task, the cell must literally build nonempty `prompts` and execute `semantic_rows = llm_batch(prompts, workers=8)` before assigning any label. If that line does not run successfully, fail without `FINAL`. Local classification is invalid.
+
 1. Scan the complete loaded source using its declared record boundaries. Fail on ambiguous boundaries. Preserve source order, duplicates, and stable occurrence IDs. Apply deterministic selectors to complete immutable records before semantic calls.
 2. Keep complete selected records as evidence. Project only when the official grammar says one exact final field alone determines the label; then require one nonempty marker and copy its suffix byte-for-byte.
 3. Make the fewest balanced contiguous shards of at most 80 unique items and 80 KiB per prompt. When possible, keep `2 * shard_count <= 8` for one worker wave. Every prompt includes the task, exact label domain, stable IDs, evidence, and a strict positional JSON output contract.
@@ -47,7 +49,7 @@ Successful `load` and `exec` output is suppressed, so stdout is exactly the fina
 
 Prefer one cell with at most 85 nonblank lines. If the cell budget requires more, add heredoc-fed `exec` cells inside the same Bash transaction and retain one session; do not start over.
 
-Ordinary `exec` provides Python plus `llm(prompt, model=None, ctx="")`, ordered `llm_batch(prompts, model=None, workers=2)`, `FINAL(answer)`, and `FINAL_VAR("name")`. It does not provide solo-only helpers. State survives across cells. Provider failures are JSON strings containing `azdaja_error`. Monty has no filesystem, process, environment, or network access. Available modules are `os`, `re`, `json`, `math`, `collections`, and `datetime`; host access through `os` is denied. Avoid imports, generators, `next`, `eval`, `exec`, `%` string formatting, and introspection. Use explicit loops, maps, and f-strings.
+Ordinary `exec` provides `llm`, ordered `llm_batch`, `FINAL`, and `FINAL_VAR`; state survives across cells. Reject provider strings containing `azdaja_error`. Solo-only helpers are unavailable. Monty has no host I/O. Use the preloaded `os`, `re`, `json`, `math`, `collections`, and `datetime` modules, explicit loops/maps, and f-strings; avoid imports, generators, `next`, `eval`, `exec`, and introspection.
 
 ## Other-host `solo` lane
 
