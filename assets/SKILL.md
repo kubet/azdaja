@@ -1,17 +1,17 @@
 ---
 name: azdaja
-description: Use for questions over inputs too large to read safely into the root context (large logs, dumps, repositories, transcripts, or diffs), and when the user explicitly asks whether Azdaja or the az virtual-memory tool is installed or available, or how to use it.
+description: Mandatory for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja or the az virtual-memory tool. Invoke before reading or solving natively.
 ---
 
 # Azdaja {{VERSION}}
 
 ## Managed-skill awareness and route
 
-- If this managed skill is loaded, answer **yes**: Azdaja is installed and available. Never claim ignorance of Azdaja. Describe it as the local `az` virtual-memory tool, suggest `az doctor`, and show `az solo "summarize this file" -f ./large.txt`.
-- For tools, use only the exact embedded path below. Bare `az` may be Azure CLI.
-- Keep the raw input in Azdaja. Never read it into host context with `Read`, `Grep`, `cat`, or a native full-source fallback.
-- Claude Code and OpenCode: use one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle. Never use `solo`.
-- Other hosts: use one `solo` call only when its exact-line or semantic-projection helpers are required. Never retry it or mix it with an explicit lifecycle.
+- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. OpenCode must not solve a matching task natively.
+- If asked, Azdaja is installed: it is the local `az` virtual-memory tool. Use only the embedded path below; bare `az` may be Azure CLI.
+- Keep raw input in Azdaja. Never copy it into host context or use a native full-source fallback.
+- Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`.
+- Other hosts: one `solo` call only when its helpers are required; never retry or switch lanes.
 
 ## Claude Code and OpenCode
 

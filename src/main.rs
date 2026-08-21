@@ -791,7 +791,7 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
     }
 }
 
-const DEFAULT_SKILL_DESCRIPTION: &str = "Use for questions over inputs too large to read safely into the root context (large logs, dumps, repositories, transcripts, or diffs), and when the user explicitly asks whether Azdaja or the az virtual-memory tool is installed or available, or how to use it.";
+const DEFAULT_SKILL_DESCRIPTION: &str = "Mandatory for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja or the az virtual-memory tool. Invoke before reading or solving natively.";
 
 const CLAUDE_ACTIVATION_RULE: &str = r#"For an answer needing complete coverage of input too large for one `Read`, call `Skill` with `azdaja` before broad access. Metadata and one structural sample up to 10 lines, 64 KiB may precede. Those use absolute `/usr/bin/...` or `/bin/...` and literal paths. The managed hook blocks broader `Read`, `Grep`, or `Bash` until activation. Otherwise do not invoke it. Discovery is not invocation.
 "#;
@@ -899,8 +899,8 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
 
 fn harness_skill_description(harness: &str, display: &str) -> String {
     match harness {
-        "claude" => "Uses Azdaja, the installed local az virtual-memory tool, when an answer needs complete coverage of an input too large for one normal tool read, such as exact counts or aggregation over a multi-megabyte or high-row-count file. Also use when asked whether Azdaja is installed or available, or how to use it. Do not use for fitting inputs, bounded excerpts, or ordinary repository work.".to_owned(),
-        "opencode" => "Uses Azdaja, the installed local az virtual-memory tool, only when complete coverage exceeds one bounded native read or deterministic Bash call, or when persistent or semantic analysis must keep a large raw input out of root context. If one native Bash call can produce the exact bounded answer, use it instead; the skill and lifecycle cannot outperform that call. Also use when asked whether Azdaja is installed or available, or how to use it. Do not use for fitting inputs, bounded excerpts, or ordinary repository work.".to_owned(),
+        "claude" => "Mandatory: invoke Azdaja, the installed local az virtual-memory tool, before broad reading when complete semantic coverage spans more than 1 MiB or 200 records, or whenever the prompt names Azdaja. Use native tools only for fitting inputs and bounded deterministic work.".to_owned(),
+        "opencode" => "Mandatory: invoke Azdaja, the installed local az virtual-memory tool, before Read, Grep, or Bash inspection when complete semantic coverage spans more than 1 MiB or 200 records, or whenever the prompt names Azdaja. Use one native Bash call instead only when it can produce the exact answer without semantic judgment.".to_owned(),
         _ => format!(
             "Use Azdaja, the installed and available local az virtual-memory tool, for inputs too large to read safely such as large logs, archives, repositories, transcripts, dumps, or diffs, whenever the user asks how to use it, and proactively before broad manual reading in {display}."
         ),
@@ -5303,13 +5303,12 @@ mod tests {
             assert!(rendered.contains(&format!("## Harness activation: {display}")));
             assert!(rendered.contains(marker));
             if matches!(harness, "claude" | "opencode") {
+                assert!(rendered.contains("complete semantic coverage spans more than 1 MiB or 200 records"));
                 if harness == "opencode" {
-                    assert!(rendered.contains("complete coverage exceeds one bounded native read"));
+                    assert!(rendered.contains("before Read, Grep, or Bash inspection"));
                     assert!(rendered.contains(
-                        "If one native Bash call can produce the exact bounded answer, use it instead"
+                        "Use one native Bash call instead only when it can produce the exact answer without semantic judgment"
                     ));
-                } else {
-                    assert!(rendered.contains("complete coverage of an input too large"));
                 }
                 assert!(rendered.contains("Load each input once"));
                 assert!(rendered.contains("source-specific parser"));
@@ -5322,9 +5321,9 @@ mod tests {
                 assert!(rendered.contains("call `FINAL` once"));
                 assert!(rendered.contains("installed local az virtual-memory tool"));
                 assert!(rendered.contains(
-                    "Claude Code and OpenCode: use one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle. Never use `solo`."
+                    "Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
                 ));
-                assert!(rendered.contains("Never retry it or mix it with an explicit lifecycle."));
+                assert!(rendered.contains("never retry or switch lanes"));
                 assert!(!rendered.contains("quote each governing source phrase"));
                 assert!(!rendered.contains("test pattern"));
                 assert!(!rendered.contains("ASTER-9"));
@@ -5356,7 +5355,7 @@ mod tests {
         let managed = "'/managed/azdaja'";
 
         assert!(rendered.contains(
-            "If one native Bash call can produce the exact bounded answer, use it instead"
+            "Use one native Bash call instead only when it can produce the exact answer without semantic judgment"
         ));
         assert!(rendered.contains("Go directly to this transaction as one Bash tool call."));
         assert!(rendered.contains("do not split `start`, `load`, `exec`, `final`"));
@@ -5394,19 +5393,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "52f77cf60ae673caf1b3eee063ca611dbcb59cbbc35d71010e16d23bfe9fff62",
+                "000bef9bac8356ccf0c16c0a679d8cd326cde894eaecd702ead4baab34b5464c",
             ),
             (
                 "jcode",
-                "f2339e47e60193502bba7d5bf43094f0777548213287954770a6b5e07e08d45b",
+                "1b4dbc58ef16785e4c68106411a42b78d17e7819f40d434ca1d39cf2edf17b5c",
             ),
             (
                 "codex",
-                "e18fb7670365b604a0c2302d2846dad08f61a77541c02dcf593c4afb500067c2",
+                "a50cda787bc66379d8f787bebec479aa8b3bd92589aaa9940f5a6fa47dbbab83",
             ),
             (
                 "gemini",
-                "683d63a6fb585e0d743d0ab3fd737215ccb25a72396db76f25dc74bb06104211",
+                "d9ab8981aa51bc41e7ce613cae1317abc1818e965d31362f11d888fdfd607429",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);
