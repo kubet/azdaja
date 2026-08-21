@@ -117,10 +117,11 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
     let opencode_binary = opencode.join("azdaja");
     let opencode_skill = fs::read_to_string(opencode.join("SKILL.md")).unwrap();
     let binary_text = opencode_binary.to_str().unwrap();
-    assert!(opencode_skill.contains("send this entire transaction as exactly one Bash tool call"));
-    assert!(opencode_skill.contains("do not split `start`, `load`, `exec`, `final`"));
+    assert!(opencode_skill.contains("Run this exact wrapper as one Bash call"));
+    assert!(opencode_skill.contains("one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle"));
+    assert!(opencode_skill.contains("Its source load is the only `load`"));
     assert!(opencode_skill.contains("trap cleanup EXIT"));
-    assert!(opencode_skill.contains("genuinely interactive multi-cell workflow"));
+    assert!(opencode_skill.contains("Prefer one cell with at most 85 nonblank lines"));
     assert_eq!(opencode_skill.matches(binary_text).count(), 5);
     assert!(!opencode_skill.contains("{{BIN}}"));
 
