@@ -5321,11 +5321,10 @@ mod tests {
                 assert!(rendered.contains("full-source accounting"));
                 assert!(rendered.contains("call `FINAL` once"));
                 assert!(rendered.contains("installed local az virtual-memory tool"));
-                assert!(rendered.contains("Choose exactly one execution lane for a task"));
-                assert!(rendered.contains("Never retry `solo`"));
-                assert!(
-                    rendered.contains("never combine `solo` with `start`/`load`/`exec` fallback")
-                );
+                assert!(rendered.contains(
+                    "Claude Code and OpenCode: use one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle. Never use `solo`."
+                ));
+                assert!(rendered.contains("Never retry it or mix it with an explicit lifecycle."));
                 assert!(!rendered.contains("quote each governing source phrase"));
                 assert!(!rendered.contains("test pattern"));
                 assert!(!rendered.contains("ASTER-9"));
@@ -5359,7 +5358,7 @@ mod tests {
         assert!(rendered.contains(
             "If one native Bash call can produce the exact bounded answer, use it instead"
         ));
-        assert!(rendered.contains("send this entire transaction as exactly one Bash tool call"));
+        assert!(rendered.contains("Go directly to this transaction as one Bash tool call."));
         assert!(rendered.contains("do not split `start`, `load`, `exec`, `final`"));
         assert!(rendered.contains("trap cleanup EXIT"));
         assert!(rendered.contains("genuinely interactive multi-cell workflow"));
@@ -5379,8 +5378,8 @@ mod tests {
             .split_once("set -euo pipefail")
             .expect("one-shot transaction")
             .1
-            .split_once("For a genuinely interactive multi-cell workflow")
-            .expect("interactive boundary")
+            .split_once("### Cell contract")
+            .expect("cell contract boundary")
             .0;
         let start = transaction.find(" start)").expect("start command");
         let load = transaction.find(" load ").expect("load command");
@@ -5395,19 +5394,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "9b641bfa815848737584213cac7cb6787e81b33c1cf7fd13f995b59bf469b68c",
+                "b3a1c26bf61fe99ef1d4322dee30a895701de6a8d66973bde973a02641057696",
             ),
             (
                 "jcode",
-                "ac79ab853979ce6c80bcc59ed1a143a34d2949e89a99a22be827288e13908222",
+                "624ed246a12af2b02059fe56e0e900f6e57339e6d5585c76d0fd8f419a7ff86c",
             ),
             (
                 "codex",
-                "4313547035846beb96381dbceaa790a34efb9714954cc80966803b1b50417fe6",
+                "17bfeb7e34b378603e022492f572aa07c1bce08da015696c5415a2d5f60c850b",
             ),
             (
                 "gemini",
-                "2d21eb84c963ae155279a8a9ae44b985328f5d0eed50627264d12068890d55bd",
+                "03f31bc8725be8500ab2118ba5889140d6b6ed5f33997b73f44c964995838d7e",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);
