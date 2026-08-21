@@ -5360,7 +5360,7 @@ mod tests {
         assert!(rendered.contains("trap cleanup EXIT"));
         assert!(rendered.contains("A Bash tool result is not completion"));
         assert!(rendered.contains("exit 42 # intentional OpenCode handoff signal; do not retry"));
-        assert_eq!(rendered.matches("workers=16").count(), 2);
+        assert_eq!(rendered.matches("workers=8").count(), 2);
         assert!(rendered.contains(&format!(r#"sid="$({managed} start)""#)));
         assert!(rendered.contains(&format!(r#"{managed} load "$sid" '<input-path>' source"#)));
         assert!(rendered.contains(&format!(r#"cat <<'PY' | {managed} exec "$sid""#)));
@@ -5393,19 +5393,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "a23399e7e1f103e71e40cd6154c9e0527a418788012cefee80b2e3d791d2068f",
+                "5ee26fe9b679977ffa35f7cbadbaffe32214fd36bc98c2b3c15b00f825ae256b",
             ),
             (
                 "jcode",
-                "c9ac368a998f5cdc3d339d1cf47d6f51c8efd930c7ec40848314d56c89e16549",
+                "c96f9a0027a37c7151f4606f4bf4f116363a7ae84ec3c9e496188c0e92eeaa4c",
             ),
             (
                 "codex",
-                "7e93682b64375707cd367e7a217ca565618cf346da6956e6e8dc81f6d360831d",
+                "76404a6b36f994b4bd1cd77bc8092437c28847d039b18314f7d11776ef9fda8a",
             ),
             (
                 "gemini",
-                "fce7016b74769905c4a068da239f423bae0099f2cbd5de272a676ec573c87ba2",
+                "e4e34894782a7e740606588feefb7cf39709000b76255e97c88185a6e05b7a9e",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);

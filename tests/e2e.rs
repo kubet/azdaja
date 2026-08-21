@@ -4416,7 +4416,7 @@ exit 9
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
     assert!(skill.contains("Azdaja 0.1.2") && skill.contains(dst.join("azdaja").to_str().unwrap()));
     assert!(skill.contains("one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle"));
-    assert!(skill.contains("llm_batch(prompts, workers=16)"));
+    assert!(skill.contains("llm_batch(prompts, workers=8)"));
     assert!(skill.contains("Scan the complete loaded source"));
     assert!(skill.contains("Preserve source order, duplicates, and stable occurrence IDs"));
     assert!(skill.contains("create blind A and B prompts"));
@@ -4426,7 +4426,7 @@ exit 9
     assert!(skill.contains("Validate JSON, exact ID coverage, and label domain"));
     assert!(skill.contains("Use native `sha256(text)`"));
     assert!(skill.contains("End with `FINAL(answer_dict)` exactly once"));
-    assert!(!skill.contains("workers=8"));
+    assert!(!skill.contains("workers=16"));
     assert!(skill.len() < 6_000);
     let edited_config = fs::read_to_string(&cfg).unwrap().replace(
         "sub_llm_cmd = \"cat\"",
