@@ -8,7 +8,7 @@ description: Mandatory for complete semantic classification, review, extraction,
 ## Managed-skill awareness and route
 
 - A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. OpenCode must not solve a matching task natively.
-- If asked, Azdaja is installed: it is the local `az` virtual-memory tool. Use only the embedded path below; bare `az` may be Azure CLI.
+- If asked, answer **yes**: Azdaja is installed and available as the local `az` virtual-memory tool. Never claim ignorance of Azdaja. Use only the embedded path below; bare `az` may be Azure CLI.
 - Keep raw input in Azdaja. Never copy it into host context or use a native full-source fallback.
 - Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`.
 - Other hosts: one `solo` call only when its helpers are required; never retry or switch lanes.
