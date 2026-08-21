@@ -5344,19 +5344,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "a43fb9d419e2860e0a5e575916b89b3168b64dd546c31afe36cb5e2d7e11f007",
+                "3478dbd23f51b0566ba1566d050229264b72a19b93fc9155491d95d2760063ce",
             ),
             (
                 "jcode",
-                "fd7191ffc7f32866137e81d98e60cf79c1cfa26ffdbe1994f4b9cfd613c8db42",
+                "f2bf48e9e51ff8e3aadf8b91569cf01e18bd495e415541ef36ebe67ab032451b",
             ),
             (
                 "codex",
-                "ad96989d5d6b8e77ec8469f9246f3d1e07cb75f845d5c3b233c3526e50b3d53d",
+                "1cb8ecf7637ae774a10010630d8b6aa4c9cd605e7270f27938c0e953585b15b0",
             ),
             (
                 "gemini",
-                "920e533436d5fb335f95441e936fd9a70dcf8f0b5e1591c7531af5f20c4abf08",
+                "1b45e9c910a9a651d9ba448c2d15d9602bab60918410cf1b7f7e57700593a02c",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);
@@ -5390,12 +5390,12 @@ mod tests {
 
     #[test]
     fn managed_skill_repair_claim_matches_turn_cap_and_eligibility() {
-        const CLAIM: &str = "A failed cell never commits its tentative answer. If a failed cell made no child call and its failure is a repairable protocol/line-limit, compile, ordinary program/extraction, or missing/empty-`FINAL` error, `solo` may make at most two root repair turns in the same root conversation. A child-calling, timeout/resource/host, or twice-repaired failure fails closed.";
+        const CLAIM: &str = "A failed cell never commits its tentative answer. If a failed cell made no child call and its typed failure is a repairable protocol/line-limit, compile, ordinary program/extraction, missing/empty-`FINAL`, classification-without-semantic-calls, ontology-mismatch, helper-contract, or projection-boundary error, `solo` may make at most three root repair turns in the same root conversation. A child-calling, timeout/resource/host, or third-repair failure fails closed.";
         let rendered = SKILL
             .replace("{{VERSION}}", VERSION)
             .replace("{{BIN}}", "/managed/azdaja");
         assert!(rendered.contains(CLAIM));
-        assert_eq!(SOLO_ROOT_TURN_LIMIT - 1, 2);
+        assert_eq!(SOLO_ROOT_TURN_LIMIT - 1, 3);
 
         let repairable = [
             SoloProgramFailureKind::Protocol,
@@ -5409,6 +5409,10 @@ mod tests {
             SoloProgramFailureKind::Program,
             SoloProgramFailureKind::MissingFinal,
             SoloProgramFailureKind::EmptyFinal,
+            SoloProgramFailureKind::ClassificationWithoutSemanticCalls,
+            SoloProgramFailureKind::OntologyMismatch,
+            SoloProgramFailureKind::HelperContract,
+            SoloProgramFailureKind::ProjectionBoundary,
         ];
         for kind in repairable {
             let failure = SoloProgramFailure {

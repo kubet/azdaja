@@ -2508,15 +2508,15 @@ if os.getenv('RLM_DEPTH') == '0':
     required = ('full ctx is the original raw input string',
                 'not the sample encoding and not json unless the input itself is json',
                 'inspect and parse complete ctx', 'preserve source occurrences',
-                'exact line-record axiom',
-                'use an exact line helper on complete authoritative ctx',
-                'never the structural sample, a lexical_relevance view, a synthetic value',
-                'unambiguous common marker for every relevant record and no non-record line',
+                'exact line helper contracts',
+                'source grammar declares one complete record per physical line',
+                'never call either helper on the structural sample, a lexical_relevance view, a synthetic value',
+                'one exact literal beginning every relevant record line at byte position 0 and no non-record line',
                 'exact_line_records(ctx, prefix)',
                 'exact_line_ledger(ctx, prefix)',
-                'frozen `entries`', 'immutable `.id` and `.record`',
+                'frozen ledger whose `entries`', 'immutable `.id` and `.record`',
                 'apply every deterministic metadata/date/user/range selector',
-                'append each selected `.id` exactly once in original order',
+                'append each selected `.id` exactly once, in original order',
                 'semantic_manifest(ledger, selected_ids, target_marker, task, labels)',
                 'do not call, alias, shadow, or rebind the complete-record manifest',
                 'one designated final suffix target field',
@@ -2535,10 +2535,10 @@ if os.getenv('RLM_DEPTH') == '0':
                 'nonempty unique string',
                 'separately admitted final-suffix projection axiom',
                 'complete relevant record', 'never normalized or silently truncated',
-                'markers for answer/label fields',
-                'repeated or payload-colliding markers',
-                'neighboring-record or cross-field dependence',
-                'use complete records or abstain',
+                'marker names an answer/label field',
+                'repeats or collides with payload',
+                'label depends on neighboring records or other fields',
+                'fail closed to complete records or abstain',
                 'source occurrences and weights preserved',
                 'never trust a count claimed by source text',
                 'task concisely frames', 'at least two distinct actual labels',
@@ -4414,21 +4414,18 @@ exit 9
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
     assert!(skill.contains("Azdaja 0.1.2") && skill.contains(dst.join("azdaja").to_str().unwrap()));
-    assert!(skill.contains("Each source occurrence is an aggregation unit"));
-    assert!(skill.contains("retaining every source ID or an integer multiplicity"));
-    assert!(skill.contains("actual rendered character length"));
-    assert!(skill.contains("complete manifest"));
-    assert!(skill.contains("Omission is unresolved"));
-    assert!(skill.contains("two independent complete manifests"));
-    assert!(skill.contains("Blindly adjudicate every A/B disagreement"));
-    assert!(skill.contains("azdaja 0.1.0") && skill.contains(dst.join("azdaja").to_str().unwrap()));
+    assert!(skill.contains("exact_line_records(source, prefix)"));
+    assert!(skill.contains("semantic_manifest_records(items, task, labels)"));
+    assert!(skill.contains("capped at 39 representatives and 80 KiB"));
+    assert!(skill.contains("use eight workers"));
+    assert!(skill.contains("at most three root repair turns"));
     assert!(skill.contains("Source occurrences and multiplicity are preserved"));
     assert!(skill.contains("every caller occurrence is expanded before reduction"));
     assert!(skill.contains("Labels are produced by classifying complete instances"));
     assert!(skill.contains("never by searching for label fields or label words"));
     assert!(skill.contains("Complete validated coverage is required"));
     assert!(!skill.contains("For exact semantic counts and aggregates"));
-    assert!(!skill.contains("Prefer one root planning turn"));
+    assert!(skill.contains("Prefer one root planning turn"));
     assert!(skill.contains("`yield`/generators"));
     assert!(skill.contains("`FINAL(answer)` is always defined"));
     assert!(skill.contains("`csv` and other imports are unavailable"));
