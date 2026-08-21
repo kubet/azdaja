@@ -183,7 +183,11 @@ mod managed_skill_tests {
             assert!(
                 internal_commands.lines().any(|line| {
                     line.contains(embedded_binary)
-                        && line.split_whitespace().any(|word| word == command)
+                        && line
+                            .split(|character: char| {
+                                !character.is_ascii_alphanumeric() && character != '-'
+                            })
+                            .any(|word| word == command)
                 }),
                 "internal {command} command did not retain the embedded binary path"
             );

@@ -113,6 +113,54 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
         assert!(target.join(".azdaja-managed").is_file());
     }
 
+    let opencode = targets(&scratch.0)[4].clone();
+    let opencode_binary = opencode.join("azdaja");
+    let opencode_skill = fs::read_to_string(opencode.join("SKILL.md")).unwrap();
+    let binary_text = opencode_binary.to_str().unwrap();
+    assert!(opencode_skill.contains("send this entire transaction as exactly one Bash tool call"));
+    assert!(opencode_skill.contains("do not split `start`, `load`, `exec`, `final`"));
+    assert!(opencode_skill.contains("trap cleanup EXIT"));
+    assert!(opencode_skill.contains("genuinely interactive multi-cell workflow"));
+    assert_eq!(opencode_skill.matches(binary_text).count(), 5);
+    assert!(!opencode_skill.contains("{{BIN}}"));
+
+    let one_shot_input = scratch.0.join("one-shot.txt");
+    fs::write(&one_shot_input, "one-shot transaction").unwrap();
+    let transaction = r#"set -euo pipefail
+azdaja=$1
+input=$2
+sid=
+cleanup() {
+  if [[ -n "$sid" ]]; then
+    "$azdaja" kill "$sid" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+sid="$("$azdaja" start)"
+"$azdaja" load "$sid" "$input" source >/dev/null
+cat <<'PY' | "$azdaja" exec "$sid" >/dev/null
+FINAL(str(len(source)))
+PY
+"$azdaja" final "$sid"
+"#;
+    let transaction_output = Command::new("/bin/bash")
+        .args(["-c", transaction, "bash"])
+        .arg(&opencode_binary)
+        .arg(&one_shot_input)
+        .env("HOME", &scratch.0)
+        .env("XDG_CONFIG_HOME", scratch.0.join("xdg"))
+        .env("AZDAJA_HOME", scratch.0.join("state"))
+        .env_remove("AZDAJA_CONFIG")
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert_eq!(assert_success(&transaction_output).trim(), "20");
+    assert!(
+        assert_success(&run(&opencode_binary, &scratch.0, &["list"]))
+            .trim()
+            .is_empty()
+    );
+
     // Even replacing every adapter string with a sentinel would be harmless:
     // the custody route only parses the managed files.
     for target in targets(&scratch.0) {

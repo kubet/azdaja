@@ -11,17 +11,28 @@ When this managed skill is loaded and the user asks whether Azdaja is installed,
 
 For tool execution, always use the exact embedded binary path in the commands below. Do not replace that path with bare `az`: another program, such as Azure CLI, may own that name. Prefer `az` only in safe user-facing guidance.
 
-Keep the input in Azdaja. Do not `cat` or otherwise read the raw file into your own context after loading it. Run:
+Keep the input in Azdaja. Do not `cat` or otherwise read the raw file into your own context after loading it.
+
+For a deterministic analysis that fits one `exec` cell, send this entire transaction as exactly one Bash tool call. Replace `<input-path>` and the cell, but keep the `EXIT` trap so `kill` runs after success or failure:
 
 ```bash
-{{BIN}} start
-{{BIN}} load <session-id> <path> <variable>
-cat <<'PY' | {{BIN}} exec <session-id>
-<python code>
+set -euo pipefail
+sid=
+cleanup() {
+  if [[ -n "$sid" ]]; then
+    {{BIN}} kill "$sid" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+sid="$({{BIN}} start)"
+{{BIN}} load "$sid" '<input-path>' source
+cat <<'PY' | {{BIN}} exec "$sid"
+<one deterministic Python cell ending in FINAL(...)>
 PY
-{{BIN}} final <session-id>
-{{BIN}} kill <session-id>
+{{BIN}} final "$sid"
 ```
+
+For a genuinely interactive multi-cell workflow, start once, retain the session ID, and use later Bash calls for `load` and heredoc-fed `exec` cells as needed. Call `final` only after a cell saves an answer, always call `kill` when done, and keep using the exact embedded binary path for every command.
 
 `start` creates a persistent Monty/Python REPL. `load` places a UTF-8 file in a variable and returns trustworthy character/line metadata only. Each `exec` reads one Python cell on stdin; state survives across cells and capped cell output comes back for inspection. `final` retrieves the saved answer. `kill` deletes the session; `list` shows live session IDs. Monty is a Python subset: prefer explicit lists/loops over generators (`yield` is unsupported), and remember that regex backtracking is bounded.
 

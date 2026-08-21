@@ -879,7 +879,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "claude" => Some((
             "Claude Code",
-            "Claude's always-loaded Azdaja rule invokes this skill before qualifying input access. Load each input once; feed cells with a `cat` heredoc, never `python | exec`; choose a source-specific parser from its header and one record; prefer one compact deterministic `exec`; use native `sha256(text)` for hashes. If a full scan risks the cell deadline, initialize aggregates once and batch bounded, disjoint physical-record ranges in one Bash call. Retain only needed aggregates and evidence; never embed filtered or full source rows unless explicitly requested; an explorer does not imply that request. Before shipping, mechanically verify requested JSON types, full-source accounting, and verbatim decisive quotes; call `FINAL` once, then `final` and `kill` once each.",
+            "Claude's always-loaded Azdaja rule invokes this skill before qualifying input access. For a deterministic analysis that fits one `exec`, use the complete transaction below as exactly one Bash tool call; do not split `start`, `load`, `exec`, `final`, or the trapped `kill` across tool calls. Separate Bash calls are only for a genuinely interactive multi-cell workflow. Load each input once; feed cells with a `cat` heredoc, never `python | exec`; choose a source-specific parser from its header and one record; prefer one compact deterministic `exec`; use native `sha256(text)` for hashes. If a full scan risks the cell deadline, initialize aggregates once and batch bounded, disjoint physical-record ranges in one Bash call. Retain only needed aggregates and evidence; never embed filtered or full source rows unless explicitly requested; an explorer does not imply that request. Before shipping, mechanically verify requested JSON types, full-source accounting, and verbatim decisive quotes; call `FINAL` once. The transaction then calls `final` once and its `EXIT` trap calls `kill` once.",
         )),
         "codex" => Some((
             "Codex",
@@ -891,7 +891,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "opencode" => Some((
             "OpenCode",
-            "Load `azdaja` with OpenCode's native `skill` tool before qualifying input access. Load each input once; feed cells with a `cat` heredoc, never `python | exec`; choose a source-specific parser from its header and one record; prefer one compact deterministic `exec`; use native `sha256(text)` for hashes. If a full scan risks the cell deadline, initialize aggregates once and batch bounded, disjoint physical-record ranges in one shell call. Retain only needed aggregates and evidence; never embed filtered or full source rows unless explicitly requested; an explorer does not imply that request. While extracting, retain the shortest decisive verbatim source span for each reported conclusion in a bounded quote list; copy each span unchanged exactly once into final evidence. Before shipping, fail preflight unless requested JSON types and full-source accounting are correct and every retained quote occurs byte-for-byte in a deliverable; call `FINAL` once, then `final` and `kill` once each.",
+            "Load `azdaja` with OpenCode's native `skill` tool only after its routing rule qualifies the workload. For a deterministic analysis that fits one `exec`, use the complete transaction below as exactly one Bash tool call; do not split `start`, `load`, `exec`, `final`, or the trapped `kill` across tool calls. Separate Bash calls are only for a genuinely interactive multi-cell workflow. Load each input once; feed cells with a `cat` heredoc, never `python | exec`; choose a source-specific parser from its header and one record; prefer one compact deterministic `exec`; use native `sha256(text)` for hashes. If a full scan risks the cell deadline, initialize aggregates once and batch bounded, disjoint physical-record ranges in one shell call. Retain only needed aggregates and evidence; never embed filtered or full source rows unless explicitly requested; an explorer does not imply that request. While extracting, retain the shortest decisive verbatim source span for each reported conclusion in a bounded quote list; copy each span unchanged exactly once into final evidence. Before shipping, fail preflight unless requested JSON types and full-source accounting are correct and every retained quote occurs byte-for-byte in a deliverable; call `FINAL` once. The transaction then calls `final` once and its `EXIT` trap calls `kill` once.",
         )),
         _ => None,
     }
@@ -899,7 +899,8 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
 
 fn harness_skill_description(harness: &str, display: &str) -> String {
     match harness {
-        "claude" | "opencode" => "Uses Azdaja, the installed local az virtual-memory tool, when an answer needs complete coverage of an input too large for one normal tool read, such as exact counts or aggregation over a multi-megabyte or high-row-count file. Also use when asked whether Azdaja is installed or available, or how to use it. Do not use for fitting inputs, bounded excerpts, or ordinary repository work.".to_owned(),
+        "claude" => "Uses Azdaja, the installed local az virtual-memory tool, when an answer needs complete coverage of an input too large for one normal tool read, such as exact counts or aggregation over a multi-megabyte or high-row-count file. Also use when asked whether Azdaja is installed or available, or how to use it. Do not use for fitting inputs, bounded excerpts, or ordinary repository work.".to_owned(),
+        "opencode" => "Uses Azdaja, the installed local az virtual-memory tool, only when complete coverage exceeds one bounded native read or deterministic Bash call, or when persistent or semantic analysis must keep a large raw input out of root context. If one native Bash call can produce the exact bounded answer, use it instead; the skill and lifecycle cannot outperform that call. Also use when asked whether Azdaja is installed or available, or how to use it. Do not use for fitting inputs, bounded excerpts, or ordinary repository work.".to_owned(),
         _ => format!(
             "Use Azdaja, the installed and available local az virtual-memory tool, for inputs too large to read safely such as large logs, archives, repositories, transcripts, dumps, or diffs, whenever the user asks how to use it, and proactively before broad manual reading in {display}."
         ),
@@ -5302,7 +5303,14 @@ mod tests {
             assert!(rendered.contains(&format!("## Harness activation: {display}")));
             assert!(rendered.contains(marker));
             if matches!(harness, "claude" | "opencode") {
-                assert!(rendered.contains("complete coverage of an input too large"));
+                if harness == "opencode" {
+                    assert!(rendered.contains("complete coverage exceeds one bounded native read"));
+                    assert!(rendered.contains(
+                        "If one native Bash call can produce the exact bounded answer, use it instead"
+                    ));
+                } else {
+                    assert!(rendered.contains("complete coverage of an input too large"));
+                }
                 assert!(rendered.contains("Load each input once"));
                 assert!(rendered.contains("source-specific parser"));
                 assert!(rendered.contains("one compact deterministic `exec`"));
@@ -5339,24 +5347,62 @@ mod tests {
     }
 
     #[test]
+    fn opencode_one_shot_transaction_is_one_bash_call_and_routes_native_work() {
+        let rendered = render_managed_skill("opencode", Path::new("/managed/azdaja"));
+        let managed = "'/managed/azdaja'";
+
+        assert!(rendered.contains(
+            "If one native Bash call can produce the exact bounded answer, use it instead"
+        ));
+        assert!(rendered.contains("send this entire transaction as exactly one Bash tool call"));
+        assert!(rendered.contains("do not split `start`, `load`, `exec`, `final`"));
+        assert!(rendered.contains("trap cleanup EXIT"));
+        assert!(rendered.contains("genuinely interactive multi-cell workflow"));
+        assert!(rendered.contains(&format!(r#"sid="$({managed} start)""#)));
+        assert!(rendered.contains(&format!(r#"{managed} load "$sid" '<input-path>' source"#)));
+        assert!(rendered.contains(&format!(r#"cat <<'PY' | {managed} exec "$sid""#)));
+        assert!(rendered.contains(&format!(r#"{managed} final "$sid""#)));
+        assert!(rendered.contains(&format!(r#"{managed} kill "$sid""#)));
+        assert_eq!(rendered.matches(managed).count(), 5);
+        assert!(!rendered.contains(&format!(
+            "{managed} start
+{managed} load"
+        )));
+        assert!(!rendered.contains("{{BIN}}"));
+
+        let transaction = rendered
+            .split_once("set -euo pipefail")
+            .expect("one-shot transaction")
+            .1
+            .split_once("For a genuinely interactive multi-cell workflow")
+            .expect("interactive boundary")
+            .0;
+        let start = transaction.find(" start)").expect("start command");
+        let load = transaction.find(" load ").expect("load command");
+        let exec = transaction.find(" exec ").expect("exec command");
+        let final_command = transaction.find(" final ").expect("final command");
+        assert!(start < load && load < exec && exec < final_command);
+    }
+
+    #[test]
     fn unchanged_harness_profiles_are_byte_golden() {
         let binary = Path::new("/managed/azdaja");
         for (harness, expected) in [
             (
                 "default",
-                "3478dbd23f51b0566ba1566d050229264b72a19b93fc9155491d95d2760063ce",
+                "687834e5144562cdb388fd7c9e72675ba4f5f5c7ce652bda014361df26e213ec",
             ),
             (
                 "jcode",
-                "f2bf48e9e51ff8e3aadf8b91569cf01e18bd495e415541ef36ebe67ab032451b",
+                "cba0c653048587097a47b92a3b917f41fb222b81e6bb77d1ac73d3d9e94271c0",
             ),
             (
                 "codex",
-                "1cb8ecf7637ae774a10010630d8b6aa4c9cd605e7270f27938c0e953585b15b0",
+                "133530cf045d670596ee0d3b7c0f8ffaca7ca25cbd238da56f0c73eb89a91060",
             ),
             (
                 "gemini",
-                "1b45e9c910a9a651d9ba448c2d15d9602bab60918410cf1b7f7e57700593a02c",
+                "5b32311c6931b37b333187bdf7679c1d393f88d8218c774dd17d7d5e0f9c39a2",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);

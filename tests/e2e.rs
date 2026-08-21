@@ -4728,10 +4728,10 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             .lines()
             .find_map(|line| line.strip_prefix("description: "))
             .expect("installed skill description");
-        let size_trigger = if matches!(harness, "claude" | "opencode") {
-            "complete coverage of an input too large"
-        } else {
-            "inputs too large"
+        let size_trigger = match harness {
+            "claude" => "complete coverage of an input too large",
+            "opencode" => "complete coverage exceeds one bounded native read",
+            _ => "inputs too large",
         };
         for trigger in [
             size_trigger,
@@ -4772,7 +4772,11 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             assert!(
                 internal_commands.lines().any(|line| {
                     line.contains(binary_text)
-                        && line.split_whitespace().any(|word| word == command)
+                        && line
+                            .split(|character: char| {
+                                !character.is_ascii_alphanumeric() && character != '-'
+                            })
+                            .any(|word| word == command)
                 }),
                 "{harness} internal {command} command does not use its managed binary"
             );
