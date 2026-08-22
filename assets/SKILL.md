@@ -36,7 +36,7 @@ PY
 {{BIN}} final "$sid"
 ```
 
-Successful `load` and `exec` output is suppressed. Return the final value as the sole assistant response, encoded as the requested JSON object. Do not call another tool to inspect or validate it; do not summarize it, wrap it in Markdown, return a path, or say only that the task completed.
+Return the final value unchanged as the requested JSON object and sole response. Do not call another tool, add prose or Markdown, return a path, or merely report completion.
 
 ### Cell contract
 
@@ -51,7 +51,7 @@ Successful `load` and `exec` output is suppressed. Return the final value as the
 
 Use exactly one inline heredoc cell. Never create a temporary script, add another `exec`, query CLI help, retry, or start over.
 
-Ordinary `exec` provides `llm`, ordered `llm_batch`, `FINAL`, and `FINAL_VAR`; state survives across cells. Reject provider strings containing `azdaja_error`. Solo-only helpers are unavailable. Monty has no host I/O. Use the preloaded `os`, `re`, `json`, `math`, `collections`, and `datetime` modules, explicit loops/maps, and f-strings; avoid imports, generators, `next`, `eval`, `exec`, and introspection.
+Ordinary `exec` provides `llm`, ordered `llm_batch`, `FINAL`, and `FINAL_VAR`; state persists. Reject `azdaja_error`. Monty has no host I/O. Use preloaded `os`, `re`, `json`, `math`, `collections`, `datetime`, loops/maps, and f-strings; no imports, generators, `next`, `eval`, `exec`, or introspection.
 
 ## Other-host `solo` lane
 

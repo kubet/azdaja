@@ -4668,7 +4668,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
         (
             "claude",
             "Claude Code",
-            "always-loaded Azdaja rule",
+            "<execution_state>",
             t.join(".claude/skills/azdaja"),
         ),
         (

@@ -1986,7 +1986,8 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
             if event.get("tool_name").and_then(serde_json::Value::as_str) == Some("Skill")
                 && skill == Some("azdaja")
             {
-                claude_hook_remove_marker(&transaction)?;
+                // Activation is idempotent: a repeated delivery must never reopen
+                // an already claimed one-transaction lease.
                 claude_hook_write_marker(&active)?;
             }
         }
@@ -8221,6 +8222,20 @@ PY
             None,
         );
         assert_eq!(claude_hook_with_root(&transaction, &root).unwrap(), None);
+        for denied_tool in ["Agent", "Task", "Skill"] {
+            let event = event(
+                session,
+                "PreToolUse",
+                &base,
+                Some(denied_tool),
+                serde_json::json!({"name": "azdaja"}),
+                None,
+            );
+            assert!(claude_hook_with_root(&event, &root).unwrap().is_some());
+        }
+        // A repeated PostToolUse delivery is idempotent and cannot reopen
+        // the already claimed transaction lease.
+        assert_eq!(claude_hook_with_root(&activation, &root).unwrap(), None);
         assert!(
             claude_hook_with_root(&transaction, &root)
                 .unwrap()

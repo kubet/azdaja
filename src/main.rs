@@ -815,7 +815,7 @@ const CLAUDE_HOOKS: &str = r#"{
     ],
     "PreToolUse": [
       {
-        "matcher": "Read|Grep|Bash",
+        "matcher": "Read|Grep|Bash|Agent|Task|Skill",
         "hooks": [
           {
             "type": "command",
@@ -882,7 +882,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "claude" => Some((
             "Claude Code",
-            "Claude's always-loaded Azdaja rule invokes this skill before qualifying access. Keep label meanings canonical across blind views: reorder definitions only and never invert returned labels. After Skill, the first and only tool is one Bash call using the exact wrapper below; set that Bash tool call's timeout to 300000 ms. No Read, Grep, inspection, help query, temporary file, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Emit stdout JSON unchanged as the sole response.",
+            "<execution_state>Azdaja active; use the main conversation.</execution_state>\n<execution_contract>\n1. One Bash call, timeout 300000 ms: copy the wrapper with exactly one literal `start`, `load`, `exec`, `final`, and `kill`.\n2. Every `llm_batch` uses `workers=4`; put complete evidence first in `<documents>` and the exact task/output contract last; flatten disputes before one global adjudication batch; keep canonical labels.\n3. Load only the raw input once; task, schema, and packing are literals; read lowercase `source`.\n4. Return stdout JSON unchanged as the sole assistant response.\nFailure: concise error; no retry, other lane, native fallback, or subagent.</execution_contract>",
         )),
         "codex" => Some((
             "Codex",
@@ -915,6 +915,10 @@ fn render_managed_skill(harness: &str, binary: &Path) -> String {
     let mut skill = SKILL.to_owned();
     if harness == "claude" {
         skill = skill.replace("workers=8", "workers=4");
+        skill = skill.replace(
+            "- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. Claude Code and OpenCode must not solve a matching task natively.\n",
+            "",
+        );
     } else if harness == "opencode" {
         skill = skill.replace("workers=8", "workers=12");
     }
@@ -5312,7 +5316,7 @@ mod tests {
 
         for (harness, display, marker) in [
             ("jcode", "Jcode", "reload all skills"),
-            ("claude", "Claude Code", "always-loaded Azdaja rule"),
+            ("claude", "Claude Code", "<execution_state>"),
             ("codex", "Codex", "In Codex"),
             ("gemini", "Gemini", "In Gemini"),
             ("opencode", "OpenCode", "OpenCode's native `skill` tool"),
@@ -5334,7 +5338,9 @@ mod tests {
                 assert!(!rendered.contains("## Other-host `solo` lane"));
                 assert!(!rendered.contains("Other hosts: one `solo` call"));
                 if harness == "claude" {
-                    assert_eq!(rendered.matches("workers=4").count(), 2);
+                    assert_eq!(rendered.matches("workers=4").count(), 3);
+                    assert!(rendered.contains("before one global adjudication batch"));
+                    assert!(rendered.contains("exactly one literal `start`"));
                     assert!(!rendered.contains("workers=8"));
                 }
                 if harness == "opencode" {
@@ -5409,19 +5415,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "40472846fe12a3eae3dd4a61de6e213dfacae49823e16d3d361d1c99172784d0",
+                "aef07f74b3abf19ecccded4671f398b726321d74e25f43f333fbbeedad921a47",
             ),
             (
                 "jcode",
-                "427ff3937de3054f28873932cb22e209e8a8f8575ac9549ae0af38cbb1377294",
+                "2decc9ef2b6edc19e1148e4d5aeeaa5cea06eb30939110918533d0b894364474",
             ),
             (
                 "codex",
-                "037e118f45110e6c94b42b3dd35e6b88cbb54e82e297f9433ce597cb982eebc0",
+                "f330767f01c23c4ff91e9dc7a0fb8c5a98a49e35ebf91b72061f4d34e23dcbd9",
             ),
             (
                 "gemini",
-                "c7883a90b78128911e8cd7fb0314bb3bdfd535ce826672bc3cc2bd8cd8a044c0",
+                "b13bddeb09ffcc57f05002bc13a3551d32f3422ad56321025573c34b72538ac4",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);
