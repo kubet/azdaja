@@ -2994,6 +2994,55 @@ fn semantic_wall_budget(required_calls: usize) -> Result<Duration> {
     Ok(Duration::from_secs(seconds))
 }
 
+fn monty_json_value(value: &MontyObject) -> Result<serde_json::Value> {
+    Ok(match value {
+        MontyObject::None => serde_json::Value::Null,
+        MontyObject::Bool(value) => serde_json::Value::Bool(*value),
+        MontyObject::Int(value) => serde_json::Value::Number((*value).into()),
+        MontyObject::BigInt(value) => serde_json::from_str(&value.to_string())
+            .context("FINAL integer is not JSON representable")?,
+        MontyObject::Float(value) => serde_json::Value::Number(
+            serde_json::Number::from_f64(*value)
+                .ok_or_else(|| anyhow!("FINAL float is not finite JSON"))?,
+        ),
+        MontyObject::String(value) => serde_json::Value::String(value.clone()),
+        MontyObject::List(values) | MontyObject::Tuple(values) => serde_json::Value::Array(
+            values
+                .iter()
+                .map(monty_json_value)
+                .collect::<Result<Vec<_>>>()?,
+        ),
+        MontyObject::Dict(entries) => {
+            let mut output = serde_json::Map::new();
+            for (key, value) in entries {
+                let MontyObject::String(key) = key else {
+                    bail!("FINAL JSON object keys must be strings")
+                };
+                output.insert(key.clone(), monty_json_value(value)?);
+            }
+            serde_json::Value::Object(output)
+        }
+        _ => bail!("FINAL structured value is not JSON representable"),
+    })
+}
+
+fn final_output_text(value: &MontyObject) -> Result<String> {
+    if let MontyObject::String(value) = value {
+        return Ok(value.clone());
+    }
+    match value {
+        MontyObject::None
+        | MontyObject::Bool(_)
+        | MontyObject::Int(_)
+        | MontyObject::BigInt(_)
+        | MontyObject::Float(_)
+        | MontyObject::List(_)
+        | MontyObject::Tuple(_)
+        | MontyObject::Dict(_) => Ok(serde_json::to_string(&monty_json_value(value)?)?),
+        _ => Ok(value.to_string()),
+    }
+}
+
 fn external(
     name: &str,
     args: &[MontyObject],
@@ -4007,7 +4056,7 @@ impl SoloSession {
                 },
             };
             if let Some(v) = value {
-                self.answer = Some(v.to_string());
+                self.answer = Some(final_output_text(&v)?);
                 finalized = true
             }
         }
@@ -4086,7 +4135,8 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
             },
         };
         if let Some(v) = value {
-            atomic_write(&dir.join("final"), v.to_string().as_bytes())?;
+            let final_text = final_output_text(&v)?;
+            atomic_write(&dir.join("final"), final_text.as_bytes())?;
             finalized = true
         }
     }

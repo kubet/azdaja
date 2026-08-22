@@ -897,7 +897,17 @@ fn lifecycle_is_persistent_and_load_is_metadata_only() {
     ));
     assert_eq!(
         ok(run(&t, &cfg, &["final", &id], "")).trim(),
-        format!("{{'chars': {}}}", secret.len() + 13)
+        format!(r#"{{"chars":{}}}"#, secret.len() + 13)
+    );
+    ok(run(
+        &t,
+        &cfg,
+        &["exec", &id],
+        "answer={'ok': True, 'items': [1, None, 'x'], 'nested': {'f': False}}\nFINAL(answer)\n",
+    ));
+    assert_eq!(
+        ok(run(&t, &cfg, &["final", &id], "")).trim(),
+        r#"{"items":[1,null,"x"],"nested":{"f":false},"ok":true}"#
     );
     assert!(ok(run(&t, &cfg, &["list"], "")).contains(&id));
     ok(run(&t, &cfg, &["kill", &id], ""));

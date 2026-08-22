@@ -113,8 +113,9 @@ FINAL_VAR("answer")
     );
     let f = run(&t, &cfg, &["final", &id], "");
     assert!(f.status.success());
-    let out = String::from_utf8(f.stdout).unwrap();
-    assert!(out.contains("'regex': 5") && out.contains("'alpha': 2"));
+    let out: serde_json::Value = serde_json::from_slice(&f.stdout).unwrap();
+    assert_eq!(out["regex"], 5);
+    assert_eq!(out["counts"]["alpha"], 2);
     run(&t, &cfg, &["kill", &id], "");
     fs::remove_dir_all(t).unwrap();
 }
