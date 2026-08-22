@@ -25,6 +25,21 @@ __pycache__/
 
 # Owner-local notebooks, planning history, and superseded release evidence.
 # Keep these on the workstation; never publish them from this repository.
+/AUTOPSY.md
+/bench/results/agent-transport-*
+/bench/results/e2e-pilot.json
+/bench/results/e2e-versions.txt
+/bench/results/endgame-*
+/bench/results/install-matrix-v0.1.2-public.json
+/bench/results/install-real-adapters-v0.1.2-public.json
+/bench/results/jcode-*
+/bench/results/macos-arm64.json
+/bench/results/oolong-current-best26-report.json
+/bench/results/prime-agent-*
+/bench/results/rah199-*
+!/bench/results/rah199-public-manifest.json
+!/bench/results/rah199-results.jsonl.gz
+/bench/results/ruler20-*
 /FAILS.md
 /WINS.md
 /SCOREBOARD.md

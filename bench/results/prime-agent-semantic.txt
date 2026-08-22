@@ -1,9 +1,0 @@
-INC-101 -> credential expiry
-INC-102 -> network saturation
-INC-103 -> storage exhaustion
-INC-104 -> credential expiry
-INC-105 -> storage exhaustion
-INC-106 -> network saturation
-credential expiry: 2
-network saturation: 2
-storage exhaustion: 2

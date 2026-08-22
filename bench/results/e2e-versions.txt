@@ -1,6 +1,0 @@
-azdaja 0.1.0 (monty 0.0.21)
-jcode v0.75.3 (fd1ff012c)
-prime-agent 0.7.0
-ProductName:		macOS
-ProductVersion:		26.5.1
-BuildVersion:		25F80
