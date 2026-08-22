@@ -781,7 +781,7 @@ fn validate_claude_rule_install(home: &Path) -> Result<()> {
 fn adapter(h: &str) -> (&'static str, &'static str) {
     match h {
         "claude" => (
-            r#"claude -p --model {model} --effort high --tools "" --no-session-persistence --system-prompt "Use careful evidence-grounded reasoning for every item. Resolve negation and entailment before selecting labels. Follow the task exactly. Return only the requested format without Markdown fences, prose, tool calls, or delegation.""#,
+            r#"claude -p --model {model} --effort medium --tools "" --no-session-persistence --system-prompt "Use careful evidence-grounded reasoning for every item. Resolve negation and entailment before selecting labels. Follow the task exactly. Return only the requested format without Markdown fences, prose, tool calls, or delegation.""#,
             "haiku",
         ),
         "codex" => (
@@ -882,7 +882,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "claude" => Some((
             "Claude Code",
-            "<execution_state>Azdaja active; use the main conversation.</execution_state>\n<execution_contract>\n1. One Bash call, timeout 300000 ms: copy the wrapper with exactly one literal `start`, `load`, `exec`, `final`, and `kill`.\n2. Every `llm_batch` uses `workers=4`; put complete evidence first in `<documents>` and the exact task/output contract last; flatten disputes before one global adjudication batch; keep canonical labels.\n3. Load only the raw input once; task, schema, and packing are literals; read lowercase `source`.\n4. Return stdout JSON unchanged as the sole assistant response.\nFailure: concise error; no retry, other lane, native fallback, or subagent.</execution_contract>",
+            "<execution_state>Azdaja active; use the main conversation.</execution_state>\n<execution_contract>\n1. One Bash call, timeout 300000 ms: copy the wrapper with exactly one literal `start`, `load`, `exec`, `final`, and `kill`.\n2. Every `llm_batch` uses `workers=4`; use the fewest balanced initial shards of at most 40 items; put complete evidence first in `<documents>` and the exact task/output contract last; flatten disputes before one global adjudication batch; keep canonical labels.\n3. Load only the raw input once; task, schema, and packing are literals; read lowercase `source`.\n4. Return stdout JSON unchanged as the sole assistant response.\nFailure: concise error; no retry, other lane, native fallback, or subagent.</execution_contract>",
         )),
         "codex" => Some((
             "Codex",
@@ -915,6 +915,8 @@ fn render_managed_skill(harness: &str, binary: &Path) -> String {
     let mut skill = SKILL.to_owned();
     if harness == "claude" {
         skill = skill.replace("workers=8", "workers=4");
+        skill = skill.replace("at most 80 unique items", "at most 40 unique items");
+        skill = skill.replace("2 * shard_count <= 8", "2 * shard_count <= 16");
         skill = skill.replace(
             "- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. Claude Code and OpenCode must not solve a matching task natively.\n",
             "",
@@ -5341,6 +5343,8 @@ mod tests {
                     assert_eq!(rendered.matches("workers=4").count(), 3);
                     assert!(rendered.contains("before one global adjudication batch"));
                     assert!(rendered.contains("exactly one literal `start`"));
+                    assert!(rendered.contains("at most 40 unique items"));
+                    assert!(rendered.contains("2 * shard_count <= 16"));
                     assert!(!rendered.contains("workers=8"));
                 }
                 if harness == "opencode" {
@@ -5349,6 +5353,8 @@ mod tests {
                     assert!(rendered.contains("exactly one literal `start`"));
                     assert!(rendered.contains("before one global adjudication batch"));
                     assert_eq!(rendered.matches("workers=12").count(), 3);
+                    assert!(rendered.contains("at most 80 unique items"));
+                    assert!(!rendered.contains("at most 40 unique items"));
                     assert!(!rendered.contains("workers=8"));
                     assert!(!rendered.contains("exit 42"));
                 } else {
