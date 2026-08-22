@@ -907,7 +907,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "opencode" => Some((
             "OpenCode",
-            "Load `azdaja` immediately with OpenCode's native `skill` tool. Keep label meanings canonical across blind views: reorder definitions only and never invert returned labels. Copy the wrapper without rewriting its lifecycle; Bash must contain exactly one literal `start`, `load`, `exec`, `final`, and `kill`. Inside the cell, every `llm_batch` uses `workers=12`; flatten all disagreements before one global adjudication batch. After Skill, the first and only tool is one Bash call using the exact wrapper below. No Read, Grep, planning, inspection, help query, temporary file, second lane, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Bash stdout is the final JSON.",
+            "Load only when the narrow frontmatter trigger matches. Passive discovery, a repository name, or a mere mention is not activation; an explicit request to use Azdaja or confirm availability is. Once loaded, stay session-sticky. Standard lane is the default; strict is only for an explicit audit, benchmark, or machine-graded exact schema. Run the exact Bash lifecycle below with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; let its trap clean up. Keep the raw input in lowercase `source`. Standard: deterministic reduction first, one semantic batch only when needed, a normal answer, and at most one retry before an honest bounded fallback. Strict: `workers=12`, canonical A/B views, one global adjudication, exact output, and fail closed without retry or fallback.",
         )),
         _ => None,
     }
@@ -916,7 +916,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
 fn harness_skill_description(harness: &str, display: &str) -> String {
     match harness {
         "claude" => "Mandatory only for exhaustive semantic judgment or classification over one input when it exceeds 1 MiB, exceeds 200 records, or requires judging every record. Do not invoke Azdaja for repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB when no record threshold applies, or deterministic count, tail, and checksum work. Azdaja remains the installed and available local az virtual-memory tool when explicitly requested.".to_owned(),
-        "opencode" => "Mandatory: invoke Azdaja, the installed and available local az virtual-memory tool, before Read, Grep, or Bash inspection when complete semantic coverage spans more than 1 MiB or 200 records, or whenever the prompt names Azdaja. Use one native Bash call instead only when it can produce the exact answer without semantic judgment.".to_owned(),
+        "opencode" => "Use Azdaja, the installed and available local az virtual-memory tool, only for exhaustive semantic judgment or classification over one input when it exceeds 1 MiB, exceeds 200 records, or requires judging every record. Also use it when explicitly asked to use Azdaja or confirm availability. Non-triggers: repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB without the record threshold, deterministic count/tail/checksum work, and a mere mention of Azdaja.".to_owned(),
         _ => format!(
             "Use Azdaja, the installed and available local az virtual-memory tool, for inputs too large to read safely such as large logs, archives, repositories, transcripts, dumps, or diffs, whenever the user asks how to use it, and proactively before broad manual reading in {display}."
         ),
@@ -935,7 +935,7 @@ fn render_managed_skill(harness: &str, binary: &Path) -> String {
             "## Claude Code coworker lane (default)",
         );
         skill = skill.replace(
-            "- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. Claude Code and OpenCode must not solve a matching task natively.\n",
+            "- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. OpenCode must not solve a matching task natively.\n",
             "",
         );
         skill = skill.replace(
@@ -959,6 +959,40 @@ Use this lane only when the user explicitly requests audit-grade, benchmark, or 
         );
     } else if harness == "opencode" {
         skill = skill.replace("workers=8", "workers=12");
+        skill = skill.replace(
+            "## Claude Code and OpenCode",
+            "## OpenCode coworker lane (default)",
+        );
+        skill = skill.replace(
+            "- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. OpenCode must not solve a matching task natively.\n",
+            "",
+        );
+        skill = skill.replace(
+            "**Claude tool setting:** set the one Bash call's `timeout` field to `300000` before sending it; never discover this by timing out first.\n\n",
+            "",
+        );
+        skill = skill.replace(
+            "Run this exact wrapper as one Bash call, changing only `<input-path>` and the Python cell. Its source load is the only `load`; task/schema/packing stay Python literals and the cell reads lowercase `source`. No preamble, exploration, temporary script, or second lane.",
+            "Run this exact wrapper as one Bash call, changing only `<input-path>` and the Python cell. Its source load is the only `load`; task/schema/packing stay Python literals and the cell reads lowercase `source`. Do not pre-read the qualifying source, query CLI help, or create a temporary script; follow the fallback policy below.",
+        );
+        skill = skill.replace(
+            "Return the final value unchanged as the requested JSON object and sole response. Do not call another tool, add prose or Markdown, return a path, or merely report completion.\n\n### Cell contract",
+            r#"### Standard cell contract
+
+Use this lane by default. Load once and make one complete evidence pass.
+
+- Use code for deterministic parsing and reduction. For semantic judgment, keep complete evidence and stable IDs, then use the fewest balanced shards in one ordered `llm_batch(..., workers=12)` pass. No blind duplicate views or adjudication.
+- Validate complete coverage. End with `FINAL(answer)` exactly once, passing the actual value.
+- Retry one failed transaction at most once. Then disclose the failure and use a bounded fallback only when it supports an honest answer; never imply complete coverage from partial evidence.
+
+Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add useful prose or Markdown unless the user requested an exact format.
+
+### Strict benchmark lane (explicit only)
+
+Use this lane only when the user explicitly requests audit-grade, benchmark, or machine-graded output with an exact schema. In this lane, the A/B views, global adjudication, exact output, and fail-closed rules below are mandatory. Return stdout unchanged in the exact requested format.
+
+#### Strict cell contract"#,
+        );
     }
     if matches!(harness, "claude" | "opencode") {
         if let Some(index) = skill.find("\n## Other-host `solo` lane") {
@@ -5357,7 +5391,7 @@ mod tests {
             ("claude", "Claude Code", "<execution_state>"),
             ("codex", "Codex", "In Codex"),
             ("gemini", "Gemini", "In Gemini"),
-            ("opencode", "OpenCode", "OpenCode's native `skill` tool"),
+            ("opencode", "OpenCode", "session-sticky"),
         ] {
             let rendered = render_managed_skill(harness, binary);
             assert!(rendered.contains(&format!("## Harness activation: {display}")));
@@ -5371,14 +5405,18 @@ mod tests {
                     );
                     assert!(rendered.contains("repository audits, code navigation"));
                 } else {
-                    assert!(rendered.contains(
-                        "complete semantic coverage spans more than 1 MiB or 200 records"
-                    ));
+                    assert!(
+                        rendered.contains(
+                            "exhaustive semantic judgment or classification over one input"
+                        )
+                    );
+                    assert!(rendered.contains("repository audits, code navigation"));
+                    assert!(rendered.contains("a mere mention of Azdaja"));
                 }
                 if harness == "claude" {
                     assert!(rendered.contains("Load the source once"));
                 } else {
-                    assert!(rendered.contains("Load only the raw input once"));
+                    assert!(rendered.contains("Load once"));
                 }
                 assert!(rendered.contains("installed and available local az virtual-memory tool"));
                 assert!(rendered.contains(
@@ -5395,11 +5433,13 @@ mod tests {
                     assert!(!rendered.contains("workers=8"));
                 }
                 if harness == "opencode" {
-                    assert!(rendered.contains("before Read, Grep, or Bash inspection"));
-                    assert!(rendered.contains("Bash stdout is the final JSON"));
+                    assert!(!rendered.contains("before Read, Grep, or Bash inspection"));
+                    assert!(!rendered.contains("**Claude tool setting:**"));
+                    assert!(rendered.contains("OpenCode coworker lane (default)"));
+                    assert!(rendered.contains("normal conversational answer"));
                     assert!(rendered.contains("exactly one literal `start`"));
-                    assert!(rendered.contains("before one global adjudication batch"));
-                    assert_eq!(rendered.matches("workers=12").count(), 3);
+                    assert!(rendered.contains("one global adjudication"));
+                    assert_eq!(rendered.matches("workers=12").count(), 4);
                     assert!(rendered.contains("at most 80 unique items"));
                     assert!(!rendered.contains("at most 40 unique items"));
                     assert!(!rendered.contains("workers=8"));
@@ -5421,19 +5461,23 @@ mod tests {
     }
 
     #[test]
-    fn opencode_one_shot_transaction_is_one_bash_call_and_routes_native_work() {
+    fn opencode_standard_lane_is_low_ceremony_and_strict_lane_remains_exact() {
         let rendered = render_managed_skill("opencode", Path::new("/managed/azdaja"));
         let managed = "'/managed/azdaja'";
 
-        assert!(rendered.contains(
-            "Use one native Bash call instead only when it can produce the exact answer without semantic judgment"
-        ));
+        assert!(
+            rendered.len() <= 7000,
+            "OpenCode skill grew to {} bytes",
+            rendered.len()
+        );
         assert!(rendered.contains("Run this exact wrapper as one Bash call"));
-        assert!(rendered.contains("first and only tool is one Bash call"));
+        assert!(rendered.contains("follow the fallback policy below"));
+        assert!(!rendered.contains("No preamble, exploration, temporary script, or second lane"));
+        assert!(rendered.contains("Passive discovery"));
+        assert!(rendered.contains("explicit request to use Azdaja or confirm availability is"));
         assert!(rendered.contains("trap cleanup EXIT"));
-        assert!(rendered.contains("Bash stdout is the final JSON"));
         assert!(!rendered.contains("exit 42"));
-        assert_eq!(rendered.matches("workers=12").count(), 3);
+        assert_eq!(rendered.matches("workers=12").count(), 4);
         assert!(rendered.contains("Its source load is the only `load`"));
         assert!(rendered.contains("discard initial shard boundaries"));
         assert!(rendered.contains(&format!(r#"sid="$({managed} start)""#)));
@@ -5452,7 +5496,7 @@ mod tests {
             .split_once("set -euo pipefail")
             .expect("one-shot transaction")
             .1
-            .split_once("### Cell contract")
+            .split_once("### Standard cell contract")
             .expect("cell contract boundary")
             .0;
         let start = transaction.find(" start)").expect("start command");
@@ -5460,6 +5504,50 @@ mod tests {
         let exec = transaction.find(" exec ").expect("exec command");
         let final_command = transaction.find(" final ").expect("final command");
         assert!(start < load && load < exec && exec < final_command);
+
+        let standard = rendered
+            .split_once("### Standard cell contract")
+            .expect("standard OpenCode lane")
+            .1
+            .split_once("### Strict benchmark lane (explicit only)")
+            .expect("strict OpenCode lane boundary")
+            .0;
+        for contract in [
+            "Use this lane by default",
+            "Use code for deterministic parsing and reduction",
+            "For semantic judgment",
+            "fewest balanced shards",
+            "one complete evidence pass",
+            "normal conversational answer",
+            "Retry one failed transaction at most once",
+            "bounded fallback only when it supports an honest answer",
+        ] {
+            assert!(
+                standard.contains(contract),
+                "missing standard contract: {contract}"
+            );
+        }
+        assert!(!standard.contains("blind A/B"));
+        assert!(!standard.contains("global adjudication"));
+
+        let strict = rendered
+            .split_once("### Strict benchmark lane (explicit only)")
+            .expect("strict OpenCode cell contract")
+            .1;
+        for contract in [
+            "create blind A/B prompts",
+            "globally repack them into the fewest prompts",
+            "Send one adjudication `llm_batch`",
+            "strict positional JSON output contract",
+            "Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure",
+            "Return stdout unchanged in the exact requested format",
+            "Never create a temporary script, add another `exec`, query CLI help, retry, or start over",
+        ] {
+            assert!(
+                strict.contains(contract),
+                "strict contract changed: {contract}"
+            );
+        }
     }
 
     #[test]
@@ -5519,9 +5607,44 @@ mod tests {
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
         assert_eq!(
-            digest, "9b979537ce2b14a24dc16f763a22228674dc36d61f4bc8953f0c0be5acad8d01",
+            digest, "0a9907c53eac2359f20723f2c5a095f1110e6f66ad9ebb6a86f7e131f6d0788d",
             "OpenCode rendered bytes changed"
         );
+    }
+
+    #[test]
+    fn opencode_activation_description_is_narrow_and_names_nontriggers() {
+        let description = harness_skill_description("opencode", "OpenCode");
+        assert!(
+            description.len() <= 1024,
+            "OpenCode skill description grew to {} bytes",
+            description.len()
+        );
+        for trigger in [
+            "exhaustive semantic judgment or classification over one input",
+            "exceeds 1 MiB",
+            "exceeds 200 records",
+            "requires judging every record",
+            "explicitly asked to use Azdaja",
+        ] {
+            assert!(description.contains(trigger), "missing trigger: {trigger}");
+        }
+        for nontrigger in [
+            "repository audits",
+            "code navigation",
+            "structural searches",
+            "bounded excerpts",
+            "files below 1 MiB",
+            "deterministic count/tail/checksum work",
+            "a mere mention of Azdaja",
+        ] {
+            assert!(
+                description.contains(nontrigger),
+                "missing nontrigger: {nontrigger}"
+            );
+        }
+        assert!(!description.contains("before Read, Grep, or Bash inspection"));
+        assert!(!description.starts_with("Mandatory:"));
     }
 
     #[test]

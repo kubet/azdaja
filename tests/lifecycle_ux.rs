@@ -122,6 +122,14 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
     assert!(opencode_skill.contains("Its source load is the only `load`"));
     assert!(opencode_skill.contains("trap cleanup EXIT"));
     assert!(opencode_skill.contains("Use exactly one inline heredoc cell"));
+    assert!(opencode_skill.contains("OpenCode coworker lane (default)"));
+    assert!(opencode_skill.contains("### Standard cell contract"));
+    assert!(opencode_skill.contains("### Strict benchmark lane (explicit only)"));
+    assert!(opencode_skill.contains("normal conversational answer"));
+    assert!(opencode_skill.contains("repository audits, code navigation"));
+    assert!(opencode_skill.contains("a mere mention of Azdaja"));
+    assert!(!opencode_skill.contains("before Read, Grep, or Bash inspection"));
+    assert!(!opencode_skill.contains("**Claude tool setting:**"));
     assert_eq!(opencode_skill.matches(binary_text).count(), 5);
     assert!(!opencode_skill.contains("{{BIN}}"));
 

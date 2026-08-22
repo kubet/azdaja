@@ -4696,7 +4696,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
         (
             "opencode",
             "OpenCode",
-            "OpenCode's native `skill` tool",
+            "session-sticky",
             xdg.join("opencode/skills/azdaja"),
         ),
     ];
@@ -4739,7 +4739,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             .expect("installed skill description");
         let size_trigger = match harness {
             "claude" => "exhaustive semantic judgment or classification over one input",
-            "opencode" => "complete semantic coverage spans more than 1 MiB or 200 records",
+            "opencode" => "exhaustive semantic judgment or classification over one input",
             _ => "inputs too large",
         };
         let mut triggers = vec![
@@ -4757,6 +4757,26 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
                 description.contains(trigger),
                 "{harness} description is missing trigger {trigger:?}"
             );
+        }
+        if harness == "opencode" {
+            for nontrigger in [
+                "repository audits",
+                "code navigation",
+                "structural searches",
+                "bounded excerpts",
+                "a mere mention of Azdaja",
+            ] {
+                assert!(
+                    description.contains(nontrigger),
+                    "OpenCode description is missing nontrigger {nontrigger:?}"
+                );
+            }
+            assert!(!description.starts_with("Mandatory:"));
+            assert!(!skill.contains("before Read, Grep, or Bash inspection"));
+            assert!(skill.contains("Passive discovery"));
+            assert!(skill.contains("explicit request to use Azdaja or confirm availability is"));
+            assert!(skill.contains("### Standard cell contract"));
+            assert!(skill.contains("### Strict benchmark lane (explicit only)"));
         }
         for awareness in [
             "## Managed-skill awareness",
