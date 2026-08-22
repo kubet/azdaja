@@ -5403,19 +5403,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "ecaeed8c558733a034320c9dea05fb4029b3e01e3eb94442acdf522b97f7cf9e",
+                "40472846fe12a3eae3dd4a61de6e213dfacae49823e16d3d361d1c99172784d0",
             ),
             (
                 "jcode",
-                "47e1e4cad3376aa742ee1996aa74eb789003203c2db03e519631df76414b9d92",
+                "427ff3937de3054f28873932cb22e209e8a8f8575ac9549ae0af38cbb1377294",
             ),
             (
                 "codex",
-                "aa0fc4aa5fd0c6694205861d0eb1c3a0f081fbab08cb1b9f2e42f5ea8e20f980",
+                "037e118f45110e6c94b42b3dd35e6b88cbb54e82e297f9433ce597cb982eebc0",
             ),
             (
                 "gemini",
-                "30e428f1024a9da378a91d6b4036bf7cff1f17d4285eda1965576da074903ee3",
+                "c7883a90b78128911e8cd7fb0314bb3bdfd535ce826672bc3cc2bd8cd8a044c0",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);
