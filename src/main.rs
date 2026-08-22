@@ -894,7 +894,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "opencode" => Some((
             "OpenCode",
-            "Load `azdaja` immediately with OpenCode's native `skill` tool. Keep label meanings canonical across blind views: reorder definitions only and never invert returned labels. Copy the wrapper without rewriting its lifecycle; Bash must contain exactly one literal `start`, `load`, `exec`, `final`, and `kill`. After Skill, the first and only tool is one Bash call using the exact wrapper below. No Read, Grep, planning, inspection, help query, temporary file, second lane, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Bash stdout is the final JSON.",
+            "Load `azdaja` immediately with OpenCode's native `skill` tool. Keep label meanings canonical across blind views: reorder definitions only and never invert returned labels. Copy the wrapper without rewriting its lifecycle; Bash must contain exactly one literal `start`, `load`, `exec`, `final`, and `kill`. Inside the cell, every `llm_batch` uses `workers=12`; flatten all disagreements before one global adjudication batch. After Skill, the first and only tool is one Bash call using the exact wrapper below. No Read, Grep, planning, inspection, help query, temporary file, second lane, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Bash stdout is the final JSON.",
         )),
         _ => None,
     }
@@ -5341,7 +5341,8 @@ mod tests {
                     assert!(rendered.contains("before Read, Grep, or Bash inspection"));
                     assert!(rendered.contains("Bash stdout is the final JSON"));
                     assert!(rendered.contains("exactly one literal `start`"));
-                    assert_eq!(rendered.matches("workers=12").count(), 2);
+                    assert!(rendered.contains("before one global adjudication batch"));
+                    assert_eq!(rendered.matches("workers=12").count(), 3);
                     assert!(!rendered.contains("workers=8"));
                     assert!(!rendered.contains("exit 42"));
                 } else {
@@ -5373,7 +5374,7 @@ mod tests {
         assert!(rendered.contains("trap cleanup EXIT"));
         assert!(rendered.contains("Bash stdout is the final JSON"));
         assert!(!rendered.contains("exit 42"));
-        assert_eq!(rendered.matches("workers=12").count(), 2);
+        assert_eq!(rendered.matches("workers=12").count(), 3);
         assert!(rendered.contains("Its source load is the only `load`"));
         assert!(rendered.contains("discard initial shard boundaries"));
         assert!(rendered.contains(&format!(r#"sid="$({managed} start)""#)));
