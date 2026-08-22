@@ -781,7 +781,7 @@ fn validate_claude_rule_install(home: &Path) -> Result<()> {
 fn adapter(h: &str) -> (&'static str, &'static str) {
     match h {
         "claude" => (
-            r#"claude -p --model {model} --effort low --tools "" --no-session-persistence --system-prompt "Follow the task exactly. Return only the requested format without Markdown fences, prose, tool calls, or delegation.""#,
+            r#"claude -p --model {model} --effort high --tools "" --no-session-persistence --system-prompt "Use careful evidence-grounded reasoning for every item. Resolve negation and entailment before selecting labels. Follow the task exactly. Return only the requested format without Markdown fences, prose, tool calls, or delegation.""#,
             "haiku",
         ),
         "codex" => (

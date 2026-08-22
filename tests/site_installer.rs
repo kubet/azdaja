@@ -711,6 +711,8 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         assert_eq!(sha256(&bin.join("azdaja")), digest);
         let active = fs::read_to_string(bin.join("azdaja-config.toml")).unwrap();
         assert!(active.contains("claude -p --model {model}"));
+        assert!(active.contains("--effort high"));
+        assert!(active.contains("Use careful evidence-grounded reasoning"));
         assert!(target(&home, "claude").join("azdaja").is_file());
         assert!(stdout.contains("azdaja ->") && stdout.contains("az ->"));
         let next = stdout.lines().last().unwrap();
