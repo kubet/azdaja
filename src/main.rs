@@ -781,7 +781,7 @@ fn validate_claude_rule_install(home: &Path) -> Result<()> {
 fn adapter(h: &str) -> (&'static str, &'static str) {
     match h {
         "claude" => (
-            r#"claude -p --model {model} --effort low --tools "" --no-session-persistence"#,
+            r#"claude -p --model {model} --effort low --tools "" --no-session-persistence --system-prompt "Follow the task exactly. Return only the requested format without Markdown fences, prose, tool calls, or delegation.""#,
             "haiku",
         ),
         "codex" => (
@@ -5396,19 +5396,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "a13a38e69ff43fb15c62c44ec88d7517bfc930a25b1b6f3f5496437b9c7fec21",
+                "90470f884485503ad3f60b43b9904edfa21c4e5437acb19786fb4ea4e94f3d34",
             ),
             (
                 "jcode",
-                "2ab6f58928fe694efb3dfb6cc53fe19c1402bcf6b652f1fb0005134782f1372d",
+                "38d18388ff83a0704ebb3b2f9684b666fef61aff2f795d51c4850f7e075f32b7",
             ),
             (
                 "codex",
-                "a15a5b2e5090e300b0e7ee0e2a4f9e9c593575e1797d16c72c0d66b914a7cbeb",
+                "103979f7c47dd116860601f27240a78b6ae9b3ebca1764ea03c41975797e78af",
             ),
             (
                 "gemini",
-                "bb6596f9bd23f2520e23b842775f3f22c663f325cbcd1107f106f35e9d7540fe",
+                "f13182190be3b3aa6fa8cb0a5d5f5918b3c3a68acc9e90741c399c7e8ea601fd",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);

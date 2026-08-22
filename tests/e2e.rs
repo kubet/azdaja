@@ -4419,7 +4419,7 @@ exit 9
     assert!(skill.contains("llm_batch(prompts, workers=8)"));
     assert!(skill.contains("Scan the complete loaded source"));
     assert!(skill.contains("Preserve source order, duplicates, and stable occurrence IDs"));
-    assert!(skill.contains("create blind A and B prompts"));
+    assert!(skill.contains("create blind A/B prompts"));
     assert!(
         skill.contains("never use keyword, regex, substring, label-name, or hand-written rules")
     );
