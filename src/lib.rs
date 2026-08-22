@@ -1191,12 +1191,13 @@ const CLAUDE_HOOK_LARGE_BYTES: u64 = 1_000_000;
 const CLAUDE_HOOK_SAMPLE_BYTES: usize = 64 * 1024;
 const CLAUDE_HOOK_MARKER: &[u8] = b"azdaja-claude-hook-v1\n";
 
-fn claude_hook_paths(root: &Path, session_id: &str) -> (PathBuf, PathBuf, PathBuf) {
+fn claude_hook_paths(root: &Path, session_id: &str) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
     let stem = sha256_hex(session_id.as_bytes());
     (
         root.join(format!("{stem}.coverage")),
         root.join(format!("{stem}.active")),
         root.join(format!("{stem}.sample")),
+        root.join(format!("{stem}.transaction")),
     )
 }
 
@@ -1915,6 +1916,37 @@ fn claude_hook_denial() -> String {
     .to_string()
 }
 
+fn claude_hook_lifecycle_denial() -> String {
+    serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": "After Azdaja activation, use exactly one managed Bash transaction containing start/load/exec/final/kill. Do not inspect, stage, validate, or retry with another tool."
+        }
+    })
+    .to_string()
+}
+
+fn claude_hook_is_managed_transaction(command: &str) -> bool {
+    [
+        "set -euo pipefail",
+        "sid=",
+        "cleanup()",
+        "trap cleanup EXIT",
+        " start",
+        " load",
+        " exec",
+        " final",
+        " kill",
+        "cat <<",
+        "FINAL(",
+    ]
+    .iter()
+    .all(|part| command.contains(part))
+        && !Regex::new(r"(?i)\bsolo\b").unwrap().is_match(command)
+        && (command.contains("/azdaja") || command.contains("$AZ"))
+}
+
 fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
     let event: serde_json::Value =
         serde_json::from_str(input).context("invalid Claude hook JSON")?;
@@ -1923,7 +1955,7 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| anyhow!("Claude hook input lacks session_id"))?;
     secure_dir(root)?;
-    let (coverage, active, sample) = claude_hook_paths(root, session_id);
+    let (coverage, active, sample, transaction) = claude_hook_paths(root, session_id);
     match event
         .get("hook_event_name")
         .and_then(serde_json::Value::as_str)
@@ -1936,14 +1968,16 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
                 .and_then(serde_json::Value::as_str)
                 .is_some_and(claude_hook_coverage_prompt) =>
         {
-            claude_hook_remove_marker(&sample)?;
+            for path in [&coverage, &active, &sample, &transaction] {
+                claude_hook_remove_marker(path)?;
+            }
             claude_hook_write_marker(&coverage)?;
         }
-        "UserPromptSubmit" if !claude_hook_marker_present(&active)? => {
-            claude_hook_remove_marker(&coverage)?;
-            claude_hook_remove_marker(&sample)?;
+        "UserPromptSubmit" => {
+            for path in [&coverage, &active, &sample, &transaction] {
+                claude_hook_remove_marker(path)?;
+            }
         }
-        "UserPromptSubmit" => {}
         "PostToolUse" => {
             let skill = event
                 .get("tool_input")
@@ -1952,11 +1986,12 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
             if event.get("tool_name").and_then(serde_json::Value::as_str) == Some("Skill")
                 && skill == Some("azdaja")
             {
+                claude_hook_remove_marker(&transaction)?;
                 claude_hook_write_marker(&active)?;
             }
         }
         "PreToolUse" => {
-            if !claude_hook_marker_present(&coverage)? || claude_hook_marker_present(&active)? {
+            if !claude_hook_marker_present(&coverage)? {
                 return Ok(None);
             }
             let tool = event
@@ -1964,6 +1999,23 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or_default();
             let tool_input = event.get("tool_input").unwrap_or(&serde_json::Value::Null);
+            if claude_hook_marker_present(&active)? {
+                if tool == "StructuredOutput" {
+                    return Ok(None);
+                }
+                if tool == "Bash" {
+                    let command = tool_input
+                        .get("command")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default();
+                    if claude_hook_is_managed_transaction(command)
+                        && claude_hook_claim_sample(&transaction)?
+                    {
+                        return Ok(None);
+                    }
+                }
+                return Ok(Some(claude_hook_lifecycle_denial()));
+            }
             let cwd = event
                 .get("cwd")
                 .and_then(serde_json::Value::as_str)
@@ -2051,7 +2103,7 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
             }
         }
         "SessionEnd" => {
-            for path in [&coverage, &active, &sample] {
+            for path in [&coverage, &active, &sample, &transaction] {
                 claude_hook_remove_marker(path)?;
             }
         }
@@ -8149,7 +8201,40 @@ mod claude_hook_tests {
             None,
         );
         assert_eq!(claude_hook_with_root(&activation, &root).unwrap(), None);
-        assert_eq!(claude_hook_with_root(&broad, &root).unwrap(), None);
+        assert!(claude_hook_with_root(&broad, &root).unwrap().is_some());
+        let transaction = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Bash"),
+            serde_json::json!({"command": r#"set -euo pipefail
+AZ="/managed/azdaja"
+sid=
+cleanup() { "$AZ" kill "$sid"; }
+trap cleanup EXIT
+sid="$("$AZ" start)"
+"$AZ" load "$sid" fixture.jsonl source
+cat <<'PY' | "$AZ" exec "$sid"
+FINAL({})
+PY
+"$AZ" final "$sid""#}),
+            None,
+        );
+        assert_eq!(claude_hook_with_root(&transaction, &root).unwrap(), None);
+        assert!(
+            claude_hook_with_root(&transaction, &root)
+                .unwrap()
+                .is_some()
+        );
+        let structured = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("StructuredOutput"),
+            serde_json::json!({"code": "TF"}),
+            None,
+        );
+        assert_eq!(claude_hook_with_root(&structured, &root).unwrap(), None);
         assert_eq!(
             claude_hook_with_root(&unrelated_prompt, &root).unwrap(),
             None
