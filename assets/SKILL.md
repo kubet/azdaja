@@ -15,6 +15,8 @@ description: Mandatory for complete semantic classification, review, extraction,
 
 ## Claude Code and OpenCode
 
+**Claude tool setting:** set the one Bash call's `timeout` field to `300000` before sending it; never discover this by timing out first.
+
 Run this exact wrapper as one Bash call, changing only `<input-path>` and the Python cell. Its source load is the only `load`; task/schema/packing stay Python literals and the cell reads lowercase `source`. No preamble, exploration, temporary script, or second lane.
 
 ```bash
@@ -34,13 +36,13 @@ PY
 {{BIN}} final "$sid"
 ```
 
-Successful `load` and `exec` output is suppressed, so stdout is exactly the final JSON. Return that value unchanged as the sole assistant response. Do not summarize it, wrap it in Markdown, return a path, or say only that the task completed.
+Successful `load` and `exec` output is suppressed. Return the final value as the sole assistant response, encoded as the requested JSON object. Do not call another tool to inspect or validate it; do not summarize it, wrap it in Markdown, return a path, or say only that the task completed.
 
 ### Cell contract
 
 **Semantic gate:** build nonempty `prompts`, then run `semantic_rows = llm_batch(prompts, workers=8)`. If the task names an exact model, copy it unchanged to `semantic_model` and add `model=semantic_model` to that call. It must succeed before any label; otherwise fail without `FINAL`. Local classification or model substitution is invalid.
 
-1. Scan the complete loaded source using its declared record boundaries. Fail on ambiguous boundaries. Preserve source order, duplicates, and stable occurrence IDs. Apply deterministic selectors to complete immutable records before semantic calls.
+1. Scan the complete loaded source using its declared record boundaries. Fail on ambiguity. Before filtering, retain each record's raw zero-based source index; never replace it with a selected-item ordinal. Preserve source order, duplicates, and stable occurrence IDs. Apply deterministic selectors to complete immutable records before semantic calls.
 2. Keep complete selected records as evidence. Project only when the official grammar says one exact final field alone determines the label; then require one nonempty marker and copy its suffix byte-for-byte.
 3. Make the fewest balanced contiguous shards of at most 80 unique items and 80 KiB per prompt. When possible, keep `2 * shard_count <= 8` for one worker wave. Every prompt includes the task, exact label domain, stable IDs, evidence, and a strict positional JSON output contract.
 4. For each shard, create blind A/B prompts. A lists items forward and says `T=yes; F=no`; B lists items in reverse and says `F=no; T=yes`. Meanings stay canonical—never invert returned labels. Submit all in one `llm_batch(..., workers=8)` using the gate's model form; every label must come from parsed semantic output; never use keyword, regex, substring, label-name, or hand-written rules.
