@@ -913,6 +913,9 @@ fn harness_skill_description(harness: &str, display: &str) -> String {
 fn render_managed_skill(harness: &str, binary: &Path) -> String {
     let default_description = format!("description: {DEFAULT_SKILL_DESCRIPTION}");
     let mut skill = SKILL.to_owned();
+    if harness == "claude" {
+        skill = skill.replace("workers=8", "workers=4");
+    }
     if matches!(harness, "claude" | "opencode") {
         if let Some(index) = skill.find("\n## Other-host `solo` lane") {
             skill.truncate(index);
@@ -5328,6 +5331,10 @@ mod tests {
                 ));
                 assert!(!rendered.contains("## Other-host `solo` lane"));
                 assert!(!rendered.contains("Other hosts: one `solo` call"));
+                if harness == "claude" {
+                    assert_eq!(rendered.matches("workers=4").count(), 2);
+                    assert!(!rendered.contains("workers=8"));
+                }
                 if harness == "opencode" {
                     assert!(rendered.contains("before Read, Grep, or Bash inspection"));
                     assert!(rendered.contains("Bash stdout is the final JSON"));
