@@ -882,7 +882,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "claude" => Some((
             "Claude Code",
-            "Claude's always-loaded Azdaja rule invokes this skill before qualifying access. After Skill, the first and only tool is one Bash call using the exact wrapper below; set that Bash tool call's timeout to 300000 ms. No Read, Grep, inspection, help query, temporary file, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Emit stdout JSON unchanged as the sole response.",
+            "Claude's always-loaded Azdaja rule invokes this skill before qualifying access. Keep label meanings canonical across blind views: reorder definitions only and never invert returned labels. After Skill, the first and only tool is one Bash call using the exact wrapper below; set that Bash tool call's timeout to 300000 ms. No Read, Grep, inspection, help query, temporary file, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Emit stdout JSON unchanged as the sole response.",
         )),
         "codex" => Some((
             "Codex",
@@ -894,7 +894,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "opencode" => Some((
             "OpenCode",
-            "Load `azdaja` immediately with OpenCode's native `skill` tool. After Skill, the first and only tool is one Bash call using the exact wrapper below. No Read, Grep, planning, inspection, help query, temporary file, second lane, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Bash stdout is the final JSON.",
+            "Load `azdaja` immediately with OpenCode's native `skill` tool. Keep label meanings canonical across blind views: reorder definitions only and never invert returned labels. After Skill, the first and only tool is one Bash call using the exact wrapper below. No Read, Grep, planning, inspection, help query, temporary file, second lane, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Bash stdout is the final JSON.",
         )),
         _ => None,
     }
