@@ -780,7 +780,10 @@ fn validate_claude_rule_install(home: &Path) -> Result<()> {
 
 fn adapter(h: &str) -> (&'static str, &'static str) {
     match h {
-        "claude" => ("claude -p --model {model}", "haiku"),
+        "claude" => (
+            r#"claude -p --model {model} --effort low --tools "" --no-session-persistence"#,
+            "haiku",
+        ),
         "codex" => (
             "codex exec --ephemeral --skip-git-repo-check --model {model} -",
             "gpt-5.4-mini",
@@ -910,6 +913,16 @@ fn harness_skill_description(harness: &str, display: &str) -> String {
 fn render_managed_skill(harness: &str, binary: &Path) -> String {
     let default_description = format!("description: {DEFAULT_SKILL_DESCRIPTION}");
     let mut skill = SKILL.to_owned();
+    if matches!(harness, "claude" | "opencode") {
+        if let Some(index) = skill.find("\n## Other-host `solo` lane") {
+            skill.truncate(index);
+            skill.push('\n');
+        }
+        skill = skill.replace(
+            "- Other hosts: one `solo` call only when its helpers are required; never retry or switch lanes.\n",
+            "",
+        );
+    }
     if let Some((display, guidance)) = harness_skill_profile(harness) {
         let description = format!(
             "description: {}",
@@ -5313,7 +5326,8 @@ mod tests {
                 assert!(rendered.contains(
                     "Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
                 ));
-                assert!(rendered.contains("never retry or switch lanes"));
+                assert!(!rendered.contains("## Other-host `solo` lane"));
+                assert!(!rendered.contains("Other hosts: one `solo` call"));
                 if harness == "opencode" {
                     assert!(rendered.contains("before Read, Grep, or Bash inspection"));
                     assert!(rendered.contains("Bash stdout is the final JSON"));
