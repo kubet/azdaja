@@ -43,6 +43,18 @@ fn run(binary: &Path, home: &Path, args: &[&str]) -> Output {
         .output()
         .unwrap()
 }
+fn run_in(binary: &Path, home: &Path, current_dir: &Path, args: &[&str]) -> Output {
+    Command::new(binary)
+        .args(args)
+        .current_dir(current_dir)
+        .env("HOME", home)
+        .env("XDG_CONFIG_HOME", home.join("xdg"))
+        .env("AZDAJA_HOME", home.join("state"))
+        .env_remove("AZDAJA_CONFIG")
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap()
+}
 fn run_with_jcode_home(binary: &Path, home: &Path, jcode_home: &Path, args: &[&str]) -> Output {
     Command::new(binary)
         .args(args)
@@ -208,6 +220,74 @@ PY
     assert!(stdout.contains("/skills -> Reload all"));
     assert!(stdout.contains("fresh Jcode session"));
     assert!(!scratch.0.join("provider-called").exists());
+}
+
+#[test]
+fn opencode_doctor_rejects_an_incompatible_agent_skills_shadow() {
+    let binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
+    let scratch = Scratch::new("opencode-shadow");
+    install_all(&scratch.0);
+
+    let codex_skill = scratch.0.join(".agents/skills/azdaja/SKILL.md");
+    let current = fs::read_to_string(&codex_skill).unwrap();
+    fs::write(
+        &codex_skill,
+        current.replace(
+            "In Codex, or when OpenCode discovers this Agent Skills compatibility profile",
+            "In Codex, activate before broad manual reads",
+        ),
+    )
+    .unwrap();
+
+    let rejected = run(binary, &scratch.0, &["doctor", "opencode"]);
+    let (stdout, stderr) = text(&rejected);
+    assert!(
+        !rejected.status.success(),
+        "stdout={stdout} stderr={stderr}"
+    );
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(stdout.contains("OpenCode can discover an incompatible same-name compatibility skill"));
+    assert!(stdout.contains("reinstall any installed claude/codex profiles"));
+
+    fs::write(&codex_skill, current).unwrap();
+    assert_success(&run(binary, &scratch.0, &["install", "codex"]));
+    let repaired = run(binary, &scratch.0, &["doctor", "opencode"]);
+    assert!(assert_success(&repaired).contains("PASS opencode"));
+}
+
+#[test]
+fn opencode_doctor_rejects_project_visible_same_name_skills() {
+    let binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
+    let scratch = Scratch::new("opencode-project-shadow");
+    assert_success(&run(binary, &scratch.0, &["install", "opencode"]));
+
+    let project = scratch.0.join("project/nested");
+    fs::create_dir_all(&project).unwrap();
+    fs::create_dir_all(scratch.0.join("project/.git")).unwrap();
+    let shadow = scratch.0.join("project/.agents/skills/azdaja/SKILL.md");
+    fs::create_dir_all(shadow.parent().unwrap()).unwrap();
+    fs::write(
+        &shadow,
+        "---\nname: azdaja\ndescription: Broad foreign profile\n---\n",
+    )
+    .unwrap();
+
+    let rejected = run_in(binary, &scratch.0, &project, &["doctor", "opencode"]);
+    let (stdout, stderr) = text(&rejected);
+    assert!(
+        !rejected.status.success(),
+        "stdout={stdout} stderr={stderr}"
+    );
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(stdout.contains("OpenCode can discover an incompatible same-name compatibility skill"));
+    assert!(
+        stdout.contains(&shadow.parent().unwrap().display().to_string()),
+        "{stdout}"
+    );
+
+    fs::remove_dir_all(shadow.parent().unwrap()).unwrap();
+    let repaired = run_in(binary, &scratch.0, &project, &["doctor", "opencode"]);
+    assert!(assert_success(&repaired).contains("PASS opencode"));
 }
 
 #[test]

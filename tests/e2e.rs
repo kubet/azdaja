@@ -4684,7 +4684,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
         (
             "codex",
             "Codex",
-            "In Codex",
+            "OpenCode discovers",
             t.join(".agents/skills/azdaja"),
         ),
         (
@@ -4739,7 +4739,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             .expect("installed skill description");
         let size_trigger = match harness {
             "claude" => "exhaustive semantic judgment or classification over one input",
-            "opencode" => "exhaustive semantic judgment or classification over one input",
+            "codex" | "opencode" => "exhaustive semantic judgment or classification over one input",
             _ => "inputs too large",
         };
         let mut triggers = vec![
@@ -4749,7 +4749,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             "installed",
             "available",
         ];
-        if !matches!(harness, "claude" | "opencode") {
+        if !matches!(harness, "claude" | "codex" | "opencode") {
             triggers.push("how to use");
         }
         for trigger in triggers {
@@ -4758,7 +4758,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
                 "{harness} description is missing trigger {trigger:?}"
             );
         }
-        if harness == "opencode" {
+        if matches!(harness, "codex" | "opencode") {
             for nontrigger in [
                 "repository audits",
                 "code navigation",
@@ -4768,7 +4768,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             ] {
                 assert!(
                     description.contains(nontrigger),
-                    "OpenCode description is missing nontrigger {nontrigger:?}"
+                    "{harness} description is missing OpenCode-safe nontrigger {nontrigger:?}"
                 );
             }
             assert!(!description.starts_with("Mandatory:"));
@@ -4777,6 +4777,9 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             assert!(skill.contains("explicit request to use Azdaja or confirm availability is"));
             assert!(skill.contains("### Standard cell contract"));
             assert!(skill.contains("### Strict benchmark lane (explicit only)"));
+            if harness == "codex" {
+                assert!(skill.contains("Codex and OpenCode coworker lane (default)"));
+            }
         }
         for awareness in [
             "## Managed-skill awareness",

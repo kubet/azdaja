@@ -899,7 +899,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "codex" => Some((
             "Codex",
-            "In Codex, activate the `azdaja` skill before broad manual reads or shell sampling. Use the exact managed binary path below for every Azdaja command.",
+            "In Codex, or when OpenCode discovers this Agent Skills compatibility profile, load only when the narrow frontmatter trigger matches. Passive discovery, a repository name, or a mere mention is not activation; an explicit request to use Azdaja or confirm availability is. Standard lane is the default; strict is only for an explicit audit, benchmark, or machine-graded exact schema. Run the exact Bash lifecycle below with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; let its trap clean up. Keep the raw input in lowercase `source`. Standard: deterministic reduction first, one semantic batch only when needed, a normal answer, and at most one retry before an honest bounded fallback. Strict: `workers=12`, canonical A/B views, one global adjudication, exact output, and fail closed without retry or fallback.",
         )),
         "gemini" => Some((
             "Gemini",
@@ -916,7 +916,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
 fn harness_skill_description(harness: &str, display: &str) -> String {
     match harness {
         "claude" => "Mandatory only for exhaustive semantic judgment or classification over one input when it exceeds 1 MiB, exceeds 200 records, or requires judging every record. Do not invoke Azdaja for repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB when no record threshold applies, or deterministic count, tail, and checksum work. Azdaja remains the installed and available local az virtual-memory tool when explicitly requested.".to_owned(),
-        "opencode" => "Use Azdaja, the installed and available local az virtual-memory tool, only for exhaustive semantic judgment or classification over one input when it exceeds 1 MiB, exceeds 200 records, or requires judging every record. Also use it when explicitly asked to use Azdaja or confirm availability. Non-triggers: repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB without the record threshold, deterministic count/tail/checksum work, and a mere mention of Azdaja.".to_owned(),
+        "codex" | "opencode" => "Use Azdaja, the installed and available local az virtual-memory tool, only for exhaustive semantic judgment or classification over one input when it exceeds 1 MiB, exceeds 200 records, or requires judging every record. Also use it when explicitly asked to use Azdaja or confirm availability. Non-triggers: repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB without the record threshold, deterministic count/tail/checksum work, and a mere mention of Azdaja.".to_owned(),
         _ => format!(
             "Use Azdaja, the installed and available local az virtual-memory tool, for inputs too large to read safely such as large logs, archives, repositories, transcripts, dumps, or diffs, whenever the user asks how to use it, and proactively before broad manual reading in {display}."
         ),
@@ -957,11 +957,15 @@ Use this lane only when the user explicitly requests audit-grade, benchmark, or 
 
 #### Strict cell contract"#,
         );
-    } else if harness == "opencode" {
+    } else if matches!(harness, "codex" | "opencode") {
         skill = skill.replace("workers=8", "workers=12");
         skill = skill.replace(
             "## Claude Code and OpenCode",
-            "## OpenCode coworker lane (default)",
+            if harness == "codex" {
+                "## Codex and OpenCode coworker lane (default)"
+            } else {
+                "## OpenCode coworker lane (default)"
+            },
         );
         skill = skill.replace(
             "- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. OpenCode must not solve a matching task natively.\n",
@@ -994,7 +998,7 @@ Use this lane only when the user explicitly requests audit-grade, benchmark, or 
 #### Strict cell contract"#,
         );
     }
-    if matches!(harness, "claude" | "opencode") {
+    if matches!(harness, "claude" | "codex" | "opencode") {
         if let Some(index) = skill.find("\n## Other-host `solo` lane") {
             skill.truncate(index);
             skill.push('\n');
@@ -2317,6 +2321,62 @@ fn validate_harness_skill_profile(dst: &Path, harness: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_opencode_safe_profile(dst: &Path) -> Result<()> {
+    validate_skill_custody(dst)?;
+    if ["claude", "codex", "opencode"]
+        .into_iter()
+        .any(|harness| validate_harness_skill_profile(dst, harness).is_ok())
+    {
+        return Ok(());
+    }
+    bail!("managed SKILL.md lacks a current OpenCode-safe activation profile")
+}
+
+fn opencode_visible_shadow_paths(home: &Path) -> Result<BTreeSet<PathBuf>> {
+    let mut paths = BTreeSet::from([target(home, "claude")?, target(home, "codex")?]);
+    let launch = env::current_dir().context("cannot resolve the OpenCode launch directory")?;
+    let mut probe = launch.clone();
+    let worktree = loop {
+        if path_entry_exists(&probe.join(".git"))? {
+            break Some(probe);
+        }
+        if !probe.pop() {
+            break None;
+        }
+    };
+    let boundary = worktree.unwrap_or_else(|| launch.clone());
+    let mut directory = launch;
+    loop {
+        for relative in [
+            ".opencode/skills/azdaja",
+            ".claude/skills/azdaja",
+            ".agents/skills/azdaja",
+        ] {
+            paths.insert(directory.join(relative));
+        }
+        if directory == boundary || !directory.pop() {
+            break;
+        }
+    }
+    paths.remove(&target(home, "opencode")?);
+    Ok(paths)
+}
+
+fn validate_opencode_shadow_profiles(home: &Path) -> Result<()> {
+    for dst in opencode_visible_shadow_paths(home)? {
+        if !path_entry_exists(&dst)? {
+            continue;
+        }
+        validate_opencode_safe_profile(&dst).with_context(|| {
+            format!(
+                "OpenCode can discover an incompatible same-name compatibility skill at {}; reinstall or remove that visible profile before using OpenCode",
+                dst.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
 fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
     let home = home()?;
     let mut passed = true;
@@ -2327,6 +2387,8 @@ fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
             .and_then(|()| {
                 if harness == "claude" {
                     validate_claude_rule_install(&home)
+                } else if harness == "opencode" {
+                    validate_opencode_shadow_profiles(&home)
                 } else {
                     Ok(())
                 }
@@ -2337,7 +2399,13 @@ fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
             ),
             Err(error) => {
                 passed = false;
-                println!("FAIL {harness}: {error:#}; Fix: reinstall with az install {harness}");
+                if harness == "opencode" {
+                    println!(
+                        "FAIL opencode: {error:#}; Fix: reinstall with az install opencode and reinstall any installed claude/codex profiles"
+                    );
+                } else {
+                    println!("FAIL {harness}: {error:#}; Fix: reinstall with az install {harness}");
+                }
             }
         }
         if harness == "jcode" {
@@ -5389,14 +5457,14 @@ mod tests {
         for (harness, display, marker) in [
             ("jcode", "Jcode", "reload all skills"),
             ("claude", "Claude Code", "<execution_state>"),
-            ("codex", "Codex", "In Codex"),
+            ("codex", "Codex", "OpenCode discovers"),
             ("gemini", "Gemini", "In Gemini"),
             ("opencode", "OpenCode", "session-sticky"),
         ] {
             let rendered = render_managed_skill(harness, binary);
             assert!(rendered.contains(&format!("## Harness activation: {display}")));
             assert!(rendered.contains(marker));
-            if matches!(harness, "claude" | "opencode") {
+            if matches!(harness, "claude" | "codex" | "opencode") {
                 if harness == "claude" {
                     assert!(
                         rendered.contains(
@@ -5432,10 +5500,14 @@ mod tests {
                     assert!(rendered.contains("2 * shard_count <= 16"));
                     assert!(!rendered.contains("workers=8"));
                 }
-                if harness == "opencode" {
+                if matches!(harness, "codex" | "opencode") {
                     assert!(!rendered.contains("before Read, Grep, or Bash inspection"));
                     assert!(!rendered.contains("**Claude tool setting:**"));
-                    assert!(rendered.contains("OpenCode coworker lane (default)"));
+                    if harness == "codex" {
+                        assert!(rendered.contains("Codex and OpenCode coworker lane (default)"));
+                    } else {
+                        assert!(rendered.contains("OpenCode coworker lane (default)"));
+                    }
                     assert!(rendered.contains("normal conversational answer"));
                     assert!(rendered.contains("exactly one literal `start`"));
                     assert!(rendered.contains("one global adjudication"));
@@ -5648,7 +5720,42 @@ mod tests {
     }
 
     #[test]
-    fn unchanged_harness_profiles_are_byte_golden() {
+    fn codex_compatibility_profile_is_safe_when_opencode_gives_it_precedence() {
+        let codex = render_managed_skill("codex", Path::new("/agents/azdaja"));
+        let opencode = render_managed_skill("opencode", Path::new("/opencode/azdaja"));
+        assert_eq!(
+            harness_skill_description("codex", "Codex"),
+            harness_skill_description("opencode", "OpenCode")
+        );
+        for required in [
+            "OpenCode discovers this Agent Skills compatibility profile",
+            "Passive discovery",
+            "repository audits, code navigation",
+            "a mere mention of Azdaja",
+            "### Standard cell contract",
+            "### Strict benchmark lane (explicit only)",
+            "normal conversational answer",
+        ] {
+            assert!(
+                codex.contains(required),
+                "Codex compatibility profile lacks {required:?}"
+            );
+        }
+        for required in [
+            "Use code for deterministic parsing and reduction",
+            "Retry one failed transaction at most once",
+            "create blind A/B prompts",
+            "one global adjudication",
+        ] {
+            assert!(codex.contains(required));
+            assert!(opencode.contains(required));
+        }
+        assert!(!codex.contains("## Other-host `solo` lane"));
+        assert!(!codex.contains("before Read, Grep, or Bash inspection"));
+    }
+
+    #[test]
+    fn stable_harness_profiles_are_byte_golden() {
         let binary = Path::new("/managed/azdaja");
         for (harness, expected) in [
             (
@@ -5661,7 +5768,7 @@ mod tests {
             ),
             (
                 "codex",
-                "f330767f01c23c4ff91e9dc7a0fb8c5a98a49e35ebf91b72061f4d34e23dcbd9",
+                "5fd863d484184022e2c349aeeeb8225a2eaa3abd627bf5bd864cbbd04c399eb1",
             ),
             (
                 "gemini",
