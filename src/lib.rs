@@ -6336,8 +6336,8 @@ impl RootDriver {
         self.history.push_str(prompt);
         let entered_turn = self.entered_turn_budget.try_enter()?;
         let started = Instant::now();
-        let text = match call_model_command(&self.history, &self.model, &self.cfg, 0) {
-            Ok(text) => text,
+        let command_reply = match call_model_command(&self.history, &self.model, &self.cfg, 0) {
+            Ok(reply) => reply,
             Err(error) => {
                 record_model_trace_result(trace_model_repair_failure(
                     &repair_request_id,
@@ -6350,13 +6350,16 @@ impl RootDriver {
             }
         };
         let reply = ModelReply {
-            text,
-            usage: ModelUsage::default(),
-            provider: String::new(),
-            model: self.model.clone(),
             latency_ms: started.elapsed().as_millis(),
+            ..command_reply.reply
         };
-        trace_model_repair_reply(&reply, &repair_request_id, entered_turn, None, false);
+        trace_model_repair_reply(
+            &reply,
+            &repair_request_id,
+            entered_turn,
+            None,
+            command_reply.usage_observed,
+        );
         self.history.push_str("\n\nAssistant:\n");
         self.history.push_str(&reply.text);
         self.history.push_str("\n\nUser:\n");
@@ -6708,7 +6711,7 @@ fn trace_model_reply_attempt(
     // exact requested model substituted into the managed command. Preserve it so
     // semantic-worker parity is auditable without claiming provider-side identity.
     let known_model = !reply.model.trim().is_empty();
-    let known_usage = known_provider && usage_observed;
+    let known_usage = usage_observed;
     record_model_trace(&ModelTrace {
         schema_version: MODEL_TRACE_SCHEMA_VERSION,
         event: ModelTraceEvent::ModelAttempt,
@@ -6768,7 +6771,7 @@ fn trace_model_repair_reply(
 ) {
     let known_provider = !reply.provider.trim().is_empty();
     let known_model = !reply.model.trim().is_empty();
-    let known_usage = known_provider && usage_observed;
+    let known_usage = usage_observed;
     record_model_trace(&ModelTrace {
         schema_version: MODEL_TRACE_SCHEMA_VERSION,
         event: ModelTraceEvent::ModelAttempt,
@@ -6880,8 +6883,8 @@ fn call_model_reply_with_attempt(
     }
     let entered_turn = entered_turn_budget.try_enter()?;
     let started = Instant::now();
-    let text = match call_model_command(&wire, model, cfg, depth) {
-        Ok(text) => text,
+    let command_reply = match call_model_command(&wire, model, cfg, depth) {
+        Ok(reply) => reply,
         Err(error) => {
             record_model_trace_result(trace_model_turn_failure(
                 depth,
@@ -6896,11 +6899,8 @@ fn call_model_reply_with_attempt(
         }
     };
     let reply = ModelReply {
-        text,
-        usage: ModelUsage::default(),
-        provider: String::new(),
-        model: model.into(),
         latency_ms: started.elapsed().as_millis(),
+        ..command_reply.reply
     };
     trace_model_reply_attempt(
         &reply,
@@ -6909,14 +6909,24 @@ fn call_model_reply_with_attempt(
         attempt,
         entered_turn,
         None,
-        false,
+        command_reply.usage_observed,
     );
     Ok(reply)
 }
 pub fn call_model(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Result<String> {
     Ok(call_model_reply(prompt, model, cfg, depth)?.text)
 }
-fn call_model_command(prompt: &str, model: &str, cfg: &Config, depth: u32) -> Result<String> {
+struct CommandModelReply {
+    reply: ModelReply,
+    usage_observed: bool,
+}
+
+fn call_model_command(
+    prompt: &str,
+    model: &str,
+    cfg: &Config,
+    depth: u32,
+) -> Result<CommandModelReply> {
     let prompt_file = if cfg.sub_llm_cmd.contains("{prompt_file}") {
         let dir = state_home()?.join("prompts");
         secure_dir(&dir)?;
@@ -6966,7 +6976,7 @@ fn call_model_inner(
     model: &str,
     cfg: &Config,
     depth: u32,
-) -> Result<String> {
+) -> Result<CommandModelReply> {
     let mut argv =
         shlex::split(&cfg.sub_llm_cmd).ok_or_else(|| anyhow!("invalid sub_llm_cmd quoting"))?;
     let path = prompt_path
@@ -7074,11 +7084,168 @@ fn call_model_inner(
             String::from_utf8_lossy(&stderr).trim()
         )
     }
-    let mut text = String::from_utf8_lossy(&strip_ansi_escapes::strip(stdout)).into_owned();
+    let text = String::from_utf8_lossy(&strip_ansi_escapes::strip(stdout)).into_owned();
+    let codex_json = is_codex_json_command(program, args);
+    if codex_json {
+        let mut reply = parse_codex_jsonl_reply(text.trim(), model)?;
+        for pattern in &cfg.clean_patterns {
+            reply.text = Regex::new(pattern)?
+                .replace_all(&reply.text, "")
+                .into_owned()
+        }
+        reply.text = reply.text.trim().to_owned();
+        return Ok(CommandModelReply {
+            reply,
+            usage_observed: true,
+        });
+    }
+
+    let mut text = text;
     for pattern in &cfg.clean_patterns {
         text = Regex::new(pattern)?.replace_all(&text, "").into_owned()
     }
-    Ok(text.trim().to_owned())
+    let text = text.trim().to_owned();
+    Ok(CommandModelReply {
+        reply: ModelReply {
+            text,
+            usage: ModelUsage::default(),
+            provider: String::new(),
+            model: model.into(),
+            latency_ms: 0,
+        },
+        usage_observed: false,
+    })
+}
+
+fn is_codex_json_command(program: &str, args: &[String]) -> bool {
+    let name = Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(program);
+    let name = name.to_ascii_lowercase();
+    (name == "codex" || name == "codex.exe") && args.iter().any(|arg| arg == "--json")
+}
+
+fn parse_codex_jsonl_reply(jsonl: &str, model: &str) -> Result<ModelReply> {
+    let mut final_text: Option<String> = None;
+    let mut completed_usage: Option<ModelUsage> = None;
+    let mut turn_completed_count = 0u32;
+
+    for (index, line) in jsonl.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value: serde_json::Value = serde_json::from_str(line.trim())
+            .with_context(|| format!("malformed Codex JSONL on line {}", index + 1))?;
+        if value.get("error").is_some() {
+            bail!(
+                "Codex JSONL contained top-level error on line {}",
+                index + 1
+            )
+        }
+        reject_codex_error_or_reroute_evidence(&value, index + 1)?;
+        let event_type = value
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default();
+        match event_type {
+            "turn.failed" => bail!("Codex JSONL contained turn.failed"),
+            "turn.completed" => {
+                turn_completed_count += 1;
+                if turn_completed_count > 1 {
+                    bail!("Codex JSONL contained duplicate turn.completed")
+                }
+                completed_usage = Some(parse_codex_usage(&value)?);
+            }
+            "item.completed" => {
+                if let Some(text) = codex_completed_agent_message_text(&value)?
+                    && final_text.replace(text).is_some()
+                {
+                    bail!("Codex JSONL contained duplicate final agent_message text")
+                }
+            }
+            _ => {}
+        }
+    }
+    if turn_completed_count != 1 {
+        bail!("Codex JSONL must contain exactly one turn.completed")
+    }
+    let text = final_text.ok_or_else(|| anyhow!("Codex JSONL missing final agent_message text"))?;
+    Ok(ModelReply {
+        text,
+        usage: completed_usage.expect("turn.completed usage was parsed"),
+        provider: "codex".into(),
+        model: model.into(),
+        latency_ms: 0,
+    })
+}
+
+fn parse_codex_usage(value: &serde_json::Value) -> Result<ModelUsage> {
+    let usage = value
+        .get("usage")
+        .ok_or_else(|| anyhow!("Codex turn.completed missing usage"))?;
+    let input = codex_usage_integer(usage, "input_tokens")?;
+    let cache_read = codex_usage_integer(usage, "cached_input_tokens")?;
+    let _cache_write = codex_usage_integer(usage, "cache_write_input_tokens")?;
+    let output = codex_usage_integer(usage, "output_tokens")?;
+    let _reasoning_output = codex_usage_integer(usage, "reasoning_output_tokens")?;
+    Ok(ModelUsage {
+        input,
+        output,
+        cache_read,
+    })
+}
+
+fn codex_usage_integer(usage: &serde_json::Value, field: &str) -> Result<u64> {
+    let value = usage
+        .get(field)
+        .ok_or_else(|| anyhow!("Codex usage missing {field}"))?;
+    value
+        .as_u64()
+        .ok_or_else(|| anyhow!("Codex usage {field} must be a non-negative integer"))
+}
+
+fn codex_completed_agent_message_text(value: &serde_json::Value) -> Result<Option<String>> {
+    let item = value.get("item").unwrap_or(value);
+    if item.get("type").and_then(serde_json::Value::as_str) != Some("agent_message") {
+        return Ok(None);
+    }
+    if item
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|status| status != "completed")
+    {
+        return Ok(None);
+    }
+    let text = item
+        .get("text")
+        .or_else(|| value.get("text"))
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow!("Codex completed agent_message missing text"))?;
+    Ok(Some(text.to_owned()))
+}
+
+fn reject_codex_error_or_reroute_evidence(value: &serde_json::Value, line: usize) -> Result<()> {
+    let ty = value
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let item_ty = value
+        .get("item")
+        .and_then(|item| item.get("type"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    if ty == "error" || item_ty == "error" {
+        bail!("Codex JSONL contained error item on line {line}")
+    }
+    let rendered = value.to_string().to_ascii_lowercase();
+    if rendered.contains("model_reroute")
+        || rendered.contains("model-reroute")
+        || (rendered.contains("reroute") && rendered.contains("model"))
+    {
+        bail!("Codex JSONL contained model-reroute evidence on line {line}")
+    }
+    Ok(())
 }
 
 fn drain_limited(mut r: impl Read, limit: usize) -> std::io::Result<(Vec<u8>, bool)> {
@@ -7124,6 +7291,215 @@ mod unit_tests {
         let shipped: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
         assert_eq!(Config::default().cell_timeout, 60);
         assert_eq!(shipped.cell_timeout, Config::default().cell_timeout);
+    }
+
+    fn codex_success_jsonl() -> String {
+        [
+            r#"{"type":"thread.started","thread_id":"s"}"#,
+            r#"{"type":"item.completed","item":{"id":"i","type":"agent_message","text":"final answer"}}"#,
+            r#"{"type":"turn.completed","usage":{"input_tokens":11,"cached_input_tokens":3,"cache_write_input_tokens":5,"output_tokens":7,"reasoning_output_tokens":2}}"#,
+        ]
+        .join("\n")
+    }
+
+    #[test]
+    fn codex_jsonl_parser_returns_final_text_and_authoritative_usage() {
+        let reply = parse_codex_jsonl_reply(&codex_success_jsonl(), "gpt-5.1-codex").unwrap();
+        assert_eq!(reply.text, "final answer");
+        assert_eq!(reply.provider, "codex");
+        assert_eq!(reply.model, "gpt-5.1-codex");
+        assert_eq!(reply.usage.input, 11);
+        assert_eq!(reply.usage.cache_read, 3);
+        assert_eq!(reply.usage.output, 7);
+    }
+
+    #[test]
+    fn codex_jsonl_parser_rejects_duplicate_terminal_events_and_text() {
+        let duplicate_turn = format!(
+            "{}\n{}",
+            codex_success_jsonl(),
+            r#"{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}"#
+        );
+        assert!(
+            parse_codex_jsonl_reply(&duplicate_turn, "m")
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate turn.completed")
+        );
+
+        let duplicate_text = [
+            r#"{"type":"item.completed","item":{"type":"agent_message","text":"one"}}"#,
+            r#"{"type":"item.completed","item":{"type":"agent_message","text":"two"}}"#,
+            r#"{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}"#,
+        ]
+        .join("\n");
+        assert!(
+            parse_codex_jsonl_reply(&duplicate_text, "m")
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate final agent_message text")
+        );
+    }
+
+    #[test]
+    fn codex_jsonl_parser_rejects_bad_json_missing_text_and_negative_usage() {
+        assert!(
+            parse_codex_jsonl_reply("{not json}", "m")
+                .unwrap_err()
+                .to_string()
+                .contains("malformed Codex JSONL")
+        );
+
+        let missing_text = r#"{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}"#;
+        assert!(
+            parse_codex_jsonl_reply(missing_text, "m")
+                .unwrap_err()
+                .to_string()
+                .contains("missing final agent_message text")
+        );
+
+        let negative_usage = [
+            r#"{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}"#,
+            r#"{"type":"turn.completed","usage":{"input_tokens":-1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}"#,
+        ]
+        .join("\n");
+        assert!(
+            parse_codex_jsonl_reply(&negative_usage, "m")
+                .unwrap_err()
+                .to_string()
+                .contains("input_tokens must be a non-negative integer")
+        );
+    }
+
+    #[test]
+    fn codex_jsonl_parser_rejects_failures_errors_and_model_reroute_evidence() {
+        for jsonl in [
+            r#"{"type":"turn.failed"}"#.to_owned(),
+            r#"{"type":"event","error":{"message":"boom"}}"#.to_owned(),
+            r#"{"type":"item.completed","item":{"type":"error","message":"boom"}}"#.to_owned(),
+            r#"{"type":"notice","model_reroute":{"from":"a","to":"b"}}"#.to_owned(),
+        ] {
+            assert!(parse_codex_jsonl_reply(&jsonl, "m").is_err(), "{jsonl}");
+        }
+    }
+
+    #[test]
+    fn codex_command_detection_is_exact_and_json_only() {
+        assert!(is_codex_json_command("/opt/bin/codex", &["--json".into()]));
+        assert!(is_codex_json_command(
+            "C:/Tools/CODEX.EXE",
+            &["--json".into()]
+        ));
+        assert!(!is_codex_json_command("codex", &["--not-json".into()]));
+        assert!(!is_codex_json_command("other-codex", &["--json".into()]));
+    }
+
+    #[test]
+    fn codex_command_transport_parses_raw_jsonl_and_traces_usage() {
+        let _guard = model_trace_test_lock().lock().unwrap();
+        let root = temp_test_dir("codex-command-trace");
+        fs::create_dir_all(&root).unwrap();
+        let codex = root.join("codex");
+        write_executable(
+            &codex,
+            r#"#!/bin/sh
+cat <<'JSONL'
+{"type":"session.started","session_id":"s"}
+{"type":"item.completed","item":{"type":"agent_message","status":"completed","text":"REMOVE final text"}}
+{"type":"turn.completed","usage":{"input_tokens":31,"cached_input_tokens":13,"cache_write_input_tokens":0,"output_tokens":17,"reasoning_output_tokens":5}}
+JSONL
+"#,
+        );
+        let trace = root.join("trace.jsonl");
+        let trace_file = File::create(&trace).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            trace_file
+                .set_permissions(fs::Permissions::from_mode(0o600))
+                .unwrap();
+        }
+        trace_file.sync_all().unwrap();
+        drop(trace_file);
+
+        let cfg = Config {
+            sub_llm_cmd: format!("{} --json", codex.display()),
+            clean_patterns: vec!["REMOVE ".into(), "input_tokens".into()],
+            ..Config::default()
+        };
+        unsafe { env::set_var("AZDAJA_MODEL_TRACE", &trace) };
+        let reply = call_model_reply("prompt", "codex-model", &cfg, 0).unwrap();
+        unsafe { env::remove_var("AZDAJA_MODEL_TRACE") };
+
+        assert_eq!(reply.text, "final text");
+        assert_eq!(reply.usage.input, 31);
+        assert_eq!(reply.usage.cache_read, 13);
+        assert_eq!(reply.usage.output, 17);
+        let row: ModelTrace = serde_json::from_str(&fs::read_to_string(&trace).unwrap()).unwrap();
+        assert_eq!(row.input_tokens, Some(31));
+        assert_eq!(row.cache_read_tokens, Some(13));
+        assert_eq!(row.output_tokens, Some(17));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn generic_command_transport_traces_unknown_usage() {
+        let _guard = model_trace_test_lock().lock().unwrap();
+        let root = temp_test_dir("generic-command-trace");
+        fs::create_dir_all(&root).unwrap();
+        let generic = root.join("generic-model");
+        write_executable(&generic, "#!/bin/sh\nprintf 'generic answer\n'\n");
+        let trace = root.join("trace.jsonl");
+        let trace_file = File::create(&trace).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            trace_file
+                .set_permissions(fs::Permissions::from_mode(0o600))
+                .unwrap();
+        }
+        trace_file.sync_all().unwrap();
+        drop(trace_file);
+
+        let cfg = Config {
+            sub_llm_cmd: generic.display().to_string(),
+            ..Config::default()
+        };
+        unsafe { env::set_var("AZDAJA_MODEL_TRACE", &trace) };
+        let reply = call_model_reply("prompt", "generic-model", &cfg, 0).unwrap();
+        unsafe { env::remove_var("AZDAJA_MODEL_TRACE") };
+
+        assert_eq!(reply.text, "generic answer");
+        let row: ModelTrace = serde_json::from_str(&fs::read_to_string(&trace).unwrap()).unwrap();
+        assert_eq!(row.input_tokens, None);
+        assert_eq!(row.cache_read_tokens, None);
+        assert_eq!(row.output_tokens, None);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn model_trace_test_lock() -> &'static std::sync::Mutex<()> {
+        static LOCK: OnceLock<std::sync::Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| std::sync::Mutex::new(()))
+    }
+
+    fn temp_test_dir(label: &str) -> PathBuf {
+        env::temp_dir().join(format!(
+            "azdaja-{label}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
+    fn write_executable(path: &Path, content: &str) {
+        fs::write(path, content).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
+        }
     }
 
     #[cfg(unix)]

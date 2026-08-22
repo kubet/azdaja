@@ -14,7 +14,7 @@ use monty::MontyRun;
 use monty_types::CompileOptions;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     env, fs,
     io::{self, IsTerminal, Read, Write},
     path::{Path, PathBuf},
@@ -527,11 +527,16 @@ fn xdg_config_root(home: &Path) -> PathBuf {
 fn jcode_root(home: &Path) -> Result<PathBuf> {
     Ok(strict_absolute_override("JCODE_HOME")?.unwrap_or_else(|| home.join(".jcode")))
 }
+
+fn codex_home(home: &Path) -> Result<PathBuf> {
+    Ok(strict_absolute_override("CODEX_HOME")?.unwrap_or_else(|| home.join(".codex")))
+}
+
 fn detection_reasons(home: &Path, harness: &str) -> Result<Vec<&'static str>> {
     let config_found = match harness {
         "jcode" => jcode_root(home)?.is_dir(),
         "claude" => home.join(".claude").is_dir(),
-        "codex" => home.join(".codex").is_dir() || home.join(".agents/skills").is_dir(),
+        "codex" => codex_home(home)?.is_dir() || home.join(".agents/skills").is_dir(),
         "gemini" => home.join(".gemini").is_dir(),
         _ => xdg_config_root(home).join("opencode").is_dir(),
     };
@@ -785,7 +790,7 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
             "haiku",
         ),
         "codex" => (
-            "codex exec --ephemeral --skip-git-repo-check --model {model} -",
+            "codex exec --ephemeral --skip-git-repo-check --ignore-rules -c skills.include_instructions=false --json --model {model} -",
             "gpt-5.4-mini",
         ),
         "gemini" => ("gemini --model {model} -p \"\"", "gemini-2.5-flash"),
@@ -899,7 +904,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "codex" => Some((
             "Codex",
-            "In Codex, or when OpenCode discovers this Agent Skills compatibility profile, load only when the narrow frontmatter trigger matches. Passive discovery, a repository name, or a mere mention is not activation; an explicit request to use Azdaja or confirm availability is. Standard lane is the default; strict is only for an explicit audit, benchmark, or machine-graded exact schema. Run the exact Bash lifecycle below with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; let its trap clean up. Keep the raw input in lowercase `source`. Standard: deterministic reduction first, one semantic batch only when needed, a normal answer, and at most one retry before an honest bounded fallback. Strict: `workers=12`, canonical A/B views, one global adjudication, exact output, and fail closed without retry or fallback.",
+            "In Codex, activate `$azdaja` only for the current turn when the narrow frontmatter trigger matches. Codex skill activation is per-turn: Passive discovery, a repository name, or a mere mention is not activation; an explicit request to use `$azdaja`/Azdaja or confirm availability is. OpenCode may also discover this Agent Skills compatibility profile, so keep the same narrow trigger and non-triggers. Standard conversational lane is the default; strict benchmark/audit lane is explicit only. Run one shell lifecycle with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; let its trap clean up. Keep the raw input in lowercase `source`. Standard: deterministic reduction first, one semantic batch only when needed, a normal conversational answer, and at most one retry before an honest bounded fallback. Strict: `workers=12`, canonical A/B views, one global adjudication, exact output, and fail closed without retry or fallback.",
         )),
         "gemini" => Some((
             "Gemini",
@@ -957,15 +962,47 @@ Use this lane only when the user explicitly requests audit-grade, benchmark, or 
 
 #### Strict cell contract"#,
         );
-    } else if matches!(harness, "codex" | "opencode") {
+    } else if harness == "codex" {
         skill = skill.replace("workers=8", "workers=12");
         skill = skill.replace(
             "## Claude Code and OpenCode",
-            if harness == "codex" {
-                "## Codex and OpenCode coworker lane (default)"
-            } else {
-                "## OpenCode coworker lane (default)"
-            },
+            "## Codex coworker lane (default)",
+        );
+        skill = skill.replace(
+            "- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. OpenCode must not solve a matching task natively.\n",
+            "",
+        );
+        skill = skill.replace(
+            "**Claude tool setting:** set the one Bash call's `timeout` field to `300000` before sending it; never discover this by timing out first.\n\n",
+            "",
+        );
+        skill = skill.replace(
+            "Run this exact wrapper as one Bash call, changing only `<input-path>` and the Python cell. Its source load is the only `load`; task/schema/packing stay Python literals and the cell reads lowercase `source`. No preamble, exploration, temporary script, or second lane.",
+            "Run this exact wrapper as one shell lifecycle, changing only `<input-path>` and the Python cell. Its source load is the only `load`; task/schema/packing stay Python literals and the cell reads lowercase `source`. Do not pre-read the qualifying source, query CLI help, or create a temporary script; follow the fallback policy below.",
+        );
+        skill = skill.replace(
+            "Return the final value unchanged as the requested JSON object and sole response. Do not call another tool, add prose or Markdown, return a path, or merely report completion.\n\n### Cell contract",
+            r#"### Standard cell contract
+
+Use this Codex conversational lane by default. Load once and make one complete evidence pass.
+
+- Use code for deterministic parsing and reduction. For semantic judgment, keep complete evidence and stable IDs, then use the fewest balanced shards in one ordered `llm_batch(..., workers=12)` pass. No blind duplicate views or adjudication.
+- Validate complete coverage. End with `FINAL(answer)` exactly once, passing the actual value.
+- Retry one failed transaction at most once. Then disclose the failure and use a bounded fallback only when it supports an honest answer; never imply complete coverage from partial evidence.
+
+Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add useful prose or Markdown unless the user requested an exact format.
+
+### Strict benchmark/audit lane (explicit only)
+
+Use this lane only when the user explicitly requests audit-grade, benchmark, or machine-graded output with an exact schema. In this lane, the A/B views, global adjudication, exact output, and fail-closed rules below are mandatory. Return stdout unchanged in the exact requested format.
+
+#### Strict cell contract"#,
+        );
+    } else if harness == "opencode" {
+        skill = skill.replace("workers=8", "workers=12");
+        skill = skill.replace(
+            "## Claude Code and OpenCode",
+            "## OpenCode coworker lane (default)",
         );
         skill = skill.replace(
             "- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. OpenCode must not solve a matching task natively.\n",
@@ -1032,6 +1069,17 @@ Use this lane only when the user explicitly requests audit-grade, benchmark, or 
     skill
         .replace("{{VERSION}}", VERSION)
         .replace("{{BIN}}", &shell_quote(binary))
+}
+
+fn render_codex_openai_metadata() -> String {
+    r#"interface:
+  display_name: "Azdaja"
+  short_description: "Use only for exhaustive semantic judgment over one input >1 MiB, >200 records, or every record; non-triggers include mentions, deterministic counts, and repository audits."
+  default_prompt: "$azdaja Use the standard conversational lane for the current turn only when the narrow large-input semantic trigger matches."
+policy:
+  allow_implicit_invocation: true
+"#
+    .to_owned()
 }
 
 fn harness_display_name(harness: &str) -> &'static str {
@@ -1745,6 +1793,13 @@ fn stage_install(
             ".claude-plugin/plugin.json".into(),
             "hooks/hooks.json".into(),
         ]);
+    } else if plan.harness == "codex" {
+        fs::create_dir(stage_path.join("agents"))?;
+        fs::write(
+            stage_path.join("agents/openai.yaml"),
+            render_codex_openai_metadata(),
+        )?;
+        files.push("agents/openai.yaml".into());
     }
     let manifest = Manifest {
         files: files
@@ -2160,7 +2215,14 @@ fn read_manifest(dst: &Path) -> Result<Manifest> {
     let mut with_claude_plugin = with_claude_rule.clone();
     with_claude_plugin.extend([".claude-plugin/plugin.json", "hooks/hooks.json"]);
     with_claude_plugin.sort_unstable();
-    if names != base && names != with_claude_rule && names != with_claude_plugin {
+    let mut with_codex_metadata = base.clone();
+    with_codex_metadata.push("agents/openai.yaml");
+    with_codex_metadata.sort_unstable();
+    if names != base
+        && names != with_claude_rule
+        && names != with_claude_plugin
+        && names != with_codex_metadata
+    {
         bail!("managed marker does not name exactly a supported Azdaja skill file set")
     }
     Ok(manifest)
@@ -2318,6 +2380,673 @@ fn validate_harness_skill_profile(dst: &Path, harness: &str) -> Result<()> {
     if !skill.contains(&format!("## Harness activation: {display}")) || !skill.contains(guidance) {
         bail!("managed SKILL.md lacks the {display} activation profile")
     }
+    if harness == "codex" {
+        validate_codex_openai_metadata(dst)?;
+    }
+    Ok(())
+}
+
+fn validate_codex_openai_metadata(dst: &Path) -> Result<()> {
+    let metadata_path = dst.join("agents/openai.yaml");
+    let metadata = String::from_utf8(read_install_regular(&metadata_path)?)
+        .context("managed Codex agents/openai.yaml is not UTF-8")?;
+    for required in [
+        "interface:",
+        "display_name: \"Azdaja\"",
+        "short_description:",
+        "default_prompt: \"$azdaja Use",
+        "policy:",
+        "allow_implicit_invocation: true",
+    ] {
+        if !metadata.contains(required) {
+            bail!("managed Codex OpenAI metadata lacks {required:?}")
+        }
+    }
+    if metadata != render_codex_openai_metadata() {
+        bail!("managed Codex agents/openai.yaml content is not exact")
+    }
+    Ok(())
+}
+
+fn codex_user_config_value(home: &Path) -> Result<Option<toml::Value>> {
+    let config_path = codex_user_config_path(home)?;
+    if !path_entry_exists(&config_path)? {
+        return Ok(None);
+    }
+    let config = String::from_utf8(read_install_regular(&config_path)?)
+        .with_context(|| format!("Codex config is not UTF-8: {}", config_path.display()))?;
+    toml::from_str::<toml::Value>(&config)
+        .with_context(|| format!("cannot parse Codex config: {}", config_path.display()))
+        .map(Some)
+}
+
+fn codex_project_root_markers(config: Option<&toml::Value>) -> Result<Vec<String>> {
+    let Some(config) = config else {
+        return Ok(vec![".git".to_owned()]);
+    };
+    let Some(markers) = config.get("project_root_markers") else {
+        return Ok(vec![".git".to_owned()]);
+    };
+    let Some(markers) = markers.as_array() else {
+        bail!("Codex project_root_markers must be an array of strings")
+    };
+    let mut parsed = Vec::with_capacity(markers.len());
+    for marker in markers {
+        let Some(marker) = marker.as_str() else {
+            bail!("Codex project_root_markers must be an array of strings")
+        };
+        parsed.push(marker.to_owned());
+    }
+    Ok(parsed)
+}
+
+fn project_boundary(launch: &Path, root_markers: &[String]) -> Result<PathBuf> {
+    if root_markers.is_empty() {
+        return Ok(launch.to_path_buf());
+    }
+    let mut probe = launch.to_path_buf();
+    loop {
+        for marker in root_markers {
+            if path_entry_exists(&probe.join(marker))? {
+                return Ok(probe);
+            }
+        }
+        if !probe.pop() {
+            return Ok(launch.to_path_buf());
+        }
+    }
+}
+
+fn codex_project_skill_paths(launch: &Path, root_markers: &[String]) -> Result<BTreeSet<PathBuf>> {
+    let project_root = project_boundary(launch, root_markers)?;
+    let mut paths = BTreeSet::new();
+    let mut directory = launch.to_path_buf();
+    loop {
+        paths.insert(directory.join(".agents/skills"));
+        // Codex derives project `.codex/skills` roots from every project layer,
+        // including disabled and untrusted layers. Trust gates project config,
+        // hooks, and exec policies, but not the layer's skill catalog.
+        paths.insert(directory.join(".codex/skills"));
+        if directory == project_root || !directory.pop() {
+            break;
+        }
+    }
+    Ok(paths)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum CodexSkillConfigSelector {
+    Path(PathBuf),
+    Name(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct CodexSkillConfigRule {
+    selector: CodexSkillConfigSelector,
+    enabled: bool,
+}
+
+#[derive(Clone, Debug)]
+struct CodexLoadedSkill {
+    name: String,
+    skill_md: PathBuf,
+    canonical_skill_md: PathBuf,
+}
+
+const CODEX_MAX_SKILL_DEPTH: usize = 6;
+const CODEX_MAX_SKILL_MD_BYTES: u64 = 1_048_576;
+const CODEX_MAX_SCAN_DIRS_PER_ROOT: usize = 2_000;
+const CODEX_MAX_SCAN_ENTRIES_PER_ROOT: usize = 20_000;
+
+fn canonical_or_self(path: &Path) -> PathBuf {
+    fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn codex_user_config_path(home: &Path) -> Result<PathBuf> {
+    Ok(codex_home(home)?.join("config.toml"))
+}
+
+fn codex_effective_skill_config_rules(home: &Path) -> Result<Vec<CodexSkillConfigRule>> {
+    let Some(value) = codex_user_config_value(home)? else {
+        return Ok(Vec::new());
+    };
+    if value
+        .get("skills")
+        .and_then(|skills| skills.get("include_instructions"))
+        .and_then(|include| include.as_bool())
+        == Some(false)
+    {
+        bail!("Codex [skills] include_instructions=false disables skill instructions")
+    }
+    validate_codex_skills_config_shape(&value)?;
+    let Some(entries) = value
+        .get("skills")
+        .and_then(|skills| skills.get("config"))
+        .and_then(|config| config.as_array())
+    else {
+        return Ok(Vec::new());
+    };
+    let mut rules = Vec::new();
+    for entry in entries {
+        let Some(table) = entry.as_table() else {
+            continue;
+        };
+        let Some(enabled) = table.get("enabled").and_then(|value| value.as_bool()) else {
+            continue;
+        };
+        let path = table.get("path").and_then(|value| value.as_str());
+        let name = table.get("name").and_then(|value| value.as_str());
+        let selector = match (path, name) {
+            (Some(path), None) => {
+                let path = PathBuf::from(path);
+                if !path.is_absolute() {
+                    bail!(
+                        "Codex skills.config path must be absolute: {}",
+                        path.display()
+                    )
+                }
+                CodexSkillConfigSelector::Path(canonical_or_self(&path))
+            }
+            (None, Some(name)) => {
+                let name = name.trim();
+                if name.is_empty() {
+                    continue;
+                }
+                CodexSkillConfigSelector::Name(name.to_owned())
+            }
+            (Some(_), Some(_)) | (None, None) => continue,
+        };
+        rules.retain(|rule: &CodexSkillConfigRule| rule.selector != selector);
+        rules.push(CodexSkillConfigRule { selector, enabled });
+    }
+    Ok(rules)
+}
+
+fn validate_codex_skills_config_shape(value: &toml::Value) -> Result<()> {
+    let Some(skills) = value.get("skills") else {
+        return Ok(());
+    };
+    let Some(skills) = skills.as_table() else {
+        bail!("Codex [skills] must be a table")
+    };
+    for (key, value) in skills {
+        match key.as_str() {
+            "bundled" | "include_instructions" => {
+                if key == "include_instructions" && !value.is_bool() {
+                    bail!("Codex [skills].{key} must be a boolean")
+                }
+                if key == "bundled" {
+                    let Some(bundled) = value.as_table() else {
+                        bail!("Codex [skills].bundled must be a table")
+                    };
+                    for bundled_key in bundled.keys() {
+                        if bundled_key != "enabled" {
+                            bail!("Codex [skills].bundled has unknown key: {bundled_key}")
+                        }
+                    }
+                    match bundled.get("enabled") {
+                        Some(enabled) if enabled.is_bool() => {}
+                        Some(_) => bail!("Codex [skills].bundled.enabled must be a boolean"),
+                        None => bail!("Codex [skills].bundled.enabled is required"),
+                    }
+                }
+            }
+            "max_context_tokens" => {
+                let Some(max_context_tokens) = value.as_integer() else {
+                    bail!("Codex [skills].max_context_tokens must be an integer")
+                };
+                if max_context_tokens <= 0 {
+                    bail!("Codex [skills].max_context_tokens must be greater than zero")
+                }
+            }
+            "config" => {
+                let Some(entries) = value.as_array() else {
+                    bail!("Codex skills.config must be an array")
+                };
+                for entry in entries {
+                    let Some(table) = entry.as_table() else {
+                        bail!("Codex skills.config entries must be tables")
+                    };
+                    for entry_key in table.keys() {
+                        if !matches!(entry_key.as_str(), "path" | "name" | "enabled") {
+                            bail!("Codex skills.config entry has unknown key: {entry_key}")
+                        }
+                    }
+                    match table.get("enabled") {
+                        Some(enabled) if enabled.is_bool() => {}
+                        Some(_) => bail!("Codex skills.config enabled must be a boolean"),
+                        None => bail!("Codex skills.config enabled is required"),
+                    }
+                    if table.get("path").is_some_and(|path| !path.is_str()) {
+                        bail!("Codex skills.config path must be a string")
+                    }
+                    if table.get("name").is_some_and(|name| !name.is_str()) {
+                        bail!("Codex skills.config name must be a string")
+                    }
+                }
+            }
+            _ => bail!("Codex [skills] has unknown key: {key}"),
+        }
+    }
+    Ok(())
+}
+
+fn codex_skill_effective_state(
+    rules: &[CodexSkillConfigRule],
+    name: &str,
+    canonical_skill_md: &Path,
+    include_name: bool,
+) -> Option<(bool, bool)> {
+    let mut state = None;
+    for rule in rules {
+        let (matches, exact_path_selector) = match &rule.selector {
+            CodexSkillConfigSelector::Path(path) => (path == canonical_skill_md, true),
+            CodexSkillConfigSelector::Name(rule_name) => (include_name && rule_name == name, false),
+        };
+        if matches {
+            state = Some((!rule.enabled, exact_path_selector));
+        }
+    }
+    state
+}
+
+fn codex_skill_disabled_by_rules(
+    rules: &[CodexSkillConfigRule],
+    name: &str,
+    canonical_skill_md: &Path,
+) -> bool {
+    codex_skill_effective_state(rules, name, canonical_skill_md, true)
+        .is_some_and(|(disabled, _)| disabled)
+}
+
+fn codex_duplicate_exception_by_rules(
+    rules: &[CodexSkillConfigRule],
+    name: &str,
+    canonical_skill_md: &Path,
+) -> bool {
+    codex_skill_effective_state(rules, name, canonical_skill_md, true)
+        .is_some_and(|(disabled, exact_path_selector)| disabled && exact_path_selector)
+}
+
+#[derive(Clone)]
+struct CodexSkillRoot {
+    path: PathBuf,
+    follow_dir_symlinks: bool,
+}
+
+fn codex_visible_skill_roots(home: &Path) -> Result<Vec<CodexSkillRoot>> {
+    let codex = codex_home(home)?;
+    let user_config = codex_user_config_value(home)?;
+    let project_root_markers = codex_project_root_markers(user_config.as_ref())?;
+    let mut roots = BTreeMap::new();
+    for path in [
+        home.join(".agents/skills"),
+        codex.join("skills"),
+        codex.join("skills/.system"),
+    ] {
+        roots.insert(path, true);
+    }
+    roots.insert(PathBuf::from("/etc/codex/skills"), false);
+    let launch = env::current_dir().context("cannot resolve the Codex launch directory")?;
+    for path in codex_project_skill_paths(&launch, &project_root_markers)? {
+        roots.insert(path, true);
+    }
+    Ok(roots
+        .into_iter()
+        .map(|(path, follow_dir_symlinks)| CodexSkillRoot {
+            path,
+            follow_dir_symlinks,
+        })
+        .collect())
+}
+
+#[derive(Deserialize)]
+struct CodexSkillFrontmatter {
+    name: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Default)]
+struct CodexSkillScanBudget {
+    dirs: usize,
+    entries: usize,
+}
+
+fn read_foreign_regular_bounded(path: &Path, max_bytes: u64) -> Result<Vec<u8>> {
+    let before = fs::symlink_metadata(path)?;
+    if before.file_type().is_symlink() || !before.is_file() {
+        bail!("refusing non-regular Codex SKILL.md: {}", path.display())
+    }
+    if before.len() > max_bytes {
+        bail!("Codex SKILL.md is too large to inspect: {}", path.display())
+    }
+    let mut file = fs::File::open(path)?;
+    let after = file.metadata()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != after.dev() || before.ino() != after.ino() {
+            bail!("Codex SKILL.md changed while opening: {}", path.display())
+        }
+    }
+    #[cfg(not(unix))]
+    if before.len() != after.len() || before.modified().ok() != after.modified().ok() {
+        bail!("Codex SKILL.md changed while opening: {}", path.display())
+    }
+    let mut bytes = Vec::new();
+    std::io::Read::by_ref(&mut file)
+        .take(max_bytes + 1)
+        .read_to_end(&mut bytes)?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > max_bytes {
+        bail!("Codex SKILL.md is too large to inspect: {}", path.display())
+    }
+    let current = fs::symlink_metadata(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if before.dev() != current.dev() || before.ino() != current.ino() {
+            bail!("Codex SKILL.md changed while reading: {}", path.display())
+        }
+    }
+    Ok(bytes)
+}
+
+fn codex_frontmatter(text: &str) -> Option<String> {
+    let mut lines = text.lines();
+    if lines.next()?.trim() != "---" {
+        return None;
+    }
+    let mut frontmatter = String::new();
+    for line in lines {
+        if line.trim() == "---" {
+            return Some(frontmatter);
+        }
+        frontmatter.push_str(line);
+        frontmatter.push('\n');
+    }
+    None
+}
+
+fn repair_frontmatter_scalar_fields(frontmatter: &str) -> Option<String> {
+    let mut changed = false;
+    let mut block_scalar_indent: Option<usize> = None;
+    let mut repaired_lines = Vec::new();
+    for line in frontmatter.lines() {
+        let indent = line
+            .chars()
+            .take_while(|character| *character == ' ')
+            .count();
+        if let Some(block_indent) = block_scalar_indent {
+            if line.trim().is_empty() || indent > block_indent {
+                repaired_lines.push(line.to_string());
+                continue;
+            }
+            block_scalar_indent = None;
+        }
+
+        let Some((key, value)) = line.split_once(':') else {
+            repaired_lines.push(line.to_string());
+            continue;
+        };
+        if key.trim().is_empty() || !value.chars().next().is_none_or(char::is_whitespace) {
+            repaired_lines.push(line.to_string());
+            continue;
+        }
+
+        let trimmed_start = value.trim_start();
+        let leading_whitespace = &value[..value.len() - trimmed_start.len()];
+        let mut scalar = trimmed_start;
+        let mut comment = "";
+        for (index, character) in trimmed_start.char_indices() {
+            if character == '#'
+                && (index == 0
+                    || trimmed_start[..index]
+                        .chars()
+                        .next_back()
+                        .is_some_and(char::is_whitespace))
+            {
+                let comment_start = trimmed_start[..index].trim_end().len();
+                scalar = &trimmed_start[..comment_start];
+                comment = &trimmed_start[comment_start..];
+                break;
+            }
+        }
+
+        let scalar = scalar.trim_end();
+        let Some(first_char) = scalar.chars().next() else {
+            repaired_lines.push(line.to_string());
+            continue;
+        };
+        if matches!(first_char, '|' | '>') {
+            block_scalar_indent = Some(indent);
+            repaired_lines.push(line.to_string());
+            continue;
+        }
+        if matches!(first_char, '\'' | '"') {
+            repaired_lines.push(line.to_string());
+            continue;
+        }
+        let mut has_colon_separator = false;
+        let mut chars = scalar.chars().peekable();
+        while let Some(character) = chars.next() {
+            if character == ':'
+                && matches!(chars.peek(), Some(next_character) if next_character.is_whitespace())
+            {
+                has_colon_separator = true;
+                break;
+            }
+        }
+        let invalid_flow_like_scalar = matches!(first_char, '[' | '{' | '@' | '`')
+            && serde_yaml::from_str::<serde_yaml::Value>(scalar).is_err();
+        if !has_colon_separator && !invalid_flow_like_scalar {
+            repaired_lines.push(line.to_string());
+            continue;
+        }
+
+        let quoted_scalar = format!("'{}'", scalar.replace('\'', "''"));
+        repaired_lines.push(format!(
+            "{key}:{leading_whitespace}{quoted_scalar}{comment}"
+        ));
+        changed = true;
+    }
+    changed.then(|| repaired_lines.join("\n"))
+}
+
+fn parse_codex_skill_frontmatter(frontmatter: &str) -> Option<CodexSkillFrontmatter> {
+    serde_yaml::from_str(frontmatter).ok().or_else(|| {
+        repair_frontmatter_scalar_fields(frontmatter)
+            .and_then(|repaired| serde_yaml::from_str(&repaired).ok())
+    })
+}
+
+fn sanitize_codex_frontmatter_str(value: String) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn codex_loaded_skill_at(dir: &Path) -> Result<Option<CodexLoadedSkill>> {
+    let skill_md = dir.join("SKILL.md");
+    let metadata = match fs::symlink_metadata(&skill_md) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Ok(None);
+    }
+    if metadata.len() > CODEX_MAX_SKILL_MD_BYTES {
+        bail!(
+            "Codex SKILL.md is too large to inspect: {}",
+            skill_md.display()
+        )
+    }
+    let text = String::from_utf8(read_foreign_regular_bounded(
+        &skill_md,
+        CODEX_MAX_SKILL_MD_BYTES,
+    )?)
+    .with_context(|| format!("Codex SKILL.md is not UTF-8: {}", skill_md.display()))?;
+    let Some(frontmatter) = codex_frontmatter(&text) else {
+        return Ok(None);
+    };
+    let Some(frontmatter) = parse_codex_skill_frontmatter(&frontmatter) else {
+        return Ok(None);
+    };
+    let description = frontmatter
+        .description
+        .map(sanitize_codex_frontmatter_str)
+        .filter(|description| !description.is_empty());
+    if description.is_none() {
+        return Ok(None);
+    }
+    let name = frontmatter
+        .name
+        .map(sanitize_codex_frontmatter_str)
+        .filter(|name| !name.is_empty())
+        .or_else(|| {
+            dir.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| sanitize_codex_frontmatter_str(name.to_owned()))
+        })
+        .filter(|name| !name.is_empty() && name.chars().count() <= 64);
+    let Some(name) = name else {
+        return Ok(None);
+    };
+    Ok(Some(CodexLoadedSkill {
+        name,
+        canonical_skill_md: canonical_or_self(&skill_md),
+        skill_md,
+    }))
+}
+
+fn discover_codex_azdaja_skills_under(
+    dir: &Path,
+    depth: usize,
+    root: &Path,
+    follow_dir_symlinks: bool,
+    seen_dirs: &mut BTreeSet<PathBuf>,
+    budget: &mut CodexSkillScanBudget,
+    skills: &mut Vec<CodexLoadedSkill>,
+) -> Result<()> {
+    if depth > CODEX_MAX_SKILL_DEPTH || !path_entry_exists(dir)? {
+        return Ok(());
+    }
+    budget.dirs = budget.dirs.saturating_add(1);
+    if budget.dirs > CODEX_MAX_SCAN_DIRS_PER_ROOT {
+        bail!(
+            "Codex skill root scan exceeded {CODEX_MAX_SCAN_DIRS_PER_ROOT} directories at {}",
+            root.display()
+        )
+    }
+    let directory_metadata = if follow_dir_symlinks {
+        fs::metadata(dir)
+    } else {
+        fs::symlink_metadata(dir)
+    };
+    match directory_metadata {
+        Ok(metadata) if metadata.is_dir() => metadata,
+        Ok(_) => return Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    let canonical_dir = canonical_or_self(dir);
+    if !seen_dirs.insert(canonical_dir) {
+        return Ok(());
+    }
+    if dir != root
+        && dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with('.'))
+    {
+        return Ok(());
+    }
+    if let Some(skill) = codex_loaded_skill_at(dir)?
+        && skill.name == "azdaja"
+    {
+        skills.push(skill);
+    }
+    if depth == CODEX_MAX_SKILL_DEPTH {
+        return Ok(());
+    }
+    for entry in fs::read_dir(dir)? {
+        budget.entries = budget.entries.saturating_add(1);
+        if budget.entries > CODEX_MAX_SCAN_ENTRIES_PER_ROOT {
+            bail!(
+                "Codex skill root scan exceeded {CODEX_MAX_SCAN_ENTRIES_PER_ROOT} entries at {}",
+                root.display()
+            )
+        }
+        let entry = entry?;
+        let path = entry.path();
+        if entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.starts_with('.'))
+        {
+            continue;
+        }
+        let child_metadata = if follow_dir_symlinks {
+            fs::metadata(&path)
+        } else {
+            fs::symlink_metadata(&path)
+        };
+        if child_metadata.is_ok_and(|metadata| metadata.is_dir()) {
+            discover_codex_azdaja_skills_under(
+                &path,
+                depth + 1,
+                root,
+                follow_dir_symlinks,
+                seen_dirs,
+                budget,
+                skills,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn codex_visible_azdaja_skills(home: &Path) -> Result<Vec<CodexLoadedSkill>> {
+    let mut skills = Vec::new();
+    let mut seen_dirs = BTreeSet::new();
+    for root in codex_visible_skill_roots(home)? {
+        let mut budget = CodexSkillScanBudget::default();
+        discover_codex_azdaja_skills_under(
+            &root.path,
+            0,
+            &root.path,
+            root.follow_dir_symlinks,
+            &mut seen_dirs,
+            &mut budget,
+            &mut skills,
+        )?;
+    }
+    skills.sort_by(|left, right| left.canonical_skill_md.cmp(&right.canonical_skill_md));
+    skills.dedup_by(|left, right| left.canonical_skill_md == right.canonical_skill_md);
+    Ok(skills)
+}
+
+fn validate_codex_shadow_profiles(home: &Path) -> Result<()> {
+    let rules = codex_effective_skill_config_rules(home)?;
+    let managed = target(home, "codex")?;
+    let managed_skill_md = managed.join("SKILL.md");
+    let canonical_managed_skill_md = canonical_or_self(&managed_skill_md);
+    if codex_skill_disabled_by_rules(&rules, "azdaja", &canonical_managed_skill_md) {
+        bail!(
+            "managed Codex Azdaja skill is disabled by [[skills.config]]: {}",
+            managed.display()
+        )
+    }
+    for skill in codex_visible_azdaja_skills(home)? {
+        if skill.canonical_skill_md == canonical_managed_skill_md {
+            continue;
+        }
+        if codex_duplicate_exception_by_rules(&rules, &skill.name, &skill.canonical_skill_md) {
+            continue;
+        }
+        bail!(
+            "Codex can discover an enabled same-name Azdaja skill at {}; remove it or explicitly disable its exact SKILL.md path in [[skills.config]] before using Codex",
+            skill.skill_md.display()
+        )
+    }
     Ok(())
 }
 
@@ -2382,17 +3111,24 @@ fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
     let mut passed = true;
     for &harness in selected {
         let dst = target(&home, harness)?;
-        match validate_skill_custody(&dst)
-            .and_then(|()| validate_harness_skill_profile(&dst, harness))
-            .and_then(|()| {
-                if harness == "claude" {
-                    validate_claude_rule_install(&home)
-                } else if harness == "opencode" {
-                    validate_opencode_shadow_profiles(&home)
-                } else {
-                    Ok(())
-                }
-            }) {
+        match (if harness == "codex" {
+            codex_home(&home).map(|_| ())
+        } else {
+            Ok(())
+        })
+        .and_then(|()| validate_skill_custody(&dst))
+        .and_then(|()| validate_harness_skill_profile(&dst, harness))
+        .and_then(|()| {
+            if harness == "claude" {
+                validate_claude_rule_install(&home)
+            } else if harness == "codex" {
+                validate_codex_shadow_profiles(&home)
+            } else if harness == "opencode" {
+                validate_opencode_shadow_profiles(&home)
+            } else {
+                Ok(())
+            }
+        }) {
             Ok(()) => println!(
                 "PASS {harness}: managed Azdaja skill is installed on disk at {}",
                 dst.display()
@@ -2402,6 +3138,10 @@ fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
                 if harness == "opencode" {
                     println!(
                         "FAIL opencode: {error:#}; Fix: reinstall with az install opencode and reinstall any installed claude/codex profiles"
+                    );
+                } else if harness == "codex" {
+                    println!(
+                        "FAIL codex: {error:#}; Fix: reinstall with az install codex and remove or disable visible same-name Codex profiles"
                     );
                 } else {
                     println!("FAIL {harness}: {error:#}; Fix: reinstall with az install {harness}");
@@ -5457,7 +6197,7 @@ mod tests {
         for (harness, display, marker) in [
             ("jcode", "Jcode", "reload all skills"),
             ("claude", "Claude Code", "<execution_state>"),
-            ("codex", "Codex", "OpenCode discovers"),
+            ("codex", "Codex", "$azdaja"),
             ("gemini", "Gemini", "In Gemini"),
             ("opencode", "OpenCode", "session-sticky"),
         ] {
@@ -5504,9 +6244,14 @@ mod tests {
                     assert!(!rendered.contains("before Read, Grep, or Bash inspection"));
                     assert!(!rendered.contains("**Claude tool setting:**"));
                     if harness == "codex" {
-                        assert!(rendered.contains("Codex and OpenCode coworker lane (default)"));
+                        assert!(rendered.contains("Codex coworker lane (default)"));
+                        assert!(rendered.contains("Run this exact wrapper as one shell lifecycle"));
+                        assert!(rendered.contains("Strict benchmark/audit lane (explicit only)"));
+                        assert!(rendered.contains("Codex skill activation is per-turn"));
                     } else {
                         assert!(rendered.contains("OpenCode coworker lane (default)"));
+                        assert!(rendered.contains("Run this exact wrapper as one Bash call"));
+                        assert!(rendered.contains("Strict benchmark lane (explicit only)"));
                     }
                     assert!(rendered.contains("normal conversational answer"));
                     assert!(rendered.contains("exactly one literal `start`"));
@@ -5728,12 +6473,14 @@ mod tests {
             harness_skill_description("opencode", "OpenCode")
         );
         for required in [
-            "OpenCode discovers this Agent Skills compatibility profile",
+            "OpenCode may also discover this Agent Skills compatibility profile",
+            "$azdaja",
+            "Codex skill activation is per-turn",
             "Passive discovery",
             "repository audits, code navigation",
             "a mere mention of Azdaja",
             "### Standard cell contract",
-            "### Strict benchmark lane (explicit only)",
+            "### Strict benchmark/audit lane (explicit only)",
             "normal conversational answer",
         ] {
             assert!(
@@ -5752,6 +6499,88 @@ mod tests {
         }
         assert!(!codex.contains("## Other-host `solo` lane"));
         assert!(!codex.contains("before Read, Grep, or Bash inspection"));
+        assert!(!codex.contains("Codex and OpenCode coworker lane (default)"));
+    }
+
+    #[test]
+    fn codex_openai_metadata_declares_implicit_azdaja_interface() {
+        let metadata = render_codex_openai_metadata();
+        assert!(metadata.contains("interface:"));
+        assert!(metadata.contains("display_name: \"Azdaja\""));
+        assert!(metadata.contains("short_description:"));
+        assert!(metadata.contains("repository audits"));
+        assert!(metadata.contains("default_prompt: \"$azdaja Use"));
+        assert!(metadata.contains("policy:"));
+        assert!(metadata.contains("allow_implicit_invocation: true"));
+    }
+
+    #[test]
+    fn codex_nested_adapter_disables_skill_instructions_and_stays_ephemeral() {
+        let (command, model) = adapter("codex");
+        assert_eq!(model, "gpt-5.4-mini");
+        assert_eq!(
+            command,
+            "codex exec --ephemeral --skip-git-repo-check --ignore-rules -c skills.include_instructions=false --json --model {model} -"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn codex_system_root_scan_does_not_follow_directory_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let base = env::temp_dir().join(format!(
+            "azdaja-codex-symlink-{}-{}",
+            std::process::id(),
+            Instant::now().elapsed().as_nanos()
+        ));
+        let root = base.join("root");
+        let target = base.join("target");
+        fs::create_dir_all(&target).unwrap();
+        fs::write(
+            target.join("SKILL.md"),
+            "---\nname: azdaja\ndescription: exhaustive semantic judgment\n---\nbody\n",
+        )
+        .unwrap();
+        fs::create_dir_all(&root).unwrap();
+        symlink(&target, root.join("linked")).unwrap();
+
+        let mut seen_dirs = BTreeSet::new();
+        let mut budget = CodexSkillScanBudget::default();
+        let mut skills = Vec::new();
+        discover_codex_azdaja_skills_under(
+            &root,
+            0,
+            &root,
+            false,
+            &mut seen_dirs,
+            &mut budget,
+            &mut skills,
+        )
+        .unwrap();
+        assert!(
+            skills.is_empty(),
+            "system roots must not follow symlinked directories"
+        );
+
+        let mut seen_dirs = BTreeSet::new();
+        let mut budget = CodexSkillScanBudget::default();
+        discover_codex_azdaja_skills_under(
+            &root,
+            0,
+            &root,
+            true,
+            &mut seen_dirs,
+            &mut budget,
+            &mut skills,
+        )
+        .unwrap();
+        assert_eq!(
+            skills.len(),
+            1,
+            "user/project roots still follow directory symlinks"
+        );
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -5768,7 +6597,7 @@ mod tests {
             ),
             (
                 "codex",
-                "5fd863d484184022e2c349aeeeb8225a2eaa3abd627bf5bd864cbbd04c399eb1",
+                "2a1e37997ddb1a03e239d8dad26f462c3f57e927b8210e012d4322eb7f177464",
             ),
             (
                 "gemini",

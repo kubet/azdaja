@@ -4681,12 +4681,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             "<execution_state>",
             t.join(".claude/skills/azdaja"),
         ),
-        (
-            "codex",
-            "Codex",
-            "OpenCode discovers",
-            t.join(".agents/skills/azdaja"),
-        ),
+        ("codex", "Codex", "$azdaja", t.join(".agents/skills/azdaja")),
         (
             "gemini",
             "Gemini",
@@ -4774,11 +4769,30 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             assert!(!description.starts_with("Mandatory:"));
             assert!(!skill.contains("before Read, Grep, or Bash inspection"));
             assert!(skill.contains("Passive discovery"));
-            assert!(skill.contains("explicit request to use Azdaja or confirm availability is"));
-            assert!(skill.contains("### Standard cell contract"));
-            assert!(skill.contains("### Strict benchmark lane (explicit only)"));
             if harness == "codex" {
-                assert!(skill.contains("Codex and OpenCode coworker lane (default)"));
+                assert!(skill.contains(
+                    "explicit request to use `$azdaja`/Azdaja or confirm availability is"
+                ));
+            } else {
+                assert!(
+                    skill.contains("explicit request to use Azdaja or confirm availability is")
+                );
+            }
+            assert!(skill.contains("### Standard cell contract"));
+            if harness == "codex" {
+                assert!(skill.contains("Codex coworker lane (default)"));
+                assert!(skill.contains("Codex skill activation is per-turn"));
+                assert!(skill.contains("Strict benchmark/audit lane (explicit only)"));
+                let metadata = fs::read_to_string(target.join("agents/openai.yaml")).unwrap();
+                assert!(metadata.contains("interface:"));
+                assert!(metadata.contains("display_name: \"Azdaja\""));
+                assert!(metadata.contains("short_description:"));
+                assert!(metadata.contains("repository audits"));
+                assert!(metadata.contains("default_prompt: \"$azdaja Use"));
+                assert!(metadata.contains("policy:"));
+                assert!(metadata.contains("allow_implicit_invocation: true"));
+            } else {
+                assert!(skill.contains("### Strict benchmark lane (explicit only)"));
             }
         }
         for awareness in [
@@ -4837,6 +4851,611 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
         fs::read_link(t.join(".claude/rules/azdaja.md")).unwrap(),
         activation
     );
+    fs::remove_dir_all(t).unwrap();
+}
+
+fn install_codex_for_doctor_fixture(t: &Path, codex_home: &Path) {
+    let installed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .args(["install", "codex"])
+        .env("HOME", t)
+        .env("CODEX_HOME", codex_home)
+        .env("AZDAJA_HOME", t.join("state"))
+        .output()
+        .unwrap();
+    assert!(
+        installed.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&installed.stderr),
+        String::from_utf8_lossy(&installed.stdout)
+    );
+}
+
+fn doctor_codex_fixture(t: &Path, codex_home: &Path, cwd: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .current_dir(cwd)
+        .env_remove("RLM_DEPTH")
+        .args(["doctor", "codex"])
+        .env("HOME", t)
+        .env("CODEX_HOME", codex_home)
+        .env("AZDAJA_HOME", t.join("state"))
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn codex_doctor_rejects_relative_codex_home_without_provider_calls() {
+    let t = temp("codex-relative-home");
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .args(["doctor", "codex"])
+        .env("HOME", &t)
+        .env("CODEX_HOME", "relative-codex-home")
+        .env("AZDAJA_HOME", t.join("state"))
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stderr.contains("CODEX_HOME must be set to a non-empty absolute path")
+            || stdout.contains("CODEX_HOME must be set to a non-empty absolute path"),
+        "stderr={stderr} stdout={stdout}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_rejects_disabled_managed_skill() {
+    let t = temp("codex-disabled-managed");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    fs::write(
+        codex_home.join("config.toml"),
+        "[[skills.config]]\nname = \"azdaja\"\nenabled = false\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("managed Codex Azdaja skill is disabled"),
+        "{stdout}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_honors_name_disable_and_later_path_reenable_for_managed_skill() {
+    let t = temp("codex-managed-reenable");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    let managed_skill_md = t.join(".agents/skills/azdaja/SKILL.md");
+    fs::write(
+        codex_home.join("config.toml"),
+        format!(
+            "[[skills.config]]\nname = \"azdaja\"\nenabled = false\n\n[[skills.config]]\npath = {:?}\nenabled = true\n",
+            managed_skill_md.to_str().unwrap()
+        ),
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(
+        output.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout)
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_rejects_include_instructions_false() {
+    let t = temp("codex-include-instructions");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    fs::write(
+        codex_home.join("config.toml"),
+        "[skills]\ninclude_instructions = false\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("include_instructions=false"), "{stdout}");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_accepts_valid_bundled_skills_config() {
+    let t = temp("codex-valid-bundled-config");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    fs::write(
+        codex_home.join("config.toml"),
+        "[skills]\ninclude_instructions = true\nmax_context_tokens = 1\n[skills.bundled]\nenabled = false\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(
+        output.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout)
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn codex_doctor_refuses_symlinked_user_config() {
+    let t = temp("codex-config-symlink");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    let real_config = t.join("real-config.toml");
+    fs::write(&real_config, "project_root_markers = []\n").unwrap();
+    std::os::unix::fs::symlink(&real_config, codex_home.join("config.toml")).unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("managed path is not a regular file")
+            || stdout.contains("Too many levels of symbolic links"),
+        "{stdout}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_rejects_zero_max_context_tokens() {
+    let t = temp("codex-zero-max-context");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    fs::write(
+        codex_home.join("config.toml"),
+        "[skills]\nmax_context_tokens = 0\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("greater than zero"), "{stdout}");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_rejects_visible_codex_home_duplicate_unless_exact_skill_disabled() {
+    let t = temp("codex-home-duplicate");
+    let codex_home = t.join("codex-home");
+    let duplicate = codex_home.join("skills/azdaja");
+    fs::create_dir_all(&duplicate).unwrap();
+    fs::write(
+        duplicate.join("SKILL.md"),
+        "---\nname: azdaja\ndescription: foreign duplicate\n---\nforeign\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&duplicate, codex_home.join("skills/link-to-azdaja")).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Codex can discover an enabled same-name Azdaja skill"),
+        "{stdout}"
+    );
+
+    fs::write(
+        codex_home.join("config.toml"),
+        format!(
+            "[[skills.config]]\npath = {:?}\nenabled = false\n",
+            duplicate.join("SKILL.md").to_str().unwrap()
+        ),
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(
+        output.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout)
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_duplicate_exception_uses_final_path_or_name_selector_state() {
+    let t = temp("codex-duplicate-selector-order");
+    let codex_home = t.join("codex-home");
+    let duplicate = codex_home.join("skills/azdaja");
+    fs::create_dir_all(&duplicate).unwrap();
+    fs::write(
+        duplicate.join("SKILL.md"),
+        "---\nname: azdaja\ndescription: foreign duplicate\n---\nforeign\n",
+    )
+    .unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    let duplicate_skill = duplicate.join("SKILL.md");
+
+    fs::write(
+        codex_home.join("config.toml"),
+        format!(
+            "[[skills.config]]\npath = {:?}\nenabled = false\n\n[[skills.config]]\nname = \"azdaja\"\nenabled = true\n",
+            duplicate_skill.to_str().unwrap()
+        ),
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Codex can discover an enabled same-name Azdaja skill"),
+        "{stdout}"
+    );
+
+    fs::write(
+        codex_home.join("config.toml"),
+        format!(
+            "[[skills.config]]\nname = \"azdaja\"\nenabled = true\n\n[[skills.config]]\npath = {:?}\nenabled = false\n",
+            duplicate_skill.to_str().unwrap()
+        ),
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(
+        output.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout)
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_rejects_malformed_skills_config_shapes() {
+    for (case, config, expected) in [
+        (
+            "unknown-skills-key",
+            "[skills]\nunknown = true\n",
+            "unknown key",
+        ),
+        (
+            "config-not-array",
+            "[skills]\nconfig = true\n",
+            "skills.config must be an array",
+        ),
+        (
+            "entry-not-table",
+            "[skills]\nconfig = [1]\n",
+            "entries must be tables",
+        ),
+        (
+            "missing-enabled",
+            "[[skills.config]]\nname = \"azdaja\"\n",
+            "enabled is required",
+        ),
+        (
+            "unknown-entry-key",
+            "[[skills.config]]\nname = \"azdaja\"\nenabled = true\nextra = true\n",
+            "unknown key",
+        ),
+        (
+            "bundled-wrong-type",
+            "[skills]\nbundled = true\n",
+            "bundled must be a table",
+        ),
+        (
+            "bundled-unknown-key",
+            "[skills.bundled]\nenabled = false\nextra = true\n",
+            "bundled has unknown key",
+        ),
+        (
+            "bundled-enabled-wrong-type",
+            "[skills.bundled]\nenabled = 1\n",
+            "bundled.enabled must be a boolean",
+        ),
+    ] {
+        let t = temp(&format!("codex-malformed-{case}"));
+        let codex_home = t.join("codex-home");
+        fs::create_dir_all(&codex_home).unwrap();
+        install_codex_for_doctor_fixture(&t, &codex_home);
+        fs::write(codex_home.join("config.toml"), config).unwrap();
+        let output = doctor_codex_fixture(&t, &codex_home, &t);
+        assert!(!output.status.success(), "case={case}");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains(expected), "case={case} stdout={stdout}");
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
+fn codex_doctor_scans_project_codex_and_agents_duplicates_even_when_untrusted() {
+    let t = temp("codex-project-duplicates");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    let project = t.join("project");
+    let nested = project.join("a/b");
+    fs::create_dir_all(&nested).unwrap();
+    fs::create_dir(project.join(".git")).unwrap();
+
+    let codex_duplicate = project.join(".codex/skills/azdaja");
+    fs::create_dir_all(&codex_duplicate).unwrap();
+    fs::write(
+        codex_duplicate.join("SKILL.md"),
+        "---\nname: azdaja\ndescription: foreign duplicate\n---\nforeign\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &nested);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Codex can discover an enabled same-name Azdaja skill"),
+        "{stdout}"
+    );
+
+    fs::write(
+        codex_home.join("config.toml"),
+        format!(
+            "[projects.{:?}]\ntrust_level = \"untrusted\"\n",
+            project.to_str().unwrap()
+        ),
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &nested);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Codex can discover an enabled same-name Azdaja skill"),
+        "{stdout}"
+    );
+    fs::remove_dir_all(&codex_duplicate).unwrap();
+
+    for duplicate in [
+        project.join(".agents/skills/azdaja"),
+        project.join(".codex/skills/group/not-azdaja"),
+    ] {
+        fs::create_dir_all(&duplicate).unwrap();
+        fs::write(
+            duplicate.join("SKILL.md"),
+            "---\nname: azdaja\ndescription: foreign duplicate\n---\nforeign\n",
+        )
+        .unwrap();
+        let output = doctor_codex_fixture(&t, &codex_home, &nested);
+        assert!(!output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("Codex can discover an enabled same-name Azdaja skill"),
+            "{stdout}"
+        );
+        fs::remove_dir_all(&duplicate).unwrap();
+    }
+
+    let default_name_duplicate = project.join(".agents/skills/group/azdaja");
+    fs::create_dir_all(&default_name_duplicate).unwrap();
+    fs::write(
+        default_name_duplicate.join("SKILL.md"),
+        "---\ndescription: fallback name\n---\nforeign\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &nested);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Codex can discover an enabled same-name Azdaja skill"),
+        "{stdout}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_honors_custom_project_root_markers() {
+    let t = temp("codex-custom-root-marker");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    let project = t.join("project");
+    let nested = project.join("src/deep");
+    fs::create_dir_all(&nested).unwrap();
+    fs::write(project.join(".codex-root"), "").unwrap();
+    fs::write(
+        codex_home.join("config.toml"),
+        "project_root_markers = [\".codex-root\"]\n",
+    )
+    .unwrap();
+    let duplicate = project.join(".codex/skills/not-named-azdaja");
+    fs::create_dir_all(&duplicate).unwrap();
+    fs::write(
+        duplicate.join("SKILL.md"),
+        " ---  \nname: azdaja\ndescription: Build for AWS: ECS\n --- \nforeign\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &nested);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Codex can discover an enabled same-name Azdaja skill"),
+        "{stdout}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_matches_codex_scalar_repair_for_unrelated_frontmatter_keys() {
+    let t = temp("codex-frontmatter-scalar-repair");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    let project = t.join("project");
+    fs::create_dir_all(project.join(".git")).unwrap();
+    let duplicate = project.join(".codex/skills/foreign");
+    fs::create_dir_all(&duplicate).unwrap();
+    fs::write(
+        duplicate.join("SKILL.md"),
+        "---\nname: azdaja\ndescription: foreign duplicate\nargument-hint: <duration: e.g. 7d>\n---\nforeign\n",
+    )
+    .unwrap();
+
+    let output = doctor_codex_fixture(&t, &codex_home, &project);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Codex can discover an enabled same-name Azdaja skill"),
+        "{stdout}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_honors_empty_project_root_markers_as_cwd_only() {
+    let t = temp("codex-empty-root-markers");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    fs::write(
+        codex_home.join("config.toml"),
+        "project_root_markers = []\n",
+    )
+    .unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    let project = t.join("project");
+    let nested = project.join("src/deep");
+    fs::create_dir_all(&nested).unwrap();
+    fs::create_dir(project.join(".git")).unwrap();
+    let ignored_duplicate = project.join(".codex/skills/azdaja");
+    fs::create_dir_all(&ignored_duplicate).unwrap();
+    fs::write(
+        ignored_duplicate.join("SKILL.md"),
+        "---\nname: azdaja\ndescription: foreign duplicate\n---\nforeign\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &nested);
+    assert!(
+        output.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    let cwd_duplicate = nested.join(".agents/skills/azdaja");
+    fs::create_dir_all(&cwd_duplicate).unwrap();
+    fs::write(
+        cwd_duplicate.join("SKILL.md"),
+        "---\nname: azdaja\ndescription: cwd duplicate\n---\nforeign\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &nested);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Codex can discover an enabled same-name Azdaja skill"),
+        "{stdout}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_rejects_invalid_project_root_markers() {
+    let t = temp("codex-invalid-root-marker");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    fs::write(
+        codex_home.join("config.toml"),
+        "project_root_markers = [1]\n",
+    )
+    .unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("project_root_markers must be an array of strings"),
+        "{stdout}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_doctor_matches_codex_validation_for_missing_description_and_repairable_yaml() {
+    let t = temp("codex-invalid-same-name");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    let invalid = codex_home.join("skills/azdaja");
+    fs::create_dir_all(&invalid).unwrap();
+    fs::write(
+        invalid.join("SKILL.md"),
+        "---\nname: azdaja\n---\nnot loaded\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(
+        output.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    fs::write(
+        invalid.join("SKILL.md"),
+        "---\nname: [not valid yaml\ndescription: bad\n---\nnot loaded\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(
+        output.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    fs::write(
+        invalid.join("SKILL.md"),
+        "---\nname: azdaja\ndescription: foreign duplicate\ninvalid: [\n---\nnot loaded\n",
+    )
+    .unwrap();
+    let output = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Codex can discover an enabled same-name Azdaja skill"),
+        "{stdout}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_metadata_is_manifested_and_removed_by_uninstall() {
+    let t = temp("codex-metadata-custody");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    let target = t.join(".agents/skills/azdaja");
+    assert!(target.join("agents/openai.yaml").is_file());
+    let manifest = fs::read_to_string(target.join(".azdaja-managed")).unwrap();
+    assert!(manifest.contains("agents/openai.yaml"), "{manifest}");
+
+    let removed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .args(["uninstall", "codex"])
+        .env("HOME", &t)
+        .env("CODEX_HOME", &codex_home)
+        .env("AZDAJA_HOME", t.join("state"))
+        .output()
+        .unwrap();
+    assert!(
+        removed.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&removed.stderr),
+        String::from_utf8_lossy(&removed.stdout)
+    );
+    assert!(!target.exists());
     fs::remove_dir_all(t).unwrap();
 }
 

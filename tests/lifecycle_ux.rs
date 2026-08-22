@@ -233,7 +233,7 @@ fn opencode_doctor_rejects_an_incompatible_agent_skills_shadow() {
     fs::write(
         &codex_skill,
         current.replace(
-            "In Codex, or when OpenCode discovers this Agent Skills compatibility profile",
+            "In Codex, activate `$azdaja` only for the current turn when the narrow frontmatter trigger matches",
             "In Codex, activate before broad manual reads",
         ),
     )
