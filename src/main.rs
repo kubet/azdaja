@@ -894,7 +894,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "opencode" => Some((
             "OpenCode",
-            "Load `azdaja` immediately with OpenCode's native `skill` tool. Keep label meanings canonical across blind views: reorder definitions only and never invert returned labels. After Skill, the first and only tool is one Bash call using the exact wrapper below. No Read, Grep, planning, inspection, help query, temporary file, second lane, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Bash stdout is the final JSON.",
+            "Load `azdaja` immediately with OpenCode's native `skill` tool. Keep label meanings canonical across blind views: reorder definitions only and never invert returned labels. Copy the wrapper without rewriting its lifecycle; Bash must contain exactly one literal `start`, `load`, `exec`, `final`, and `kill`. After Skill, the first and only tool is one Bash call using the exact wrapper below. No Read, Grep, planning, inspection, help query, temporary file, second lane, or retry. Load only the raw input once; keep task, schema, and packing as Python literals. The cell reads lowercase `source`. Bash stdout is the final JSON.",
         )),
         _ => None,
     }
@@ -915,6 +915,8 @@ fn render_managed_skill(harness: &str, binary: &Path) -> String {
     let mut skill = SKILL.to_owned();
     if harness == "claude" {
         skill = skill.replace("workers=8", "workers=4");
+    } else if harness == "opencode" {
+        skill = skill.replace("workers=8", "workers=12");
     }
     if matches!(harness, "claude" | "opencode") {
         if let Some(index) = skill.find("\n## Other-host `solo` lane") {
@@ -5338,6 +5340,9 @@ mod tests {
                 if harness == "opencode" {
                     assert!(rendered.contains("before Read, Grep, or Bash inspection"));
                     assert!(rendered.contains("Bash stdout is the final JSON"));
+                    assert!(rendered.contains("exactly one literal `start`"));
+                    assert_eq!(rendered.matches("workers=12").count(), 2);
+                    assert!(!rendered.contains("workers=8"));
                     assert!(!rendered.contains("exit 42"));
                 } else {
                     assert!(rendered.contains("stdout JSON unchanged"));
@@ -5368,7 +5373,7 @@ mod tests {
         assert!(rendered.contains("trap cleanup EXIT"));
         assert!(rendered.contains("Bash stdout is the final JSON"));
         assert!(!rendered.contains("exit 42"));
-        assert_eq!(rendered.matches("workers=8").count(), 2);
+        assert_eq!(rendered.matches("workers=12").count(), 2);
         assert!(rendered.contains("Its source load is the only `load`"));
         assert!(rendered.contains("discard initial shard boundaries"));
         assert!(rendered.contains(&format!(r#"sid="$({managed} start)""#)));
