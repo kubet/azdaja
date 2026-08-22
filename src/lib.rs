@@ -1187,7 +1187,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
     out
 }
 
-const CLAUDE_HOOK_LARGE_BYTES: u64 = 1_000_000;
+const CLAUDE_HOOK_LARGE_BYTES: u64 = 1024 * 1024;
 const CLAUDE_HOOK_SAMPLE_BYTES: usize = 64 * 1024;
 const CLAUDE_HOOK_MARKER: &[u8] = b"azdaja-claude-hook-v1\n";
 
@@ -1259,7 +1259,7 @@ fn claude_hook_remove_marker(path: &Path) -> Result<()> {
 
 fn claude_hook_coverage_prompt(prompt: &str) -> bool {
     let lower = prompt.to_lowercase();
-    let bounded_substep = [
+    let bounded = [
         "only the first",
         "only first",
         "only the last",
@@ -1267,6 +1267,8 @@ fn claude_hook_coverage_prompt(prompt: &str) -> bool {
         "small excerpt",
         "bounded excerpt",
         "sample of",
+        "first few",
+        "last few",
     ]
     .iter()
     .any(|needle| lower.contains(needle));
@@ -1274,71 +1276,112 @@ fn claude_hook_coverage_prompt(prompt: &str) -> bool {
         .split(|character: char| !character.is_alphanumeric())
         .filter(|word| !word.is_empty())
         .collect::<HashSet<_>>();
-    let data_noun = [
+    let repo_audit = ["repo", "repository", "codebase"]
+        .iter()
+        .any(|word| words.contains(word))
+        && ["audit", "review", "navigate", "navigation"]
+            .iter()
+            .any(|word| words.contains(word));
+    let repo_or_multi_input = repo_audit
+        || [
+            "release audit",
+            "code navigation",
+            "structural search",
+            "structural grep",
+            "both inputs",
+            "multiple inputs",
+            "multiple files",
+            "all files",
+            "across files",
+        ]
+        .iter()
+        .any(|needle| lower.contains(needle));
+    if bounded || repo_or_multi_input {
+        return false;
+    }
+    let semantic_judgment = [
+        "classify",
+        "classified",
+        "classification",
+        "categorize",
+        "categorized",
+        "categorise",
+        "categorised",
+        "label",
+        "labeled",
+        "labelled",
+        "judge",
+        "judging",
+        "judgment",
+        "judgement",
+        "semantic",
+        "sentiment",
+        "entailment",
+        "contradict",
+        "contradicts",
+        "contradicting",
+        "contradiction",
+        "violate",
+        "violates",
+        "violating",
+        "violation",
+    ]
+    .iter()
+    .any(|word| words.contains(word))
+        || [
+            "determine whether",
+            "decide whether",
+            "assess whether",
+            "evaluate whether",
+        ]
+        .iter()
+        .any(|needle| lower.contains(needle));
+    if !semantic_judgment {
+        return false;
+    }
+
+    let record_noun = [
         "row",
         "rows",
         "record",
         "records",
-        "line",
-        "lines",
         "entry",
         "entries",
         "observation",
         "observations",
-        "value",
-        "values",
-        "file",
-        "files",
-        "input",
-        "inputs",
-        "dataset",
-        "datasets",
-        "log",
-        "logs",
         "event",
         "events",
         "item",
         "items",
+        "line",
+        "lines",
+        "clause",
+        "clauses",
+        "incident",
+        "incidents",
+        "block",
+        "blocks",
     ]
     .iter()
     .any(|word| words.contains(word));
-    let coverage_quantifier = ["all", "every", "full", "complete", "whole", "entire"]
+    let one_input_noun = ["file", "input", "dataset", "log"]
         .iter()
         .any(|word| words.contains(word));
-    let explicit_coverage = ["complete coverage", "machine-graded", "clean dataset"]
+    let exhaustive = ["all", "every", "complete", "whole", "entire", "exhaustive"]
         .iter()
-        .any(|needle| lower.contains(needle))
-        || words.contains("aggregate")
-        || (coverage_quantifier && data_noun);
-    let strong_reduction = [
-        "count",
-        "total",
-        "number",
-        "maximum",
-        "minimum",
-        "max",
-        "min",
-        "highest",
-        "lowest",
-        "earliest",
-        "latest",
-        "unique",
-        "distinct",
-        "sum",
-        "average",
-        "median",
-        "frequency",
-        "distribution",
-    ]
-    .iter()
-    .any(|word| words.contains(word))
-        || lower.contains("how many");
-    let positional_reduction = ["first", "last"].iter().any(|word| words.contains(word));
-    let whole_input_digest =
-        words.contains("checksum") || words.contains("sha256") || lower.contains("sha-256");
-    let complete_intent =
-        explicit_coverage || (strong_reduction && data_noun) || whole_input_digest;
-    complete_intent || (!bounded_substep && positional_reduction && data_noun)
+        .any(|word| words.contains(word));
+    let stated_record_count_over_200 = Regex::new(
+        r"\b(?:20[1-9]|2[1-9][0-9]|[3-9][0-9]{2}|[1-9][0-9]{3,})\s+(?:records?|rows?|entries?|items?)\b",
+    )
+    .unwrap()
+    .is_match(&lower);
+    let explicit_large_scope = lower.contains("1 mib")
+        || lower.contains("1mb")
+        || lower.contains("more than 200")
+        || lower.contains("over 200")
+        || stated_record_count_over_200;
+
+    (exhaustive && (record_noun || one_input_noun)) || explicit_large_scope
 }
 
 fn claude_hook_path_is_large(path: &Path, remaining: &mut usize, depth: usize) -> Result<bool> {
@@ -1408,21 +1451,25 @@ fn claude_hook_resolve(cwd: &Path, raw: &str) -> PathBuf {
     }
 }
 
-fn claude_hook_path_or_scope_is_large(path: &Path, cwd: &Path) -> Result<bool> {
-    let path_within_cwd = fs::canonicalize(path)
-        .ok()
-        .zip(fs::canonicalize(cwd).ok())
-        .is_some_and(|(path, cwd)| path.starts_with(cwd));
-    if !path_within_cwd {
-        return Ok(true);
-    }
-    for candidate in [Some(path), Some(cwd), path.parent()].into_iter().flatten() {
-        let mut budget = 10_000usize;
-        if claude_hook_path_is_large(candidate, &mut budget, 0)? {
-            return Ok(true);
+fn claude_hook_path_or_scope_is_large(path: &Path, _cwd: &Path) -> Result<bool> {
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(_) => return Ok(false),
+    };
+    if metadata.file_type().is_file() {
+        // Judge an existing file by its own size. A large cwd, parent, or
+        // unrelated sibling must never turn a small-file operation into a gate.
+        if metadata.len() < CLAUDE_HOOK_SAMPLE_BYTES as u64 {
+            return Ok(false);
         }
+        return Ok(metadata.len() > CLAUDE_HOOK_LARGE_BYTES);
     }
-    Ok(false)
+    if !metadata.file_type().is_dir() {
+        return Ok(false);
+    }
+    let mut budget = 10_000usize;
+    claude_hook_path_is_large(path, &mut budget, 0)
 }
 
 fn claude_hook_find_large_basename(
@@ -1872,8 +1919,8 @@ fn claude_hook_argument_is_large(raw: &str, cwd: &Path) -> Result<bool> {
         return Ok(false);
     }
     let path = claude_hook_resolve(cwd, raw);
-    if claude_hook_path_or_scope_is_large(&path, cwd)? {
-        return Ok(true);
+    if fs::symlink_metadata(&path).is_ok() {
+        return claude_hook_path_or_scope_is_large(&path, cwd);
     }
     if !raw.contains('/') {
         let mut budget = 10_000usize;
@@ -1902,7 +1949,46 @@ fn claude_hook_bash_access(command: &str, cwd: &Path) -> Result<ClaudeHookBashAc
         }
         return Ok(ClaudeHookBashAccess::None);
     }
-    Ok(ClaudeHookBashAccess::Broad)
+
+    if command.contains("$(")
+        || command.contains('`')
+        || command.contains('<')
+        || command.contains('>')
+        || command.contains('|')
+        || command.contains('&')
+        || command.contains(';')
+        || command.contains('\n')
+    {
+        return Ok(ClaudeHookBashAccess::Broad);
+    }
+    let Some(tokens) = shlex::split(command) else {
+        return Ok(ClaudeHookBashAccess::None);
+    };
+    let mut saw_existing_path = false;
+    for argument in tokens.iter().skip(1) {
+        if !claude_hook_literal_path_operand(argument) {
+            continue;
+        }
+        let cleaned =
+            argument.trim_matches(|character: char| matches!(character, ';' | ',' | '(' | ')'));
+        let path = claude_hook_resolve(cwd, cleaned);
+        if fs::metadata(&path).is_ok() {
+            saw_existing_path = true;
+            if claude_hook_path_or_scope_is_large(&path, cwd)? {
+                return Ok(ClaudeHookBashAccess::Broad);
+            }
+        } else if !cleaned.contains('/') {
+            let mut budget = 10_000usize;
+            if claude_hook_find_large_basename(cwd, cleaned, &mut budget, 0)? {
+                return Ok(ClaudeHookBashAccess::Broad);
+            }
+        }
+    }
+    if saw_existing_path {
+        Ok(ClaudeHookBashAccess::None)
+    } else {
+        Ok(ClaudeHookBashAccess::Broad)
+    }
 }
 
 fn claude_hook_denial() -> String {
@@ -1968,27 +2054,60 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
                 .and_then(serde_json::Value::as_str)
                 .is_some_and(claude_hook_coverage_prompt) =>
         {
-            for path in [&coverage, &active, &sample, &transaction] {
+            // Activation belongs to the session. Prompt-scoped coverage and leases
+            // reset without forgetting that Claude already loaded the skill.
+            for path in [&coverage, &sample, &transaction] {
                 claude_hook_remove_marker(path)?;
             }
             claude_hook_write_marker(&coverage)?;
         }
         "UserPromptSubmit" => {
-            for path in [&coverage, &active, &sample, &transaction] {
+            for path in [&coverage, &sample, &transaction] {
                 claude_hook_remove_marker(path)?;
             }
         }
         "PostToolUse" => {
-            let skill = event
-                .get("tool_input")
-                .and_then(|input| input.get("skill").or_else(|| input.get("name")))
+            let tool = event
+                .get("tool_name")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let tool_input = event.get("tool_input").unwrap_or(&serde_json::Value::Null);
+            let skill = tool_input
+                .get("skill")
+                .or_else(|| tool_input.get("name"))
                 .and_then(serde_json::Value::as_str);
-            if event.get("tool_name").and_then(serde_json::Value::as_str) == Some("Skill")
-                && skill == Some("azdaja")
-            {
-                // Activation is idempotent: a repeated delivery must never reopen
-                // an already claimed one-transaction lease.
+            if tool == "Skill" && skill == Some("azdaja") {
                 claude_hook_write_marker(&active)?;
+            } else if tool == "Bash"
+                && tool_input
+                    .get("command")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(claude_hook_is_managed_transaction)
+                && claude_hook_marker_present(&transaction)?
+            {
+                // PostToolUse means the claimed transaction succeeded. Release this
+                // prompt so Claude can use ordinary tools and answer normally.
+                for path in [&coverage, &sample, &transaction] {
+                    claude_hook_remove_marker(path)?;
+                }
+            }
+        }
+        "PostToolUseFailure" => {
+            let tool = event
+                .get("tool_name")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let command = event
+                .get("tool_input")
+                .and_then(|input| input.get("command"))
+                .and_then(serde_json::Value::as_str);
+            if tool == "Bash"
+                && command.is_some_and(claude_hook_is_managed_transaction)
+                && claude_hook_marker_present(&transaction)?
+            {
+                // The standard lane permits one disclosed retry. The skill owns
+                // that cap; the hook only releases the failed transaction lease.
+                claude_hook_remove_marker(&transaction)?;
             }
         }
         "PreToolUse" => {
@@ -2071,21 +2190,9 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
                         ClaudeHookBashAccess::Broad
                     }
                 }
-                "Grep" => {
-                    let raw_path = tool_input.get("path").and_then(serde_json::Value::as_str);
-                    if raw_path.is_some_and(claude_hook_has_shell_expansion) {
-                        ClaudeHookBashAccess::Broad
-                    } else {
-                        let path = raw_path
-                            .map(|path| claude_hook_resolve(&cwd, path))
-                            .unwrap_or_else(|| cwd.clone());
-                        if claude_hook_path_or_scope_is_large(&path, &cwd)? {
-                            ClaudeHookBashAccess::Broad
-                        } else {
-                            ClaudeHookBashAccess::None
-                        }
-                    }
-                }
+                // Grep is structural navigation. It is never a substitute for
+                // exhaustive semantic classification, so the hook does not gate it.
+                "Grep" => ClaudeHookBashAccess::None,
                 "Bash" => tool_input
                     .get("command")
                     .and_then(serde_json::Value::as_str)
@@ -2113,21 +2220,10 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn claude_hook_prompt_denial() -> String {
-    serde_json::json!({
-        "decision": "block",
-        "reason": "Azdaja hook classification timed out or failed; retry the prompt."
-    })
-    .to_string()
-}
-
-fn claude_hook_failure_decision(hook_event_name: &str) -> Option<String> {
-    match hook_event_name {
-        "UserPromptSubmit" => Some(claude_hook_prompt_denial()),
-        "PreToolUse" => Some(claude_hook_denial()),
-        "PostToolUse" | "SessionEnd" => None,
-        _ => Some(claude_hook_denial()),
-    }
+fn claude_hook_failure_decision(_hook_event_name: &str) -> Option<String> {
+    // Claude hooks run in an interactive session. A timeout, malformed marker,
+    // or local state error must not strand the user behind a denial.
+    None
 }
 
 fn claude_hook_with_deadline<F>(
@@ -2157,8 +2253,10 @@ where
 }
 
 pub fn claude_hook(input: &str) -> Result<Option<String>> {
-    let event: serde_json::Value =
-        serde_json::from_str(input).context("invalid Claude hook JSON")?;
+    let event: serde_json::Value = match serde_json::from_str(input) {
+        Ok(event) => event,
+        Err(_) => return Ok(None),
+    };
     let hook_event_name = event
         .get("hook_event_name")
         .and_then(serde_json::Value::as_str)
@@ -7956,309 +8054,8 @@ mod claude_hook_tests {
         path
     }
 
-    #[test]
-    fn claude_hook_internal_deadline_fails_closed_before_the_worker_finishes() {
-        let started = Instant::now();
-        let prompt_block =
-            claude_hook_with_deadline("UserPromptSubmit", Duration::from_millis(1), || {
-                thread::sleep(Duration::from_millis(100));
-                Ok(None)
-            })
-            .unwrap();
-        let prompt_block: serde_json::Value = serde_json::from_str(&prompt_block).unwrap();
-        assert_eq!(prompt_block["decision"], "block");
-        assert!(prompt_block["reason"].as_str().unwrap().contains("retry"));
-        assert!(started.elapsed() < Duration::from_secs(1));
-
-        let pretool_denial =
-            claude_hook_with_deadline("PreToolUse", Duration::from_secs(1), || {
-                Err(anyhow!("forced worker error"))
-            })
-            .unwrap();
-        let pretool_denial: serde_json::Value = serde_json::from_str(&pretool_denial).unwrap();
-        assert_eq!(
-            pretool_denial["hookSpecificOutput"]["permissionDecision"],
-            "deny"
-        );
-        let panic_denial = claude_hook_with_deadline(
-            "PreToolUse",
-            Duration::from_secs(1),
-            || -> Result<Option<String>> { panic!("forced worker panic") },
-        )
-        .unwrap();
-        let panic_denial: serde_json::Value = serde_json::from_str(&panic_denial).unwrap();
-        assert_eq!(
-            panic_denial["hookSpecificOutput"]["permissionDecision"],
-            "deny"
-        );
-        assert_eq!(
-            claude_hook_with_deadline("PostToolUse", Duration::from_secs(1), || {
-                Err(anyhow!("forced worker error"))
-            }),
-            None
-        );
-        assert_eq!(
-            claude_hook_with_deadline("PreToolUse", Duration::from_secs(1), || {
-                Ok(Some("decision".to_owned()))
-            }),
-            Some("decision".to_owned())
-        );
-    }
-
-    #[test]
-    fn claude_hook_coverage_terms_use_word_boundaries_and_common_reductions() {
-        for prompt in [
-            "Determine the total ERROR entries in observations.csv.",
-            "What is the number of ERROR rows?",
-            "Find the earliest event in the log.",
-            "Compute the exact count for these records.",
-            "Analyze the full dataset.",
-            "Scan the entire log.",
-            "List all events.",
-            "Inspect only the first line to learn the schema, then compute the total number of rows across all records.",
-        ] {
-            assert!(claude_hook_coverage_prompt(prompt), "not routed: {prompt}");
-        }
-        for prompt in [
-            "Update account settings.",
-            "Apply the discount policy.",
-            "Raise the minimum pipeline version.",
-            "Make this exact small function change.",
-            "Show only the first five records.",
-        ] {
-            assert!(
-                !claude_hook_coverage_prompt(prompt),
-                "false route: {prompt}"
-            );
-        }
-    }
-
-    #[test]
-    fn claude_hook_blocks_only_broad_large_access_until_successful_activation() {
-        let base = env::temp_dir().join(format!(
-            "azdaja-claude-hook-test-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let root = base.join("markers");
-        fs::create_dir(&base).unwrap();
-        let large = base.join("observations.csv");
-        let small = base.join("small.csv");
-        let extensionless = base.join("observations");
-        let spaced = base.join("space name.data");
-        let unicode = base.join("観測資料");
-        let long_line = base.join("one-line.blob");
-        let short_lines = b"id,value\n".repeat(CLAUDE_HOOK_LARGE_BYTES as usize / 9 + 2);
-        fs::write(&large, &short_lines).unwrap();
-        fs::write(&extensionless, &short_lines).unwrap();
-        fs::write(&spaced, &short_lines).unwrap();
-        fs::write(&unicode, &short_lines).unwrap();
-        fs::write(&long_line, vec![b'x'; CLAUDE_HOOK_LARGE_BYTES as usize + 1]).unwrap();
-        fs::write(&small, b"id,value\n1,2\n").unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            for name in ["head", "file"] {
-                let executable = base.join(name);
-                fs::write(&executable, b"#!/bin/sh\ncat observations.csv\n").unwrap();
-                fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
-            }
-            std::os::unix::fs::symlink(&large, base.join("large-link.csv")).unwrap();
-        }
-        let session = "session-one";
-
-        let prompt = event(
-            session,
-            "UserPromptSubmit",
-            &base,
-            None,
-            serde_json::Value::Null,
-            Some("Compute the exact aggregate over every record."),
-        );
-        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
-
-        let metadata = event(
-            session,
-            "PreToolUse",
-            &base,
-            Some("Bash"),
-            serde_json::json!({"command": "/usr/bin/wc -l observations.csv"}),
-            None,
-        );
-        assert_eq!(claude_hook_with_root(&metadata, &root).unwrap(), None);
-        let sample = event(
-            session,
-            "PreToolUse",
-            &base,
-            Some("Bash"),
-            serde_json::json!({"command": "/usr/bin/head -6 observations.csv; /usr/bin/tail -3 observations.csv"}),
-            None,
-        );
-        assert_eq!(claude_hook_with_root(&sample, &root).unwrap(), None);
-        let oversized_sample = event(
-            session,
-            "PreToolUse",
-            &base,
-            Some("Bash"),
-            serde_json::json!({"command": "/usr/bin/head -6 observations.csv; /usr/bin/tail -5 observations.csv"}),
-            None,
-        );
-        assert!(
-            claude_hook_with_root(&oversized_sample, &root)
-                .unwrap()
-                .is_some()
-        );
-        for command in [
-            "/usr/bin/head -c 1000001 observations.csv",
-            "cp observations.csv /dev/stdout",
-            "/usr/bin/head -10 observations.csv observations.csv",
-            "/usr/bin/head -1 observations.csv; nl observations.csv",
-            "/usr/bin/head -1 observations.csv",
-            "/usr/bin/head -1 one-line.blob",
-            "/usr/bin/tail -1 one-line.blob",
-            "cat observations",
-            "cat 'space name.data'",
-            "cat 観測資料",
-            "/usr/bin/file -f observations.csv",
-            "/usr/bin/head -1 {observations.csv,small.csv}",
-            "/usr/bin/head -1 ~/outside-large",
-            "/usr/bin/head -1 $TARGET",
-            "/usr/bin/wc -l *.csv",
-            "/usr/bin/file *",
-            "/usr/bin/du -sh *",
-            "head -1 observations.csv",
-            "file observations.csv",
-            "./head -1 observations.csv",
-            "./file observations.csv",
-            "./unknown-reader-with-hardcoded-path",
-        ] {
-            let bypass = event(
-                session,
-                "PreToolUse",
-                &base,
-                Some("Bash"),
-                serde_json::json!({"command": command}),
-                None,
-            );
-            assert!(
-                claude_hook_with_root(&bypass, &root).unwrap().is_some(),
-                "bypass was not denied: {command}"
-            );
-        }
-        let small_scan = event(
-            session,
-            "PreToolUse",
-            &base,
-            Some("Bash"),
-            serde_json::json!({"command": "python3 scan.py small.csv"}),
-            None,
-        );
-        assert!(
-            claude_hook_with_root(&small_scan, &root).unwrap().is_some(),
-            "unknown broad Bash is fail-closed while a complete large-input task is pending"
-        );
-
-        let broad = event(
-            session,
-            "PreToolUse",
-            &base,
-            Some("Bash"),
-            serde_json::json!({"command": "python3 scan.py observations.csv"}),
-            None,
-        );
-        let denial = claude_hook_with_root(&broad, &root)
-            .unwrap()
-            .expect("broad large scan must be denied");
-        assert!(denial.contains("permissionDecision"));
-        assert!(denial.contains("Call the Skill tool with azdaja"));
-
-        let bounded_read = event(
-            session,
-            "PreToolUse",
-            &base,
-            Some("Read"),
-            serde_json::json!({"file_path": large, "limit": 5}),
-            None,
-        );
-        assert!(
-            claude_hook_with_root(&bounded_read, &root)
-                .unwrap()
-                .is_some(),
-            "a second structural sample in one task must be denied"
-        );
-        let broad_read = event(
-            session,
-            "PreToolUse",
-            &base,
-            Some("Read"),
-            serde_json::json!({"file_path": large}),
-            None,
-        );
-        assert!(claude_hook_with_root(&broad_read, &root).unwrap().is_some());
-        #[cfg(unix)]
-        {
-            let symlink_read = event(
-                session,
-                "PreToolUse",
-                &base,
-                Some("Read"),
-                serde_json::json!({"file_path": base.join("large-link.csv")}),
-                None,
-            );
-            assert!(
-                claude_hook_with_root(&symlink_read, &root)
-                    .unwrap()
-                    .is_some()
-            );
-        }
-
-        let unrelated_prompt = event(
-            session,
-            "UserPromptSubmit",
-            &base,
-            None,
-            serde_json::Value::Null,
-            Some("Summarize this small excerpt only."),
-        );
-        assert_eq!(
-            claude_hook_with_root(&unrelated_prompt, &root).unwrap(),
-            None
-        );
-        assert_eq!(claude_hook_with_root(&broad, &root).unwrap(), None);
-        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
-
-        let unrelated_skill = event(
-            session,
-            "PostToolUse",
-            &base,
-            Some("Skill"),
-            serde_json::json!({"skill": "other"}),
-            None,
-        );
-        assert_eq!(
-            claude_hook_with_root(&unrelated_skill, &root).unwrap(),
-            None
-        );
-        assert!(claude_hook_with_root(&broad, &root).unwrap().is_some());
-        let activation = event(
-            session,
-            "PostToolUse",
-            &base,
-            Some("Skill"),
-            serde_json::json!({"skill": "azdaja"}),
-            None,
-        );
-        assert_eq!(claude_hook_with_root(&activation, &root).unwrap(), None);
-        assert!(claude_hook_with_root(&broad, &root).unwrap().is_some());
-        let transaction = event(
-            session,
-            "PreToolUse",
-            &base,
-            Some("Bash"),
-            serde_json::json!({"command": r#"set -euo pipefail
+    fn managed_transaction() -> &'static str {
+        r#"set -euo pipefail
 AZ="/managed/azdaja"
 sid=
 cleanup() { "$AZ" kill "$sid"; }
@@ -8268,353 +8065,271 @@ sid="$("$AZ" start)"
 cat <<'PY' | "$AZ" exec "$sid"
 FINAL({})
 PY
-"$AZ" final "$sid""#}),
+"$AZ" final "$sid""#
+    }
+
+    #[test]
+    fn claude_hook_internal_errors_fail_open_without_ignoring_real_decisions() {
+        let started = Instant::now();
+        assert_eq!(
+            claude_hook_with_deadline("UserPromptSubmit", Duration::from_millis(1), || {
+                thread::sleep(Duration::from_millis(100));
+                Ok(None)
+            }),
+            None
+        );
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert_eq!(
+            claude_hook_with_deadline("PreToolUse", Duration::from_secs(1), || {
+                Err(anyhow!("forced worker error"))
+            }),
+            None
+        );
+        assert_eq!(
+            claude_hook_with_deadline(
+                "PreToolUse",
+                Duration::from_secs(1),
+                || -> Result<Option<String>> { panic!("forced worker panic") },
+            ),
+            None
+        );
+        assert_eq!(
+            claude_hook_with_deadline("PreToolUse", Duration::from_secs(1), || {
+                Ok(Some("decision".to_owned()))
+            }),
+            Some("decision".to_owned())
+        );
+        assert_eq!(claude_hook("not json").unwrap(), None);
+    }
+
+    #[test]
+    fn claude_hook_prompt_trigger_is_exhaustive_semantic_and_one_input_only() {
+        for prompt in [
+            "Classify every record in observations.jsonl.",
+            "Apply semantic labels to all 500 records in this input.",
+            "Judge whether every event entails the policy.",
+            "Find every clause contradicting the retention rule.",
+            "Check every incident block for a policy violation.",
+            "Perform exhaustive sentiment classification over the entire dataset.",
+        ] {
+            assert!(claude_hook_coverage_prompt(prompt), "not routed: {prompt}");
+        }
+        for prompt in [
+            "Run a release audit across this repository.",
+            "Navigate the codebase and review every module.",
+            "Use structural Grep to find all callers.",
+            "Classify only the first five records.",
+            "Show a bounded excerpt from the large file.",
+            "Read this 2 KiB file.",
+            "Count every row in the full input.",
+            "Return the tail of the log.",
+            "Compute the SHA-256 checksum of the whole file.",
+            "Classify records from both inputs.",
+        ] {
+            assert!(
+                !claude_hook_coverage_prompt(prompt),
+                "false route: {prompt}"
+            );
+        }
+    }
+
+    #[test]
+    fn claude_hook_litmus_routes_only_large_semantic_file_access() {
+        let base = unique_temp_dir("azdaja-claude-hook-litmus");
+        let root = base.join("markers");
+        let large = base.join("observations.jsonl");
+        let small = base.join("small.txt");
+        fs::write(&large, vec![b'x'; 5_000_000]).unwrap();
+        fs::write(&small, vec![b's'; 2 * 1024]).unwrap();
+        let session = "litmus";
+        let prompt = event(
+            session,
+            "UserPromptSubmit",
+            &base,
+            None,
+            serde_json::Value::Null,
+            Some("Classify every record in observations.jsonl."),
+        );
+        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
+
+        let read_small = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Read"),
+            serde_json::json!({"file_path": small}),
+            None,
+        );
+        assert_eq!(
+            claude_hook_with_root(&read_small, &root).unwrap(),
+            None,
+            "a 2 KiB Read must be allowed even inside a large cwd"
+        );
+        for command in [
+            "/usr/bin/stat small.txt",
+            "/usr/bin/head -10 small.txt",
+            "/usr/bin/tail -10 small.txt",
+            "python3 scan.py small.txt",
+        ] {
+            let tool = event(
+                session,
+                "PreToolUse",
+                &base,
+                Some("Bash"),
+                serde_json::json!({"command": command}),
+                None,
+            );
+            assert_eq!(
+                claude_hook_with_root(&tool, &root).unwrap(),
+                None,
+                "small metadata/tail route was gated: {command}"
+            );
+        }
+        let grep = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Grep"),
+            serde_json::json!({"path": large, "pattern": "id"}),
+            None,
+        );
+        assert_eq!(claude_hook_with_root(&grep, &root).unwrap(), None);
+
+        let read_large = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Read"),
+            serde_json::json!({"file_path": large}),
+            None,
+        );
+        let denial = claude_hook_with_root(&read_large, &root)
+            .unwrap()
+            .expect("classifying every record in a 5 MB file must trigger");
+        assert!(denial.contains("permissionDecision"));
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn claude_hook_nontriggers_never_create_large_file_coverage() {
+        let base = unique_temp_dir("azdaja-claude-hook-nontriggers");
+        let root = base.join("markers");
+        let large = base.join("release.log");
+        fs::write(&large, vec![b'x'; 2_000_000]).unwrap();
+        let broad = |session: &str| {
+            event(
+                session,
+                "PreToolUse",
+                &base,
+                Some("Read"),
+                serde_json::json!({"file_path": large}),
+                None,
+            )
+        };
+        for (session, prompt) in [
+            ("repo-audit", "Run a release audit across this repository."),
+            (
+                "navigation",
+                "Navigate the codebase and find all release callers.",
+            ),
+            ("count", "Count every line in release.log."),
+            ("tail", "Return the last ten lines of release.log."),
+            (
+                "checksum",
+                "Compute the checksum of the complete release.log file.",
+            ),
+        ] {
+            let prompt = event(
+                session,
+                "UserPromptSubmit",
+                &base,
+                None,
+                serde_json::Value::Null,
+                Some(prompt),
+            );
+            assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
+            assert_eq!(
+                claude_hook_with_root(&broad(session), &root).unwrap(),
+                None,
+                "nontrigger gained hook coverage: {prompt}"
+            );
+        }
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn claude_hook_activation_is_session_sticky_and_success_releases_prompt() {
+        let base = unique_temp_dir("azdaja-claude-hook-sticky");
+        let root = base.join("markers");
+        let large = base.join("records.jsonl");
+        fs::write(&large, vec![b'x'; 2_000_000]).unwrap();
+        let session = "sticky";
+        let prompt = event(
+            session,
+            "UserPromptSubmit",
+            &base,
+            None,
+            serde_json::Value::Null,
+            Some("Classify every record in records.jsonl."),
+        );
+        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
+        let activation = event(
+            session,
+            "PostToolUse",
+            &base,
+            Some("Skill"),
+            serde_json::json!({"skill": "azdaja"}),
+            None,
+        );
+        assert_eq!(claude_hook_with_root(&activation, &root).unwrap(), None);
+        let transaction = event(
+            session,
+            "PreToolUse",
+            &base,
+            Some("Bash"),
+            serde_json::json!({"command": managed_transaction()}),
             None,
         );
         assert_eq!(claude_hook_with_root(&transaction, &root).unwrap(), None);
-        for denied_tool in ["Agent", "Task", "Skill"] {
-            let event = event(
-                session,
-                "PreToolUse",
-                &base,
-                Some(denied_tool),
-                serde_json::json!({"name": "azdaja"}),
-                None,
-            );
-            assert!(claude_hook_with_root(&event, &root).unwrap().is_some());
-        }
-        // A repeated PostToolUse delivery is idempotent and cannot reopen
-        // the already claimed transaction lease.
-        assert_eq!(claude_hook_with_root(&activation, &root).unwrap(), None);
-        assert!(
-            claude_hook_with_root(&transaction, &root)
-                .unwrap()
-                .is_some()
-        );
-        let structured = event(
+        let failed = event(
             session,
-            "PreToolUse",
-            &base,
-            Some("StructuredOutput"),
-            serde_json::json!({"code": "TF"}),
-            None,
-        );
-        assert_eq!(claude_hook_with_root(&structured, &root).unwrap(), None);
-        assert_eq!(
-            claude_hook_with_root(&unrelated_prompt, &root).unwrap(),
-            None
-        );
-        assert_eq!(claude_hook_with_root(&broad, &root).unwrap(), None);
-
-        let end = event(
-            session,
-            "SessionEnd",
-            &base,
-            None,
-            serde_json::Value::Null,
-            None,
-        );
-        assert_eq!(claude_hook_with_root(&end, &root).unwrap(), None);
-        assert_eq!(claude_hook_with_root(&broad, &root).unwrap(), None);
-        fs::remove_dir_all(base).unwrap();
-    }
-
-    #[test]
-    fn claude_hook_directories_accumulate_and_traversal_limits_fail_closed() {
-        let base = env::temp_dir().join(format!(
-            "azdaja-claude-hook-directory-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let cumulative = base.join("cumulative");
-        let budgeted = base.join("budgeted");
-        let leaf_scope = base.join("leaf-scope");
-        fs::create_dir_all(&cumulative).unwrap();
-        fs::create_dir_all(&budgeted).unwrap();
-        fs::create_dir_all(&leaf_scope).unwrap();
-        fs::write(leaf_scope.join("a"), vec![b'a'; 600_001]).unwrap();
-        fs::write(leaf_scope.join("b"), vec![b'b'; 600_001]).unwrap();
-        for index in 0..2_000 {
-            fs::write(cumulative.join(format!("part-{index:04}")), vec![b'x'; 600]).unwrap();
-        }
-        for index in 0..10_001 {
-            fs::write(budgeted.join(format!("empty-{index:05}")), b"").unwrap();
-        }
-        let mut deep = base.join("deep");
-        fs::create_dir_all(&deep).unwrap();
-        for index in 0..13 {
-            deep = deep.join(format!("level-{index:02}"));
-            fs::create_dir(&deep).unwrap();
-        }
-        let mut budget = 10_000usize;
-        assert!(claude_hook_path_is_large(&cumulative, &mut budget, 0).unwrap());
-        let mut budget = 10_000usize;
-        assert!(claude_hook_path_is_large(&budgeted, &mut budget, 0).unwrap());
-        let mut budget = 10_000usize;
-        assert!(claude_hook_path_is_large(&base.join("deep"), &mut budget, 0).unwrap());
-
-        let root = base.join("markers");
-        let prompt = event(
-            "session-directory",
-            "UserPromptSubmit",
-            &base,
-            None,
-            serde_json::Value::Null,
-            Some("Compute the exact count for these records."),
-        );
-        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
-        let grep = event(
-            "session-directory",
-            "PreToolUse",
-            &base,
-            Some("Grep"),
-            serde_json::json!({"path": cumulative}),
-            None,
-        );
-        assert!(claude_hook_with_root(&grep, &root).unwrap().is_some());
-        for leaf in [leaf_scope.join("a"), leaf_scope.join("b")] {
-            let read_leaf = event(
-                "session-directory",
-                "PreToolUse",
-                &base,
-                Some("Read"),
-                serde_json::json!({"file_path": leaf, "limit": 1}),
-                None,
-            );
-            assert!(claude_hook_with_root(&read_leaf, &root).unwrap().is_some());
-            let grep_leaf = event(
-                "session-directory",
-                "PreToolUse",
-                &base,
-                Some("Grep"),
-                serde_json::json!({"path": leaf}),
-                None,
-            );
-            assert!(claude_hook_with_root(&grep_leaf, &root).unwrap().is_some());
-        }
-        let aggregate_head = event(
-            "session-directory",
-            "PreToolUse",
+            "PostToolUseFailure",
             &base,
             Some("Bash"),
-            serde_json::json!({"command": "/usr/bin/head -5 leaf-scope/a; /usr/bin/head -5 leaf-scope/b"}),
+            serde_json::json!({"command": managed_transaction()}),
             None,
         );
-        assert!(
-            claude_hook_with_root(&aggregate_head, &root)
-                .unwrap()
-                .is_some()
+        assert_eq!(claude_hook_with_root(&failed, &root).unwrap(), None);
+        assert_eq!(
+            claude_hook_with_root(&transaction, &root).unwrap(),
+            None,
+            "a failed standard transaction must release its retry lease"
         );
-        let expanding_grep = event(
-            "session-directory",
+        let completed = event(
+            session,
+            "PostToolUse",
+            &base,
+            Some("Bash"),
+            serde_json::json!({"command": managed_transaction()}),
+            None,
+        );
+        assert_eq!(claude_hook_with_root(&completed, &root).unwrap(), None);
+
+        let followup_read = event(
+            session,
             "PreToolUse",
             &base,
-            Some("Grep"),
-            serde_json::json!({"path": "~/outside-large"}),
+            Some("Read"),
+            serde_json::json!({"file_path": large}),
             None,
-        );
-        assert!(
-            claude_hook_with_root(&expanding_grep, &root)
-                .unwrap()
-                .is_some()
-        );
-
-        let small_cwd = unique_temp_dir("azdaja-claude-small-cwd");
-        let external_a = unique_temp_dir("azdaja-claude-external-a");
-        let external_b = unique_temp_dir("azdaja-claude-external-b");
-        let disjoint_a = external_a.join("a");
-        let disjoint_b = external_b.join("b");
-        fs::write(&disjoint_a, vec![b'a'; 600_001]).unwrap();
-        fs::write(&disjoint_b, vec![b'b'; 600_001]).unwrap();
-        let disjoint_prompt = event(
-            "session-disjoint",
-            "UserPromptSubmit",
-            &small_cwd,
-            None,
-            serde_json::Value::Null,
-            Some("Aggregate all records from both inputs."),
         );
         assert_eq!(
-            claude_hook_with_root(&disjoint_prompt, &root).unwrap(),
-            None
-        );
-        for leaf in [&disjoint_a, &disjoint_b] {
-            let read_leaf = event(
-                "session-disjoint",
-                "PreToolUse",
-                &small_cwd,
-                Some("Read"),
-                serde_json::json!({"file_path": leaf, "limit": 1}),
-                None,
-            );
-            assert!(claude_hook_with_root(&read_leaf, &root).unwrap().is_some());
-            let grep_leaf = event(
-                "session-disjoint",
-                "PreToolUse",
-                &small_cwd,
-                Some("Grep"),
-                serde_json::json!({"path": leaf}),
-                None,
-            );
-            assert!(claude_hook_with_root(&grep_leaf, &root).unwrap().is_some());
-        }
-        let disjoint_head = event(
-            "session-disjoint",
-            "PreToolUse",
-            &small_cwd,
-            Some("Bash"),
-            serde_json::json!({
-                "command": format!(
-                    "/usr/bin/head -5 '{}'; /usr/bin/head -5 '{}'",
-                    disjoint_a.display(),
-                    disjoint_b.display()
-                )
-            }),
+            claude_hook_with_root(&followup_read, &root).unwrap(),
             None,
+            "successful managed work must release the current prompt"
         );
-        assert!(
-            claude_hook_with_root(&disjoint_head, &root)
-                .unwrap()
-                .is_some()
-        );
-        fs::remove_dir_all(small_cwd).unwrap();
-        fs::remove_dir_all(external_a).unwrap();
-        fs::remove_dir_all(external_b).unwrap();
-        fs::remove_dir_all(base).unwrap();
-    }
-
-    #[test]
-    fn claude_hook_allows_only_one_byte_bounded_read_sample_per_prompt() {
-        let base = env::temp_dir().join(format!(
-            "azdaja-claude-hook-read-sample-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let root = base.join("markers");
-        fs::create_dir(&base).unwrap();
-        let large = base.join("rows");
-        let long_line = base.join("long-row");
-        let pdf = base.join("large.pdf");
-        let notebook = base.join("large.ipynb");
-        let image = base.join("large.png");
-        let inaccessible = base.join("inaccessible.txt");
-        let short_text =
-            b"short structural row\n".repeat(CLAUDE_HOOK_LARGE_BYTES as usize / 21 + 2);
-        fs::write(&large, &short_text).unwrap();
-        fs::write(&long_line, vec![b'x'; CLAUDE_HOOK_LARGE_BYTES as usize + 1]).unwrap();
-        fs::write(
-            &pdf,
-            [
-                b"%PDF-1.7\n".as_slice(),
-                vec![b'x'; CLAUDE_HOOK_LARGE_BYTES as usize].as_slice(),
-            ]
-            .concat(),
-        )
-        .unwrap();
-        fs::write(
-            &notebook,
-            b"{\"cells\":[]}\n".repeat(CLAUDE_HOOK_LARGE_BYTES as usize / 13 + 2),
-        )
-        .unwrap();
-        fs::write(
-            &image,
-            [
-                b"\x89PNG\r\n\x1a\n".as_slice(),
-                vec![b'x'; CLAUDE_HOOK_LARGE_BYTES as usize].as_slice(),
-            ]
-            .concat(),
-        )
-        .unwrap();
-        fs::write(&inaccessible, &short_text).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&inaccessible, fs::Permissions::from_mode(0o000)).unwrap();
-        }
-        let long_prompt = event(
-            "session-long-read",
-            "UserPromptSubmit",
-            &base,
-            None,
-            serde_json::Value::Null,
-            Some("Compute the exact aggregate over every row."),
-        );
-        assert_eq!(claude_hook_with_root(&long_prompt, &root).unwrap(), None);
-        let long_sample = event(
-            "session-long-read",
-            "PreToolUse",
-            &base,
-            Some("Read"),
-            serde_json::json!({"file_path": long_line, "limit": 1}),
-            None,
-        );
-        assert!(
-            claude_hook_with_root(&long_sample, &root)
-                .unwrap()
-                .is_some()
-        );
-
-        let session = "session-read-sample";
-        let prompt = event(
-            session,
-            "UserPromptSubmit",
-            &base,
-            None,
-            serde_json::Value::Null,
-            Some("Compute the exact aggregate over every row."),
-        );
-        assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
-        for invalid_input in [
-            serde_json::json!({"file_path": large, "limit": 0}),
-            serde_json::json!({"file_path": large, "offset": -1, "limit": 5}),
-            serde_json::json!({"file_path": large, "offset": "0", "limit": 5}),
-            serde_json::json!({"file_path": large, "limit": 5, "pages": "1"}),
-            serde_json::json!({"file_path": large, "path": large, "limit": 5}),
-            serde_json::json!({"file_path": "~/outside-large", "limit": 5}),
-            serde_json::json!({"file_path": pdf, "limit": 5}),
-            serde_json::json!({"file_path": notebook, "limit": 5}),
-            serde_json::json!({"file_path": image, "limit": 5}),
-            serde_json::json!({"file_path": inaccessible, "limit": 5}),
-        ] {
-            let invalid = event(
-                session,
-                "PreToolUse",
-                &base,
-                Some("Read"),
-                invalid_input,
-                None,
-            );
-            assert!(claude_hook_with_root(&invalid, &root).unwrap().is_some());
-        }
-        let first = event(
-            session,
-            "PreToolUse",
-            &base,
-            Some("Read"),
-            serde_json::json!({"file_path": large, "limit": 5}),
-            None,
-        );
-        assert_eq!(claude_hook_with_root(&first, &root).unwrap(), None);
-        let changed_offset = event(
-            session,
-            "PreToolUse",
-            &base,
-            Some("Read"),
-            serde_json::json!({"file_path": large, "offset": 5, "limit": 5}),
-            None,
-        );
-        assert!(
-            claude_hook_with_root(&changed_offset, &root)
-                .unwrap()
-                .is_some()
-        );
-        assert!(claude_hook_with_root(&first, &root).unwrap().is_some());
+        let (_, active, _, _) = claude_hook_paths(&root, session);
+        assert!(claude_hook_marker_present(&active).unwrap());
 
         let unrelated = event(
             session,
@@ -8622,85 +8337,50 @@ PY
             &base,
             None,
             serde_json::Value::Null,
-            Some("Summarize this small excerpt only."),
+            Some("Explain the result in one paragraph."),
         );
         assert_eq!(claude_hook_with_root(&unrelated, &root).unwrap(), None);
+        assert!(claude_hook_marker_present(&active).unwrap());
+
         assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
-        assert_eq!(claude_hook_with_root(&first, &root).unwrap(), None);
+        let premature_read = claude_hook_with_root(&followup_read, &root).unwrap();
+        assert!(
+            premature_read.is_some(),
+            "sticky activation must require the managed transaction on later semantic prompts"
+        );
         fs::remove_dir_all(base).unwrap();
     }
 
     #[test]
-    fn claude_hook_does_not_force_large_bounded_or_noncoverage_work() {
-        let base = env::temp_dir().join(format!(
-            "azdaja-claude-hook-negative-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+    fn claude_hook_allows_one_bounded_large_sample_before_activation() {
+        let base = unique_temp_dir("azdaja-claude-hook-sample");
         let root = base.join("markers");
-        fs::create_dir(&base).unwrap();
+        let large = base.join("records.txt");
         fs::write(
-            base.join("large.jsonl"),
-            vec![b'x'; CLAUDE_HOOK_LARGE_BYTES as usize + 1],
+            &large,
+            b"short structural row\n".repeat(CLAUDE_HOOK_LARGE_BYTES as usize / 21 + 2),
         )
         .unwrap();
+        let session = "sample";
         let prompt = event(
-            "session-negative",
+            session,
             "UserPromptSubmit",
             &base,
             None,
             serde_json::Value::Null,
-            Some("Show only the first five records."),
+            Some("Semantically classify every record in records.txt."),
         );
         assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
-        let tool = event(
-            "session-negative",
+        let sample = event(
+            session,
             "PreToolUse",
             &base,
             Some("Bash"),
-            serde_json::json!({"command": "python3 scan.py large.jsonl"}),
+            serde_json::json!({"command": "/usr/bin/head -5 records.txt"}),
             None,
         );
-        assert_eq!(claude_hook_with_root(&tool, &root).unwrap(), None);
-        let small_exact = event(
-            "session-negative",
-            "UserPromptSubmit",
-            &base,
-            None,
-            serde_json::Value::Null,
-            Some("Make this exact small function change."),
-        );
-        assert_eq!(claude_hook_with_root(&small_exact, &root).unwrap(), None);
-        assert_eq!(claude_hook_with_root(&tool, &root).unwrap(), None);
-
-        let installed_prompt = serde_json::json!({
-            "session_id": "session-installed-prompt",
-            "hook_event_name": "UserPromptSubmit",
-            "cwd": base,
-            "tool_input": {},
-            "prompt": "Count every row in the full input."
-        })
-        .to_string();
-        assert_eq!(
-            claude_hook_with_root(&installed_prompt, &root).unwrap(),
-            None
-        );
-        let installed_tool = event(
-            "session-installed-prompt",
-            "PreToolUse",
-            &base,
-            Some("Bash"),
-            serde_json::json!({"command": "python3 scan.py large.jsonl"}),
-            None,
-        );
-        assert!(
-            claude_hook_with_root(&installed_tool, &root)
-                .unwrap()
-                .is_some()
-        );
+        assert_eq!(claude_hook_with_root(&sample, &root).unwrap(), None);
+        assert!(claude_hook_with_root(&sample, &root).unwrap().is_some());
         fs::remove_dir_all(base).unwrap();
     }
 }

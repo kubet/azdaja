@@ -796,7 +796,7 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
 
 const DEFAULT_SKILL_DESCRIPTION: &str = "Mandatory for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja, asks if it is installed or available, or names the az virtual-memory tool. Invoke before reading or solving natively.";
 
-const CLAUDE_ACTIVATION_RULE: &str = r#"For an answer needing complete coverage of input too large for one `Read`, call `Skill` with `azdaja` before broad access. Metadata and one structural sample up to 10 lines, 64 KiB may precede. Those use absolute `/usr/bin/...` or `/bin/...` and literal paths. The managed hook blocks broader `Read`, `Grep`, or `Bash` until activation. Otherwise do not invoke it. Discovery is not invocation.
+const CLAUDE_ACTIVATION_RULE: &str = r#"Invoke `Skill` with `azdaja` only when the answer requires exhaustive semantic judgment or classification over one input and that input exceeds 1 MiB, exceeds 200 records, or the prompt requires judging every record. Do not invoke it for repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB when no record threshold applies, or deterministic count, tail, and checksum work. Activation is session-sticky. Discovery is not invocation.
 "#;
 
 const CLAUDE_HOOKS: &str = r#"{
@@ -828,7 +828,20 @@ const CLAUDE_HOOKS: &str = r#"{
     ],
     "PostToolUse": [
       {
-        "matcher": "Skill",
+        "matcher": "Skill|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/azdaja",
+            "args": ["claude-hook"],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
@@ -863,7 +876,7 @@ fn render_claude_plugin_manifest() -> String {
     serde_json::to_string_pretty(&serde_json::json!({
         "name": "azdaja",
         "version": VERSION,
-        "description": "Deterministically routes broad large-input work through the managed Azdaja skill."
+        "description": "Routes exhaustive large-input semantic judgment through the managed Azdaja skill without intercepting normal Claude Code work."
     }))
     .expect("static Claude plugin manifest")
         + "
@@ -882,7 +895,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "claude" => Some((
             "Claude Code",
-            "<execution_state>Azdaja active; use the main conversation.</execution_state>\n<execution_contract>\n1. One Bash call, timeout 300000 ms: copy the wrapper with exactly one literal `start`, `load`, `exec`, `final`, and `kill`.\n2. Every `llm_batch` uses `workers=4`; use the fewest balanced initial shards of at most 40 items; put complete evidence first in `<documents>` and the exact task/output contract last; flatten disputes before one global adjudication batch; keep canonical labels.\n3. Load only the raw input once; task, schema, and packing are literals; read lowercase `source`.\n4. Return stdout JSON unchanged as the sole assistant response.\nFailure: concise error; no retry, other lane, native fallback, or subagent.</execution_contract>",
+            "<execution_state>Azdaja is active and session-sticky; stay in the main conversation.</execution_state>\n<execution_contract>\n1. The mandatory route is narrow: exhaustive semantic judgment or classification over one input that exceeds 1 MiB, exceeds 200 records, or requires judging every record.\n2. Use the standard coworker lane by default. Run one Bash lifecycle transaction with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; deterministic reduction is allowed and `llm_batch` is optional unless semantic judgment is required.\n3. Use the strict A/B, adjudication, JSON-only, fail-closed lane only for an explicit audit-grade, benchmark, or machine-graded exact-schema request.\n4. After a successful transaction, integrate `FINAL` into the normal conversational answer. Do not call Skill again in this session.\n5. Standard lane only: retry a failed managed transaction at most once. Then disclose the failure concisely and use a bounded fallback only when it can answer honestly. Strict lane remains fail-closed with no retry.\nFailure must not strand ordinary follow-up work.</execution_contract>",
         )),
         "codex" => Some((
             "Codex",
@@ -902,7 +915,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
 
 fn harness_skill_description(harness: &str, display: &str) -> String {
     match harness {
-        "claude" => "Mandatory: invoke Azdaja, the installed and available local az virtual-memory tool, before broad reading when complete semantic coverage spans more than 1 MiB or 200 records, or whenever the prompt names Azdaja. Use native tools only for fitting inputs and bounded deterministic work.".to_owned(),
+        "claude" => "Mandatory only for exhaustive semantic judgment or classification over one input when it exceeds 1 MiB, exceeds 200 records, or requires judging every record. Do not invoke Azdaja for repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB when no record threshold applies, or deterministic count, tail, and checksum work. Azdaja remains the installed and available local az virtual-memory tool when explicitly requested.".to_owned(),
         "opencode" => "Mandatory: invoke Azdaja, the installed and available local az virtual-memory tool, before Read, Grep, or Bash inspection when complete semantic coverage spans more than 1 MiB or 200 records, or whenever the prompt names Azdaja. Use one native Bash call instead only when it can produce the exact answer without semantic judgment.".to_owned(),
         _ => format!(
             "Use Azdaja, the installed and available local az virtual-memory tool, for inputs too large to read safely such as large logs, archives, repositories, transcripts, dumps, or diffs, whenever the user asks how to use it, and proactively before broad manual reading in {display}."
@@ -918,8 +931,31 @@ fn render_managed_skill(harness: &str, binary: &Path) -> String {
         skill = skill.replace("at most 80 unique items", "at most 40 unique items");
         skill = skill.replace("2 * shard_count <= 8", "2 * shard_count <= 16");
         skill = skill.replace(
+            "## Claude Code and OpenCode",
+            "## Claude Code coworker lane (default)",
+        );
+        skill = skill.replace(
             "- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. Claude Code and OpenCode must not solve a matching task natively.\n",
             "",
+        );
+        skill = skill.replace(
+            "Return the final value unchanged as the requested JSON object and sole response. Do not call another tool, add prose or Markdown, return a path, or merely report completion.\n\n### Cell contract",
+            r#"### Standard cell contract
+
+Use this coworker lane by default. Load the source once and make one complete evidence pass.
+
+- Deterministic parsing, filtering, counting, tail selection, checksums, and reductions are allowed inside the cell. Do not call a model for work that code can determine exactly.
+- `llm_batch` is optional. Use it only when the requested result needs semantic judgment. For semantic work, keep complete evidence and stable IDs, then use the fewest balanced shards in one ordered `llm_batch(..., workers=4)` pass. Add a later pass only if the user asks for audit-grade adjudication.
+- Validate coverage and the requested result. End with `FINAL(answer)` exactly once, passing the actual value.
+- If the managed transaction fails, retry it at most once in this standard lane. After that, disclose the failure concisely. Use a bounded fallback only when it can support an honest answer; never imply complete coverage from partial evidence.
+
+Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add useful prose or Markdown unless the user requested an exact format.
+
+### Strict audit lane (explicit only)
+
+Use this lane only when the user explicitly requests audit-grade, benchmark, or machine-graded output with an exact schema. In this lane, the A/B views, global adjudication, exact JSON-only response, and fail-closed rules below are mandatory. Return stdout JSON unchanged as the sole assistant response.
+
+#### Strict cell contract"#,
         );
     } else if harness == "opencode" {
         skill = skill.replace("workers=8", "workers=12");
@@ -5327,12 +5363,23 @@ mod tests {
             assert!(rendered.contains(&format!("## Harness activation: {display}")));
             assert!(rendered.contains(marker));
             if matches!(harness, "claude" | "opencode") {
-                assert!(
-                    rendered.contains(
+                if harness == "claude" {
+                    assert!(
+                        rendered.contains(
+                            "exhaustive semantic judgment or classification over one input"
+                        )
+                    );
+                    assert!(rendered.contains("repository audits, code navigation"));
+                } else {
+                    assert!(rendered.contains(
                         "complete semantic coverage spans more than 1 MiB or 200 records"
-                    )
-                );
-                assert!(rendered.contains("Load only the raw input once"));
+                    ));
+                }
+                if harness == "claude" {
+                    assert!(rendered.contains("Load the source once"));
+                } else {
+                    assert!(rendered.contains("Load only the raw input once"));
+                }
                 assert!(rendered.contains("installed and available local az virtual-memory tool"));
                 assert!(rendered.contains(
                     "Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
@@ -5341,7 +5388,7 @@ mod tests {
                 assert!(!rendered.contains("Other hosts: one `solo` call"));
                 if harness == "claude" {
                     assert_eq!(rendered.matches("workers=4").count(), 3);
-                    assert!(rendered.contains("before one global adjudication batch"));
+                    assert!(rendered.contains("globally repack them into the fewest prompts"));
                     assert!(rendered.contains("exactly one literal `start`"));
                     assert!(rendered.contains("at most 40 unique items"));
                     assert!(rendered.contains("2 * shard_count <= 16"));
@@ -5416,6 +5463,68 @@ mod tests {
     }
 
     #[test]
+    fn claude_standard_lane_is_conversational_and_strict_lane_remains_exact() {
+        let rendered = render_managed_skill("claude", Path::new("/managed/azdaja"));
+        let standard = rendered
+            .split_once("### Standard cell contract")
+            .expect("standard Claude lane")
+            .1
+            .split_once("### Strict audit lane (explicit only)")
+            .expect("strict Claude lane boundary")
+            .0;
+        for contract in [
+            "Use this coworker lane by default",
+            "Deterministic parsing, filtering, counting",
+            "`llm_batch` is optional",
+            "fewest balanced shards",
+            "one complete evidence pass",
+            "normal conversational answer",
+            "retry it at most once",
+            "bounded fallback only when it can support an honest answer",
+        ] {
+            assert!(
+                standard.contains(contract),
+                "missing standard contract: {contract}"
+            );
+        }
+        assert!(!standard.contains("blind A/B"));
+        assert!(!standard.contains("sole assistant response"));
+
+        let strict = rendered
+            .split_once("### Strict audit lane (explicit only)")
+            .expect("strict cell contract")
+            .1;
+        for contract in [
+            "create blind A/B prompts",
+            "globally repack them into the fewest prompts",
+            "Send one adjudication `llm_batch`",
+            "strict positional JSON output contract",
+            "Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure",
+            "sole assistant response",
+            "Never create a temporary script, add another `exec`, query CLI help, retry, or start over",
+        ] {
+            assert!(
+                strict.contains(contract),
+                "strict contract changed: {contract}"
+            );
+        }
+    }
+
+    #[test]
+    fn opencode_rendered_output_is_version_neutral_byte_golden() {
+        let rendered = render_managed_skill("opencode", Path::new("/managed/azdaja"));
+        let normalized = rendered.replace(&format!("# Azdaja {VERSION}"), "# Azdaja <VERSION>");
+        let digest = sha256_digest(normalized.as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        assert_eq!(
+            digest, "9b979537ce2b14a24dc16f763a22228674dc36d61f4bc8953f0c0be5acad8d01",
+            "OpenCode rendered bytes changed"
+        );
+    }
+
+    #[test]
     fn unchanged_harness_profiles_are_byte_golden() {
         let binary = Path::new("/managed/azdaja");
         for (harness, expected) in [
@@ -5446,23 +5555,36 @@ mod tests {
     }
 
     #[test]
-    fn claude_activation_rule_is_short_and_conjunctive() {
+    fn claude_activation_rule_is_narrow_semantic_and_names_nontriggers() {
         let rule = render_claude_activation_rule();
         assert!(
-            rule.len() <= 400,
+            rule.len() <= 500,
             "activation rule grew to {} bytes",
             rule.len()
         );
-        assert!(rule.contains("answer needing complete coverage"));
-        assert!(rule.contains("too large for one `Read`"));
-        assert!(rule.contains("one structural sample up to 10 lines"));
-        assert!(rule.contains("managed hook blocks broader"));
-        assert!(rule.contains("Otherwise do not invoke it"));
+        assert!(rule.contains("exhaustive semantic judgment or classification"));
+        assert!(rule.contains("one input"));
+        assert!(rule.contains("exceeds 1 MiB"));
+        assert!(rule.contains("exceeds 200 records"));
+        for nontrigger in [
+            "repository audits",
+            "code navigation",
+            "structural searches",
+            "bounded excerpts",
+            "files below 1 MiB",
+            "deterministic count, tail, and checksum work",
+        ] {
+            assert!(
+                rule.contains(nontrigger),
+                "missing nontrigger: {nontrigger}"
+            );
+        }
+        assert!(rule.contains("Activation is session-sticky"));
         assert!(rule.contains("Discovery is not invocation"));
-        assert_eq!(CLAUDE_HOOKS.matches("\"timeout\": 30").count(), 4);
+        assert_eq!(CLAUDE_HOOKS.matches("\"timeout\": 30").count(), 5);
+        assert!(CLAUDE_HOOKS.contains("\"matcher\": \"Skill|Bash\""));
+        assert!(CLAUDE_HOOKS.contains("PostToolUseFailure"));
         assert!(!CLAUDE_HOOKS.contains("\"timeout\": 5"));
-        assert!(!rule.contains("20,000"));
-        assert!(!rule.contains("test pattern"));
     }
 
     #[test]

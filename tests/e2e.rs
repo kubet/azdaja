@@ -4437,7 +4437,7 @@ exit 9
     assert!(skill.contains("Use native `sha256(text)`"));
     assert!(skill.contains("End with `FINAL(answer_dict)` exactly once"));
     assert!(!skill.contains("workers=16"));
-    assert!(skill.len() < 6_000);
+    assert!(skill.len() < 8_000);
     let edited_config = fs::read_to_string(&cfg).unwrap().replace(
         "sub_llm_cmd = \"cat\"",
         &format!("sub_llm_cmd = {:?}", mock.to_str().unwrap()),
@@ -4738,9 +4738,8 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             .find_map(|line| line.strip_prefix("description: "))
             .expect("installed skill description");
         let size_trigger = match harness {
-            "claude" | "opencode" => {
-                "complete semantic coverage spans more than 1 MiB or 200 records"
-            }
+            "claude" => "exhaustive semantic judgment or classification over one input",
+            "opencode" => "complete semantic coverage spans more than 1 MiB or 200 records",
             _ => "inputs too large",
         };
         let mut triggers = vec![
@@ -4796,9 +4795,10 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
     }
     let activation = t.join(".claude/skills/azdaja/ACTIVATION.md");
     let activation_text = fs::read_to_string(&activation).unwrap();
-    assert!(activation_text.len() <= 400);
-    assert!(activation_text.contains("answer needing complete coverage"));
-    assert!(activation_text.contains("managed hook blocks broader"));
+    assert!(activation_text.len() <= 500);
+    assert!(activation_text.contains("exhaustive semantic judgment or classification"));
+    assert!(activation_text.contains("repository audits"));
+    assert!(activation_text.contains("deterministic count, tail, and checksum work"));
     let plugin =
         fs::read_to_string(t.join(".claude/skills/azdaja/.claude-plugin/plugin.json")).unwrap();
     let hooks = fs::read_to_string(t.join(".claude/skills/azdaja/hooks/hooks.json")).unwrap();
@@ -4806,6 +4806,8 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
     assert!(hooks.contains("UserPromptSubmit"));
     assert!(hooks.contains("PreToolUse"));
     assert!(hooks.contains("PostToolUse"));
+    assert!(hooks.contains("PostToolUseFailure"));
+    assert!(hooks.contains("\"matcher\": \"Skill|Bash\""));
     assert!(hooks.contains("SessionEnd"));
     #[cfg(unix)]
     assert_eq!(
@@ -6758,8 +6760,8 @@ time.sleep(60)
 }
 
 #[test]
-fn claude_hook_worker_errors_fail_closed_by_event_without_authorizing_posttool() {
-    let root = temp("claude-hook-fail-closed");
+fn claude_hook_worker_errors_fail_open_for_interactive_events() {
+    let root = temp("claude-hook-fail-open");
     let blocked_state = root.join("state-is-a-file");
     fs::write(&blocked_state, b"not a directory").unwrap();
     let invoke = |event: serde_json::Value| {
@@ -6780,27 +6782,24 @@ fn claude_hook_worker_errors_fail_closed_by_event_without_authorizing_posttool()
         child.wait_with_output().unwrap()
     };
     let base = serde_json::json!({
-        "session_id": "fail-closed-session",
+        "session_id": "fail-open-session",
         "cwd": root,
         "tool_input": {}
     });
 
     let mut prompt = base.clone();
     prompt["hook_event_name"] = serde_json::json!("UserPromptSubmit");
-    prompt["user_prompt"] = serde_json::json!("Count every row in the full input.");
+    prompt["user_prompt"] = serde_json::json!("Classify every record in the full input.");
     let output = invoke(prompt);
     assert!(output.status.success(), "{:?}", output);
-    let decision: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(decision["decision"], "block");
-    assert!(decision["reason"].as_str().unwrap().contains("retry"));
+    assert!(output.stdout.is_empty());
 
     let mut pretool = base.clone();
     pretool["hook_event_name"] = serde_json::json!("PreToolUse");
     pretool["tool_name"] = serde_json::json!("Read");
     let output = invoke(pretool);
     assert!(output.status.success(), "{:?}", output);
-    let decision: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(decision["hookSpecificOutput"]["permissionDecision"], "deny");
+    assert!(output.stdout.is_empty());
 
     let mut posttool = base;
     posttool["hook_event_name"] = serde_json::json!("PostToolUse");

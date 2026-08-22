@@ -222,9 +222,10 @@ fn claude_activation_rule_is_owned_checked_removed_and_never_clobbers_foreign_co
     );
     assert_eq!(fs::read_link(&link).unwrap(), target);
     let rule = fs::read_to_string(&target).unwrap();
-    assert!(rule.len() <= 400, "rule grew to {} bytes", rule.len());
-    assert!(rule.contains("answer needing complete coverage"));
-    assert!(rule.contains("managed hook blocks broader"));
+    assert!(rule.len() <= 500, "rule grew to {} bytes", rule.len());
+    assert!(rule.contains("exhaustive semantic judgment or classification"));
+    assert!(rule.contains("repository audits"));
+    assert!(rule.contains("deterministic count, tail, and checksum work"));
     let plugin_text = fs::read_to_string(&plugin).unwrap();
     let hook_bytes = fs::read(&hooks).unwrap();
     let hook_text = std::str::from_utf8(&hook_bytes).unwrap();
@@ -233,6 +234,7 @@ fn claude_activation_rule_is_owned_checked_removed_and_never_clobbers_foreign_co
         "UserPromptSubmit",
         "PreToolUse",
         "PostToolUse",
+        "PostToolUseFailure",
         "SessionEnd",
         "${CLAUDE_PLUGIN_ROOT}/azdaja",
     ] {
