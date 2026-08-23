@@ -2596,18 +2596,22 @@ fn build_relevance_view(source: &str, query: &str, max_chars: usize) -> Result<R
     let wanted: BTreeSet<&str> = query_frequency.keys().map(String::as_str).collect();
     let mut document_frequency = BTreeMap::<String, usize>::new();
     let mut matched = BTreeSet::<String>::new();
+    let mut matched_window_frequencies = Vec::new();
     for &start in &starts {
         let end = (start + WINDOW).min(source_chars);
         let window_text: String = chars[start..end].iter().collect();
-        let mut present = BTreeSet::<String>::new();
+        let mut frequency = BTreeMap::<String, usize>::new();
         for term in relevance_terms(&window_text) {
             if wanted.contains(term.as_str()) {
-                present.insert(term);
+                *frequency.entry(term).or_default() += 1;
             }
         }
-        for term in present {
-            *document_frequency.entry(term.clone()).or_default() += 1;
-            matched.insert(term);
+        if !frequency.is_empty() {
+            for term in frequency.keys() {
+                *document_frequency.entry(term.clone()).or_default() += 1;
+                matched.insert(term.clone());
+            }
+            matched_window_frequencies.push((start, end, frequency));
         }
     }
     if matched.is_empty() {
@@ -2621,15 +2625,7 @@ fn build_relevance_view(source: &str, query: &str, max_chars: usize) -> Result<R
     }
 
     let mut ranked = Vec::<(u128, usize, usize)>::new();
-    for &start in &starts {
-        let end = (start + WINDOW).min(source_chars);
-        let window_text: String = chars[start..end].iter().collect();
-        let mut frequency = BTreeMap::<String, usize>::new();
-        for term in relevance_terms(&window_text) {
-            if wanted.contains(term.as_str()) {
-                *frequency.entry(term).or_default() += 1;
-            }
-        }
+    for (start, end, frequency) in matched_window_frequencies {
         let mut score = 0u128;
         for (term, count) in frequency {
             let df = document_frequency[&term] as u128;
@@ -9741,6 +9737,36 @@ mod lexical_relevance_tests {
         let view = build_relevance_view(&source, "rareanchor", 20_000).unwrap();
         assert!(view.evidence.contains("rareanchor"));
         assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
+    #[test]
+    fn lexical_relevance_cached_frequencies_match_frozen_baseline() {
+        let source = format!(
+            "{} alpha alpha rareone {} alpha raretwo {} rareone ending",
+            "zero ".repeat(500),
+            "middle ".repeat(500),
+            "tail ".repeat(500),
+        );
+        let view = build_relevance_view(&source, "alpha rareone raretwo", 5_000).unwrap();
+        assert_eq!(view.source_chars, 8_551);
+        assert_eq!(view.selected_chars, 4_151);
+        assert_eq!(
+            view.ranges,
+            vec![(1_600, 3_400), (4_800, 6_600), (8_000, 8_551)]
+        );
+        assert_eq!(
+            view.matched_terms,
+            vec![
+                "alpha".to_owned(),
+                "rareone".to_owned(),
+                "raretwo".to_owned()
+            ]
+        );
+        assert!(!view.complete);
+        assert_eq!(
+            sha256_hex(view.evidence.as_bytes()),
+            "47776395f103f4433b964289cf650bcfd4c3126dea767033450491444438b431"
+        );
     }
 
     #[test]
