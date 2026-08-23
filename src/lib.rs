@@ -4667,6 +4667,8 @@ pub struct ModelUsage {
     pub input: u64,
     pub output: u64,
     pub cache_read: u64,
+    pub cache_write: u64,
+    pub reasoning: u64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelReply {
@@ -4895,6 +4897,10 @@ pub struct ModelTrace {
     pub output_tokens: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_read_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_write_tokens: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_tokens: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latency_ms: Option<u128>,
     /// Explicitly prevents a successful retry from being presented as a clean call.
@@ -6652,6 +6658,8 @@ fn trace_model_failure_attempt(
         input_tokens: None,
         output_tokens: None,
         cache_read_tokens: None,
+        cache_write_tokens: None,
+        reasoning_tokens: None,
         latency_ms: context.latency_ms,
         degraded_transport: None,
         failed_attempts_before_success: None,
@@ -6754,6 +6762,8 @@ fn trace_model_reply_attempt(
         input_tokens: known_usage.then_some(reply.usage.input),
         output_tokens: known_usage.then_some(reply.usage.output),
         cache_read_tokens: known_usage.then_some(reply.usage.cache_read),
+        cache_write_tokens: known_usage.then_some(reply.usage.cache_write),
+        reasoning_tokens: known_usage.then_some(reply.usage.reasoning),
         latency_ms: Some(reply.latency_ms),
         degraded_transport: Some(attempt > 1),
         failed_attempts_before_success: Some(attempt.saturating_sub(1)),
@@ -6814,6 +6824,8 @@ fn trace_model_repair_reply(
         input_tokens: known_usage.then_some(reply.usage.input),
         output_tokens: known_usage.then_some(reply.usage.output),
         cache_read_tokens: known_usage.then_some(reply.usage.cache_read),
+        cache_write_tokens: known_usage.then_some(reply.usage.cache_write),
+        reasoning_tokens: known_usage.then_some(reply.usage.reasoning),
         latency_ms: Some(reply.latency_ms),
         degraded_transport: Some(false),
         failed_attempts_before_success: Some(0),
@@ -7218,9 +7230,14 @@ fn call_model_inner(
         )
     }
     let text = String::from_utf8_lossy(&strip_ansi_escapes::strip(stdout)).into_owned();
-    let codex_json = is_codex_json_command(program, args);
-    if codex_json {
-        let mut reply = parse_codex_jsonl_reply(text.trim(), model)?;
+    let structured_reply = if is_codex_json_command(program, args) {
+        Some(parse_codex_jsonl_reply(text.trim(), model)?)
+    } else if is_opencode_json_command(program, args) {
+        Some(parse_opencode_jsonl_reply(text.trim(), model)?)
+    } else {
+        None
+    };
+    if let Some(mut reply) = structured_reply {
         for pattern in &cfg.clean_patterns {
             reply.text = Regex::new(pattern)?
                 .replace_all(&reply.text, "")
@@ -7310,6 +7327,25 @@ fn is_codex_json_command(program: &str, args: &[String]) -> bool {
     is_codex_program(program) && args.iter().any(|arg| arg == "--json")
 }
 
+fn is_opencode_program(program: &str) -> bool {
+    let name = Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(program)
+        .to_ascii_lowercase();
+    name == "opencode" || name == "opencode.exe"
+}
+
+fn is_opencode_json_command(program: &str, args: &[String]) -> bool {
+    if !is_opencode_program(program) {
+        return false;
+    }
+    args.iter().any(|arg| arg == "--format=json")
+        || args
+            .windows(2)
+            .any(|pair| pair[0] == "--format" && pair[1] == "json")
+}
+
 fn parse_codex_jsonl_reply(jsonl: &str, model: &str) -> Result<ModelReply> {
     let mut final_text: Option<String> = None;
     let mut completed_usage: Option<ModelUsage> = None;
@@ -7370,13 +7406,207 @@ fn parse_codex_usage(value: &serde_json::Value) -> Result<ModelUsage> {
         .ok_or_else(|| anyhow!("Codex turn.completed missing usage"))?;
     let input = codex_usage_integer(usage, "input_tokens")?;
     let cache_read = codex_usage_integer(usage, "cached_input_tokens")?;
-    let _cache_write = codex_usage_integer(usage, "cache_write_input_tokens")?;
+    let cache_write = codex_usage_integer(usage, "cache_write_input_tokens")?;
     let output = codex_usage_integer(usage, "output_tokens")?;
-    let _reasoning_output = codex_usage_integer(usage, "reasoning_output_tokens")?;
+    let reasoning = codex_usage_integer(usage, "reasoning_output_tokens")?;
     Ok(ModelUsage {
         input,
         output,
         cache_read,
+        cache_write,
+        reasoning,
+    })
+}
+
+fn parse_opencode_jsonl_reply(jsonl: &str, model: &str) -> Result<ModelReply> {
+    let mut text_parts = Vec::new();
+    let mut finishes = Vec::new();
+
+    for (index, line) in jsonl.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value: serde_json::Value = serde_json::from_str(line.trim())
+            .with_context(|| format!("malformed OpenCode JSONL on line {}", index + 1))?;
+        if value.get("error").is_some() {
+            bail!(
+                "OpenCode JSONL contained top-level error on line {}",
+                index + 1
+            )
+        }
+        let event_type = value
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow!("OpenCode JSONL missing event type on line {}", index + 1))?;
+        let part = value
+            .get("part")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| anyhow!("OpenCode JSONL missing part on line {}", index + 1))?;
+        match event_type {
+            "step_start" => {
+                if part.get("type").and_then(serde_json::Value::as_str) != Some("step-start") {
+                    bail!(
+                        "OpenCode step_start part schema mismatch on line {}",
+                        index + 1
+                    )
+                }
+            }
+            "text" => {
+                if part.get("type").and_then(serde_json::Value::as_str) != Some("text") {
+                    bail!("OpenCode text part schema mismatch on line {}", index + 1)
+                }
+                let text = part
+                    .get("text")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| {
+                        anyhow!("OpenCode text part missing text on line {}", index + 1)
+                    })?;
+                text_parts.push(text.to_owned());
+            }
+            "tool_use" => {
+                if part.get("type").and_then(serde_json::Value::as_str) != Some("tool") {
+                    bail!(
+                        "OpenCode tool_use part schema mismatch on line {}",
+                        index + 1
+                    )
+                }
+                let status = part
+                    .get("state")
+                    .and_then(serde_json::Value::as_object)
+                    .and_then(|state| state.get("status"))
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| {
+                        anyhow!("OpenCode tool_use missing status on line {}", index + 1)
+                    })?;
+                if matches!(status, "error" | "failed") {
+                    bail!(
+                        "OpenCode JSONL contained failed tool_use on line {}",
+                        index + 1
+                    )
+                }
+            }
+            "step_finish" => {
+                if part.get("type").and_then(serde_json::Value::as_str) != Some("step-finish") {
+                    bail!(
+                        "OpenCode step_finish part schema mismatch on line {}",
+                        index + 1
+                    )
+                }
+                let reason = part
+                    .get("reason")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| {
+                        anyhow!("OpenCode step_finish missing reason on line {}", index + 1)
+                    })?;
+                if matches!(
+                    reason.to_ascii_lowercase().as_str(),
+                    "error" | "failed" | "failure" | "retry"
+                ) {
+                    bail!(
+                        "OpenCode JSONL contained failed step_finish on line {}",
+                        index + 1
+                    )
+                }
+                let cost = part
+                    .get("cost")
+                    .and_then(serde_json::Value::as_f64)
+                    .filter(|cost| cost.is_finite() && *cost >= 0.0)
+                    .ok_or_else(|| {
+                        anyhow!("OpenCode step_finish cost is invalid on line {}", index + 1)
+                    })?;
+                let _ = cost;
+                finishes.push((reason.to_owned(), parse_opencode_usage(part, index + 1)?));
+            }
+            other => bail!(
+                "unknown OpenCode JSONL event {other:?} on line {}",
+                index + 1
+            ),
+        }
+    }
+    if finishes.is_empty() {
+        bail!("OpenCode JSONL missing step_finish")
+    }
+    if finishes
+        .iter()
+        .filter(|(reason, _)| reason == "stop")
+        .count()
+        != 1
+        || finishes.last().map(|(reason, _)| reason.as_str()) != Some("stop")
+    {
+        bail!("OpenCode JSONL must end with exactly one stop step_finish")
+    }
+    if text_parts.is_empty() {
+        bail!("OpenCode JSONL missing text")
+    }
+    let mut usage = ModelUsage::default();
+    for (_, step) in finishes {
+        usage.input = usage
+            .input
+            .checked_add(step.input)
+            .ok_or_else(|| anyhow!("OpenCode input token total overflow"))?;
+        usage.output = usage
+            .output
+            .checked_add(step.output)
+            .ok_or_else(|| anyhow!("OpenCode output token total overflow"))?;
+        usage.cache_read = usage
+            .cache_read
+            .checked_add(step.cache_read)
+            .ok_or_else(|| anyhow!("OpenCode cache-read token total overflow"))?;
+        usage.cache_write = usage
+            .cache_write
+            .checked_add(step.cache_write)
+            .ok_or_else(|| anyhow!("OpenCode cache-write token total overflow"))?;
+        usage.reasoning = usage
+            .reasoning
+            .checked_add(step.reasoning)
+            .ok_or_else(|| anyhow!("OpenCode reasoning token total overflow"))?;
+    }
+    Ok(ModelReply {
+        text: text_parts.concat(),
+        usage,
+        provider: "opencode".into(),
+        model: model.into(),
+        latency_ms: 0,
+    })
+}
+
+fn parse_opencode_usage(
+    part: &serde_json::Map<String, serde_json::Value>,
+    line: usize,
+) -> Result<ModelUsage> {
+    let tokens = part
+        .get("tokens")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| anyhow!("OpenCode step_finish missing tokens on line {line}"))?;
+    let keys: BTreeSet<&str> = tokens.keys().map(String::as_str).collect();
+    let required = BTreeSet::from(["input", "output", "reasoning", "cache"]);
+    let with_total = BTreeSet::from(["total", "input", "output", "reasoning", "cache"]);
+    if keys != required && keys != with_total {
+        bail!("OpenCode usage schema mismatch on line {line}")
+    }
+    if let Some(total) = tokens.get("total") {
+        opencode_usage_integer(total, "total", line)?;
+    }
+    let cache = tokens
+        .get("cache")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| anyhow!("OpenCode usage cache schema mismatch on line {line}"))?;
+    let cache_keys: BTreeSet<&str> = cache.keys().map(String::as_str).collect();
+    if cache_keys != BTreeSet::from(["read", "write"]) {
+        bail!("OpenCode usage cache schema mismatch on line {line}")
+    }
+    Ok(ModelUsage {
+        input: opencode_usage_integer(&tokens["input"], "input", line)?,
+        output: opencode_usage_integer(&tokens["output"], "output", line)?,
+        reasoning: opencode_usage_integer(&tokens["reasoning"], "reasoning", line)?,
+        cache_read: opencode_usage_integer(&cache["read"], "cache.read", line)?,
+        cache_write: opencode_usage_integer(&cache["write"], "cache.write", line)?,
+    })
+}
+
+fn opencode_usage_integer(value: &serde_json::Value, field: &str, line: usize) -> Result<u64> {
+    value.as_u64().ok_or_else(|| {
+        anyhow!("OpenCode usage {field} must be a non-negative integer on line {line}")
     })
 }
 
@@ -7494,7 +7724,9 @@ mod unit_tests {
         assert_eq!(reply.model, "gpt-5.1-codex");
         assert_eq!(reply.usage.input, 11);
         assert_eq!(reply.usage.cache_read, 3);
+        assert_eq!(reply.usage.cache_write, 5);
         assert_eq!(reply.usage.output, 7);
+        assert_eq!(reply.usage.reasoning, 2);
     }
 
     #[test]
@@ -7578,6 +7810,82 @@ mod unit_tests {
         assert!(!is_codex_json_command("other-codex", &["--json".into()]));
     }
 
+    fn opencode_success_jsonl() -> String {
+        [
+            r#"{"type":"step_start","part":{"type":"step-start"}}"#,
+            r#"{"type":"text","part":{"type":"text","text":"final "}}"#,
+            r#"{"type":"step_finish","part":{"type":"step-finish","reason":"tool-calls","cost":0.01,"tokens":{"input":11,"output":3,"reasoning":2,"cache":{"read":5,"write":7}}}}"#,
+            r#"{"type":"text","part":{"type":"text","text":"answer"}}"#,
+            r#"{"type":"step_finish","part":{"type":"step-finish","reason":"stop","cost":0.02,"tokens":{"total":37,"input":13,"output":4,"reasoning":1,"cache":{"read":2,"write":3}}}}"#,
+        ]
+        .join("\n")
+    }
+
+    #[test]
+    fn opencode_jsonl_parser_returns_final_text_and_complete_usage() {
+        let reply =
+            parse_opencode_jsonl_reply(&opencode_success_jsonl(), "openai/gpt-5.6-luna").unwrap();
+        assert_eq!(reply.text, "final answer");
+        assert_eq!(reply.provider, "opencode");
+        assert_eq!(reply.model, "openai/gpt-5.6-luna");
+        assert_eq!(reply.usage.input, 24);
+        assert_eq!(reply.usage.output, 7);
+        assert_eq!(reply.usage.reasoning, 3);
+        assert_eq!(reply.usage.cache_read, 7);
+        assert_eq!(reply.usage.cache_write, 10);
+    }
+
+    #[test]
+    fn opencode_command_detection_is_exact_and_json_only() {
+        assert!(is_opencode_json_command(
+            "/opt/bin/opencode",
+            &["--format".into(), "json".into()]
+        ));
+        assert!(is_opencode_json_command(
+            "C:/Tools/OPENCODE.EXE",
+            &["--format=json".into()]
+        ));
+        assert!(!is_opencode_json_command(
+            "opencode",
+            &["--format".into(), "text".into()]
+        ));
+        assert!(!is_opencode_json_command(
+            "other-opencode",
+            &["--format=json".into()]
+        ));
+    }
+
+    #[test]
+    fn opencode_jsonl_parser_rejects_bad_usage_failures_and_terminal_drift() {
+        let cases = [
+            "{not json}".to_owned(),
+            r#"{"type":"error","part":{},"error":{"message":"boom"}}"#.to_owned(),
+            r#"{"type":"step_finish","part":{"type":"step-finish","reason":"stop","cost":0,"tokens":{"input":1,"output":1,"reasoning":0,"cache":{"read":0,"write":0}}}}"#.to_owned(),
+            [
+                r#"{"type":"text","part":{"type":"text","text":"ok"}}"#,
+                r#"{"type":"step_finish","part":{"type":"step-finish","reason":"stop","cost":0,"tokens":{"input":1,"output":true,"reasoning":0,"cache":{"read":0,"write":0}}}}"#,
+            ]
+            .join("\n"),
+            [
+                r#"{"type":"text","part":{"type":"text","text":"ok"}}"#,
+                r#"{"type":"step_finish","part":{"type":"step-finish","reason":"stop","cost":0,"tokens":{"input":1,"output":1,"reasoning":0,"cache":{"read":0,"write":0},"extra":0}}}"#,
+            ]
+            .join("\n"),
+            [
+                r#"{"type":"text","part":{"type":"text","text":"ok"}}"#,
+                r#"{"type":"step_finish","part":{"type":"step-finish","reason":"error","cost":0,"tokens":{"input":1,"output":1,"reasoning":0,"cache":{"read":0,"write":0}}}}"#,
+            ]
+            .join("\n"),
+            [opencode_success_jsonl(), opencode_success_jsonl()].join("\n"),
+        ];
+        for jsonl in cases {
+            assert!(
+                parse_opencode_jsonl_reply(&jsonl, "m").is_err(),
+                "unexpectedly accepted {jsonl}"
+            );
+        }
+    }
+
     #[test]
     fn codex_command_transport_parses_raw_jsonl_and_traces_usage() {
         let _guard = model_trace_test_lock().lock().unwrap();
@@ -7618,11 +7926,68 @@ JSONL
         assert_eq!(reply.text, "final text");
         assert_eq!(reply.usage.input, 31);
         assert_eq!(reply.usage.cache_read, 13);
+        assert_eq!(reply.usage.cache_write, 0);
         assert_eq!(reply.usage.output, 17);
+        assert_eq!(reply.usage.reasoning, 5);
         let row: ModelTrace = serde_json::from_str(&fs::read_to_string(&trace).unwrap()).unwrap();
         assert_eq!(row.input_tokens, Some(31));
         assert_eq!(row.cache_read_tokens, Some(13));
+        assert_eq!(row.cache_write_tokens, Some(0));
         assert_eq!(row.output_tokens, Some(17));
+        assert_eq!(row.reasoning_tokens, Some(5));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn opencode_command_transport_parses_jsonl_and_traces_complete_usage() {
+        let _guard = model_trace_test_lock().lock().unwrap();
+        let root = temp_test_dir("opencode-command-trace");
+        fs::create_dir_all(&root).unwrap();
+        let opencode = root.join("opencode");
+        write_executable(
+            &opencode,
+            r#"#!/bin/sh
+cat <<'JSONL'
+{"type":"text","part":{"type":"text","text":"REMOVE final answer"}}
+{"type":"step_finish","part":{"type":"step-finish","reason":"stop","cost":0.01,"tokens":{"total":83,"input":31,"output":17,"reasoning":5,"cache":{"read":13,"write":7}}}}
+JSONL
+"#,
+        );
+        let trace = root.join("trace.jsonl");
+        let trace_file = File::create(&trace).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            trace_file
+                .set_permissions(fs::Permissions::from_mode(0o600))
+                .unwrap();
+        }
+        trace_file.sync_all().unwrap();
+        drop(trace_file);
+
+        let cfg = Config {
+            sub_llm_cmd: format!("{} --format json", opencode.display()),
+            clean_patterns: vec!["REMOVE ".into(), "input".into()],
+            ..Config::default()
+        };
+        unsafe { env::set_var("AZDAJA_MODEL_TRACE", &trace) };
+        let reply = call_model_reply("prompt", "openai/gpt-5.6-luna", &cfg, 0).unwrap();
+        unsafe { env::remove_var("AZDAJA_MODEL_TRACE") };
+
+        assert_eq!(reply.text, "final answer");
+        assert_eq!(reply.usage.input, 31);
+        assert_eq!(reply.usage.output, 17);
+        assert_eq!(reply.usage.reasoning, 5);
+        assert_eq!(reply.usage.cache_read, 13);
+        assert_eq!(reply.usage.cache_write, 7);
+        let row: ModelTrace = serde_json::from_str(&fs::read_to_string(&trace).unwrap()).unwrap();
+        assert_eq!(row.provider.as_deref(), Some("opencode"));
+        assert_eq!(row.model.as_deref(), Some("openai/gpt-5.6-luna"));
+        assert_eq!(row.input_tokens, Some(31));
+        assert_eq!(row.output_tokens, Some(17));
+        assert_eq!(row.reasoning_tokens, Some(5));
+        assert_eq!(row.cache_read_tokens, Some(13));
+        assert_eq!(row.cache_write_tokens, Some(7));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -7915,7 +8280,9 @@ JSONL
         let row: ModelTrace = serde_json::from_str(&fs::read_to_string(&trace).unwrap()).unwrap();
         assert_eq!(row.input_tokens, None);
         assert_eq!(row.cache_read_tokens, None);
+        assert_eq!(row.cache_write_tokens, None);
         assert_eq!(row.output_tokens, None);
+        assert_eq!(row.reasoning_tokens, None);
         fs::remove_dir_all(root).unwrap();
     }
 

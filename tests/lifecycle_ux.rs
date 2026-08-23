@@ -230,14 +230,12 @@ fn opencode_doctor_rejects_an_incompatible_agent_skills_shadow() {
 
     let codex_skill = scratch.0.join(".agents/skills/azdaja/SKILL.md");
     let current = fs::read_to_string(&codex_skill).unwrap();
-    fs::write(
-        &codex_skill,
-        current.replace(
-            "In Codex, activate `$azdaja` only for the current turn when the narrow frontmatter trigger matches",
-            "In Codex, activate before broad manual reads",
-        ),
-    )
-    .unwrap();
+    let incompatible = current.replace(
+        "Codex skill activation is per-turn. Activate `$azdaja` only for this turn when the narrow trigger matches.",
+        "Codex may solve matching tasks natively before activating `$azdaja`.",
+    );
+    assert_ne!(incompatible, current, "managed skill mutation source drift");
+    fs::write(&codex_skill, incompatible).unwrap();
 
     let rejected = run(binary, &scratch.0, &["doctor", "opencode"]);
     let (stdout, stderr) = text(&rejected);

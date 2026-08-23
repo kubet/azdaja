@@ -794,7 +794,10 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
             "gpt-5.6-luna",
         ),
         "gemini" => ("gemini --model {model} -p \"\"", "gemini-2.5-flash"),
-        "opencode" => ("opencode --pure run --model {model}", "openai/gpt-5.6-luna"),
+        "opencode" => (
+            "opencode --pure run --format json --model {model}",
+            "openai/gpt-5.6-luna",
+        ),
         _ => ("jcode-api", "gpt-5.6-luna"),
     }
 }
@@ -5874,13 +5877,15 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
         &mut trace,
         trace_path.as_deref(),
         format!(
-            "\n=== turn 0 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={root_session_id:?} category=turn outcome=succeeded degraded_transport={} failed_attempts_before_success={failed_root_attempts} provider={:?} model={:?} input={} output={} cache_read={} latency_ms={} ===\n{}\n",
+            "\n=== turn 0 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={root_session_id:?} category=turn outcome=succeeded degraded_transport={} failed_attempts_before_success={failed_root_attempts} provider={:?} model={:?} input={} output={} reasoning={} cache_read={} cache_write={} latency_ms={} ===\n{}\n",
             failed_root_attempts > 0,
             model_reply.provider,
             model_reply.model,
             model_reply.usage.input,
             model_reply.usage.output,
+            model_reply.usage.reasoning,
             model_reply.usage.cache_read,
+            model_reply.usage.cache_write,
             model_reply.latency_ms,
             model_reply.text
         ),
@@ -5979,13 +5984,15 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
                 &mut trace,
                 trace_path.as_deref(),
                 format!(
-                    "\n=== turn 1 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={repair_session_id:?} category=repair outcome=succeeded trigger={:?} provider={:?} model={:?} input={} output={} cache_read={} latency_ms={} ===\n{}\n",
+                    "\n=== turn 1 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={repair_session_id:?} category=repair outcome=succeeded trigger={:?} provider={:?} model={:?} input={} output={} reasoning={} cache_read={} cache_write={} latency_ms={} ===\n{}\n",
                     first_failure.kind,
                     repair_reply.provider,
                     repair_reply.model,
                     repair_reply.usage.input,
                     repair_reply.usage.output,
+                    repair_reply.usage.reasoning,
                     repair_reply.usage.cache_read,
+                    repair_reply.usage.cache_write,
                     repair_started.elapsed().as_millis(),
                     repair_reply.text
                 ),
@@ -6090,13 +6097,15 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
                         &mut trace,
                         trace_path.as_deref(),
                         format!(
-                            "\n=== turn 2 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={second_session_id:?} category=repair outcome=succeeded trigger={:?} provider={:?} model={:?} input={} output={} cache_read={} latency_ms={} ===\n{}\n",
+                            "\n=== turn 2 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={second_session_id:?} category=repair outcome=succeeded trigger={:?} provider={:?} model={:?} input={} output={} reasoning={} cache_read={} cache_write={} latency_ms={} ===\n{}\n",
                             repair_failure.kind,
                             second_reply.provider,
                             second_reply.model,
                             second_reply.usage.input,
                             second_reply.usage.output,
+                            second_reply.usage.reasoning,
                             second_reply.usage.cache_read,
+                            second_reply.usage.cache_write,
                             second_started.elapsed().as_millis(),
                             second_reply.text
                         ),
@@ -6188,13 +6197,15 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
                                 &mut trace,
                                 trace_path.as_deref(),
                                 format!(
-                                    "\n=== turn 3 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={third_session_id:?} category=repair outcome=succeeded trigger={:?} provider={:?} model={:?} input={} output={} cache_read={} latency_ms={} ===\n{}\n",
+                                    "\n=== turn 3 request_id={root_request_id:?} attempt={successful_root_attempt} session_id={third_session_id:?} category=repair outcome=succeeded trigger={:?} provider={:?} model={:?} input={} output={} reasoning={} cache_read={} cache_write={} latency_ms={} ===\n{}\n",
                                     second_failure.kind,
                                     third_reply.provider,
                                     third_reply.model,
                                     third_reply.usage.input,
                                     third_reply.usage.output,
+                                    third_reply.usage.reasoning,
                                     third_reply.usage.cache_read,
+                                    third_reply.usage.cache_write,
                                     third_started.elapsed().as_millis(),
                                     third_reply.text
                                 ),
@@ -6668,6 +6679,7 @@ mod tests {
     fn managed_coworker_adapters_are_luna_only_and_call_bounded() {
         assert_eq!(adapter("codex").1, "gpt-5.6-luna");
         assert_eq!(adapter("opencode").1, "openai/gpt-5.6-luna");
+        assert!(adapter("opencode").0.contains("--format json"));
         assert_eq!(MANAGED_COWORKER_CALL_LIMIT, 64);
         assert!(!adapter("codex").1.contains("gpt-5.4"));
         assert!(!adapter("opencode").1.contains("gpt-5.4"));
