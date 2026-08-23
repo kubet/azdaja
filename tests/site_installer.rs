@@ -532,6 +532,9 @@ fn installers_are_identical_and_bind_fresh_v013_assets_and_sums() {
     assert!(text.contains("printf 'Next: azdaja doctor"));
     assert!(text.contains("Select integrations  ↑/↓ move  Space toggle  Enter install"));
     assert!(text.contains("menu_selected_$menu_cursor"));
+    assert!(text.contains("for name in jcode claude codex gemini opencode"));
+    assert!(text.contains("● installed"));
+    assert!(text.contains("\\033[32m"));
     assert!(text.contains("interactive selection needs a terminal"));
 }
 

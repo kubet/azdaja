@@ -206,14 +206,20 @@ prompt_targets() {
     command -v od >/dev/null 2>&1 || fail 'interactive selection requires od; rerun with --all or name targets' 2
 
     menu_count=0
-    for name in $DETECTED; do
+    for name in jcode claude codex gemini opencode; do
       menu_count=$((menu_count + 1))
       eval "menu_name_$menu_count=\$name"
       eval "menu_selected_$menu_count=false"
+      case " $DETECTED " in
+        *" $name "*) eval "menu_installed_$menu_count=true" ;;
+        *) eval "menu_installed_$menu_count=false" ;;
+      esac
     done
     menu_cursor=1
     menu_rendered=false
     menu_lines=$((menu_count + 1))
+    menu_color=true
+    [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ] || menu_color=false
 
     render_menu() {
       if [ "$menu_rendered" = true ]; then
@@ -224,9 +230,18 @@ prompt_targets() {
       while [ "$menu_index" -le "$menu_count" ]; do
         eval "menu_name=\$menu_name_$menu_index"
         eval "menu_selected=\$menu_selected_$menu_index"
+        eval "menu_installed=\$menu_installed_$menu_index"
         if [ "$menu_index" -eq "$menu_cursor" ]; then menu_pointer='›'; else menu_pointer=' '; fi
         if [ "$menu_selected" = true ]; then menu_mark='x'; else menu_mark=' '; fi
-        printf '\r\033[K%s [%s] %s\n' "$menu_pointer" "$menu_mark" "$menu_name" > /dev/tty
+        if [ "$menu_installed" = true ]; then
+          if [ "$menu_color" = true ]; then
+            printf '\r\033[K%s [%s] \033[32m%s  ● installed\033[0m\n' "$menu_pointer" "$menu_mark" "$menu_name" > /dev/tty
+          else
+            printf '\r\033[K%s [%s] %s  installed\n' "$menu_pointer" "$menu_mark" "$menu_name" > /dev/tty
+          fi
+        else
+          printf '\r\033[K%s [%s] %s\n' "$menu_pointer" "$menu_mark" "$menu_name" > /dev/tty
+        fi
         menu_index=$((menu_index + 1))
       done
       menu_rendered=true
