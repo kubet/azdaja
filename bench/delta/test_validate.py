@@ -22,6 +22,8 @@ class DeltaPlanTests(unittest.TestCase):
         oolong.mkdir(parents=True)
         for name in ("plan.json", "prompt.txt", "candidate-prefix.txt", "run.py", "fixture.py"):
             shutil.copyfile(HERE / name, self.delta / name)
+        (self.delta / "results").mkdir()
+        shutil.copyfile(HERE / "results/r8-result.json", self.delta / "results/r8-result.json")
         source_oolong = HERE.parent / "oolong"
         for name in ("context-131072.txt", "row-645.json"):
             shutil.copyfile(source_oolong / name, oolong / name)
@@ -56,6 +58,7 @@ class DeltaPlanTests(unittest.TestCase):
         self.assertEqual(result["selected_records"], 64)
         self.assertEqual(result["unique_decision_evidence"], 64)
         self.assertEqual(result["maximum_candidate_inner_attempts_per_harness"], 1)
+        self.assertEqual(result["baseline"]["sha256"], self.plan["baseline"]["sha256"])
 
     def test_model_and_reasoning_are_luna_low_only(self):
         self.assert_blocked(lambda p: p["model"].__setitem__("codex", "gpt-5.4-mini"))
@@ -67,13 +70,16 @@ class DeltaPlanTests(unittest.TestCase):
         self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_config_max_calls_per_cell", 2))
         self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_config_cell_timeout_seconds", 60))
         self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_transaction_ceiling", 2))
+        self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_only_followup", False))
+        self.assert_blocked(lambda p: p["execution"].__setitem__("new_outer_provider_invocations", 1))
+        self.assert_blocked(lambda p: p["execution"].__setitem__("new_inner_provider_invocations", 4))
         self.assert_blocked(lambda p: p["gates"].__setitem__("native_inner_attempts_must_equal", 1))
 
     def test_compact_shard_contract_is_exact(self):
         self.assert_blocked(lambda p: p["execution"].__setitem__("max_unique_items_per_shard", 80))
         self.assert_blocked(lambda p: p["execution"].__setitem__("workers", 12))
 
-    def test_schedule_is_two_parallel_harness_pairs(self):
+    def test_schedule_is_one_parallel_direct_candidate_pair(self):
         self.assert_blocked(lambda p: p["execution"].__setitem__("parallel_groups", [["codex/native"]]))
 
     def test_prompt_and_fixture_hashes_are_bound(self):
@@ -87,6 +93,8 @@ class DeltaPlanTests(unittest.TestCase):
         self.assert_blocked(lambda p: p["runtime"].__setitem__("codex_sha256", "0" * 64))
         self.assert_blocked(lambda p: p["runtime"].__setitem__("opencode_version", "0.0.0"))
         self.assert_blocked(lambda p: p["runner"].__setitem__("sha256", "0" * 64))
+        self.assert_blocked(lambda p: p["baseline"].__setitem__("sha256", "0" * 64))
+        self.assert_blocked(lambda p: p["baseline"]["native"]["codex"].__setitem__("wall_seconds", 1.0))
         self.assert_blocked(lambda p: p["accounting"]["inner_trace_fields"].remove("reasoning_tokens"))
         self.assert_blocked(
             lambda p: p["accounting"].__setitem__("normalized_input_semantics", "fresh input only")
@@ -96,11 +104,17 @@ class DeltaPlanTests(unittest.TestCase):
         )
         self.assert_blocked(lambda p: p["accounting"].__setitem__("missing_usage_blocks_efficiency", False))
 
-    def test_codex_workspace_write_and_owner_only_workdir_are_exact(self):
-        self.assert_runner_blocked(lambda text: text.replace('"--cd",\n            str(work)', '"-C",\n            str(work)'))
-        self.assert_runner_blocked(lambda text: text.replace('"workspace-write"', '"read-only"', 1))
-        self.assert_runner_blocked(lambda text: text.replace('"sandbox_workspace_write.network_access=true"', '"sandbox_workspace_write.network_access=false"', 1))
-        self.assert_runner_blocked(lambda text: text.replace('            "--add-dir",\n            str(work.parent),\n', '', 1))
+    def test_direct_candidate_and_owner_only_workdir_are_exact(self):
+        self.assert_runner_blocked(
+            lambda text: text.replace('    command = [str(work / "azdaja-evaluate")]\n', '', 1)
+        )
+        self.assert_runner_blocked(
+            lambda text: text.replace(
+                "pool.submit(invoke_candidate_direct, campaign, harness)",
+                "pool.submit(invoke, campaign, harness)",
+                1,
+            )
+        )
         self.assert_runner_blocked(lambda text: text.replace("    ensure_owner_directory(work)\n", "", 1))
 
     def test_quality_and_efficiency_gates_are_required(self):
@@ -108,6 +122,8 @@ class DeltaPlanTests(unittest.TestCase):
         self.assert_blocked(lambda p: p["gates"].__setitem__("candidate_outer_uncached_tokens_must_be_lower", False))
         self.assert_blocked(lambda p: p["gates"].__setitem__("candidate_total_uncached_tokens_must_be_lower", False))
         self.assert_blocked(lambda p: p["gates"].__setitem__("candidate_wall_seconds_must_be_lower", False))
+        self.assert_blocked(lambda p: p["gates"].__setitem__("frozen_native_baseline_required", False))
+        self.assert_blocked(lambda p: p["gates"].__setitem__("new_provider_invocations_must_equal", 4))
 
     def test_extra_keys_fail_closed(self):
         self.assert_blocked(lambda p: p.__setitem__("notes", "not allowed"))

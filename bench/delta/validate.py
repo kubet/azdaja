@@ -55,11 +55,11 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     root = plan_path.parent
     plan = exact_keys(
         json.loads(plan_path.read_text(encoding="utf-8")),
-        {"schema", "stage", "model", "source", "runtime", "fixture", "prompts", "runner", "execution", "accounting", "gates"},
+        {"schema", "stage", "model", "source", "runtime", "fixture", "prompts", "runner", "baseline", "execution", "accounting", "gates"},
         "plan",
     )
-    require(plan["schema"] == "azdaja-delta-ladder-v3", "schema")
-    require(plan["stage"] == "synthetic-clear-sms-metadata-projection-r8", "stage")
+    require(plan["schema"] == "azdaja-delta-followup-v1", "schema")
+    require(plan["stage"] == "synthetic-clear-sms-metadata-projection-r9-direct-followup", "stage")
 
     model = exact_keys(plan["model"], {"codex", "opencode", "outer_reasoning", "inner_reasoning"}, "model")
     require(model == {
@@ -188,24 +188,53 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     for field in (
         "ensure_owner_directory(root)",
         "ensure_owner_directory(work)",
-        '"--sandbox",\n            "workspace-write"',
-        '"--add-dir",\n            str(work.parent)',
-        '"sandbox_workspace_write.network_access=true"',
-        '"--cd",\n            str(work)',
         "write_candidate_driver(work, env, harness)",
         "llm_batch([prompt], workers=6, model=",
         '"$AZDAJA" final "$sid"',
+        "def invoke_candidate_direct",
+        'command = [str(work / "azdaja-evaluate")]',
+        "pool.submit(invoke_candidate_direct, campaign, harness)",
     ):
         require(field in runner_text, f"runner missing workdir custody contract: {field}")
-    require('"-C",\n            str(work)' not in runner_text, "runner must use explicit --cd")
+    require("pool.submit(invoke," not in runner_text, "runner must not launch new native or outer candidate arms")
+
+    baseline = exact_keys(plan["baseline"], {"path", "sha256", "plan_sha256", "native"}, "baseline")
+    baseline_path = contained_file(root, baseline["path"], "baseline result")
+    require(sha256(baseline_path) == baseline["sha256"], "baseline result hash")
+    require(baseline["plan_sha256"] == "a4c3aa0ad272484f75b44504384af2438ff4916df513ea52a55c8849c36581ce", "baseline plan hash")
+    baseline_result = json.loads(baseline_path.read_text(encoding="utf-8"))
+    require(baseline_result.get("schema") == "azdaja-luna-delta-cheap-gate/v1", "baseline schema")
+    require(baseline_result.get("plan_sha256") == baseline["plan_sha256"], "baseline embedded plan hash")
+    native = exact_keys(baseline["native"], {"codex", "opencode"}, "baseline native")
+    expected_native = {
+        "codex": {"answer": 42, "model": "gpt-5.6-luna", "outer_uncached_tokens": 32862, "outer_gross_tokens": 150366, "wall_seconds": 23.862, "inner_attempts": 0},
+        "opencode": {"answer": 42, "model": "openai/gpt-5.6-luna", "outer_uncached_tokens": 70397, "outer_gross_tokens": 238333, "wall_seconds": 22.479, "inner_attempts": 0},
+    }
+    require(native == expected_native, "baseline native pins")
+    baseline_rows = {row.get("harness"): row for row in baseline_result.get("calls", []) if row.get("arm") == "native"}
+    require(set(baseline_rows) == {"codex", "opencode"}, "baseline native rows")
+    for harness, expected in expected_native.items():
+        row = baseline_rows[harness]
+        observed = {
+            "answer": row.get("answer"),
+            "model": row.get("model"),
+            "outer_uncached_tokens": row.get("outer_uncached_tokens"),
+            "outer_gross_tokens": row.get("outer_gross_tokens"),
+            "wall_seconds": row.get("wall_seconds"),
+            "inner_attempts": row.get("inner", {}).get("attempts"),
+        }
+        require(observed == expected and row.get("correct") is True, f"baseline {harness} identity")
 
     execution = exact_keys(
         plan["execution"],
-        {"repetitions", "retry", "timeout_seconds", "candidate_inner_attempt_ceiling", "candidate_transaction_ceiling", "candidate_config_max_calls_per_cell", "candidate_config_cell_timeout_seconds", "max_unique_items_per_shard", "max_chars_per_shard", "workers", "codex_sandbox", "codex_workspace_network_access", "codex_add_dir", "parallel_groups"},
+        {"repetitions", "retry", "timeout_seconds", "candidate_only_followup", "new_outer_provider_invocations", "new_inner_provider_invocations", "candidate_inner_attempt_ceiling", "candidate_transaction_ceiling", "candidate_config_max_calls_per_cell", "candidate_config_cell_timeout_seconds", "max_unique_items_per_shard", "max_chars_per_shard", "workers", "parallel_groups"},
         "execution",
     )
     require(execution["repetitions"] == 1 and execution["retry"] is False, "one-shot no-retry contract")
     require(execution["timeout_seconds"] == 300, "timeout")
+    require(execution["candidate_only_followup"] is True, "candidate-only follow-up")
+    require(execution["new_outer_provider_invocations"] == 0, "no new outer provider calls")
+    require(execution["new_inner_provider_invocations"] == 2, "two new inner provider calls")
     require(execution["candidate_inner_attempt_ceiling"] == 1, "inner call ceiling")
     require(execution["candidate_transaction_ceiling"] == 1, "transaction ceiling")
     require(execution["candidate_config_max_calls_per_cell"] == 1, "runtime call ceiling")
@@ -213,12 +242,8 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     require(execution["max_unique_items_per_shard"] == 256, "item shard cap")
     require(execution["max_chars_per_shard"] == 65536, "character shard cap")
     require(execution["workers"] == 6, "worker cap")
-    require(execution["codex_sandbox"] == "workspace-write", "Codex sandbox")
-    require(execution["codex_workspace_network_access"] is True, "Codex nested-provider network")
-    require(execution["codex_add_dir"] == "owner-private arm root", "Codex owner-private arm add-dir")
     require(execution["parallel_groups"] == [
-        ["codex/native", "opencode/native"],
-        ["codex/candidate", "opencode/candidate"],
+        ["codex/candidate-direct", "opencode/candidate-direct"],
     ], "schedule")
 
     accounting = exact_keys(
@@ -243,13 +268,14 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
 
     gates = exact_keys(
         plan["gates"],
-        {"quality_first", "candidate_exact_required", "efficiency_requires_both_correct", "native_inner_attempts_must_equal", "candidate_outer_uncached_tokens_must_be_lower", "candidate_total_uncached_tokens_must_be_lower", "candidate_wall_seconds_must_be_lower", "candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal", "single_run_is_diagnostic_only"},
+        {"quality_first", "candidate_exact_required", "efficiency_requires_both_correct", "native_inner_attempts_must_equal", "candidate_outer_uncached_tokens_must_be_lower", "candidate_total_uncached_tokens_must_be_lower", "candidate_wall_seconds_must_be_lower", "candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal", "frozen_native_baseline_required", "new_provider_invocations_must_equal", "single_run_is_diagnostic_only"},
         "gates",
     )
-    require(all(value is True for key, value in gates.items() if key not in {"native_inner_attempts_must_equal", "candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal"}), "boolean gates")
+    require(all(value is True for key, value in gates.items() if key not in {"native_inner_attempts_must_equal", "candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal", "new_provider_invocations_must_equal"}), "boolean gates")
     require(gates["native_inner_attempts_must_equal"] == 0, "native inner attempt gate")
     require(gates["candidate_inner_attempts_must_equal"] == 1, "inner attempt gate")
     require(gates["candidate_inner_failures_must_equal"] == 0, "inner failure gate")
+    require(gates["new_provider_invocations_must_equal"] == 2, "provider invocation gate")
 
     return {
         "valid": True,
@@ -262,6 +288,7 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
         "source": source,
         "runtime": runtime,
         "accounting": accounting,
+        "baseline": baseline,
     }
 
 

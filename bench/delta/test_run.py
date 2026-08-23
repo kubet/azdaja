@@ -1,5 +1,6 @@
 import os
 import json
+import inspect
 import re
 import shutil
 import stat
@@ -70,6 +71,15 @@ class DeltaRunnerContractTests(unittest.TestCase):
             self.assertIn(f'model="{model}"', cell)
             self.assertEqual(cell.count("FINAL("), 1)
             self.assertIn('FINAL("Answer: " + str(ham))', cell)
+
+    def test_followup_launches_only_the_direct_candidate_driver(self):
+        invoke_source = inspect.getsource(run.invoke_candidate_direct)
+        main_source = inspect.getsource(run.main)
+        self.assertIn('command = [str(work / "azdaja-evaluate")]', invoke_source)
+        self.assertNotIn("CODEX", invoke_source)
+        self.assertNotIn("OPENCODE", invoke_source)
+        self.assertIn("pool.submit(invoke_candidate_direct, campaign, harness)", main_source)
+        self.assertNotIn("pool.submit(invoke,", main_source)
 
     def test_driver_is_owner_executable_and_one_lifecycle(self):
         with tempfile.TemporaryDirectory() as temporary:

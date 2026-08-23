@@ -24,6 +24,7 @@ BENCH = REPO / "bench/delta"
 PLAN = BENCH / "plan.json"
 PLAN_DATA = json.loads(PLAN.read_text(encoding="utf-8"))
 RUNTIME = PLAN_DATA["runtime"]
+BASELINE = BENCH / PLAN_DATA["baseline"]["path"]
 BINARY = Path(RUNTIME["azdaja_release_path"])
 CODEX = Path(RUNTIME["codex_path"])
 OPENCODE = Path(RUNTIME["opencode_path"])
@@ -487,83 +488,29 @@ def run_bounded(command: list[str], *, stdin: bytes | None, env: dict[str, str],
         return 124, stdout, stderr, True
 
 
-def invoke(campaign: Path, harness: str, arm: str) -> dict[str, Any]:
-    work, env, trace = prepare_arm(campaign, harness, arm)
-    shared = (BENCH / "prompt.txt").read_text(encoding="utf-8")
-    prefix = (BENCH / "candidate-prefix.txt").read_text(encoding="utf-8") if arm == "candidate" else ""
-    prompt = prefix + ("\n" if prefix else "") + shared
-    if harness == "codex":
-        command = [
-            str(CODEX),
-            "exec",
-            "--ephemeral",
-            "--skip-git-repo-check",
-            "--ignore-user-config",
-            "--ignore-rules",
-            "--sandbox",
-            "workspace-write",
-            "--add-dir",
-            str(work.parent),
-            "-c",
-            "model_reasoning_effort=low",
-            "-c",
-            "sandbox_workspace_write.network_access=true",
-            "-c",
-            "features.multi_agent=false",
-            "-c",
-            "features.multi_agent_v2=false",
-            "-c",
-            "agents.enabled=false",
-            "-c",
-            "web_search=disabled",
-            "--json",
-            "--model",
-            "gpt-5.6-luna",
-            "--cd",
-            str(work),
-            "-",
-        ]
-        stdin = prompt.encode("utf-8")
-    else:
-        command = [
-            str(OPENCODE),
-            "--pure",
-            "run",
-            "--model",
-            "openai/gpt-5.6-luna",
-            "--variant",
-            "low",
-            "--format",
-            "json",
-            "--dir",
-            str(work),
-            prompt,
-        ]
-        stdin = None
+def invoke_candidate_direct(campaign: Path, harness: str) -> dict[str, Any]:
+    work, env, trace = prepare_arm(campaign, harness, "candidate")
+    command = [str(work / "azdaja-evaluate")]
     started = time.monotonic()
-    returncode, stdout, stderr, timed_out = run_bounded(command, stdin=stdin, env=env, cwd=work)
+    returncode, stdout, stderr, timed_out = run_bounded(command, stdin=None, env=env, cwd=work)
     wall = time.monotonic() - started
     parse_error: str | None = None
     answer: int | None = None
-    usage = {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}}
     if not timed_out and returncode == 0:
         try:
-            answer, usage = parse_codex(stdout) if harness == "codex" else parse_opencode(stdout)
-        except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
+            answer = exact_answer([stdout.decode("utf-8", "strict")])
+        except (UnicodeError, ValueError) as exc:
             parse_error = str(exc)
     try:
         inner = trace_summary(trace)
     except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
         inner = {"error": str(exc), "attempts": -1, "failures": -1, "successes": -1, "usage": {}, "measured_uncached_tokens": None, "measured_gross_tokens": None, "usage_complete": False, "usage_complete_successes": 0, "missing_usage_fields": [], "models": [], "providers": [], "categories": [], "error_categories": [], "error_sha256": [], "error_summaries": []}
-    outer_uncached = usage_uncached_total(usage)
-    outer_gross = usage_gross_total(usage)
     inner_uncached = inner.get("measured_uncached_tokens")
     inner_gross = inner.get("measured_gross_tokens")
-    measured_uncached = outer_uncached + inner_uncached if finite_int(inner_uncached) else None
-    measured_gross = outer_gross + inner_gross if finite_int(inner_gross) else None
     return {
         "harness": harness,
-        "arm": arm,
+        "arm": "candidate",
+        "execution": "direct-azdaja-driver",
         "model": "gpt-5.6-luna" if harness == "codex" else "openai/gpt-5.6-luna",
         "answer": answer,
         "correct": answer == GOLD,
@@ -571,12 +518,12 @@ def invoke(campaign: Path, harness: str, arm: str) -> dict[str, Any]:
         "timed_out": timed_out,
         "parse_error": parse_error,
         "wall_seconds": round(wall, 3),
-        "outer_usage": usage,
-        "outer_uncached_tokens": outer_uncached,
-        "outer_gross_tokens": outer_gross,
+        "outer_usage": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+        "outer_uncached_tokens": 0,
+        "outer_gross_tokens": 0,
         "inner": inner,
-        "measured_total_uncached_tokens": measured_uncached,
-        "measured_total_gross_tokens": measured_gross,
+        "measured_total_uncached_tokens": inner_uncached if finite_int(inner_uncached) else None,
+        "measured_total_gross_tokens": inner_gross if finite_int(inner_gross) else None,
         "stdout_bytes": len(stdout),
         "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
         "stderr_bytes": len(stderr),
@@ -603,15 +550,17 @@ def main() -> int:
         raise RuntimeError("generated context hash drift")
     if not BINARY.is_file() or not os.access(BINARY, os.X_OK):
         raise RuntimeError("release binary missing")
+    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
+    native_results = [row for row in baseline["calls"] if row.get("arm") == "native"]
+    if {row.get("harness") for row in native_results} != {"codex", "opencode"}:
+        raise RuntimeError("frozen native baseline mismatch")
     scratch = Path(os.environ["JCODE_SCRATCH_DIR"])
-    campaign = Path(tempfile.mkdtemp(prefix="azdaja-luna-delta-gate-", dir=scratch))
-    results: list[dict[str, Any]] = []
+    campaign = Path(tempfile.mkdtemp(prefix="azdaja-luna-delta-followup-", dir=scratch))
     try:
-        for arms in (("native",), ("candidate",)):
-            arm = arms[0]
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-                futures = [pool.submit(invoke, campaign, harness, arm) for harness in ("codex", "opencode")]
-                results.extend(future.result() for future in futures)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(invoke_candidate_direct, campaign, harness) for harness in ("codex", "opencode")]
+            candidate_results = [future.result() for future in futures]
+        results = native_results + candidate_results
         results.sort(key=lambda row: (row["harness"], 0 if row["arm"] == "native" else 1))
         deltas: dict[str, Any] = {}
         overall = True
@@ -640,16 +589,20 @@ def main() -> int:
                 "diagnostic_win": won,
             }
         summary = {
-            "schema": "azdaja-luna-delta-cheap-gate/v1",
+            "schema": "azdaja-luna-delta-followup/v1",
             "plan_sha256": validated["plan_sha256"],
+            "baseline_result_sha256": validated["baseline"]["sha256"],
+            "baseline_plan_sha256": validated["baseline"]["plan_sha256"],
             "fixture": "synthetic clear SMS May subset with irrelevant metadata",
             "gold": GOLD,
-            "parallel_groups": [["codex/native", "opencode/native"], ["codex/candidate", "opencode/candidate"]],
+            "new_provider_invocations": 2,
+            "parallel_groups": [["codex/candidate-direct", "opencode/candidate-direct"]],
             "calls": results,
             "deltas": deltas,
             "overall_diagnostic_win": overall,
             "limitations": [
-                "one paired observation per harness",
+                "candidate-only follow-up against the exact frozen r8 native baseline",
+                "native and candidate observations were not concurrent",
                 "uncached token totals are input minus cache-read plus cache-write plus output plus reasoning",
                 "all-in totals require complete five-field usage for every successful inner attempt",
                 "diagnostic result, not a robustness or general-superiority claim",

@@ -2,7 +2,7 @@
 
 This is a one-shot diagnostic of Azdaja's intended metadata-projection advantage. It is not a general benchmark or a claim of broad superiority.
 
-## Frozen r8 fixture
+## Frozen r9 direct follow-up
 
 `fixture.py` deterministically generates a public 1,306,163-byte context with 306 records. Exactly 64 May records require semantic spam-versus-ham classification. Their long `User` fields are irrelevant synthetic metadata, while each `Instance` is complete decision evidence. The selected set has 64 unique instances, a 7,655-byte compact projection, and a frozen answer of 42 ham messages.
 
@@ -10,15 +10,15 @@ The messages use clear legitimate and unsolicited-scam categories. This reduces 
 
 ## Execution contract
 
-Both harnesses use GPT-5.6 Luna at low reasoning.
+Both harnesses use GPT-5.6 Luna at low reasoning. r9 reuses only the exact correct native rows from the frozen r8 result, then makes exactly two new model calls through Azdaja.
 
-- Codex-native and OpenCode-native run in parallel.
-- Codex-candidate and OpenCode-candidate then run in parallel.
-- Every arm has one 300-second timeout and no retry.
+- The r8 Codex-native and OpenCode-native rows are hash-bound as the baseline. r9 makes no new native or outer-model call.
+- The direct Codex-backed and OpenCode-backed Azdaja candidates run in parallel.
+- Each new candidate has one 300-second timeout and no retry.
 - Every arm runs in an owner-only `0700` work directory.
 - The release Azdaja binary and resolved Codex/OpenCode executable paths, versions, and SHA-256 hashes are exact plan pins.
-- Codex is pinned to `--sandbox workspace-write --cd <arm-workdir>`.
-- Codex adds the isolated owner-private arm root as writable so nested provider state and temporary files remain usable without exposing any other campaign arm. Workspace network transport is enabled for the nested Luna call. Web search remains disabled.
+- The benchmark invokes `./azdaja-evaluate` directly. There is no candidate outer model relay and therefore no zero-value outer usage hidden in the total.
+- The managed Codex inner adapter remains ephemeral, read-only, isolated, low-reasoning, and web-search-disabled. The OpenCode inner adapter remains pure and low-reasoning.
 - Candidate config is runtime-patched to `max_calls_per_cell = 1`.
 - Candidate config is runtime-patched to a 180-second cell timeout inside the unchanged 300-second arm timeout.
 - The candidate outer harness must run `./azdaja-evaluate` exactly once and must not read the context itself.
@@ -27,7 +27,7 @@ Both harnesses use GPT-5.6 Luna at low reasoning.
 
 ## Gates
 
-Quality is evaluated first. Efficiency is compared only when native and candidate both return the exact frozen answer for a harness. A positive diagnostic delta requires all of the following on both Codex and OpenCode:
+Quality is evaluated first. Efficiency is compared only when the frozen native row and the new direct candidate both return the exact frozen answer for a harness. A positive diagnostic delta requires all of the following on both Codex and OpenCode:
 
 1. the native arm uses zero inner attempts
 2. the candidate uses exactly one successful inner attempt and no failed inner attempt
@@ -53,6 +53,7 @@ The normalized `input` field is total prompt input including cache reads. Codex 
 - r6 was a new diagnostic fixture and an outcome-independent activation repair. Its one live attempt stopped while resolving the parallel native group because OpenCode's fresh-input counter was incorrectly treated as total input. The empty result artifact and exception are recorded in `results/r6-failure.json`. The candidate group never started, and no efficiency claim was made.
 - r7 kept the frozen r6 fixture and execution contract, but normalized OpenCode fresh input plus cache reads into the same terminal representation as Codex before applying the preregistered uncached-token formula. Its exact result is frozen at `results/r7-result.json`. Both native arms returned the exact answer. Both candidate arms entered exactly one inner attempt, but those attempts failed before producing usage or an answer. No efficiency claim was made.
 - r8 reduced the semantic batch from 226 to 64 clear messages while retaining a context above 1 MiB, bound the full isolated arm root for nested Codex state, raised only the candidate cell timeout, and added a provider-free end-to-end candidate lifecycle test for both structured harness transports. Its exact result is frozen at `results/r8-result.json`. Both native arms were exact. Both candidate inner calls succeeded with complete usage and large token reductions, but the unnecessary outer model relay did not return the driver's answer unchanged. No efficiency claim was made.
+- r9 removes that redundant relay. It is explicitly a candidate-only follow-up against the hash-bound r8 native rows, not a fresh concurrent paired run. It permits exactly two new provider calls, one through each managed harness adapter, and was frozen and pushed before either call.
 
 ## Provider-free validation
 
