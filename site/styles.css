@@ -16,10 +16,8 @@ h1{margin:0;color:var(--red);font-size:clamp(1.3rem,2.6vw,1.7rem);font-weight:30
 .copy p:first-child::first-letter{float:left;color:var(--red);font-size:3.15em;line-height:.8;padding:.05em .08em 0 0}
 .copy p+p::first-letter{color:var(--red)}
 .install{width:100%;max-width:42rem;margin-top:clamp(30px,5svh,46px)}
-.install p{max-width:37rem;margin:0 auto;color:rgba(36,28,18,.86);font-size:.94rem;line-height:1.42;text-wrap:pretty}
-.install p+p{margin-top:.75rem}
-.install-command{display:block;width:100%;margin:.8rem 0;padding:.3rem 0;color:rgba(36,28,18,.8);font:600 .67rem/1.4 "SFMono-Regular",Consolas,monospace;white-space:nowrap;overflow-x:auto;overscroll-behavior-inline:contain;text-align:left}
+.install-command{display:block;width:100%;padding:.3rem 0;color:rgba(36,28,18,.8);font:600 .67rem/1.4 "SFMono-Regular",Consolas,monospace;white-space:nowrap;overflow-x:auto;overscroll-behavior-inline:contain;text-align:left}
 .install-command::first-letter{color:var(--red)}
 footer{margin-top:14px;font-size:.72rem;letter-spacing:.08em}
 footer a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
-@media(max-width:520px){main{width:calc(100% - 34px);padding:36px 0 44px}img{width:108px;margin-bottom:24px}h1{font-size:1.18rem;letter-spacing:.17em}.copy{margin-top:24px}.copy p{font-size:1.05rem}.install{margin-top:36px}.install p{font-size:.9rem}.install-command{font-size:.59rem}}
+@media(max-width:520px){main{width:calc(100% - 34px);padding:36px 0 44px}img{width:108px;margin-bottom:24px}h1{font-size:1.18rem;letter-spacing:.17em}.copy{margin-top:24px}.copy p{font-size:1.05rem}.install{margin-top:36px}.install-command{font-size:.59rem}}
