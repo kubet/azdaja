@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-VERSION=0.1.3
+VERSION=0.1.4
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 OUT=${1:-$ROOT/dist-v$VERSION}
 DARWIN=azdaja-v$VERSION-darwin-arm64

@@ -39,7 +39,7 @@ fn reviewed_notice_license_and_font_ofl_bytes_are_preserved() {
 }
 
 #[test]
-fn cargo_package_list_is_the_exact_twelve_file_allowlist() {
+fn cargo_package_list_is_the_exact_thirteen_file_allowlist() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = Command::new("cargo")
         .args(["package", "--list", "--allow-dirty"])
@@ -69,6 +69,7 @@ fn cargo_package_list_is_the_exact_twelve_file_allowlist() {
             "assets/SKILL.md",
             "assets/config.toml",
             "src/banner.rs",
+            "src/dashboard.rs",
             "src/lib.rs",
             "src/main.rs",
         ]
@@ -105,8 +106,8 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads()
         std::process::id()
     ));
     fs::create_dir(&dist).unwrap();
-    let darwin = dist.join("azdaja-v0.1.3-darwin-arm64");
-    let linux = dist.join("azdaja-v0.1.3-linux-x86_64");
+    let darwin = dist.join("azdaja-v0.1.4-darwin-arm64");
+    let linux = dist.join("azdaja-v0.1.4-linux-x86_64");
     fs::write(&darwin, b"raw darwin binary").unwrap();
     fs::write(&linux, b"raw linux binary").unwrap();
     let output = Command::new("sh")
@@ -133,8 +134,8 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads()
     let lines: Vec<_> = sums.lines().collect();
     assert_eq!(lines.len(), 4);
     for name in [
-        "azdaja-v0.1.3-darwin-arm64",
-        "azdaja-v0.1.3-linux-x86_64",
+        "azdaja-v0.1.4-darwin-arm64",
+        "azdaja-v0.1.4-linux-x86_64",
         "LICENSE",
         "THIRD-PARTY-NOTICES.md",
     ] {

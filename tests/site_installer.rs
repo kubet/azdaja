@@ -208,7 +208,7 @@ fn local_candidate(scratch: &Path) -> PathBuf {
 fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     let release = root.join(name);
     fs::create_dir_all(&release).unwrap();
-    for asset in ["azdaja-v0.1.3-darwin-arm64", "azdaja-v0.1.3-linux-x86_64"] {
+    for asset in ["azdaja-v0.1.4-darwin-arm64", "azdaja-v0.1.4-linux-x86_64"] {
         fs::copy(candidate, release.join(asset)).unwrap();
     }
     let source = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -223,7 +223,7 @@ fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     fs::write(
         release.join("SHA256SUMS"),
         format!(
-            "{digest}  azdaja-v0.1.3-darwin-arm64\n{digest}  azdaja-v0.1.3-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
+            "{digest}  azdaja-v0.1.4-darwin-arm64\n{digest}  azdaja-v0.1.4-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
         ),
     )
     .unwrap();
@@ -464,14 +464,14 @@ fn assert_alias_identity_and_local_caps(home: &Path, bin: &Path, path: &str) {
             let help = String::from_utf8(short_output.stdout).unwrap();
             assert_eq!(
                 help,
-                "AZDAJA v0.1.3 — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
+                "AZDAJA v0.1.4 — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
             );
         }
     }
 }
 
 #[test]
-fn installers_are_identical_and_bind_fresh_v013_assets_and_sums() {
+fn installers_are_identical_and_bind_fresh_v014_assets_and_sums() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let site = fs::read(root.join("site/install")).unwrap();
     let top = fs::read(root.join("install.sh")).unwrap();
@@ -511,7 +511,7 @@ fn installers_are_identical_and_bind_fresh_v013_assets_and_sums() {
     );
 
     let text = String::from_utf8(site).unwrap();
-    assert_eq!(text.matches("VERSION=0.1.3").count(), 1);
+    assert_eq!(text.matches("VERSION=0.1.4").count(), 1);
     assert!(text.contains("RELEASE_BASE=https://azdaja.dev/releases/v$VERSION"));
     assert!(text.contains("$BASE_URL/SHA256SUMS"));
     assert!(text.contains("azdaja-v$VERSION-darwin-arm64"));
@@ -569,7 +569,7 @@ fn interactive_selection_installs_only_the_chosen_detected_subset() {
     assert_eq!(
         stdout,
         format!(
-            "Installed: azdaja v0.1.3\nIntegrations: jcode, codex\nNext: {} doctor\n",
+            "Installed: azdaja v0.1.4\nIntegrations: jcode, codex\nNext: {} doctor\n",
             shell_quoted(&bin.join("azdaja"))
         )
     );
@@ -643,17 +643,17 @@ fn bare_installer_without_a_terminal_requires_an_explicit_selection() {
 }
 
 #[test]
-fn public_v013_site_assets_match_the_bound_checksum_manifest() {
+fn public_v014_site_assets_match_the_bound_checksum_manifest() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let release = root.join("site/releases/v0.1.3");
+    let release = root.join("site/releases/v0.1.4");
     let sums = fs::read_to_string(release.join("SHA256SUMS")).unwrap();
     let expected = [
         (
-            "azdaja-v0.1.3-darwin-arm64",
+            "azdaja-v0.1.4-darwin-arm64",
             "6898a1d47b6edf0b1b3759a56102603f3486704e16b332bc1060bd044e8e0948",
         ),
         (
-            "azdaja-v0.1.3-linux-x86_64",
+            "azdaja-v0.1.4-linux-x86_64",
             "99b96b85b1d9d03917fcc7b4958ec61750addd400e4b32996a6d0ca47ac1c10c",
         ),
         (
@@ -856,7 +856,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         });
         let stdout = assert_success(&output);
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
-        assert!(stdout.starts_with("Installed: azdaja v0.1.3\nIntegrations: claude\n"));
+        assert!(stdout.starts_with("Installed: azdaja v0.1.4\nIntegrations: claude\n"));
         assert_eq!(sha256(&bin.join("azdaja")), digest);
         let active = fs::read_to_string(bin.join("azdaja-config.toml")).unwrap();
         assert!(active.contains("claude -p --model {model}"));
@@ -869,8 +869,8 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     }
     let requests = fs::read_to_string(&server.log).unwrap();
     assert!(requests.contains("/good/SHA256SUMS"));
-    assert!(requests.contains("/good/azdaja-v0.1.3-darwin-arm64"));
-    assert!(requests.contains("/good/azdaja-v0.1.3-linux-x86_64"));
+    assert!(requests.contains("/good/azdaja-v0.1.4-darwin-arm64"));
+    assert!(requests.contains("/good/azdaja-v0.1.4-linux-x86_64"));
 
     let home = scratch.0.join("atomic-home");
     let bin = home.join("bin");
@@ -906,7 +906,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     });
     assert_success(&good);
     let version = Command::new(&existing).arg("--version").output().unwrap();
-    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.3 "));
+    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.4 "));
     assert_alias_identity_and_local_caps(&home, &bin, system_path);
 
     let home = scratch.0.join("path-home");

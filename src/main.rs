@@ -1,13 +1,14 @@
 mod banner;
+mod dashboard;
 
 use anyhow::{Context, Result, anyhow, bail};
 use azdaja::{
     Config, DEFAULT_CONFIG, EnteredTurnBudget, ExecFailureKind, MONTY_VERSION, RootDriver,
     SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS, SEMANTIC_MANIFEST_RESPONSE_ENVELOPE_CHARS, SKILL,
-    SoloSession, VERSION, call_model, capability_check, claude_hook, config_error_report, exec,
-    final_answer, kill, list, load, model_trace_request_id, model_transport_error_category,
-    model_transport_error_is_transient, provider_interrupt_exit_status, provider_interrupted,
-    start,
+    SoloSession, VERSION, call_model, capability_check, claude_hook, config_error_report,
+    dashboard_snapshot, exec, final_answer, kill, list, load, model_trace_request_id,
+    model_transport_error_category, model_transport_error_is_transient,
+    provider_interrupt_exit_status, provider_interrupted, start,
 };
 use fs2::FileExt;
 use monty::MontyRun;
@@ -289,7 +290,21 @@ fn main() -> ExitCode {
 fn run() -> Result<bool> {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
-        help(true);
+        if io::stdout().is_terminal() {
+            let term = env::var("TERM").ok();
+            let color =
+                banner::color_enabled(true, env::var_os("NO_COLOR").is_some(), term.as_deref());
+            let width = dashboard::terminal_width();
+            match Config::load().and_then(|config| dashboard_snapshot(&config)) {
+                Ok(snapshot) => print!("{}", dashboard::render(&snapshot, color, width)),
+                Err(error) => print!(
+                    "{}",
+                    dashboard::render_error(&format!("{error:#}"), color, width)
+                ),
+            }
+        } else {
+            help(false);
+        }
         return Ok(true);
     }
     if matches!(args[0].as_str(), "-h" | "--help") {
@@ -6799,19 +6814,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "e547eb4633555987d3aaacce0e45267afa4a15ef83650bb849c2af88ac1c79f9",
+                "70e9a3a5089df132c10ce642f2fbd87d0bcc0d6a7dab811645be6038f27cce73",
             ),
             (
                 "jcode",
-                "ebdaeec4b5858e3c7e6979079840b4d5ce80fae4cf12174e963f8a687d28bff5",
+                "f09071caa3e63dc0adae41bb37f9d49bd5d1dd4816834a545d2e8145d441998a",
             ),
             (
                 "codex",
-                "1e0a722a57c36c94e6a354fb14261febe6a6558beccbf77a03b204fcebca1b15",
+                "a66d53a952091cf6f2dc6f179c36be6bc90a312f8b090a665fb446d18c941dda",
             ),
             (
                 "gemini",
-                "716029fa73de10eca7499a78fa7789b47aa60a443b5267c68cf9ef3b29986dae",
+                "4015afe2053de4db2aaa8f94d9cacbab3f2c39eb938645014740c04d1d4bb9d2",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);

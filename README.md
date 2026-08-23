@@ -32,7 +32,7 @@ The stable `azdaja.dev/install` URL serves the current published installer. Its 
 Alternatively, install from source with Rust 1.95:
 
 ```bash
-cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.3 --locked
+cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.4 --locked
 ```
 
 `azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.
@@ -50,6 +50,8 @@ az uninstall all
 ```
 
 ## Use
+
+Run `azdaja` with no arguments in a terminal for a provider-free local dashboard showing the configured route, session capacity, active work, state size, recent sessions, and command shortcuts.
 
 Ask one question about one input:
 

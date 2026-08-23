@@ -1,6 +1,6 @@
 # CLI reference
 
-Use `azdaja` in every command below when the short `az` alias is unavailable.
+Use `azdaja` in every command below when the short `az` alias is unavailable. A bare interactive `azdaja` renders a provider-free local dashboard from validated configuration and owner-only session state; piped/non-terminal invocation keeps the stable five-line help output.
 
 ## Commands
 
@@ -15,7 +15,7 @@ Use `azdaja` in every command below when the short `az` alias is unavailable.
 | `kill` | `az kill <session-id>` | Remove a session. |
 | `solo` | `az solo <question> -f <path> [--model <model>] [--sub-model <model>]` | Run one file question. |
 | `doctor` | `az doctor [jcode|claude|codex|gemini|opencode|all|--caps]` | Check the configured route, or name a tool to check installed files only. |
-| `install` | `az install [jcode|claude|codex|gemini|opencode|all]` | Detect supported tools and install their managed integrations. |
+| `install` | `az install [TARGET[,TARGET...]|all]` | Detect supported tools or atomically install a named comma-separated subset. |
 | `uninstall` | `az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]` | Remove detected integrations, one named scope, or everything. |
 
 Use `az help` for the short overview and `az help <command>` for command-specific help. `--help` remains available. Invalid options or arity print the same canonical usage line on standard error and return status 2.

@@ -425,6 +425,27 @@ struct Meta {
     created: u64,
     sub_model: Option<String>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionStatus {
+    pub id: String,
+    pub created: u64,
+    pub updated: u64,
+    pub sub_model: Option<String>,
+    pub busy: bool,
+    pub state_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DashboardSnapshot {
+    pub default_model: String,
+    pub provider: String,
+    pub reasoning: String,
+    pub max_sessions: usize,
+    pub idle_timeout: u64,
+    pub state_root: PathBuf,
+    pub sessions: Vec<SessionStatus>,
+}
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1052,6 +1073,68 @@ pub fn list(cfg: &Config) -> Result<Vec<String>> {
     }
     v.sort();
     Ok(v)
+}
+
+fn session_is_busy(base: &Path, sid: &str) -> Result<bool> {
+    let path = base.join("locks").join(sid).with_extension("lock");
+    match fs::symlink_metadata(&path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    }
+    let file = open_private_file(&path, true)?;
+    match FileExt::try_lock_exclusive(&file) {
+        Ok(()) => {
+            FileExt::unlock(&file)?;
+            Ok(false)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => Ok(true),
+        Err(error) => Err(error.into()),
+    }
+}
+
+pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
+    let ids = list(cfg)?;
+    let base = state_home()?;
+    let mut sessions = Vec::with_capacity(ids.len());
+    for id in ids {
+        let (dir, directory) = session_dir(&id)?;
+        validate_private_directory(&directory, &dir)?;
+        let meta = read_meta(&dir)?;
+        let state_path = dir.join("state.monty");
+        let state = open_private_file(&state_path, false)?;
+        let metadata = validate_private_file(&state, &state_path)?;
+        let updated = metadata
+            .modified()
+            .unwrap_or(UNIX_EPOCH)
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        sessions.push(SessionStatus {
+            id: id.clone(),
+            created: meta.created,
+            updated,
+            sub_model: meta.sub_model,
+            busy: session_is_busy(&base, &id)?,
+            state_bytes: metadata.len(),
+        });
+    }
+    sessions.sort_by(|left, right| {
+        right
+            .busy
+            .cmp(&left.busy)
+            .then_with(|| right.updated.cmp(&left.updated))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    Ok(DashboardSnapshot {
+        default_model: cfg.default_model.clone(),
+        provider: cfg.jcode_provider.clone(),
+        reasoning: cfg.jcode_reasoning.clone(),
+        max_sessions: cfg.max_sessions,
+        idle_timeout: cfg.idle_timeout,
+        state_root: base,
+        sessions,
+    })
 }
 
 pub fn start(cfg: &Config, sub_model: Option<String>) -> Result<String> {
