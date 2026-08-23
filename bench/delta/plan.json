@@ -1,0 +1,49 @@
+{
+  "schema": "azdaja-delta-ladder-v1",
+  "stage": "oolong-row645-may-cheap-gate",
+  "model": {
+    "codex": "gpt-5.6-luna",
+    "opencode": "openai/gpt-5.6-luna",
+    "outer_reasoning": "low",
+    "inner_reasoning": "low"
+  },
+  "fixture": {
+    "context": "../oolong/context-131072.txt",
+    "context_sha256": "05e4419a7280c91b3bbf1ea97629bfc235ee0eb23e67e1f0eeb21fc38b485bf2",
+    "row": "../oolong/row-645.json",
+    "row_sha256": "9419b658e7364aa9f5d7b4911457bbfe53739aeb3cb7349f52cf91671664decc",
+    "selected_records": 227,
+    "unique_decision_evidence": 226,
+    "expected_answer": 132
+  },
+  "prompts": {
+    "shared": "prompt.txt",
+    "shared_sha256": "1b8db6cc8884826abb6a2583d3b48d85d2f444f091ec577ee9ccd8327258a06c",
+    "candidate_prefix": "candidate-prefix.txt",
+    "candidate_prefix_sha256": "461962f511e22b08927013f498352d4fa3496f014b3f3012b27dedebdd4031c4"
+  },
+  "execution": {
+    "repetitions": 1,
+    "retry": false,
+    "timeout_seconds": 300,
+    "candidate_inner_attempt_ceiling": 1,
+    "candidate_transaction_ceiling": 1,
+    "max_unique_items_per_shard": 256,
+    "max_chars_per_shard": 65536,
+    "workers": 6,
+    "parallel_groups": [
+      ["codex/native", "opencode/native"],
+      ["codex/candidate", "opencode/candidate"]
+    ]
+  },
+  "gates": {
+    "quality_first": true,
+    "candidate_exact_required": true,
+    "efficiency_requires_both_correct": true,
+    "candidate_outer_tokens_must_be_lower": true,
+    "candidate_wall_seconds_must_be_lower": true,
+    "candidate_inner_attempts_must_equal": 1,
+    "candidate_inner_failures_must_equal": 0,
+    "single_run_is_diagnostic_only": true
+  }
+}

@@ -4771,19 +4771,18 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             assert!(!description.starts_with("Mandatory:"));
             assert!(!skill.contains("before Read, Grep, or Bash inspection"));
             assert!(skill.contains("Passive discovery"));
-            if harness == "codex" {
-                assert!(skill.contains(
-                    "explicit request to use `$azdaja`/Azdaja or confirm availability is"
-                ));
-            } else {
-                assert!(
-                    skill.contains("explicit request to use Azdaja or confirm availability is")
-                );
-            }
+            assert!(skill.contains("an explicit Azdaja request is"));
             assert!(skill.contains("### Standard cell contract"));
+            assert!(skill.contains("at most 256 unique items and 64 KiB each"));
+            assert!(skill.contains(r#"{"labels":"TFT..."}"#));
+            assert!(skill.contains("evaluations get no retry"));
+            assert!(!skill.lines().any(|line| line.starts_with("        ")));
             if harness == "codex" {
                 assert!(skill.contains("Codex coworker lane (default)"));
                 assert!(skill.contains("Codex skill activation is per-turn"));
+                assert!(skill.contains(
+                    "OpenCode may also discover this Agent Skills compatibility profile"
+                ));
                 assert!(skill.contains("Strict benchmark/audit lane (explicit only)"));
                 let metadata = fs::read_to_string(target.join("agents/openai.yaml")).unwrap();
                 assert!(metadata.contains("interface:"));

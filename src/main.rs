@@ -791,13 +791,15 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
         ),
         "codex" => (
             "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c model_reasoning_effort=low -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -",
-            "gpt-5.4-mini",
+            "gpt-5.6-luna",
         ),
         "gemini" => ("gemini --model {model} -p \"\"", "gemini-2.5-flash"),
-        "opencode" => ("opencode --pure run --model {model}", "openai/gpt-5.4-mini"),
+        "opencode" => ("opencode --pure run --model {model}", "openai/gpt-5.6-luna"),
         _ => ("jcode-api", "gpt-5.6-luna"),
     }
 }
+
+const MANAGED_COWORKER_CALL_LIMIT: usize = 64;
 
 const LEGACY_MANAGED_CODEX_CONFIGS: &[&[u8]] = &[
     include_bytes!("../assets/legacy/codex-config-a9da6615.toml"),
@@ -910,7 +912,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "codex" => Some((
             "Codex",
-            "In Codex, activate `$azdaja` only for the current turn when the narrow frontmatter trigger matches. Codex skill activation is per-turn: Passive discovery, a repository name, or a mere mention is not activation; an explicit request to use `$azdaja`/Azdaja or confirm availability is. OpenCode may also discover this Agent Skills compatibility profile, so keep the same narrow trigger and non-triggers. Standard conversational lane is the default; strict benchmark/audit lane is explicit only. Run one shell lifecycle with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; let its trap clean up. Keep the raw input in lowercase `source`. Standard: deterministic reduction first, one semantic batch only when needed, a normal conversational answer, and at most one retry before an honest bounded fallback. Strict: `workers=12`, canonical A/B views, one global adjudication, exact output, and fail closed without retry or fallback.",
+            "Codex skill activation is per-turn. Activate `$azdaja` only for this turn when the narrow trigger matches. OpenCode may also discover this Agent Skills compatibility profile, so its activation rules must remain safe under either host. Passive discovery, a repository name, or a mere mention is not activation; an explicit Azdaja request is. Standard is default: a scalar, final line, or exact format stays standard. Strict requires explicit redundancy or adjudication. Run one shell lifecycle with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; keep raw input in lowercase `source`. Standard uses deterministic projection, safe deduplication, one compact bounded batch, and no whole-transaction retry after child calls. Strict uses `workers=6`, canonical A/B, one adjudication, and no retry or fallback.",
         )),
         "gemini" => Some((
             "Gemini",
@@ -918,7 +920,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "opencode" => Some((
             "OpenCode",
-            "Load only when the narrow frontmatter trigger matches. Passive discovery, a repository name, or a mere mention is not activation; an explicit request to use Azdaja or confirm availability is. Once loaded, stay session-sticky. Standard lane is the default; strict is only for an explicit audit, benchmark, or machine-graded exact schema. Run the exact Bash lifecycle below with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; let its trap clean up. Keep the raw input in lowercase `source`. Standard: deterministic reduction first, one semantic batch only when needed, a normal answer, and at most one retry before an honest bounded fallback. Strict: `workers=12`, canonical A/B views, one global adjudication, exact output, and fail closed without retry or fallback.",
+            "Load only when the narrow trigger matches. Passive discovery, a repository name, or a mere mention is not activation; an explicit Azdaja request is. Once loaded, stay session-sticky. Standard is default: a scalar, final line, or exact format stays standard. Strict requires explicit redundancy or adjudication. Run one Bash lifecycle with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; keep raw input in lowercase `source`. Standard uses deterministic projection, safe deduplication, one compact bounded batch, and no whole-transaction retry after child calls. Strict uses `workers=6`, canonical A/B, one adjudication, and no retry or fallback.",
         )),
         _ => None,
     }
@@ -969,7 +971,9 @@ Use this lane only when the user explicitly requests audit-grade, benchmark, or 
 #### Strict cell contract"#,
         );
     } else if harness == "codex" {
-        skill = skill.replace("workers=8", "workers=12");
+        skill = skill.replace("workers=8", "workers=6");
+        skill = skill.replace("at most 80 unique items", "at most 256 unique items");
+        skill = skill.replace("80 KiB", "64 KiB");
         skill = skill.replace(
             "## Claude Code and OpenCode",
             "## Codex coworker lane (default)",
@@ -990,22 +994,25 @@ Use this lane only when the user explicitly requests audit-grade, benchmark, or 
             "Return the final value unchanged as the requested JSON object and sole response. Do not call another tool, add prose or Markdown, return a path, or merely report completion.\n\n### Cell contract",
             r#"### Standard cell contract
 
-Use this Codex conversational lane by default. Load once and make one complete evidence pass.
+Use this Codex lane by default. Load once. A scalar, final line, or compact exact format stays standard unless redundant review or adjudication is explicit.
 
-- Use code for deterministic parsing and reduction. For semantic judgment, keep complete evidence and stable IDs, then use the fewest balanced shards in one ordered `llm_batch(..., workers=12)` pass. No blind duplicate views or adjudication.
+- Parse and reduce in code. Project only declared-irrelevant fields. Dedupe byte-identical decision evidence; retain occurrence IDs and multiplicities, then expand labels.
+- Semantic work: make the fewest shards of at most 256 unique items and 64 KiB each; run one ordered `llm_batch(..., workers=6)`. Binary output is compact positional JSON such as `{"labels":"TFT..."}`, exactly one symbol per item, with no prose or per-item objects. No A/B or adjudication.
 - Validate complete coverage. End with `FINAL(answer)` exactly once, passing the actual value.
-- Retry one failed transaction at most once. Then disclose the failure and use a bounded fallback only when it supports an honest answer; never imply complete coverage from partial evidence.
+- Fail on malformed, missing, extra, or `azdaja_error` output. Never rerun the whole transaction after a child call. Ordinary work may retry at most two failed shards once; evaluations get no retry. Otherwise disclose failure; never claim complete coverage from partial evidence.
 
 Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add useful prose or Markdown unless the user requested an exact format.
 
 ### Strict benchmark/audit lane (explicit only)
 
-Use this lane only when the user explicitly requests audit-grade, benchmark, or machine-graded output with an exact schema. In this lane, the A/B views, global adjudication, exact output, and fail-closed rules below are mandatory. Return stdout unchanged in the exact requested format.
+Use this lane only when the user explicitly requests redundant review or adjudication. A benchmark label, scalar answer, final line, or exact compact format alone does not select this lane. In this lane, the A/B views, global adjudication, exact output, and fail-closed rules below are mandatory. Return stdout unchanged in the exact requested format.
 
 #### Strict cell contract"#,
         );
     } else if harness == "opencode" {
-        skill = skill.replace("workers=8", "workers=12");
+        skill = skill.replace("workers=8", "workers=6");
+        skill = skill.replace("at most 80 unique items", "at most 256 unique items");
+        skill = skill.replace("80 KiB", "64 KiB");
         skill = skill.replace(
             "## Claude Code and OpenCode",
             "## OpenCode coworker lane (default)",
@@ -1026,17 +1033,18 @@ Use this lane only when the user explicitly requests audit-grade, benchmark, or 
             "Return the final value unchanged as the requested JSON object and sole response. Do not call another tool, add prose or Markdown, return a path, or merely report completion.\n\n### Cell contract",
             r#"### Standard cell contract
 
-Use this lane by default. Load once and make one complete evidence pass.
+Use this lane by default. Load once. A scalar, final line, or compact exact format stays standard unless redundant review or adjudication is explicit.
 
-- Use code for deterministic parsing and reduction. For semantic judgment, keep complete evidence and stable IDs, then use the fewest balanced shards in one ordered `llm_batch(..., workers=12)` pass. No blind duplicate views or adjudication.
+- Parse and reduce in code. Project only declared-irrelevant fields. Dedupe byte-identical decision evidence; retain occurrence IDs and multiplicities, then expand labels.
+- Semantic work: make the fewest shards of at most 256 unique items and 64 KiB each; run one ordered `llm_batch(..., workers=6)`. Binary output is compact positional JSON such as `{"labels":"TFT..."}`, exactly one symbol per item, with no prose or per-item objects. No A/B or adjudication.
 - Validate complete coverage. End with `FINAL(answer)` exactly once, passing the actual value.
-- Retry one failed transaction at most once. Then disclose the failure and use a bounded fallback only when it supports an honest answer; never imply complete coverage from partial evidence.
+- Fail on malformed, missing, extra, or `azdaja_error` output. Never rerun the whole transaction after a child call. Ordinary work may retry at most two failed shards once; evaluations get no retry. Otherwise disclose failure; never claim complete coverage from partial evidence.
 
 Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add useful prose or Markdown unless the user requested an exact format.
 
 ### Strict benchmark lane (explicit only)
 
-Use this lane only when the user explicitly requests audit-grade, benchmark, or machine-graded output with an exact schema. In this lane, the A/B views, global adjudication, exact output, and fail-closed rules below are mandatory. Return stdout unchanged in the exact requested format.
+Use this lane only when the user explicitly requests redundant review or adjudication. A benchmark label, scalar answer, final line, or exact compact format alone does not select this lane. In this lane, the A/B views, global adjudication, exact output, and fail-closed rules below are mandatory. Return stdout unchanged in the exact requested format.
 
 #### Strict cell contract"#,
         );
@@ -1659,11 +1667,16 @@ fn preflight_install(home: &Path, harness: &'static str) -> Result<InstallPlan> 
         let mut config: Config = toml::from_str(DEFAULT_CONFIG)?;
         config.sub_llm_cmd = cmd.into();
         config.default_model = model.into();
+        if matches!(harness, "codex" | "opencode") {
+            config.max_calls_per_cell = MANAGED_COWORKER_CALL_LIMIT;
+        }
         config.validate()?
     };
     let staged_config = if let Some(bytes) = &preserved {
         if harness == "codex" && is_byte_exact_legacy_codex_config(bytes) {
             cfg.sub_llm_cmd = cmd.into();
+            cfg.default_model = model.into();
+            cfg.max_calls_per_cell = MANAGED_COWORKER_CALL_LIMIT;
             cfg = cfg.validate()?;
             toml::to_string_pretty(&cfg)?.into_bytes()
         } else {
@@ -6306,11 +6319,14 @@ mod tests {
                     }
                     assert!(rendered.contains("normal conversational answer"));
                     assert!(rendered.contains("exactly one literal `start`"));
-                    assert!(rendered.contains("one global adjudication"));
-                    assert_eq!(rendered.matches("workers=12").count(), 4);
-                    assert!(rendered.contains("at most 80 unique items"));
+                    assert!(rendered.contains("one adjudication"));
+                    assert_eq!(rendered.matches("workers=6").count(), 4);
+                    assert!(rendered.contains("at most 256 unique items"));
+                    assert!(rendered.contains("64 KiB"));
                     assert!(!rendered.contains("at most 40 unique items"));
+                    assert!(!rendered.contains("at most 80 unique items"));
                     assert!(!rendered.contains("workers=8"));
+                    assert!(!rendered.contains("workers=12"));
                     assert!(!rendered.contains("exit 42"));
                 } else {
                     assert!(rendered.contains("stdout JSON unchanged"));
@@ -6342,10 +6358,10 @@ mod tests {
         assert!(rendered.contains("follow the fallback policy below"));
         assert!(!rendered.contains("No preamble, exploration, temporary script, or second lane"));
         assert!(rendered.contains("Passive discovery"));
-        assert!(rendered.contains("explicit request to use Azdaja or confirm availability is"));
+        assert!(rendered.contains("explicit Azdaja request is"));
         assert!(rendered.contains("trap cleanup EXIT"));
         assert!(!rendered.contains("exit 42"));
-        assert_eq!(rendered.matches("workers=12").count(), 4);
+        assert_eq!(rendered.matches("workers=6").count(), 4);
         assert!(rendered.contains("Its source load is the only `load`"));
         assert!(rendered.contains("discard initial shard boundaries"));
         assert!(rendered.contains(&format!(r#"sid="$({managed} start)""#)));
@@ -6382,13 +6398,20 @@ mod tests {
             .0;
         for contract in [
             "Use this lane by default",
-            "Use code for deterministic parsing and reduction",
-            "For semantic judgment",
-            "fewest balanced shards",
-            "one complete evidence pass",
+            "Parse and reduce in code",
+            "Project only declared-irrelevant fields",
+            "Dedupe byte-identical decision evidence",
+            "retain occurrence IDs and multiplicities",
+            "Semantic work",
+            "fewest shards",
+            "at most 256 unique items and 64 KiB each",
+            "compact positional JSON",
+            r#"{"labels":"TFT..."}"#,
+            "no prose or per-item objects",
             "normal conversational answer",
-            "Retry one failed transaction at most once",
-            "bounded fallback only when it supports an honest answer",
+            "Never rerun the whole transaction",
+            "evaluations get no retry",
+            "never claim complete coverage from partial evidence",
         ] {
             assert!(
                 standard.contains(contract),
@@ -6397,16 +6420,19 @@ mod tests {
         }
         assert!(!standard.contains("blind A/B"));
         assert!(!standard.contains("global adjudication"));
+        assert!(!standard.contains("Retry one failed transaction"));
 
         let strict = rendered
             .split_once("### Strict benchmark lane (explicit only)")
             .expect("strict OpenCode cell contract")
             .1;
         for contract in [
+            "explicitly requests redundant review or adjudication",
+            "scalar answer, final line, or exact compact format alone does not select this lane",
             "create blind A/B prompts",
             "globally repack them into the fewest prompts",
             "Send one adjudication `llm_batch`",
-            "strict positional JSON output contract",
+            "strict compact positional JSON output contract",
             "Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure",
             "Return stdout unchanged in the exact requested format",
             "Never create a temporary script, add another `exec`, query CLI help, retry, or start over",
@@ -6414,6 +6440,33 @@ mod tests {
             assert!(
                 strict.contains(contract),
                 "strict contract changed: {contract}"
+            );
+        }
+    }
+
+    #[test]
+    fn codex_and_opencode_efficiency_contract_is_bounded_and_fail_fast() {
+        for harness in ["codex", "opencode"] {
+            let rendered = render_managed_skill(harness, Path::new("/managed/azdaja"));
+            for required in [
+                "A benchmark label, scalar answer, final line, or exact compact format alone does not select this lane",
+                "deterministic projection, safe deduplication, one compact bounded batch",
+                "at most 256 unique items and 64 KiB each",
+                r#"{"labels":"TFT..."}"#,
+                "no whole-transaction retry after child calls",
+                "evaluations get no retry",
+            ] {
+                assert!(
+                    rendered.contains(required),
+                    "{harness} missing efficiency contract: {required}"
+                );
+            }
+            assert_eq!(rendered.matches("workers=6").count(), 4);
+            assert!(!rendered.contains("workers=12"));
+            assert!(!rendered.contains("per-item objects are allowed"));
+            assert!(
+                !rendered.lines().any(|line| line.starts_with("        ")),
+                "{harness} contract must render as Markdown, not an indented code block"
             );
         }
     }
@@ -6454,7 +6507,7 @@ mod tests {
             "create blind A/B prompts",
             "globally repack them into the fewest prompts",
             "Send one adjudication `llm_batch`",
-            "strict positional JSON output contract",
+            "strict compact positional JSON output contract",
             "Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure",
             "sole assistant response",
             "Never create a temporary script, add another `exec`, query CLI help, retry, or start over",
@@ -6475,7 +6528,7 @@ mod tests {
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
         assert_eq!(
-            digest, "0a9907c53eac2359f20723f2c5a095f1110e6f66ad9ebb6a86f7e131f6d0788d",
+            digest, "1ffed603e0985057fe79abb625e9d1bb4f0e5e201949c0b782357a3d6eca32f2",
             "OpenCode rendered bytes changed"
         );
     }
@@ -6540,13 +6593,14 @@ mod tests {
             );
         }
         for required in [
-            "Use code for deterministic parsing and reduction",
-            "Retry one failed transaction at most once",
+            "Parse and reduce in code",
+            "Never rerun the whole transaction after a child call",
+            "evaluations get no retry",
             "create blind A/B prompts",
-            "one global adjudication",
+            "Send one adjudication `llm_batch`",
         ] {
-            assert!(codex.contains(required));
-            assert!(opencode.contains(required));
+            assert!(codex.contains(required), "Codex lacks {required:?}");
+            assert!(opencode.contains(required), "OpenCode lacks {required:?}");
         }
         assert!(!codex.contains("## Other-host `solo` lane"));
         assert!(!codex.contains("before Read, Grep, or Bash inspection"));
@@ -6568,7 +6622,7 @@ mod tests {
     #[test]
     fn codex_nested_adapter_disables_skill_instructions_and_stays_ephemeral() {
         let (command, model) = adapter("codex");
-        assert_eq!(model, "gpt-5.4-mini");
+        assert_eq!(model, "gpt-5.6-luna");
         assert_eq!(
             command,
             "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c model_reasoning_effort=low -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -"
@@ -6608,6 +6662,15 @@ mod tests {
                 "later override {suffix:?} must fail"
             );
         }
+    }
+
+    #[test]
+    fn managed_coworker_adapters_are_luna_only_and_call_bounded() {
+        assert_eq!(adapter("codex").1, "gpt-5.6-luna");
+        assert_eq!(adapter("opencode").1, "openai/gpt-5.6-luna");
+        assert_eq!(MANAGED_COWORKER_CALL_LIMIT, 64);
+        assert!(!adapter("codex").1.contains("gpt-5.4"));
+        assert!(!adapter("opencode").1.contains("gpt-5.4"));
     }
 
     #[test]
@@ -6701,19 +6764,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "aef07f74b3abf19ecccded4671f398b726321d74e25f43f333fbbeedad921a47",
+                "928922c3366f4a0e43a6c9dfb67637be1e6c98e89c877da6f9374e5568fadc59",
             ),
             (
                 "jcode",
-                "2decc9ef2b6edc19e1148e4d5aeeaa5cea06eb30939110918533d0b894364474",
+                "7dab3f56536fe87def7ed6882b87e9e245f2b88c576089ef6cf9ea825704f152",
             ),
             (
                 "codex",
-                "2a1e37997ddb1a03e239d8dad26f462c3f57e927b8210e012d4322eb7f177464",
+                "de8267b95c43d3471778fd8b3d61be1439c3f832446be1d78adab579e39d5333",
             ),
             (
                 "gemini",
-                "b13bddeb09ffcc57f05002bc13a3551d32f3422ad56321025573c34b72538ac4",
+                "5783e9f48de4de266606386f40b32ac314b9c554f8c38da24127d3322c27e463",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);

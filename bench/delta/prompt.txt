@@ -1,0 +1,7 @@
+Use only the public context file `context.txt` in the current working directory. Do not use network access, hidden files, repository files, or private context.
+
+The file contains records formatted as `Date: ... || User: ... || Instance: ...`. First select only records whose Date month is May. For spam-versus-ham classification, `Instance` is the complete decision evidence; Date and User are filtering or identity metadata. Group byte-identical selected Instance values, classify each unique Instance once, then expand by multiplicity. Do not guess or estimate.
+
+Among the selected May records, how many should be classified as `ham`?
+
+Return exactly `Answer: number`.
