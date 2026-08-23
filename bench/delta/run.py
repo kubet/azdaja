@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import concurrent.futures
 import hashlib
+import importlib.util
 import json
 import math
 import os
 import re
 import signal
 import shutil
+import shlex
 import stat
 import subprocess
 import sys
@@ -18,11 +20,13 @@ from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
-BINARY = REPO / "target/release/azdaja"
 BENCH = REPO / "bench/delta"
-CONTEXT = REPO / "bench/oolong/context-131072.txt"
 PLAN = BENCH / "plan.json"
-GOLD = 132
+PLAN_DATA = json.loads(PLAN.read_text(encoding="utf-8"))
+RUNTIME = PLAN_DATA["runtime"]
+BINARY = Path(RUNTIME["azdaja_release_path"])
+CODEX = Path(RUNTIME["codex_path"])
+OPENCODE = Path(RUNTIME["opencode_path"])
 TIMEOUT_SECONDS = 300
 TOKEN_KEYS = {
     "input_tokens",
@@ -31,6 +35,14 @@ TOKEN_KEYS = {
     "output_tokens",
     "reasoning_output_tokens",
 }
+
+FIXTURE_SPEC = importlib.util.spec_from_file_location("delta_fixture", BENCH / "fixture.py")
+if FIXTURE_SPEC is None or FIXTURE_SPEC.loader is None:
+    raise RuntimeError("unable to load frozen delta fixture")
+FIXTURE = importlib.util.module_from_spec(FIXTURE_SPEC)
+FIXTURE_SPEC.loader.exec_module(FIXTURE)
+CONTEXT_BYTES = FIXTURE.generate().encode("ascii")
+GOLD = FIXTURE.expected_answer()
 
 
 def sha256(path: Path) -> str:
@@ -57,6 +69,85 @@ def ensure_owner_directory(path: Path) -> None:
         raise RuntimeError(f"benchmark directory custody mismatch: {path}")
 
 
+def managed_binary(env: dict[str, str], harness: str) -> Path:
+    if harness == "codex":
+        return Path(env["HOME"]) / ".agents/skills/azdaja/azdaja"
+    return Path(env["XDG_CONFIG_HOME"]) / "opencode/skills/azdaja/azdaja"
+
+
+def candidate_cell(model: str) -> str:
+    return f'''lines = source.splitlines()
+items = []
+multiplicities = []
+positions = {{}}
+for raw in lines:
+    pieces = raw.split(" || ")
+    if len(pieces) != 3 or not pieces[0].startswith("Date: ") or not pieces[2].startswith("Instance: "):
+        raise ValueError("record grammar mismatch")
+    if "-May-" not in pieces[0]:
+        continue
+    value = pieces[2][10:]
+    if value == "":
+        raise ValueError("empty decision evidence")
+    if value in positions:
+        multiplicities[positions[value]] += 1
+    else:
+        positions[value] = len(items)
+        items.append(value)
+        multiplicities.append(1)
+if len(items) != 226:
+    raise ValueError("selected evidence count mismatch")
+payload = []
+for index in range(len(items)):
+    payload.append(str(index) + "\\t" + json.dumps(items[index]))
+prompt = "Classify every SMS below. H means a legitimate requested personal, work, school, travel, appointment, delivery, repair, or community message. S means unsolicited prize, phishing, fee, gambling, miracle-product, guaranteed-income, guaranteed-return, premium-rate, or credential-stealing promotion. Return exactly one JSON object with key labels and a string of exactly " + str(len(items)) + " H/S characters in row order, with no prose.\\n" + "\\n".join(payload)
+if len(prompt) > 65536:
+    raise ValueError("compact prompt exceeds character ceiling")
+semantic_rows = llm_batch([prompt], workers=6, model={json.dumps(model)})
+if len(semantic_rows) != 1:
+    raise ValueError("semantic result count mismatch")
+decoded = json.loads(semantic_rows[0])
+if len(decoded) != 1 or "labels" not in decoded or not isinstance(decoded["labels"], str):
+    raise ValueError("semantic schema mismatch")
+labels = decoded["labels"]
+if len(labels) != len(items):
+    raise ValueError("semantic coverage mismatch")
+ham = 0
+for index in range(len(labels)):
+    if labels[index] == "H":
+        ham += multiplicities[index]
+    elif labels[index] != "S":
+        raise ValueError("semantic label domain mismatch")
+FINAL("Answer: " + str(ham))
+'''
+
+
+def write_candidate_driver(work: Path, env: dict[str, str], harness: str) -> None:
+    binary = managed_binary(env, harness)
+    if not binary.is_file() or not os.access(binary, os.X_OK):
+        raise RuntimeError(f"{harness} managed binary missing")
+    model = "gpt-5.6-luna" if harness == "codex" else "openai/gpt-5.6-luna"
+    driver = work / "azdaja-evaluate"
+    script = f'''#!/bin/sh
+set -eu
+AZDAJA={shlex.quote(str(binary))}
+sid=
+cleanup() {{
+  if [ -n "$sid" ]; then
+    "$AZDAJA" kill "$sid" >/dev/null 2>&1 || true
+  fi
+}}
+trap cleanup EXIT HUP INT TERM
+sid="$("$AZDAJA" start)"
+"$AZDAJA" load "$sid" context.txt source >/dev/null
+cat <<'PY' | "$AZDAJA" exec "$sid" >/dev/null
+{candidate_cell(model)}PY
+"$AZDAJA" final "$sid"
+'''
+    driver.write_text(script, encoding="utf-8")
+    driver.chmod(0o500)
+
+
 def jsonl(raw: bytes) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for number, line in enumerate(raw.decode("utf-8", "strict").splitlines(), 1):
@@ -73,6 +164,10 @@ def jsonl(raw: bytes) -> list[dict[str, Any]]:
 
 def finite_int(value: Any) -> bool:
     return type(value) is int and value >= 0
+
+
+def integer_delta(left: Any, right: Any) -> int | None:
+    return left - right if finite_int(left) and finite_int(right) else None
 
 
 def exact_answer(texts: list[str]) -> int:
@@ -189,8 +284,15 @@ def parse_opencode(raw: bytes) -> tuple[int, dict[str, Any]]:
     return exact_answer(texts), usage
 
 
-def usage_total(usage: dict[str, Any]) -> int:
-    return usage["input"] + usage["output"] + usage["reasoning"] + usage["cache"]["read"] + usage["cache"]["write"]
+def usage_uncached_total(usage: dict[str, Any]) -> int:
+    uncached_input = usage["input"] - usage["cache"]["read"]
+    if uncached_input < 0:
+        raise ValueError("cached input exceeds input")
+    return uncached_input + usage["cache"]["write"] + usage["output"] + usage["reasoning"]
+
+
+def usage_gross_total(usage: dict[str, Any]) -> int:
+    return usage["input"] + usage["cache"]["write"] + usage["output"] + usage["reasoning"]
 
 
 def trace_summary(path: Path) -> dict[str, Any]:
@@ -200,7 +302,8 @@ def trace_summary(path: Path) -> dict[str, Any]:
             "failures": 0,
             "successes": 0,
             "usage": {"input": 0, "output": 0, "reasoning": 0, "cache_read": 0, "cache_write": 0},
-            "measured_tokens": 0,
+            "measured_uncached_tokens": 0,
+            "measured_gross_tokens": 0,
             "usage_complete": True,
             "usage_complete_successes": 0,
             "missing_usage_fields": [],
@@ -233,12 +336,16 @@ def trace_summary(path: Path) -> dict[str, Any]:
             value = row.get(source)
             usage[target] += value
     usage_complete = complete_successes == len(successes)
+    uncached = usage["input"] - usage["cache_read"]
+    if uncached < 0:
+        raise ValueError("inner cached input exceeds input")
     return {
         "attempts": len(attempts),
         "failures": failures,
         "successes": len(successes),
         "usage": usage,
-        "measured_tokens": sum(usage.values()) if usage_complete else None,
+        "measured_uncached_tokens": (uncached + usage["cache_write"] + usage["output"] + usage["reasoning"]) if usage_complete else None,
+        "measured_gross_tokens": (usage["input"] + usage["cache_write"] + usage["output"] + usage["reasoning"]) if usage_complete else None,
         "usage_complete": usage_complete,
         "usage_complete_successes": complete_successes,
         "missing_usage_fields": missing_usage_fields,
@@ -299,7 +406,7 @@ def prepare_arm(campaign: Path, harness: str, arm: str) -> tuple[Path, dict[str,
     work = root / "work"
     ensure_owner_directory(root)
     ensure_owner_directory(work)
-    shutil.copyfile(CONTEXT, work / "context.txt")
+    (work / "context.txt").write_bytes(CONTEXT_BYTES)
     (work / "context.txt").chmod(0o400)
     env = base_env(root, harness)
     trace = Path(env["AZDAJA_MODEL_TRACE"])
@@ -329,6 +436,7 @@ def prepare_arm(campaign: Path, harness: str, arm: str) -> tuple[Path, dict[str,
         config.chmod(0o600)
         if "max_calls_per_cell = 1" not in config.read_text(encoding="utf-8"):
             raise RuntimeError(f"{harness} candidate call-limit patch failed")
+        write_candidate_driver(work, env, harness)
     return work, env, trace
 
 
@@ -362,7 +470,7 @@ def invoke(campaign: Path, harness: str, arm: str) -> dict[str, Any]:
     prompt = prefix + ("\n" if prefix else "") + shared
     if harness == "codex":
         command = [
-            shutil.which("codex") or "codex",
+            str(CODEX),
             "exec",
             "--ephemeral",
             "--skip-git-repo-check",
@@ -370,8 +478,12 @@ def invoke(campaign: Path, harness: str, arm: str) -> dict[str, Any]:
             "--ignore-rules",
             "--sandbox",
             "workspace-write",
+            "--add-dir",
+            env["AZDAJA_HOME"],
             "-c",
             "model_reasoning_effort=low",
+            "-c",
+            "sandbox_workspace_write.network_access=true",
             "-c",
             "features.multi_agent=false",
             "-c",
@@ -390,7 +502,7 @@ def invoke(campaign: Path, harness: str, arm: str) -> dict[str, Any]:
         stdin = prompt.encode("utf-8")
     else:
         command = [
-            shutil.which("opencode") or "opencode",
+            str(OPENCODE),
             "--pure",
             "run",
             "--model",
@@ -418,10 +530,13 @@ def invoke(campaign: Path, harness: str, arm: str) -> dict[str, Any]:
     try:
         inner = trace_summary(trace)
     except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
-        inner = {"error": str(exc), "attempts": -1, "failures": -1, "successes": -1, "usage": {}, "measured_tokens": None, "usage_complete": False, "usage_complete_successes": 0, "missing_usage_fields": [], "models": [], "providers": [], "categories": [], "error_categories": []}
-    outer_total = usage_total(usage)
-    inner_measured = inner.get("measured_tokens")
-    measured_total = outer_total + inner_measured if finite_int(inner_measured) else None
+        inner = {"error": str(exc), "attempts": -1, "failures": -1, "successes": -1, "usage": {}, "measured_uncached_tokens": None, "measured_gross_tokens": None, "usage_complete": False, "usage_complete_successes": 0, "missing_usage_fields": [], "models": [], "providers": [], "categories": [], "error_categories": []}
+    outer_uncached = usage_uncached_total(usage)
+    outer_gross = usage_gross_total(usage)
+    inner_uncached = inner.get("measured_uncached_tokens")
+    inner_gross = inner.get("measured_gross_tokens")
+    measured_uncached = outer_uncached + inner_uncached if finite_int(inner_uncached) else None
+    measured_gross = outer_gross + inner_gross if finite_int(inner_gross) else None
     return {
         "harness": harness,
         "arm": arm,
@@ -433,9 +548,11 @@ def invoke(campaign: Path, harness: str, arm: str) -> dict[str, Any]:
         "parse_error": parse_error,
         "wall_seconds": round(wall, 3),
         "outer_usage": usage,
-        "outer_tokens": outer_total,
+        "outer_uncached_tokens": outer_uncached,
+        "outer_gross_tokens": outer_gross,
         "inner": inner,
-        "measured_total_tokens": measured_total,
+        "measured_total_uncached_tokens": measured_uncached,
+        "measured_total_gross_tokens": measured_gross,
         "stdout_bytes": len(stdout),
         "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
         "stderr_bytes": len(stderr),
@@ -457,8 +574,9 @@ def main() -> int:
     if validation.returncode != 0:
         raise RuntimeError(validation.stderr.decode("utf-8", "replace"))
     validated = json.loads(validation.stdout)
-    if sha256(CONTEXT) != "05e4419a7280c91b3bbf1ea97629bfc235ee0eb23e67e1f0eeb21fc38b485bf2":
-        raise RuntimeError("context hash drift")
+    fixture_validation = FIXTURE.validate()
+    if hashlib.sha256(CONTEXT_BYTES).hexdigest() != fixture_validation["context_sha256"]:
+        raise RuntimeError("generated context hash drift")
     if not BINARY.is_file() or not os.access(BINARY, os.X_OK):
         raise RuntimeError("release binary missing")
     scratch = Path(os.environ["JCODE_SCRATCH_DIR"])
@@ -477,27 +595,30 @@ def main() -> int:
             native = next(row for row in results if row["harness"] == harness and row["arm"] == "native")
             candidate = next(row for row in results if row["harness"] == harness and row["arm"] == "candidate")
             paired = native["correct"] and candidate["correct"]
-            calls_ok = candidate["inner"].get("attempts") == 1 and candidate["inner"].get("failures") == 0 and candidate["inner"].get("successes") == 1 and candidate["inner"].get("usage_complete") is True
-            outer_lower = paired and candidate["outer_tokens"] < native["outer_tokens"]
-            total_lower = paired and finite_int(candidate["measured_total_tokens"]) and finite_int(native["measured_total_tokens"]) and candidate["measured_total_tokens"] < native["measured_total_tokens"]
+            expected_model = "gpt-5.6-luna" if harness == "codex" else "openai/gpt-5.6-luna"
+            native_no_inner = native["inner"].get("attempts") == 0
+            calls_ok = candidate["inner"].get("attempts") == 1 and candidate["inner"].get("failures") == 0 and candidate["inner"].get("successes") == 1 and candidate["inner"].get("usage_complete") is True and candidate["inner"].get("models") == [expected_model] and candidate["inner"].get("providers") == [harness]
+            outer_lower = paired and candidate["outer_uncached_tokens"] < native["outer_uncached_tokens"]
+            total_lower = paired and finite_int(candidate["measured_total_uncached_tokens"]) and finite_int(native["measured_total_uncached_tokens"]) and candidate["measured_total_uncached_tokens"] < native["measured_total_uncached_tokens"]
             wall_lower = paired and candidate["wall_seconds"] < native["wall_seconds"]
-            won = paired and calls_ok and outer_lower and total_lower and wall_lower
+            won = paired and native_no_inner and calls_ok and outer_lower and total_lower and wall_lower
             overall = overall and won
             deltas[harness] = {
                 "paired_both_correct": paired,
+                "native_has_zero_inner_attempts": native_no_inner,
                 "candidate_exactly_one_successful_inner_attempt": calls_ok,
-                "candidate_outer_minus_native_tokens": candidate["outer_tokens"] - native["outer_tokens"],
-                "candidate_measured_total_minus_native_tokens": candidate["measured_total_tokens"] - native["measured_total_tokens"],
+                "candidate_outer_minus_native_uncached_tokens": candidate["outer_uncached_tokens"] - native["outer_uncached_tokens"],
+                "candidate_measured_total_minus_native_uncached_tokens": integer_delta(candidate["measured_total_uncached_tokens"], native["measured_total_uncached_tokens"]),
                 "candidate_minus_native_wall_seconds": round(candidate["wall_seconds"] - native["wall_seconds"], 3),
-                "outer_tokens_lower": outer_lower,
-                "measured_total_tokens_lower": total_lower,
+                "outer_uncached_tokens_lower": outer_lower,
+                "measured_total_uncached_tokens_lower": total_lower,
                 "wall_lower": wall_lower,
                 "diagnostic_win": won,
             }
         summary = {
             "schema": "azdaja-luna-delta-cheap-gate/v1",
             "plan_sha256": validated["plan_sha256"],
-            "fixture": "OOLONG row 645 May subset",
+            "fixture": "synthetic clear SMS May subset with irrelevant metadata",
             "gold": GOLD,
             "parallel_groups": [["codex/native", "opencode/native"], ["codex/candidate", "opencode/candidate"]],
             "calls": results,
@@ -505,7 +626,8 @@ def main() -> int:
             "overall_diagnostic_win": overall,
             "limitations": [
                 "one paired observation per harness",
-                "all-in token totals require complete input/output/reasoning/cache-read/cache-write usage for every successful inner attempt",
+                "uncached token totals are input minus cache-read plus cache-write plus output plus reasoning",
+                "all-in totals require complete five-field usage for every successful inner attempt",
                 "diagnostic result, not a robustness or general-superiority claim",
             ],
             "temporary_execution_data_deleted": True,

@@ -1,44 +1,66 @@
-# Codex/OpenCode Luna delta ladder
+# Codex/OpenCode GPT-5.6 Luna delta gate
 
-This benchmark starts with the cheapest task that can expose Azdaja's intended advantage. It does not begin with the 17,469-record row-651 task.
+This is a one-shot diagnostic of Azdaja's intended metadata-projection advantage. It is not a general benchmark or a claim of broad superiority.
 
-## Stage 1: cheap gate
+## Frozen r6 fixture
 
-OOLONG row 645 contains 2,177 records, but the question selects only May. Provider-free validation proves the selected workload is 227 records and 226 unique decision texts. Both native and candidate prompts receive the same filtering and deduplication contract. The candidate adds only the Azdaja treatment instruction.
+`fixture.py` deterministically generates a public 1,306,076-byte context with 306 records. Exactly 226 May records require semantic spam-versus-ham classification. Their long `User` fields are irrelevant synthetic metadata, while each `Instance` is complete decision evidence. The selected set has 226 unique instances, a 27,053-byte compact projection, and a frozen answer of 149 ham messages.
 
-The candidate must use:
+The messages use clear legitimate and unsolicited-scam categories. This reduces quality variance while retaining the workload property under test: the native harness must discover and perform the projection, while the Azdaja arm receives a pinned one-call execution shim that performs deterministic filtering and projection inside Azdaja before one semantic batch.
 
-- GPT-5.6 Luna at low reasoning for outer and inner calls
-- the standard lane, not redundant A/B or adjudication
-- one compact positional semantic batch
-- at most 256 unique items and 64 KiB
-- six workers
-- exactly one transaction and at most one inner model attempt
-- an isolated candidate runtime with `max_calls_per_cell = 1`
-- no retries
+## Execution contract
 
-Codex-native and OpenCode-native run in parallel. Then Codex-candidate and OpenCode-candidate run in parallel. Each run has a 300-second timeout.
+Both harnesses use GPT-5.6 Luna at low reasoning.
+
+- Codex-native and OpenCode-native run in parallel.
+- Codex-candidate and OpenCode-candidate then run in parallel.
+- Every arm has one 300-second timeout and no retry.
+- Every arm runs in an owner-only `0700` work directory.
+- The release Azdaja binary and resolved Codex/OpenCode executable paths, versions, and SHA-256 hashes are exact plan pins.
+- Codex is pinned to `--sandbox workspace-write --cd <arm-workdir>`.
+- Codex adds only the owner-private `AZDAJA_HOME` state directory as writable and enables workspace network transport so the nested Luna provider call can complete. Web search remains disabled.
+- Candidate config is runtime-patched to `max_calls_per_cell = 1`.
+- The candidate outer harness must run `./azdaja-evaluate` exactly once and must not read the context itself.
+- The shim runs one literal `start`, `load`, `exec`, `final`, and `kill` lifecycle.
+- The cell makes exactly one `llm_batch` call with one compact prompt, six workers, and the same harness-specific Luna model.
 
 ## Gates
 
-Quality is evaluated first. A candidate must return the exact public row-645 answer. Efficiency is compared only when native and candidate are both correct for a harness.
+Quality is evaluated first. Efficiency is compared only when native and candidate both return the exact frozen answer for a harness. A positive diagnostic delta requires all of the following on both Codex and OpenCode:
 
-A positive diagnostic efficiency delta requires both:
+1. the native arm uses zero inner attempts
+2. the candidate uses exactly one successful inner attempt and no failed inner attempt
+3. candidate outer uncached tokens are lower than native outer uncached tokens
+4. candidate outer-plus-inner uncached tokens are lower than native total uncached tokens
+5. candidate wall time is lower than native wall time
 
-1. candidate outer tokens are lower than native outer tokens
-2. candidate outer-plus-inner total tokens are lower than native total tokens
-3. candidate wall time is lower than native wall time
+The primary metric is:
 
-Candidate inner usage and total usage are always reported. Every successful inner attempt must expose exact input, output, reasoning, cache-read, and cache-write fields. Missing usage blocks the efficiency result rather than being treated as zero. A candidate also fails if it uses anything other than one successful inner attempt. One repetition is diagnostic only and cannot support a general superiority claim.
+```text
+total_uncached_tokens = input - cache.read + cache.write + output + reasoning
+```
 
-The hard row-651 task is blocked until both harnesses pass this gate. It must then use the same compact standard-lane algorithm and no-retry rule, with an independently frozen call ceiling before inference.
+Gross tokens are also reported. Every successful inner attempt must expose exact input, output, reasoning, cache-read, and cache-write fields. Missing usage blocks the result instead of being treated as zero.
 
-The initial r1 attempt was acceptance-invalid because its strict output parsers lagged the installed harness schemas and its isolated candidate config did not runtime-enforce the preregistered one-call ceiling. R2 was frozen before any benchmark rerun with explicit harness activation, schema-correct outer parsers, and `max_calls_per_cell = 1`. A two-call transport-only preflight then exposed that the managed command trace omitted reasoning and cache-write usage, so no benchmark outcome was evaluated. R3 was frozen before another provider call. A Codex-only transport preflight then failed before provider entry because its isolated `AZDAJA_HOME` was inside the launch directory, which the product correctly rejects for provider-sandbox custody. R4 was frozen before another provider call with state outside the launch directory. Separate minimal transport preflights then passed for both harnesses with one successful GPT-5.6 Luna inner attempt and complete five-field usage. R5 is the final provider-free custody amendment before paired inference. It requires owner-only `0700` per-arm work directories and pins Codex to `--sandbox workspace-write --cd <arm-workdir>`. It does not change the model, prompts, fixture, schedule, quality gates, efficiency gates, or one-call ceiling. The plan pins candidate commit `486c6dc1e84146bac8b6beebfda731e70515973b`, the versioned runner, and fail-closed five-field outer-plus-inner accounting.
+## Audit history
+
+- r1 was invalid because its output parsers lagged installed harness schemas and its candidate config did not enforce the one-call ceiling.
+- r2 fixed those issues. A transport-only preflight then found missing reasoning and cache-write trace fields, so no benchmark outcome was evaluated.
+- r3 added exact five-field accounting. Its Codex transport preflight failed before provider entry because `AZDAJA_HOME` was inside the sandbox work directory.
+- r4 moved state outside the work directory. Separate minimal Codex and OpenCode preflights then passed with one successful Luna inner attempt and complete usage.
+- r5 pinned owner-only work directories and explicit Codex sandbox/cwd arguments. Its single paired result is frozen at `results/r5-result.json`. The gate failed because passive skill activation produced zero candidate inner attempts, and OpenCode-native was not exact. No efficiency claim was made.
+- r6 is a new diagnostic fixture and an outcome-independent activation repair. It replaces passive skill discovery with a pinned execution shim and corrects the primary accounting formula to the preregistered uncached-token metric. It was frozen before any r6 provider call.
 
 ## Provider-free validation
 
 ```bash
-python3 bench/delta/validate.py
-python3 -m unittest discover -s bench/delta -p 'test_*.py' -v
-python3 bench/delta/run.py
+PYTHONDONTWRITEBYTECODE=1 python3 bench/delta/fixture.py
+PYTHONDONTWRITEBYTECODE=1 python3 bench/delta/validate.py
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s bench/delta -p 'test_*.py' -v
+```
+
+`run.py` is not provider-free. After the exact plan, runner, fixture, prompts, candidate source, and release binary are frozen and pushed, the one live campaign is:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 bench/delta/run.py
 ```

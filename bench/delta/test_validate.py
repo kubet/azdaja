@@ -20,7 +20,7 @@ class DeltaPlanTests(unittest.TestCase):
         oolong = bench / "oolong"
         self.delta.mkdir(parents=True)
         oolong.mkdir(parents=True)
-        for name in ("plan.json", "prompt.txt", "candidate-prefix.txt", "run.py"):
+        for name in ("plan.json", "prompt.txt", "candidate-prefix.txt", "run.py", "fixture.py"):
             shutil.copyfile(HERE / name, self.delta / name)
         source_oolong = HERE.parent / "oolong"
         for name in ("context-131072.txt", "row-645.json"):
@@ -53,7 +53,7 @@ class DeltaPlanTests(unittest.TestCase):
     def test_valid_plan(self):
         result = validate.validate(self.plan_path, HERE.parents[1])
         self.assertTrue(result["valid"])
-        self.assertEqual(result["selected_records"], 227)
+        self.assertEqual(result["selected_records"], 226)
         self.assertEqual(result["unique_decision_evidence"], 226)
         self.assertEqual(result["maximum_candidate_inner_attempts_per_harness"], 1)
 
@@ -66,6 +66,7 @@ class DeltaPlanTests(unittest.TestCase):
         self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_inner_attempt_ceiling", 2))
         self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_config_max_calls_per_cell", 2))
         self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_transaction_ceiling", 2))
+        self.assert_blocked(lambda p: p["gates"].__setitem__("native_inner_attempts_must_equal", 1))
 
     def test_compact_shard_contract_is_exact(self):
         self.assert_blocked(lambda p: p["execution"].__setitem__("max_unique_items_per_shard", 80))
@@ -76,10 +77,14 @@ class DeltaPlanTests(unittest.TestCase):
 
     def test_prompt_and_fixture_hashes_are_bound(self):
         self.assert_blocked(lambda p: p["prompts"].__setitem__("shared_sha256", "0" * 64))
-        self.assert_blocked(lambda p: p["fixture"].__setitem__("context_sha256", "0" * 64))
+        self.assert_blocked(lambda p: p["fixture"].__setitem__("generated_context_sha256", "0" * 64))
+        self.assert_blocked(lambda p: p["fixture"].__setitem__("generator_sha256", "0" * 64))
 
     def test_candidate_source_runner_and_all_usage_fields_are_bound(self):
         self.assert_blocked(lambda p: p["source"].__setitem__("src_lib_sha256", "0" * 64))
+        self.assert_blocked(lambda p: p["runtime"].__setitem__("azdaja_release_sha256", "0" * 64))
+        self.assert_blocked(lambda p: p["runtime"].__setitem__("codex_sha256", "0" * 64))
+        self.assert_blocked(lambda p: p["runtime"].__setitem__("opencode_version", "0.0.0"))
         self.assert_blocked(lambda p: p["runner"].__setitem__("sha256", "0" * 64))
         self.assert_blocked(lambda p: p["accounting"]["inner_trace_fields"].remove("reasoning_tokens"))
         self.assert_blocked(lambda p: p["accounting"].__setitem__("missing_usage_blocks_efficiency", False))
@@ -87,12 +92,14 @@ class DeltaPlanTests(unittest.TestCase):
     def test_codex_workspace_write_and_owner_only_workdir_are_exact(self):
         self.assert_runner_blocked(lambda text: text.replace('"--cd",\n            str(work)', '"-C",\n            str(work)'))
         self.assert_runner_blocked(lambda text: text.replace('"workspace-write"', '"read-only"', 1))
+        self.assert_runner_blocked(lambda text: text.replace('"sandbox_workspace_write.network_access=true"', '"sandbox_workspace_write.network_access=false"', 1))
+        self.assert_runner_blocked(lambda text: text.replace('            "--add-dir",\n            env["AZDAJA_HOME"],\n', '', 1))
         self.assert_runner_blocked(lambda text: text.replace("    ensure_owner_directory(work)\n", "", 1))
 
     def test_quality_and_efficiency_gates_are_required(self):
         self.assert_blocked(lambda p: p["gates"].__setitem__("quality_first", False))
-        self.assert_blocked(lambda p: p["gates"].__setitem__("candidate_outer_tokens_must_be_lower", False))
-        self.assert_blocked(lambda p: p["gates"].__setitem__("candidate_total_tokens_must_be_lower", False))
+        self.assert_blocked(lambda p: p["gates"].__setitem__("candidate_outer_uncached_tokens_must_be_lower", False))
+        self.assert_blocked(lambda p: p["gates"].__setitem__("candidate_total_uncached_tokens_must_be_lower", False))
         self.assert_blocked(lambda p: p["gates"].__setitem__("candidate_wall_seconds_must_be_lower", False))
 
     def test_extra_keys_fail_closed(self):

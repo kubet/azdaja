@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -53,11 +55,11 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     root = plan_path.parent
     plan = exact_keys(
         json.loads(plan_path.read_text(encoding="utf-8")),
-        {"schema", "stage", "model", "source", "fixture", "prompts", "runner", "execution", "accounting", "gates"},
+        {"schema", "stage", "model", "source", "runtime", "fixture", "prompts", "runner", "execution", "accounting", "gates"},
         "plan",
     )
-    require(plan["schema"] == "azdaja-delta-ladder-v2", "schema")
-    require(plan["stage"] == "oolong-row645-may-cheap-gate-r5", "stage")
+    require(plan["schema"] == "azdaja-delta-ladder-v3", "schema")
+    require(plan["stage"] == "synthetic-clear-sms-metadata-projection-r6", "stage")
 
     model = exact_keys(plan["model"], {"codex", "opencode", "outer_reasoning", "inner_reasoning"}, "model")
     require(model == {
@@ -100,22 +102,57 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     )
     require(ancestry.returncode == 0, "candidate source commit is not current ancestry")
 
+    runtime = exact_keys(
+        plan["runtime"],
+        {"azdaja_release_path", "azdaja_release_sha256", "codex_path", "codex_sha256", "codex_version", "opencode_path", "opencode_sha256", "opencode_version"},
+        "runtime",
+    )
+    for key in ("azdaja_release_path", "codex_path", "opencode_path"):
+        require(isinstance(runtime[key], str) and Path(runtime[key]).is_absolute(), f"runtime {key}")
+    for key in ("azdaja_release_sha256", "codex_sha256", "opencode_sha256"):
+        require(isinstance(runtime[key], str) and re.fullmatch(r"[0-9a-f]{64}", runtime[key]) is not None, f"runtime {key}")
+    azdaja_binary = Path(runtime["azdaja_release_path"]).resolve(strict=True)
+    codex_binary = Path(runtime["codex_path"]).resolve(strict=True)
+    opencode_binary = Path(runtime["opencode_path"]).resolve(strict=True)
+    require(azdaja_binary == (repo / "target/release/azdaja").resolve(strict=True), "Azdaja release path")
+    require(codex_binary == Path(shutil.which("codex") or "").resolve(strict=True), "Codex executable path")
+    require(opencode_binary == Path(shutil.which("opencode") or "").resolve(strict=True), "OpenCode executable path")
+    require(sha256(azdaja_binary) == runtime["azdaja_release_sha256"], "Azdaja release hash")
+    require(sha256(codex_binary) == runtime["codex_sha256"], "Codex executable hash")
+    require(sha256(opencode_binary) == runtime["opencode_sha256"], "OpenCode executable hash")
+    codex_version = subprocess.run([str(codex_binary), "--version"], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.strip()
+    opencode_version = subprocess.run([str(opencode_binary), "--version"], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.strip()
+    require(codex_version == runtime["codex_version"] == "codex-cli 0.149.0", "Codex version")
+    require(opencode_version == runtime["opencode_version"] == "1.18.21", "OpenCode version")
+
     fixture = exact_keys(
         plan["fixture"],
-        {"context", "context_sha256", "row", "row_sha256", "selected_records", "unique_decision_evidence", "expected_answer"},
+        {"generator", "generator_sha256", "generated_context_sha256", "context_bytes", "total_records", "selected_records", "unique_decision_evidence", "expected_answer", "compact_evidence_bytes"},
         "fixture",
     )
-    context = contained_file(root, fixture["context"], "context")
-    row = contained_file(root, fixture["row"], "row")
-    require(sha256(context) == fixture["context_sha256"], "context hash")
-    require(sha256(row) == fixture["row_sha256"], "row hash")
-    row_data = json.loads(row.read_text(encoding="utf-8"))
-    require(row_data.get("answer") == "[132]", "row scorer")
-    require(row_data.get("context_file") == context.name, "row context")
-    selected, unique = selected_evidence(context)
-    require(selected == fixture["selected_records"] == 227, "selected record count")
-    require(unique == fixture["unique_decision_evidence"] == 226, "unique evidence count")
-    require(fixture["expected_answer"] == 132, "expected answer")
+    generator = contained_file(root, fixture["generator"], "fixture generator")
+    require(sha256(generator) == fixture["generator_sha256"], "fixture generator hash")
+    spec = importlib.util.spec_from_file_location("validated_delta_fixture", generator)
+    require(spec is not None and spec.loader is not None, "fixture generator import")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    generated = module.validate()
+    require(isinstance(generated, dict), "fixture validation result")
+    require(generated == {
+        "context_sha256": fixture["generated_context_sha256"],
+        "context_bytes": fixture["context_bytes"],
+        "total_records": fixture["total_records"],
+        "selected_records": fixture["selected_records"],
+        "unique_decision_evidence": fixture["unique_decision_evidence"],
+        "expected_answer": fixture["expected_answer"],
+        "compact_evidence_bytes": fixture["compact_evidence_bytes"],
+    }, "generated fixture identity")
+    require(fixture["context_bytes"] > 1_000_000, "large context threshold")
+    require(fixture["total_records"] == 306, "total record count")
+    require(fixture["selected_records"] == 226, "selected record count")
+    require(fixture["unique_decision_evidence"] == 226, "unique evidence count")
+    require(fixture["expected_answer"] == 149, "expected answer")
+    require(fixture["compact_evidence_bytes"] < 65536, "compact evidence ceiling")
 
     prompts = exact_keys(
         plan["prompts"],
@@ -128,16 +165,14 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     require(sha256(prefix) == prompts["candidate_prefix_sha256"], "candidate prefix hash")
     shared_text = shared.read_text(encoding="utf-8")
     prefix_text = prefix.read_text(encoding="utf-8")
-    require("132" not in shared_text and "8638" not in shared_text, "prompt leaks gold")
+    require("149" not in shared_text and "132" not in shared_text and "8638" not in shared_text, "prompt leaks gold")
     require("Group byte-identical" in shared_text and "Return exactly `Answer: number`" in shared_text, "shared prompt contract")
     for term in (
-        "$azdaja",
-        "load the `azdaja` skill in OpenCode",
-        "standard lane",
-        "exactly one inner provider attempt",
-        "Do not use strict A/B",
-        "one compact positional semantic batch",
-        "workers=6",
+        "./azdaja-evaluate",
+        "exactly once",
+        "Do not open, read, copy, sample, or classify `context.txt`",
+        "Do not load a skill, retry, or use another analysis path",
+        "stdout line unchanged",
     ):
         require(term in prefix_text, f"candidate prefix missing {term}")
 
@@ -145,20 +180,25 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     runner_path = contained_file(root, runner["path"], "runner")
     require(sha256(runner_path) == runner["sha256"], "runner hash")
     runner_text = runner_path.read_text(encoding="utf-8")
-    for field in ("reasoning_tokens", "cache_write_tokens", "usage_complete", "measured_total_tokens"):
+    for field in ("reasoning_tokens", "cache_write_tokens", "usage_complete", "measured_total_uncached_tokens"):
         require(field in runner_text, f"runner missing {field}")
     for field in (
         "ensure_owner_directory(root)",
         "ensure_owner_directory(work)",
         '"--sandbox",\n            "workspace-write"',
+        '"--add-dir",\n            env["AZDAJA_HOME"]',
+        '"sandbox_workspace_write.network_access=true"',
         '"--cd",\n            str(work)',
+        "write_candidate_driver(work, env, harness)",
+        "llm_batch([prompt], workers=6, model=",
+        '"$AZDAJA" final "$sid"',
     ):
         require(field in runner_text, f"runner missing workdir custody contract: {field}")
     require('"-C",\n            str(work)' not in runner_text, "runner must use explicit --cd")
 
     execution = exact_keys(
         plan["execution"],
-        {"repetitions", "retry", "timeout_seconds", "candidate_inner_attempt_ceiling", "candidate_transaction_ceiling", "candidate_config_max_calls_per_cell", "max_unique_items_per_shard", "max_chars_per_shard", "workers", "parallel_groups"},
+        {"repetitions", "retry", "timeout_seconds", "candidate_inner_attempt_ceiling", "candidate_transaction_ceiling", "candidate_config_max_calls_per_cell", "max_unique_items_per_shard", "max_chars_per_shard", "workers", "codex_sandbox", "codex_workspace_network_access", "codex_add_dir", "parallel_groups"},
         "execution",
     )
     require(execution["repetitions"] == 1 and execution["retry"] is False, "one-shot no-retry contract")
@@ -169,6 +209,9 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     require(execution["max_unique_items_per_shard"] == 256, "item shard cap")
     require(execution["max_chars_per_shard"] == 65536, "character shard cap")
     require(execution["workers"] == 6, "worker cap")
+    require(execution["codex_sandbox"] == "workspace-write", "Codex sandbox")
+    require(execution["codex_workspace_network_access"] is True, "Codex nested-provider network")
+    require(execution["codex_add_dir"] == "AZDAJA_HOME", "Codex owner-private state add-dir")
     require(execution["parallel_groups"] == [
         ["codex/native", "opencode/native"],
         ["codex/candidate", "opencode/candidate"],
@@ -176,35 +219,39 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
 
     accounting = exact_keys(
         plan["accounting"],
-        {"outer_usage_fields", "inner_trace_fields", "sum_every_field", "complete_usage_required_for_every_success", "missing_usage_blocks_efficiency"},
+        {"outer_usage_fields", "inner_trace_fields", "primary_metric", "primary_formula", "report_gross_tokens", "complete_usage_required_for_every_success", "missing_usage_blocks_efficiency"},
         "accounting",
     )
     require(accounting == {
         "outer_usage_fields": ["input", "output", "reasoning", "cache.read", "cache.write"],
         "inner_trace_fields": ["input_tokens", "output_tokens", "reasoning_tokens", "cache_read_tokens", "cache_write_tokens"],
-        "sum_every_field": True,
+        "primary_metric": "total_uncached_tokens",
+        "primary_formula": "input - cache.read + cache.write + output + reasoning",
+        "report_gross_tokens": True,
         "complete_usage_required_for_every_success": True,
         "missing_usage_blocks_efficiency": True,
-    }, "five-field all-in accounting")
+    }, "five-field uncached accounting")
 
     gates = exact_keys(
         plan["gates"],
-        {"quality_first", "candidate_exact_required", "efficiency_requires_both_correct", "candidate_outer_tokens_must_be_lower", "candidate_total_tokens_must_be_lower", "candidate_wall_seconds_must_be_lower", "candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal", "single_run_is_diagnostic_only"},
+        {"quality_first", "candidate_exact_required", "efficiency_requires_both_correct", "native_inner_attempts_must_equal", "candidate_outer_uncached_tokens_must_be_lower", "candidate_total_uncached_tokens_must_be_lower", "candidate_wall_seconds_must_be_lower", "candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal", "single_run_is_diagnostic_only"},
         "gates",
     )
-    require(all(value is True for key, value in gates.items() if key not in {"candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal"}), "boolean gates")
+    require(all(value is True for key, value in gates.items() if key not in {"native_inner_attempts_must_equal", "candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal"}), "boolean gates")
+    require(gates["native_inner_attempts_must_equal"] == 0, "native inner attempt gate")
     require(gates["candidate_inner_attempts_must_equal"] == 1, "inner attempt gate")
     require(gates["candidate_inner_failures_must_equal"] == 0, "inner failure gate")
 
     return {
         "valid": True,
         "plan_sha256": sha256(plan_path),
-        "context_sha256": sha256(context),
-        "selected_records": selected,
-        "unique_decision_evidence": unique,
+        "context_sha256": fixture["generated_context_sha256"],
+        "selected_records": fixture["selected_records"],
+        "unique_decision_evidence": fixture["unique_decision_evidence"],
         "maximum_candidate_inner_attempts_per_harness": 1,
         "model": model,
         "source": source,
+        "runtime": runtime,
         "accounting": accounting,
     }
 
