@@ -1,0 +1,21 @@
+{
+  "schema": "azdaja-luna-delta-failed-attempt/v1",
+  "stage": "synthetic-clear-sms-metadata-projection-r6",
+  "plan_sha256": "0f0f2c52c0ed103f9cb60325440b285a93a30e8a32cd57ef68c1e240fa190ff5",
+  "runner_sha256": "f48ec8d9170abcfc37765fa943ccefa939cd0be63f5fd864565d0088d9829adc",
+  "task_id": "023912h9w1",
+  "outcome": "blocked_before_summary",
+  "submitted_native_arms": [
+    "codex/native",
+    "opencode/native"
+  ],
+  "candidate_group_started": false,
+  "result_artifact_bytes": 0,
+  "failure": {
+    "type": "ValueError",
+    "message": "cached input exceeds input",
+    "location": "run.py usage_uncached_total"
+  },
+  "cause": "OpenCode tokens.input is fresh input and tokens.cache.read is a disjoint counter, but r6 treated tokens.input as total input.",
+  "claims": []
+}

@@ -2,7 +2,7 @@
 
 This is a one-shot diagnostic of Azdaja's intended metadata-projection advantage. It is not a general benchmark or a claim of broad superiority.
 
-## Frozen r6 fixture
+## Frozen r7 fixture
 
 `fixture.py` deterministically generates a public 1,306,076-byte context with 306 records. Exactly 226 May records require semantic spam-versus-ham classification. Their long `User` fields are irrelevant synthetic metadata, while each `Instance` is complete decision evidence. The selected set has 226 unique instances, a 27,053-byte compact projection, and a frozen answer of 149 ham messages.
 
@@ -40,7 +40,7 @@ The primary metric is:
 total_uncached_tokens = input - cache.read + cache.write + output + reasoning
 ```
 
-Gross tokens are also reported. Every successful inner attempt must expose exact input, output, reasoning, cache-read, and cache-write fields. Missing usage blocks the result instead of being treated as zero.
+The normalized `input` field is total prompt input including cache reads. Codex already reports that representation. OpenCode reports fresh input and cache reads separately, so r7 normalizes it as `tokens.input + tokens.cache.read`. Gross tokens are also reported. Every successful inner attempt must expose exact input, output, reasoning, cache-read, and cache-write fields. Missing usage blocks the result instead of being treated as zero.
 
 ## Audit history
 
@@ -49,7 +49,8 @@ Gross tokens are also reported. Every successful inner attempt must expose exact
 - r3 added exact five-field accounting. Its Codex transport preflight failed before provider entry because `AZDAJA_HOME` was inside the sandbox work directory.
 - r4 moved state outside the work directory. Separate minimal Codex and OpenCode preflights then passed with one successful Luna inner attempt and complete usage.
 - r5 pinned owner-only work directories and explicit Codex sandbox/cwd arguments. Its single paired result is frozen at `results/r5-result.json`. The gate failed because passive skill activation produced zero candidate inner attempts, and OpenCode-native was not exact. No efficiency claim was made.
-- r6 is a new diagnostic fixture and an outcome-independent activation repair. It replaces passive skill discovery with a pinned execution shim and corrects the primary accounting formula to the preregistered uncached-token metric. It was frozen before any r6 provider call.
+- r6 was a new diagnostic fixture and an outcome-independent activation repair. Its one live attempt stopped while resolving the parallel native group because OpenCode's fresh-input counter was incorrectly treated as total input. The empty result artifact and exception are recorded in `results/r6-failure.json`. The candidate group never started, and no efficiency claim was made.
+- r7 keeps the frozen r6 fixture and execution contract, but normalizes OpenCode fresh input plus cache reads into the same terminal representation as Codex before applying the preregistered uncached-token formula. It was frozen and pushed before any r7 provider call.
 
 ## Provider-free validation
 

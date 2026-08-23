@@ -236,8 +236,12 @@ def canonical_usage(value: Any) -> dict[str, Any]:
         raise ValueError("OpenCode cache fields must be nonnegative integers")
     if "total" in value and not finite_int(value["total"]):
         raise ValueError("OpenCode total usage must be a nonnegative integer")
+    # OpenCode exposes fresh input and cache reads as disjoint counters. The
+    # benchmark normalizes both harnesses to the broker terminal contract,
+    # where input is total prompt input and cache.read is its cached subset.
+    normalized_input = value["input"] + cache["read"]
     return {
-        "input": value["input"],
+        "input": normalized_input,
         "output": value["output"],
         "reasoning": value["reasoning"],
         "cache": {"read": cache["read"], "write": cache["write"]},

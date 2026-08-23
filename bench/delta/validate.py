@@ -59,7 +59,7 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
         "plan",
     )
     require(plan["schema"] == "azdaja-delta-ladder-v3", "schema")
-    require(plan["stage"] == "synthetic-clear-sms-metadata-projection-r6", "stage")
+    require(plan["stage"] == "synthetic-clear-sms-metadata-projection-r7", "stage")
 
     model = exact_keys(plan["model"], {"codex", "opencode", "outer_reasoning", "inner_reasoning"}, "model")
     require(model == {
@@ -219,12 +219,17 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
 
     accounting = exact_keys(
         plan["accounting"],
-        {"outer_usage_fields", "inner_trace_fields", "primary_metric", "primary_formula", "report_gross_tokens", "complete_usage_required_for_every_success", "missing_usage_blocks_efficiency"},
+        {"outer_usage_fields", "inner_trace_fields", "normalized_input_semantics", "harness_input_normalization", "primary_metric", "primary_formula", "report_gross_tokens", "complete_usage_required_for_every_success", "missing_usage_blocks_efficiency"},
         "accounting",
     )
     require(accounting == {
         "outer_usage_fields": ["input", "output", "reasoning", "cache.read", "cache.write"],
         "inner_trace_fields": ["input_tokens", "output_tokens", "reasoning_tokens", "cache_read_tokens", "cache_write_tokens"],
+        "normalized_input_semantics": "total prompt input including cache.read",
+        "harness_input_normalization": {
+            "codex": "usage.input_tokens",
+            "opencode": "tokens.input + tokens.cache.read",
+        },
         "primary_metric": "total_uncached_tokens",
         "primary_formula": "input - cache.read + cache.write + output + reasoning",
         "report_gross_tokens": True,

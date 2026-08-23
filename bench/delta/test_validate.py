@@ -87,6 +87,12 @@ class DeltaPlanTests(unittest.TestCase):
         self.assert_blocked(lambda p: p["runtime"].__setitem__("opencode_version", "0.0.0"))
         self.assert_blocked(lambda p: p["runner"].__setitem__("sha256", "0" * 64))
         self.assert_blocked(lambda p: p["accounting"]["inner_trace_fields"].remove("reasoning_tokens"))
+        self.assert_blocked(
+            lambda p: p["accounting"].__setitem__("normalized_input_semantics", "fresh input only")
+        )
+        self.assert_blocked(
+            lambda p: p["accounting"]["harness_input_normalization"].__setitem__("opencode", "tokens.input")
+        )
         self.assert_blocked(lambda p: p["accounting"].__setitem__("missing_usage_blocks_efficiency", False))
 
     def test_codex_workspace_write_and_owner_only_workdir_are_exact(self):

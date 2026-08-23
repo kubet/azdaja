@@ -1,4 +1,5 @@
 import os
+import json
 import stat
 import tempfile
 import unittest
@@ -32,6 +33,32 @@ class DeltaRunnerContractTests(unittest.TestCase):
             run.usage_uncached_total(usage)
         self.assertEqual(run.integer_delta(10, 7), 3)
         self.assertIsNone(run.integer_delta(None, 7))
+
+    def test_opencode_usage_normalizes_fresh_and_cached_input(self):
+        raw = (
+            json.dumps({"type": "text", "part": {"type": "text", "text": "Answer: 149"}})
+            + "\n"
+            + json.dumps({
+                "type": "step_finish",
+                "part": {
+                    "type": "step-finish",
+                    "reason": "stop",
+                    "cost": 0,
+                    "tokens": {
+                        "input": 10,
+                        "output": 7,
+                        "reasoning": 3,
+                        "cache": {"read": 40, "write": 5},
+                    },
+                },
+            })
+        ).encode()
+        answer, usage = run.parse_opencode(raw)
+        self.assertEqual(answer, 149)
+        self.assertEqual(usage["input"], 50)
+        self.assertEqual(usage["cache"]["read"], 40)
+        self.assertEqual(run.usage_uncached_total(usage), 25)
+        self.assertEqual(run.usage_gross_total(usage), 65)
 
     def test_candidate_cell_has_one_pinned_semantic_call(self):
         for model in ("gpt-5.6-luna", "openai/gpt-5.6-luna"):

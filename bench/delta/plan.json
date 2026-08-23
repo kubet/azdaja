@@ -1,6 +1,6 @@
 {
   "schema": "azdaja-delta-ladder-v3",
-  "stage": "synthetic-clear-sms-metadata-projection-r6",
+  "stage": "synthetic-clear-sms-metadata-projection-r7",
   "model": {
     "codex": "gpt-5.6-luna",
     "opencode": "openai/gpt-5.6-luna",
@@ -8,9 +8,9 @@
     "inner_reasoning": "low"
   },
   "source": {
-    "candidate_commit": "486c6dc1e84146bac8b6beebfda731e70515973b",
-    "candidate_tree": "e51cab4fecd3fdebc027b4b1dbbb3d5984dd3a1d",
-    "src_lib_sha256": "9d48a9ce49af96c52132e9b36ec68b00659cc542e40481c7d8c2a04890f1f1e8",
+    "candidate_commit": "a642db83d54b5c80901aba1e1e183e7178481a0e",
+    "candidate_tree": "7ff28185775abd0072ef3be6fc08a3ae04617ec5",
+    "src_lib_sha256": "3e41e82420cc19327d4ce8108628dbdbc37248d1feda5a18bbeeffb2e5dfd69b",
     "src_main_sha256": "300db9d03a73b8aa607ab54cc7a2e5f39f79bec4cc177898b543ced234685bbb",
     "skill_sha256": "000473002650c1dd50b27c6b0bc277c2ccd8b14f4bfb8a0bfe056064d4dd2df8",
     "config_sha256": "1c53a46e914189a2ca36eb0278c75ad3955c3aa2c22e9a3ff41d5b1a7cdd5825",
@@ -35,7 +35,7 @@
   },
   "runner": {
     "path": "run.py",
-    "sha256": "f48ec8d9170abcfc37765fa943ccefa939cd0be63f5fd864565d0088d9829adc"
+    "sha256": "0da611b3696d3563bc2d22776318c8e6468670489d803fe7d8e7e7962eff1b77"
   },
   "execution": {
     "repetitions": 1,
@@ -76,6 +76,11 @@
       "cache_read_tokens",
       "cache_write_tokens"
     ],
+    "normalized_input_semantics": "total prompt input including cache.read",
+    "harness_input_normalization": {
+      "codex": "usage.input_tokens",
+      "opencode": "tokens.input + tokens.cache.read"
+    },
     "primary_metric": "total_uncached_tokens",
     "primary_formula": "input - cache.read + cache.write + output + reasoning",
     "report_gross_tokens": true,
@@ -96,7 +101,7 @@
   },
   "runtime": {
     "azdaja_release_path": "/Users/vukasinkubet/dev/azdaja/target/release/azdaja",
-    "azdaja_release_sha256": "8588a6489dbe5f0f1ea3015c71fd106b183424de485064eb3b50d228ea352dcb",
+    "azdaja_release_sha256": "1a5020f465270e442f77fa55b5cabda579cfb73aca2ecbe9ff521fe48a61169a",
     "codex_path": "/Users/vukasinkubet/.codex/packages/standalone/releases/0.149.0-aarch64-apple-darwin/bin/codex",
     "codex_sha256": "f4a74117b8142cda581c95ff753abf4508b5636d89682c1ed77e4a9249af8963",
     "codex_version": "codex-cli 0.149.0",
