@@ -1,2 +1,1 @@
-Use Azdaja's standard lane for the semantic classification. Do not use strict A/B, redundant review, adjudication, or retries. After deterministic May filtering and exact deduplication, use one compact positional semantic batch with at most 256 unique items, at most 64 KiB, and workers=6.
-
+Activate the installed Azdaja skill now (`$azdaja` in Codex; load the `azdaja` skill in OpenCode) and use its standard lane for the semantic classification. This evaluation permits exactly one inner provider attempt and no retry. Do not use strict A/B, redundant review, or adjudication. After deterministic May filtering and exact deduplication, use one compact positional semantic batch with at most 256 unique items, at most 64 KiB, and workers=6.

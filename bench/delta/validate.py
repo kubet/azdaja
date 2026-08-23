@@ -55,8 +55,8 @@ def validate(plan_path: Path) -> dict[str, Any]:
         {"schema", "stage", "model", "fixture", "prompts", "execution", "gates"},
         "plan",
     )
-    require(plan["schema"] == "azdaja-delta-ladder-v1", "schema")
-    require(plan["stage"] == "oolong-row645-may-cheap-gate", "stage")
+    require(plan["schema"] == "azdaja-delta-ladder-v2", "schema")
+    require(plan["stage"] == "oolong-row645-may-cheap-gate-r2", "stage")
 
     model = exact_keys(plan["model"], {"codex", "opencode", "outer_reasoning", "inner_reasoning"}, "model")
     require(model == {
@@ -96,18 +96,27 @@ def validate(plan_path: Path) -> dict[str, Any]:
     prefix_text = prefix.read_text(encoding="utf-8")
     require("132" not in shared_text and "8638" not in shared_text, "prompt leaks gold")
     require("Group byte-identical" in shared_text and "Return exactly `Answer: number`" in shared_text, "shared prompt contract")
-    for term in ("standard lane", "Do not use strict A/B", "one compact positional semantic batch", "workers=6"):
+    for term in (
+        "$azdaja",
+        "load the `azdaja` skill in OpenCode",
+        "standard lane",
+        "exactly one inner provider attempt",
+        "Do not use strict A/B",
+        "one compact positional semantic batch",
+        "workers=6",
+    ):
         require(term in prefix_text, f"candidate prefix missing {term}")
 
     execution = exact_keys(
         plan["execution"],
-        {"repetitions", "retry", "timeout_seconds", "candidate_inner_attempt_ceiling", "candidate_transaction_ceiling", "max_unique_items_per_shard", "max_chars_per_shard", "workers", "parallel_groups"},
+        {"repetitions", "retry", "timeout_seconds", "candidate_inner_attempt_ceiling", "candidate_transaction_ceiling", "candidate_config_max_calls_per_cell", "max_unique_items_per_shard", "max_chars_per_shard", "workers", "parallel_groups"},
         "execution",
     )
     require(execution["repetitions"] == 1 and execution["retry"] is False, "one-shot no-retry contract")
     require(execution["timeout_seconds"] == 300, "timeout")
     require(execution["candidate_inner_attempt_ceiling"] == 1, "inner call ceiling")
     require(execution["candidate_transaction_ceiling"] == 1, "transaction ceiling")
+    require(execution["candidate_config_max_calls_per_cell"] == 1, "runtime call ceiling")
     require(execution["max_unique_items_per_shard"] == 256, "item shard cap")
     require(execution["max_chars_per_shard"] == 65536, "character shard cap")
     require(execution["workers"] == 6, "worker cap")

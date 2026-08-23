@@ -54,6 +54,7 @@ class DeltaPlanTests(unittest.TestCase):
     def test_no_retry_and_one_inner_attempt_are_exact(self):
         self.assert_blocked(lambda p: p["execution"].__setitem__("retry", True))
         self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_inner_attempt_ceiling", 2))
+        self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_config_max_calls_per_cell", 2))
         self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_transaction_ceiling", 2))
 
     def test_compact_shard_contract_is_exact(self):
