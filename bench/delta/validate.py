@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -47,16 +48,16 @@ def selected_evidence(context: Path) -> tuple[int, int]:
     return len(values), len(set(values))
 
 
-def validate(plan_path: Path) -> dict[str, Any]:
+def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     plan_path = plan_path.resolve(strict=True)
     root = plan_path.parent
     plan = exact_keys(
         json.loads(plan_path.read_text(encoding="utf-8")),
-        {"schema", "stage", "model", "fixture", "prompts", "execution", "gates"},
+        {"schema", "stage", "model", "source", "fixture", "prompts", "runner", "execution", "accounting", "gates"},
         "plan",
     )
     require(plan["schema"] == "azdaja-delta-ladder-v2", "schema")
-    require(plan["stage"] == "oolong-row645-may-cheap-gate-r2", "stage")
+    require(plan["stage"] == "oolong-row645-may-cheap-gate-r3", "stage")
 
     model = exact_keys(plan["model"], {"codex", "opencode", "outer_reasoning", "inner_reasoning"}, "model")
     require(model == {
@@ -65,6 +66,39 @@ def validate(plan_path: Path) -> dict[str, Any]:
         "outer_reasoning": "low",
         "inner_reasoning": "low",
     }, "Luna low-reasoning contract")
+
+    repo = repo_root.resolve(strict=True) if repo_root is not None else root.parents[1]
+    source = exact_keys(
+        plan["source"],
+        {"candidate_commit", "candidate_tree", "src_lib_sha256", "src_main_sha256", "skill_sha256", "config_sha256", "cargo_lock_sha256"},
+        "source",
+    )
+    for key, value in source.items():
+        length = 40 if key in {"candidate_commit", "candidate_tree"} else 64
+        require(
+            isinstance(value, str) and re.fullmatch(rf"[0-9a-f]{{{length}}}", value),
+            f"source {key}",
+        )
+    require(sha256(repo / "src/lib.rs") == source["src_lib_sha256"], "src/lib.rs hash")
+    require(sha256(repo / "src/main.rs") == source["src_main_sha256"], "src/main.rs hash")
+    require(sha256(repo / "assets/SKILL.md") == source["skill_sha256"], "skill hash")
+    require(sha256(repo / "assets/config.toml") == source["config_sha256"], "config hash")
+    require(sha256(repo / "Cargo.lock") == source["cargo_lock_sha256"], "Cargo.lock hash")
+    tree = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", f"{source['candidate_commit']}^{{tree}}"],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).stdout.strip()
+    require(tree == source["candidate_tree"], "candidate source tree")
+    ancestry = subprocess.run(
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor", source["candidate_commit"], "HEAD"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    require(ancestry.returncode == 0, "candidate source commit is not current ancestry")
 
     fixture = exact_keys(
         plan["fixture"],
@@ -107,6 +141,13 @@ def validate(plan_path: Path) -> dict[str, Any]:
     ):
         require(term in prefix_text, f"candidate prefix missing {term}")
 
+    runner = exact_keys(plan["runner"], {"path", "sha256"}, "runner")
+    runner_path = contained_file(root, runner["path"], "runner")
+    require(sha256(runner_path) == runner["sha256"], "runner hash")
+    runner_text = runner_path.read_text(encoding="utf-8")
+    for field in ("reasoning_tokens", "cache_write_tokens", "usage_complete", "measured_total_tokens"):
+        require(field in runner_text, f"runner missing {field}")
+
     execution = exact_keys(
         plan["execution"],
         {"repetitions", "retry", "timeout_seconds", "candidate_inner_attempt_ceiling", "candidate_transaction_ceiling", "candidate_config_max_calls_per_cell", "max_unique_items_per_shard", "max_chars_per_shard", "workers", "parallel_groups"},
@@ -125,6 +166,19 @@ def validate(plan_path: Path) -> dict[str, Any]:
         ["codex/candidate", "opencode/candidate"],
     ], "schedule")
 
+    accounting = exact_keys(
+        plan["accounting"],
+        {"outer_usage_fields", "inner_trace_fields", "sum_every_field", "complete_usage_required_for_every_success", "missing_usage_blocks_efficiency"},
+        "accounting",
+    )
+    require(accounting == {
+        "outer_usage_fields": ["input", "output", "reasoning", "cache.read", "cache.write"],
+        "inner_trace_fields": ["input_tokens", "output_tokens", "reasoning_tokens", "cache_read_tokens", "cache_write_tokens"],
+        "sum_every_field": True,
+        "complete_usage_required_for_every_success": True,
+        "missing_usage_blocks_efficiency": True,
+    }, "five-field all-in accounting")
+
     gates = exact_keys(
         plan["gates"],
         {"quality_first", "candidate_exact_required", "efficiency_requires_both_correct", "candidate_outer_tokens_must_be_lower", "candidate_total_tokens_must_be_lower", "candidate_wall_seconds_must_be_lower", "candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal", "single_run_is_diagnostic_only"},
@@ -142,6 +196,8 @@ def validate(plan_path: Path) -> dict[str, Any]:
         "unique_decision_evidence": unique,
         "maximum_candidate_inner_attempts_per_harness": 1,
         "model": model,
+        "source": source,
+        "accounting": accounting,
     }
 
 
@@ -149,7 +205,7 @@ def main() -> int:
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).with_name("plan.json")
     try:
         print(json.dumps(validate(path), sort_keys=True))
-    except (OSError, UnicodeError, json.JSONDecodeError, PlanError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, subprocess.SubprocessError, PlanError) as exc:
         print(f"BLOCK: {exc}", file=sys.stderr)
         return 2
     return 0

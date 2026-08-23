@@ -1,11 +1,20 @@
 {
   "schema": "azdaja-delta-ladder-v2",
-  "stage": "oolong-row645-may-cheap-gate-r2",
+  "stage": "oolong-row645-may-cheap-gate-r3",
   "model": {
     "codex": "gpt-5.6-luna",
     "opencode": "openai/gpt-5.6-luna",
     "outer_reasoning": "low",
     "inner_reasoning": "low"
+  },
+  "source": {
+    "candidate_commit": "486c6dc1e84146bac8b6beebfda731e70515973b",
+    "candidate_tree": "e51cab4fecd3fdebc027b4b1dbbb3d5984dd3a1d",
+    "src_lib_sha256": "9d48a9ce49af96c52132e9b36ec68b00659cc542e40481c7d8c2a04890f1f1e8",
+    "src_main_sha256": "300db9d03a73b8aa607ab54cc7a2e5f39f79bec4cc177898b543ced234685bbb",
+    "skill_sha256": "000473002650c1dd50b27c6b0bc277c2ccd8b14f4bfb8a0bfe056064d4dd2df8",
+    "config_sha256": "1c53a46e914189a2ca36eb0278c75ad3955c3aa2c22e9a3ff41d5b1a7cdd5825",
+    "cargo_lock_sha256": "73134ed1c6d75a5712adbe4057a5fb2a013dd3387a265baa8c0188c4122f6ecd"
   },
   "fixture": {
     "context": "../oolong/context-131072.txt",
@@ -22,6 +31,10 @@
     "candidate_prefix": "candidate-prefix.txt",
     "candidate_prefix_sha256": "8adef1d576d4587883d3174e486c82f18062929c6ab38517dd50a01713875231"
   },
+  "runner": {
+    "path": "run.py",
+    "sha256": "008ce2f3472cc8e30b50d72814963b16786a5cc899a12835706627625e5c7050"
+  },
   "execution": {
     "repetitions": 1,
     "retry": false,
@@ -33,9 +46,34 @@
     "max_chars_per_shard": 65536,
     "workers": 6,
     "parallel_groups": [
-      ["codex/native", "opencode/native"],
-      ["codex/candidate", "opencode/candidate"]
+      [
+        "codex/native",
+        "opencode/native"
+      ],
+      [
+        "codex/candidate",
+        "opencode/candidate"
+      ]
     ]
+  },
+  "accounting": {
+    "outer_usage_fields": [
+      "input",
+      "output",
+      "reasoning",
+      "cache.read",
+      "cache.write"
+    ],
+    "inner_trace_fields": [
+      "input_tokens",
+      "output_tokens",
+      "reasoning_tokens",
+      "cache_read_tokens",
+      "cache_write_tokens"
+    ],
+    "sum_every_field": true,
+    "complete_usage_required_for_every_success": true,
+    "missing_usage_blocks_efficiency": true
   },
   "gates": {
     "quality_first": true,

@@ -19,7 +19,7 @@ class DeltaPlanTests(unittest.TestCase):
         oolong = bench / "oolong"
         self.delta.mkdir(parents=True)
         oolong.mkdir(parents=True)
-        for name in ("plan.json", "prompt.txt", "candidate-prefix.txt"):
+        for name in ("plan.json", "prompt.txt", "candidate-prefix.txt", "run.py"):
             shutil.copyfile(HERE / name, self.delta / name)
         source_oolong = HERE.parent / "oolong"
         for name in ("context-131072.txt", "row-645.json"):
@@ -38,10 +38,10 @@ class DeltaPlanTests(unittest.TestCase):
         mutate(plan)
         self.write(plan)
         with self.assertRaises(validate.PlanError):
-            validate.validate(self.plan_path)
+            validate.validate(self.plan_path, HERE.parents[1])
 
     def test_valid_plan(self):
-        result = validate.validate(self.plan_path)
+        result = validate.validate(self.plan_path, HERE.parents[1])
         self.assertTrue(result["valid"])
         self.assertEqual(result["selected_records"], 227)
         self.assertEqual(result["unique_decision_evidence"], 226)
@@ -67,6 +67,12 @@ class DeltaPlanTests(unittest.TestCase):
     def test_prompt_and_fixture_hashes_are_bound(self):
         self.assert_blocked(lambda p: p["prompts"].__setitem__("shared_sha256", "0" * 64))
         self.assert_blocked(lambda p: p["fixture"].__setitem__("context_sha256", "0" * 64))
+
+    def test_candidate_source_runner_and_all_usage_fields_are_bound(self):
+        self.assert_blocked(lambda p: p["source"].__setitem__("src_lib_sha256", "0" * 64))
+        self.assert_blocked(lambda p: p["runner"].__setitem__("sha256", "0" * 64))
+        self.assert_blocked(lambda p: p["accounting"]["inner_trace_fields"].remove("reasoning_tokens"))
+        self.assert_blocked(lambda p: p["accounting"].__setitem__("missing_usage_blocks_efficiency", False))
 
     def test_quality_and_efficiency_gates_are_required(self):
         self.assert_blocked(lambda p: p["gates"].__setitem__("quality_first", False))

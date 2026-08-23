@@ -29,15 +29,16 @@ A positive diagnostic efficiency delta requires both:
 2. candidate outer-plus-inner total tokens are lower than native total tokens
 3. candidate wall time is lower than native wall time
 
-Candidate inner usage and total usage are always reported. A candidate also fails if it uses anything other than one successful inner attempt. One repetition is diagnostic only and cannot support a general superiority claim.
+Candidate inner usage and total usage are always reported. Every successful inner attempt must expose exact input, output, reasoning, cache-read, and cache-write fields. Missing usage blocks the efficiency result rather than being treated as zero. A candidate also fails if it uses anything other than one successful inner attempt. One repetition is diagnostic only and cannot support a general superiority claim.
 
 The hard row-651 task is blocked until both harnesses pass this gate. It must then use the same compact standard-lane algorithm and no-retry rule, with an independently frozen call ceiling before inference.
 
-The initial r1 attempt was acceptance-invalid because its strict output parsers lagged the installed harness schemas and its isolated candidate config did not runtime-enforce the preregistered one-call ceiling. R2 was frozen before any rerun with explicit harness activation, schema-correct parsers, and `max_calls_per_cell = 1`.
+The initial r1 attempt was acceptance-invalid because its strict output parsers lagged the installed harness schemas and its isolated candidate config did not runtime-enforce the preregistered one-call ceiling. R2 was frozen before any benchmark rerun with explicit harness activation, schema-correct outer parsers, and `max_calls_per_cell = 1`. A two-call transport-only preflight then exposed that the managed command trace omitted reasoning and cache-write usage, so no benchmark outcome was evaluated. R3 was frozen before another provider call. It pins candidate commit `486c6dc1e84146bac8b6beebfda731e70515973b`, the versioned runner, and fail-closed five-field outer-plus-inner accounting. This is an outcome-independent measurement repair, not a changed quality or efficiency threshold.
 
 ## Provider-free validation
 
 ```bash
 python3 bench/delta/validate.py
 python3 -m unittest discover -s bench/delta -p 'test_*.py' -v
+python3 bench/delta/run.py
 ```
