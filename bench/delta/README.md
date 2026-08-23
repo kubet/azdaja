@@ -25,7 +25,8 @@ Quality is evaluated first. A candidate must return the exact public row-645 ans
 A positive diagnostic efficiency delta requires both:
 
 1. candidate outer tokens are lower than native outer tokens
-2. candidate wall time is lower than native wall time
+2. candidate outer-plus-inner total tokens are lower than native total tokens
+3. candidate wall time is lower than native wall time
 
 Candidate inner usage and total usage are always reported. A candidate also fails if it uses anything other than one successful inner attempt. One repetition is diagnostic only and cannot support a general superiority claim.
 

@@ -69,6 +69,8 @@ class DeltaPlanTests(unittest.TestCase):
 
     def test_quality_and_efficiency_gates_are_required(self):
         self.assert_blocked(lambda p: p["gates"].__setitem__("quality_first", False))
+        self.assert_blocked(lambda p: p["gates"].__setitem__("candidate_outer_tokens_must_be_lower", False))
+        self.assert_blocked(lambda p: p["gates"].__setitem__("candidate_total_tokens_must_be_lower", False))
         self.assert_blocked(lambda p: p["gates"].__setitem__("candidate_wall_seconds_must_be_lower", False))
 
     def test_extra_keys_fail_closed(self):

@@ -118,7 +118,7 @@ def validate(plan_path: Path) -> dict[str, Any]:
 
     gates = exact_keys(
         plan["gates"],
-        {"quality_first", "candidate_exact_required", "efficiency_requires_both_correct", "candidate_outer_tokens_must_be_lower", "candidate_wall_seconds_must_be_lower", "candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal", "single_run_is_diagnostic_only"},
+        {"quality_first", "candidate_exact_required", "efficiency_requires_both_correct", "candidate_outer_tokens_must_be_lower", "candidate_total_tokens_must_be_lower", "candidate_wall_seconds_must_be_lower", "candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal", "single_run_is_diagnostic_only"},
         "gates",
     )
     require(all(value is True for key, value in gates.items() if key not in {"candidate_inner_attempts_must_equal", "candidate_inner_failures_must_equal"}), "boolean gates")

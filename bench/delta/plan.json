@@ -41,6 +41,7 @@
     "candidate_exact_required": true,
     "efficiency_requires_both_correct": true,
     "candidate_outer_tokens_must_be_lower": true,
+    "candidate_total_tokens_must_be_lower": true,
     "candidate_wall_seconds_must_be_lower": true,
     "candidate_inner_attempts_must_equal": 1,
     "candidate_inner_failures_must_equal": 0,
