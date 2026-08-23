@@ -471,7 +471,7 @@ fn assert_alias_identity_and_local_caps(home: &Path, bin: &Path, path: &str) {
 }
 
 #[test]
-fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
+fn installers_are_identical_and_bind_fresh_v013_assets_and_sums() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let site = fs::read(root.join("site/install")).unwrap();
     let top = fs::read(root.join("install.sh")).unwrap();
@@ -530,7 +530,8 @@ fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
     assert!(!text.contains("\"$BIN_DIR/config.toml\""));
     assert!(text.contains("printf 'Next: az doctor"));
     assert!(text.contains("printf 'Next: azdaja doctor"));
-    assert!(text.contains("Select integrations (space-separated numbers):"));
+    assert!(text.contains("Select integrations  ↑/↓ move  Space toggle  Enter install"));
+    assert!(text.contains("menu_selected_$menu_cursor"));
     assert!(text.contains("interactive selection needs a terminal"));
 }
 

@@ -170,56 +170,132 @@ explicit_targets() {
 
 prompt_targets() {
   [ -n "$DETECTED" ] || fail 'no supported tool found; install Jcode, Claude, Codex, Gemini, or OpenCode, or name one: install.sh jcode'
-  selection_from_env=false
+
   if [ "${AZDAJA_INSTALL_TEST_MODE:-}" = local ] && [ "${AZDAJA_INSTALL_SELECTION+x}" = x ]; then
-    prompt_target=/dev/null
     answer=$AZDAJA_INSTALL_SELECTION
-    selection_from_env=true
+    [ -n "$answer" ] || fail 'select at least one integration' 2
+    case "$answer" in
+      a|all)
+        INSTALL_NAMES=$DETECTED
+        ;;
+      *)
+        INSTALL_NAMES=
+        for choice in $(printf '%s' "$answer" | tr ',' ' '); do
+          selected=
+          index=1
+          for name in $DETECTED; do
+            if [ "$choice" = "$index" ] || [ "$choice" = "$name" ]; then
+              selected=$name
+              break
+            fi
+            index=$((index + 1))
+          done
+          [ -n "$selected" ] || fail "invalid integration selection '$choice'" 2
+          case " $INSTALL_NAMES " in
+            *" $selected "*) ;;
+            *) INSTALL_NAMES="${INSTALL_NAMES}${INSTALL_NAMES:+ }$selected" ;;
+          esac
+        done
+        ;;
+    esac
   else
     ( : < /dev/tty ) 2>/dev/null && ( : > /dev/tty ) 2>/dev/null || \
       fail 'interactive selection needs a terminal; rerun with --all or name targets, for example: install.sh jcode,codex' 2
-    prompt_target=/dev/tty
-    answer=
-  fi
+    command -v stty >/dev/null 2>&1 || fail 'interactive selection requires stty; rerun with --all or name targets' 2
+    command -v dd >/dev/null 2>&1 || fail 'interactive selection requires dd; rerun with --all or name targets' 2
+    command -v od >/dev/null 2>&1 || fail 'interactive selection requires od; rerun with --all or name targets' 2
 
-  {
-    printf 'Select integrations (space-separated numbers):\n'
-    index=1
+    menu_count=0
     for name in $DETECTED; do
-      printf '  [ ] %s  %s\n' "$index" "$name"
-      index=$((index + 1))
+      menu_count=$((menu_count + 1))
+      eval "menu_name_$menu_count=\$name"
+      eval "menu_selected_$menu_count=false"
     done
-    printf '  [a] all detected\n> '
-  } > "$prompt_target"
-  if [ "$selection_from_env" = false ]; then
-    IFS= read -r answer < /dev/tty || fail 'could not read integration selection' 2
-  fi
-  [ -n "$answer" ] || fail 'select at least one integration' 2
+    menu_cursor=1
+    menu_rendered=false
+    menu_lines=$((menu_count + 1))
 
-  case "$answer" in
-    a|all)
-      INSTALL_NAMES=$DETECTED
-      ;;
-    *)
-      INSTALL_NAMES=
-      for choice in $(printf '%s' "$answer" | tr ',' ' '); do
-        selected=
-        index=1
-        for name in $DETECTED; do
-          if [ "$choice" = "$index" ] || [ "$choice" = "$name" ]; then
-            selected=$name
-            break
-          fi
-          index=$((index + 1))
-        done
-        [ -n "$selected" ] || fail "invalid integration selection '$choice'" 2
-        case " $INSTALL_NAMES " in
-          *" $selected "*) ;;
-          *) INSTALL_NAMES="${INSTALL_NAMES}${INSTALL_NAMES:+ }$selected" ;;
-        esac
+    render_menu() {
+      if [ "$menu_rendered" = true ]; then
+        printf '\033[%sA' "$menu_lines" > /dev/tty
+      fi
+      printf '\r\033[KSelect integrations  ↑/↓ move  Space toggle  Enter install\n' > /dev/tty
+      menu_index=1
+      while [ "$menu_index" -le "$menu_count" ]; do
+        eval "menu_name=\$menu_name_$menu_index"
+        eval "menu_selected=\$menu_selected_$menu_index"
+        if [ "$menu_index" -eq "$menu_cursor" ]; then menu_pointer='›'; else menu_pointer=' '; fi
+        if [ "$menu_selected" = true ]; then menu_mark='x'; else menu_mark=' '; fi
+        printf '\r\033[K%s [%s] %s\n' "$menu_pointer" "$menu_mark" "$menu_name" > /dev/tty
+        menu_index=$((menu_index + 1))
       done
-      ;;
-  esac
+      menu_rendered=true
+    }
+
+    read_menu_byte() {
+      dd bs=1 count=1 2>/dev/null < /dev/tty | od -An -tu1 | tr -d ' '
+    }
+
+    menu_stty=$(stty -g < /dev/tty) || fail 'could not read terminal settings' 2
+    restore_menu_terminal() {
+      stty "$menu_stty" < /dev/tty >/dev/null 2>&1 || true
+    }
+    trap 'restore_menu_terminal; printf "\n" > /dev/tty; exit 130' HUP INT TERM
+    stty -echo -icanon min 1 time 0 < /dev/tty || {
+      restore_menu_terminal
+      trap - HUP INT TERM
+      fail 'could not enable interactive selection; rerun with --all or name targets' 2
+    }
+
+    render_menu
+    while :; do
+      menu_key=$(read_menu_byte)
+      case "$menu_key" in
+        27)
+          menu_escape_1=$(read_menu_byte)
+          menu_escape_2=$(read_menu_byte)
+          if [ "$menu_escape_1" = 91 ]; then
+            case "$menu_escape_2" in
+              65)
+                if [ "$menu_cursor" -gt 1 ]; then menu_cursor=$((menu_cursor - 1)); else menu_cursor=$menu_count; fi
+                render_menu
+                ;;
+              66)
+                if [ "$menu_cursor" -lt "$menu_count" ]; then menu_cursor=$((menu_cursor + 1)); else menu_cursor=1; fi
+                render_menu
+                ;;
+            esac
+          fi
+          ;;
+        32)
+          eval "menu_selected=\$menu_selected_$menu_cursor"
+          if [ "$menu_selected" = true ]; then
+            eval "menu_selected_$menu_cursor=false"
+          else
+            eval "menu_selected_$menu_cursor=true"
+          fi
+          render_menu
+          ;;
+        10|13)
+          INSTALL_NAMES=
+          menu_index=1
+          while [ "$menu_index" -le "$menu_count" ]; do
+            eval "menu_selected=\$menu_selected_$menu_index"
+            if [ "$menu_selected" = true ]; then
+              eval "menu_name=\$menu_name_$menu_index"
+              INSTALL_NAMES="${INSTALL_NAMES}${INSTALL_NAMES:+ }$menu_name"
+            fi
+            menu_index=$((menu_index + 1))
+          done
+          if [ -n "$INSTALL_NAMES" ]; then break; fi
+          printf '\a' > /dev/tty
+          ;;
+      esac
+    done
+    restore_menu_terminal
+    trap - HUP INT TERM
+  fi
+
   [ -n "$INSTALL_NAMES" ] || fail 'select at least one integration' 2
   HARNESS=
   for name in $INSTALL_NAMES; do
