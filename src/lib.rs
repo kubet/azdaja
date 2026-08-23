@@ -7409,6 +7409,9 @@ fn parse_codex_usage(value: &serde_json::Value) -> Result<ModelUsage> {
     let cache_write = codex_usage_integer(usage, "cache_write_input_tokens")?;
     let output = codex_usage_integer(usage, "output_tokens")?;
     let reasoning = codex_usage_integer(usage, "reasoning_output_tokens")?;
+    if cache_read > input {
+        bail!("Codex cached_input_tokens exceeds input_tokens")
+    }
     Ok(ModelUsage {
         input,
         output,
@@ -7595,11 +7598,18 @@ fn parse_opencode_usage(
     if cache_keys != BTreeSet::from(["read", "write"]) {
         bail!("OpenCode usage cache schema mismatch on line {line}")
     }
+    // OpenCode reports fresh input and cache reads as disjoint counters. The
+    // ModelTrace contract matches Codex's terminal schema, where input_tokens
+    // is total prompt input and cached_input_tokens is the cached subset.
+    let cache_read = opencode_usage_integer(&cache["read"], "cache.read", line)?;
+    let input = opencode_usage_integer(&tokens["input"], "input", line)?
+        .checked_add(cache_read)
+        .ok_or_else(|| anyhow!("OpenCode total input token count overflow on line {line}"))?;
     Ok(ModelUsage {
-        input: opencode_usage_integer(&tokens["input"], "input", line)?,
+        input,
         output: opencode_usage_integer(&tokens["output"], "output", line)?,
         reasoning: opencode_usage_integer(&tokens["reasoning"], "reasoning", line)?,
-        cache_read: opencode_usage_integer(&cache["read"], "cache.read", line)?,
+        cache_read,
         cache_write: opencode_usage_integer(&cache["write"], "cache.write", line)?,
     })
 }
@@ -7785,6 +7795,18 @@ mod unit_tests {
                 .to_string()
                 .contains("input_tokens must be a non-negative integer")
         );
+
+        let invalid_cache_subset = [
+            r#"{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}"#,
+            r#"{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":2,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}"#,
+        ]
+        .join("\n");
+        assert!(
+            parse_codex_jsonl_reply(&invalid_cache_subset, "m")
+                .unwrap_err()
+                .to_string()
+                .contains("cached_input_tokens exceeds input_tokens")
+        );
     }
 
     #[test]
@@ -7828,7 +7850,7 @@ mod unit_tests {
         assert_eq!(reply.text, "final answer");
         assert_eq!(reply.provider, "opencode");
         assert_eq!(reply.model, "openai/gpt-5.6-luna");
-        assert_eq!(reply.usage.input, 24);
+        assert_eq!(reply.usage.input, 31);
         assert_eq!(reply.usage.output, 7);
         assert_eq!(reply.usage.reasoning, 3);
         assert_eq!(reply.usage.cache_read, 7);
@@ -7874,6 +7896,11 @@ mod unit_tests {
             [
                 r#"{"type":"text","part":{"type":"text","text":"ok"}}"#,
                 r#"{"type":"step_finish","part":{"type":"step-finish","reason":"error","cost":0,"tokens":{"input":1,"output":1,"reasoning":0,"cache":{"read":0,"write":0}}}}"#,
+            ]
+            .join("\n"),
+            [
+                r#"{"type":"text","part":{"type":"text","text":"ok"}}"#,
+                r#"{"type":"step_finish","part":{"type":"step-finish","reason":"stop","cost":0,"tokens":{"input":18446744073709551615,"output":1,"reasoning":0,"cache":{"read":1,"write":0}}}}"#,
             ]
             .join("\n"),
             [opencode_success_jsonl(), opencode_success_jsonl()].join("\n"),
@@ -7975,7 +8002,7 @@ JSONL
         unsafe { env::remove_var("AZDAJA_MODEL_TRACE") };
 
         assert_eq!(reply.text, "final answer");
-        assert_eq!(reply.usage.input, 31);
+        assert_eq!(reply.usage.input, 44);
         assert_eq!(reply.usage.output, 17);
         assert_eq!(reply.usage.reasoning, 5);
         assert_eq!(reply.usage.cache_read, 13);
@@ -7983,7 +8010,7 @@ JSONL
         let row: ModelTrace = serde_json::from_str(&fs::read_to_string(&trace).unwrap()).unwrap();
         assert_eq!(row.provider.as_deref(), Some("opencode"));
         assert_eq!(row.model.as_deref(), Some("openai/gpt-5.6-luna"));
-        assert_eq!(row.input_tokens, Some(31));
+        assert_eq!(row.input_tokens, Some(44));
         assert_eq!(row.output_tokens, Some(17));
         assert_eq!(row.reasoning_tokens, Some(5));
         assert_eq!(row.cache_read_tokens, Some(13));
