@@ -1,4 +1,5 @@
 import os
+import hashlib
 import json
 import inspect
 import re
@@ -13,6 +14,38 @@ import run
 
 
 class DeltaRunnerContractTests(unittest.TestCase):
+    def test_frozen_r10_result_passes_every_preregistered_gate(self):
+        path = Path(__file__).with_name("results") / "r10-result.json"
+        self.assertEqual(
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+            "8d63dc943d75a2d4eb911d2332d71ffa619f8466f13f04187edac22ddcbdc68e",
+        )
+        result = json.loads(path.read_text())
+        self.assertEqual(result["plan_sha256"], hashlib.sha256(run.PLAN.read_bytes()).hexdigest())
+        self.assertTrue(result["overall_diagnostic_win"])
+        self.assertEqual(result["new_provider_invocations"], 2)
+        rows = {(row["harness"], row["arm"]): row for row in result["calls"]}
+        self.assertEqual(set(rows), {
+            ("codex", "native"),
+            ("codex", "candidate"),
+            ("opencode", "native"),
+            ("opencode", "candidate"),
+        })
+        for harness in ("codex", "opencode"):
+            native = rows[(harness, "native")]
+            candidate = rows[(harness, "candidate")]
+            delta = result["deltas"][harness]
+            self.assertTrue(native["correct"])
+            self.assertTrue(candidate["correct"])
+            self.assertEqual(native["inner"]["attempts"], 0)
+            self.assertEqual(candidate["inner"]["attempts"], 1)
+            self.assertEqual(candidate["inner"]["successes"], 1)
+            self.assertEqual(candidate["inner"]["failures"], 0)
+            self.assertTrue(candidate["inner"]["usage_complete"])
+            self.assertLess(candidate["measured_total_uncached_tokens"], native["measured_total_uncached_tokens"])
+            self.assertLess(candidate["wall_seconds"], native["wall_seconds"])
+            self.assertTrue(delta["diagnostic_win"])
+
     def test_fixture_is_large_compact_clear_and_exact(self):
         validated = run.FIXTURE.validate()
         self.assertGreater(validated["context_bytes"], 1_000_000)
