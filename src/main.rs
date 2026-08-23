@@ -790,7 +790,7 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
             "haiku",
         ),
         "codex" => (
-            "codex exec --ephemeral --skip-git-repo-check --ignore-rules -c skills.include_instructions=false --json --model {model} -",
+            "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -",
             "gpt-5.4-mini",
         ),
         "gemini" => ("gemini --model {model} -p \"\"", "gemini-2.5-flash"),
@@ -798,6 +798,11 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
         _ => ("jcode-api", "gpt-5.6-luna"),
     }
 }
+
+const LEGACY_MANAGED_CODEX_CONFIGS: &[&[u8]] = &[
+    include_bytes!("../assets/legacy/codex-config-a9da6615.toml"),
+    include_bytes!("../assets/legacy/codex-config-41f19430.toml"),
+];
 
 const DEFAULT_SKILL_DESCRIPTION: &str = "Mandatory for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja, asks if it is installed or available, or names the az virtual-memory tool. Invoke before reading or solving natively.";
 
@@ -1598,7 +1603,12 @@ struct InstallPlan {
     existing_directory: Option<fs::File>,
     existing_ancestor: Option<(PathBuf, fs::File)>,
     preserved: Option<Vec<u8>>,
+    staged_config: Vec<u8>,
     cfg: Config,
+}
+
+fn is_byte_exact_legacy_codex_config(bytes: &[u8]) -> bool {
+    LEGACY_MANAGED_CODEX_CONFIGS.contains(&bytes)
 }
 
 fn nearest_existing_install_ancestor(dst: &Path) -> Result<(PathBuf, fs::File)> {
@@ -1642,7 +1652,7 @@ fn preflight_install(home: &Path, harness: &'static str) -> Result<InstallPlan> 
         None
     };
     let (cmd, model) = adapter(harness);
-    let cfg = if let Some(bytes) = &preserved {
+    let mut cfg = if let Some(bytes) = &preserved {
         toml::from_str::<Config>(&String::from_utf8(bytes.clone())?)?.validate()?
     } else {
         let mut config: Config = toml::from_str(DEFAULT_CONFIG)?;
@@ -1650,12 +1660,24 @@ fn preflight_install(home: &Path, harness: &'static str) -> Result<InstallPlan> 
         config.default_model = model.into();
         config.validate()?
     };
+    let staged_config = if let Some(bytes) = &preserved {
+        if harness == "codex" && is_byte_exact_legacy_codex_config(bytes) {
+            cfg.sub_llm_cmd = cmd.into();
+            cfg = cfg.validate()?;
+            toml::to_string_pretty(&cfg)?.into_bytes()
+        } else {
+            bytes.clone()
+        }
+    } else {
+        toml::to_string_pretty(&cfg)?.into_bytes()
+    };
     Ok(InstallPlan {
         harness,
         dst,
         existing_directory,
         existing_ancestor,
         preserved,
+        staged_config,
         cfg,
     })
 }
@@ -1762,12 +1784,7 @@ fn stage_install(
         .join(bin.file_name().expect("staged binary has a name"));
     let skill = render_managed_skill(plan.harness, &final_bin);
     fs::write(stage_path.join("SKILL.md"), skill)?;
-    fs::write(
-        stage_path.join("config.toml"),
-        plan.preserved
-            .clone()
-            .unwrap_or(toml::to_string_pretty(&plan.cfg)?.into_bytes()),
-    )?;
+    fs::write(stage_path.join("config.toml"), &plan.staged_config)?;
     let mut files = vec![
         bin.file_name()
             .expect("staged binary has a name")
@@ -2382,6 +2399,39 @@ fn validate_harness_skill_profile(dst: &Path, harness: &str) -> Result<()> {
     }
     if harness == "codex" {
         validate_codex_openai_metadata(dst)?;
+        validate_codex_nested_adapter(dst)?;
+    }
+    Ok(())
+}
+
+fn validate_codex_nested_adapter(dst: &Path) -> Result<()> {
+    let bytes = read_install_regular(&dst.join("config.toml"))?;
+    let text = String::from_utf8(bytes).context("managed config is not UTF-8")?;
+    let config = toml::from_str::<Config>(&text)
+        .context("managed config is invalid")?
+        .validate()
+        .context("managed config is invalid")?;
+    validate_codex_nested_adapter_command(&config.sub_llm_cmd)
+}
+
+fn validate_codex_nested_adapter_command(command: &str) -> Result<()> {
+    let argv =
+        shlex::split(command).ok_or_else(|| anyhow!("managed sub_llm_cmd has invalid quoting"))?;
+    let Some(program) = argv.first() else {
+        bail!("managed sub_llm_cmd is empty")
+    };
+    let name = Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(program)
+        .to_ascii_lowercase();
+    if name != "codex" && name != "codex.exe" {
+        return Ok(());
+    }
+    let expected = shlex::split(adapter("codex").0)
+        .ok_or_else(|| anyhow!("internal Codex adapter has invalid quoting"))?;
+    if argv[1..] != expected[1..] {
+        bail!("managed Codex sub_llm_cmd does not exactly match the isolated adapter contract")
     }
     Ok(())
 }
@@ -6520,8 +6570,66 @@ mod tests {
         assert_eq!(model, "gpt-5.4-mini");
         assert_eq!(
             command,
-            "codex exec --ephemeral --skip-git-repo-check --ignore-rules -c skills.include_instructions=false --json --model {model} -"
+            "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -"
         );
+        validate_codex_nested_adapter_command(command).unwrap();
+        validate_codex_nested_adapter_command(&command.replacen("codex", "/opt/bin/codex", 1))
+            .unwrap();
+        validate_codex_nested_adapter_command("custom-provider --model {model}").unwrap();
+        for required in [
+            "--ignore-user-config",
+            "{isolated_env}",
+            "features.shell_tool=false",
+            "features.view_image=false",
+            "features.multi_agent=false",
+            "features.multi_agent_v2=false",
+            "agents.enabled=false",
+            "web_search=disabled",
+            "{sandbox_dir}",
+        ] {
+            let unsafe_command = command.replace(required, "removed");
+            assert!(
+                validate_codex_nested_adapter_command(&unsafe_command).is_err(),
+                "missing {required} must fail"
+            );
+        }
+        for suffix in [
+            " -c features.shell_tool=true",
+            " --sandbox danger-full-access",
+            " -C /tmp",
+            " -c features.multi_agent=true",
+            " --ignore-rules",
+        ] {
+            assert!(
+                validate_codex_nested_adapter_command(&format!("{command}{suffix}")).is_err(),
+                "later override {suffix:?} must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn only_byte_exact_legacy_codex_configs_are_auto_migrated() {
+        let expected_commands = [
+            "codex exec --ephemeral --skip-git-repo-check --model {model} -",
+            "codex exec --ephemeral --skip-git-repo-check --ignore-rules -c skills.include_instructions=false --json --model {model} -",
+        ];
+        for (historical, expected_command) in
+            LEGACY_MANAGED_CODEX_CONFIGS.iter().zip(expected_commands)
+        {
+            let parsed: Config = toml::from_str(std::str::from_utf8(historical).unwrap()).unwrap();
+            assert_eq!(parsed.sub_llm_cmd, expected_command);
+            assert!(is_byte_exact_legacy_codex_config(historical));
+            let mut customized = historical.to_vec();
+            customized.extend_from_slice(b"# user customization\n");
+            assert!(!is_byte_exact_legacy_codex_config(&customized));
+        }
+        let mut current: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
+        current.sub_llm_cmd = adapter("codex").0.into();
+        current.default_model = adapter("codex").1.into();
+        let current = toml::to_string_pretty(&current.validate().unwrap())
+            .unwrap()
+            .into_bytes();
+        assert!(!is_byte_exact_legacy_codex_config(&current));
     }
 
     #[cfg(unix)]

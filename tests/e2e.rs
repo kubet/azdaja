@@ -435,9 +435,11 @@ for line in rows_text.splitlines():
     rows.append((local_id, json.loads(evidence)))
 assert len(rows) == item_count
 assert len(prefix) + item_count * code_width <= 8192
-started_ns = time.monotonic_ns()
+# These values are compared across separate provider processes. macOS Python 3.9
+# exposes a process-relative monotonic epoch, so use the shared wall-clock epoch here.
+started_ns = time.time_ns()
 time.sleep(0.05)
-ended_ns = time.monotonic_ns()
+ended_ns = time.time_ns()
 record = {
     "case": case,
     "role": role,
@@ -5456,6 +5458,72 @@ fn codex_metadata_is_manifested_and_removed_by_uninstall() {
         String::from_utf8_lossy(&removed.stdout)
     );
     assert!(!target.exists());
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn codex_reinstall_migrates_byte_exact_legacy_adapter_to_isolated_workers() {
+    let t = temp("codex-adapter-migration");
+    let codex_home = t.join("codex-home");
+    fs::create_dir_all(&codex_home).unwrap();
+    install_codex_for_doctor_fixture(&t, &codex_home);
+    let target = t.join(".agents/skills/azdaja");
+    let config_path = target.join("config.toml");
+    let current = fs::read_to_string(&config_path).unwrap();
+    let current_command = "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -";
+    assert!(current.contains(current_command), "{current}");
+    let legacy_configs: [&[u8]; 2] = [
+        include_bytes!("../assets/legacy/codex-config-a9da6615.toml"),
+        include_bytes!("../assets/legacy/codex-config-41f19430.toml"),
+    ];
+    for legacy in legacy_configs {
+        assert_ne!(legacy, current.as_bytes());
+        fs::write(&config_path, legacy).unwrap();
+
+        let reinstalled = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+            .env_remove("RLM_DEPTH")
+            .args(["install", "codex"])
+            .env("HOME", &t)
+            .env("CODEX_HOME", &codex_home)
+            .env("AZDAJA_HOME", t.join("state"))
+            .output()
+            .unwrap();
+        assert!(
+            reinstalled.status.success(),
+            "stderr={} stdout={}",
+            String::from_utf8_lossy(&reinstalled.stderr),
+            String::from_utf8_lossy(&reinstalled.stdout)
+        );
+        let migrated = fs::read_to_string(&config_path).unwrap();
+        assert!(migrated.contains(current_command), "{migrated}");
+    }
+
+    let doctor = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(
+        doctor.status.success(),
+        "stderr={} stdout={}",
+        String::from_utf8_lossy(&doctor.stderr),
+        String::from_utf8_lossy(&doctor.stdout)
+    );
+
+    let mut customized_legacy = legacy_configs[1].to_vec();
+    customized_legacy.extend_from_slice(b"# user customization\n");
+    fs::write(&config_path, &customized_legacy).unwrap();
+    let reinstalled = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_remove("RLM_DEPTH")
+        .args(["install", "codex"])
+        .env("HOME", &t)
+        .env("CODEX_HOME", &codex_home)
+        .env("AZDAJA_HOME", t.join("state"))
+        .output()
+        .unwrap();
+    assert!(reinstalled.status.success());
+    assert_eq!(fs::read(&config_path).unwrap(), customized_legacy);
+    let doctor = doctor_codex_fixture(&t, &codex_home, &t);
+    assert!(!doctor.status.success());
+    assert!(String::from_utf8_lossy(&doctor.stdout).contains(
+        "managed Codex sub_llm_cmd does not exactly match the isolated adapter contract"
+    ));
     fs::remove_dir_all(t).unwrap();
 }
 

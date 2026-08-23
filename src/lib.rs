@@ -830,6 +830,28 @@ fn remove_bound_file(path: &Path, file: &File) {
     }
 }
 
+struct BoundPrivateFile {
+    path: PathBuf,
+    file: File,
+}
+
+impl Drop for BoundPrivateFile {
+    fn drop(&mut self) {
+        remove_bound_file(&self.path, &self.file);
+    }
+}
+
+struct OwnedPrivateDirectory {
+    path: PathBuf,
+    directory: File,
+}
+
+impl Drop for OwnedPrivateDirectory {
+    fn drop(&mut self) {
+        cleanup_owned_directory(&self.path, &self.directory);
+    }
+}
+
 fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         let parent = open_private_directory(parent)?;
@@ -6921,14 +6943,95 @@ struct CommandModelReply {
     usage_observed: bool,
 }
 
+fn has_git_marker(path: &Path) -> Result<bool> {
+    match fs::symlink_metadata(path.join(".git")) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn validate_provider_sandbox_parent(parent: &Path, cwd: &Path) -> Result<()> {
+    let parent = fs::canonicalize(parent)
+        .with_context(|| format!("canonicalize provider sandbox parent {}", parent.display()))?;
+    let cwd = fs::canonicalize(cwd)
+        .with_context(|| format!("canonicalize provider launch directory {}", cwd.display()))?;
+    let project_root = cwd
+        .ancestors()
+        .find(|ancestor| has_git_marker(ancestor).unwrap_or(true))
+        .unwrap_or(cwd.as_path());
+    if parent.starts_with(project_root) {
+        bail!(
+            "provider sandbox root must be outside the current project; move AZDAJA_HOME outside {}",
+            project_root.display()
+        )
+    }
+    for ancestor in parent.ancestors() {
+        if has_git_marker(ancestor)? {
+            bail!(
+                "provider sandbox root is inside a project at {}; move AZDAJA_HOME outside that project",
+                ancestor.display()
+            )
+        }
+    }
+    Ok(())
+}
+
 fn call_model_command(
     prompt: &str,
     model: &str,
     cfg: &Config,
     depth: u32,
 ) -> Result<CommandModelReply> {
+    let needs_state =
+        cfg.sub_llm_cmd.contains("{prompt_file}") || cfg.sub_llm_cmd.contains("{sandbox_dir}");
+    let state = needs_state.then(state_home).transpose()?;
+    call_model_command_in_state(prompt, model, cfg, depth, state.as_deref())
+}
+
+fn call_model_command_in_state(
+    prompt: &str,
+    model: &str,
+    cfg: &Config,
+    depth: u32,
+    state: Option<&Path>,
+) -> Result<CommandModelReply> {
+    let provider_sandbox = if cfg.sub_llm_cmd.contains("{sandbox_dir}") {
+        let root = state.ok_or_else(|| anyhow!("provider sandbox requires a state directory"))?;
+        secure_dir(root)?;
+        let parent = root.join("provider-cwds");
+        secure_dir(&parent)?;
+        validate_provider_sandbox_parent(&parent, &env::current_dir()?)?;
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let mut made = None;
+        for salt in 0..100u8 {
+            let path = parent.join(format!("{}-{nanos}-{salt}", std::process::id()));
+            match create_new_private_directory(&path) {
+                Ok(directory) => {
+                    made = Some(OwnedPrivateDirectory { path, directory });
+                    break;
+                }
+                Err(error)
+                    if error
+                        .downcast_ref::<std::io::Error>()
+                        .is_some_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists) =>
+                {
+                    continue;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Some(made.ok_or_else(|| anyhow!("could not allocate provider sandbox"))?)
+    } else {
+        None
+    };
     let prompt_file = if cfg.sub_llm_cmd.contains("{prompt_file}") {
-        let dir = state_home()?.join("prompts");
+        let root = state.ok_or_else(|| anyhow!("prompt file requires a state directory"))?;
+        secure_dir(root)?;
+        let dir = root.join("prompts");
         secure_dir(&dir)?;
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -6938,10 +7041,11 @@ fn call_model_command(
         for salt in 0..100u8 {
             let path = dir.join(format!("{}-{nanos}-{salt}.txt", std::process::id()));
             match create_private_file(&path) {
-                Ok(mut file) => {
-                    file.write_all(prompt.as_bytes())?;
-                    validate_private_file(&file, &path)?;
-                    made = Some((path, file));
+                Ok(file) => {
+                    let mut file = BoundPrivateFile { path, file };
+                    file.file.write_all(prompt.as_bytes())?;
+                    validate_private_file(&file.file, &file.path)?;
+                    made = Some(file);
                     break;
                 }
                 Err(error)
@@ -6958,38 +7062,61 @@ fn call_model_command(
     } else {
         None
     };
-    let result = call_model_inner(
+    call_model_inner(
         prompt,
-        prompt_file.as_ref().map(|(path, _)| path.as_path()),
+        prompt_file.as_ref().map(|file| file.path.as_path()),
+        provider_sandbox
+            .as_ref()
+            .map(|directory| directory.path.as_path()),
         model,
         cfg,
         depth,
-    );
-    if let Some((path, file)) = prompt_file {
-        remove_bound_file(&path, &file);
-    }
-    result
+    )
 }
 fn call_model_inner(
     prompt: &str,
     prompt_path: Option<&Path>,
+    sandbox_path: Option<&Path>,
     model: &str,
     cfg: &Config,
     depth: u32,
 ) -> Result<CommandModelReply> {
     let mut argv =
         shlex::split(&cfg.sub_llm_cmd).ok_or_else(|| anyhow!("invalid sub_llm_cmd quoting"))?;
+    let isolated_environment_count = argv
+        .iter()
+        .filter(|arg| arg.as_str() == "{isolated_env}")
+        .count();
+    if argv
+        .iter()
+        .any(|arg| arg.contains("{isolated_env}") && arg != "{isolated_env}")
+        || isolated_environment_count > 1
+    {
+        bail!("{{isolated_env}} must be one standalone command argument")
+    }
+    let isolate_environment = isolated_environment_count == 1;
+    argv.retain(|arg| arg != "{isolated_env}");
     let path = prompt_path
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_default();
+    let sandbox = sandbox_path
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if cfg.sub_llm_cmd.contains("{sandbox_dir}") && sandbox_path.is_none() {
+        bail!("sub_llm_cmd requires a provider sandbox")
+    }
     for arg in &mut argv {
         *arg = arg
             .replace("{model}", model)
             .replace("{prompt_file}", &path)
+            .replace("{sandbox_dir}", &sandbox)
     }
     let (program, args) = argv
         .split_first()
         .ok_or_else(|| anyhow!("empty sub_llm_cmd"))?;
+    if isolate_environment && !is_codex_program(program) {
+        bail!("{{isolated_env}} is supported only for Codex commands")
+    }
     let stdin = if prompt_path.is_some() {
         Stdio::null()
     } else {
@@ -6998,10 +7125,16 @@ fn call_model_inner(
     let mut command = Command::new(program);
     command
         .args(args)
-        .env("RLM_DEPTH", depth.to_string())
         .stdin(stdin)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    configure_provider_environment(&mut command, depth, isolate_environment);
+    if let Some(sandbox_path) = sandbox_path {
+        command
+            .current_dir(sandbox_path)
+            .env("PWD", sandbox_path)
+            .env_remove("OLDPWD");
+    }
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -7117,13 +7250,64 @@ fn call_model_inner(
     })
 }
 
-fn is_codex_json_command(program: &str, args: &[String]) -> bool {
+const PROVIDER_ENV_ALLOWLIST: &[&str] = &[
+    "PATH",
+    "HOME",
+    "USERPROFILE",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "CODEX_HOME",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "NODE_EXTRA_CA_CERTS",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "no_proxy",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TZ",
+    "SYSTEMROOT",
+    "WINDIR",
+    "COMSPEC",
+    "PATHEXT",
+];
+
+fn configure_provider_environment(command: &mut Command, depth: u32, isolate: bool) {
+    if !isolate {
+        command.env("RLM_DEPTH", depth.to_string());
+        return;
+    }
+    let inherited: Vec<_> = PROVIDER_ENV_ALLOWLIST
+        .iter()
+        .filter_map(|key| env::var_os(key).map(|value| (*key, value)))
+        .collect();
+    command.env_clear();
+    for (key, value) in inherited {
+        command.env(key, value);
+    }
+    command.env("RLM_DEPTH", depth.to_string());
+}
+
+fn is_codex_program(program: &str) -> bool {
     let name = Path::new(program)
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or(program);
-    let name = name.to_ascii_lowercase();
-    (name == "codex" || name == "codex.exe") && args.iter().any(|arg| arg == "--json")
+        .unwrap_or(program)
+        .to_ascii_lowercase();
+    name == "codex" || name == "codex.exe"
+}
+
+fn is_codex_json_command(program: &str, args: &[String]) -> bool {
+    is_codex_program(program) && args.iter().any(|arg| arg == "--json")
 }
 
 fn parse_codex_jsonl_reply(jsonl: &str, model: &str) -> Result<ModelReply> {
@@ -7439,6 +7623,264 @@ JSONL
         assert_eq!(row.input_tokens, Some(31));
         assert_eq!(row.cache_read_tokens, Some(13));
         assert_eq!(row.output_tokens, Some(17));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn provider_sandbox_placeholder_sets_an_empty_private_working_directory() {
+        let root = temp_test_dir("provider-sandbox");
+        fs::create_dir_all(&root).unwrap();
+        let sandbox = root.join("empty-cwd");
+        let sandbox_directory = create_new_private_directory(&sandbox).unwrap();
+        let codex = root.join("codex");
+        write_executable(
+            &codex,
+            "#!/bin/sh\nsandbox_arg=''\nwhile [ \"$#\" -gt 0 ]; do\n    if [ \"$1\" = '-C' ]; then\n        shift\n        sandbox_arg=$1\n    fi\n    shift\ndone\ncwd=$(pwd)\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"%s|%s\"}}\\n' \"$cwd\" \"$sandbox_arg\"\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":1,\"reasoning_output_tokens\":0}}\\n'\n",
+        );
+        let cfg = Config {
+            sub_llm_cmd: format!(
+                "{} --json {{isolated_env}} -C {{sandbox_dir}}",
+                codex.display()
+            ),
+            ..Config::default()
+        };
+
+        let reply = call_model_inner("prompt", None, Some(&sandbox), "codex-model", &cfg, 0)
+            .unwrap()
+            .reply;
+        let expected = sandbox.to_string_lossy();
+        assert_eq!(reply.text, format!("{expected}|{expected}"));
+        assert_eq!(fs::read_dir(&sandbox).unwrap().count(), 0);
+        cleanup_owned_directory(&sandbox, &sandbox_directory);
+        assert!(!sandbox.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn provider_sandbox_placeholder_fails_closed_without_a_bound_directory() {
+        let cfg = Config {
+            sub_llm_cmd: "codex --json -C {sandbox_dir}".into(),
+            ..Config::default()
+        };
+        let error = match call_model_inner("prompt", None, None, "codex-model", &cfg, 0) {
+            Ok(_) => panic!("missing provider sandbox should fail closed"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("sub_llm_cmd requires a provider sandbox")
+        );
+    }
+
+    #[test]
+    fn isolated_provider_environment_is_allowlisted() {
+        let _guard = model_trace_test_lock().lock().unwrap();
+        let root = temp_test_dir("provider-sandbox-env");
+        let state = root.join("state");
+        fs::create_dir_all(&root).unwrap();
+        let codex = root.join("codex");
+        write_executable(
+            &codex,
+            "#!/bin/sh\nsecret=${AZDAJA_PROVIDER_SECRET-unset}\nauth=${OPENAI_API_KEY-unset}\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"%s|%s\"}}\\n' \"$secret\" \"$auth\"\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":1,\"reasoning_output_tokens\":0}}\\n'\n",
+        );
+        let old_secret = env::var_os("AZDAJA_PROVIDER_SECRET");
+        let old_key = env::var_os("OPENAI_API_KEY");
+        unsafe {
+            env::set_var("AZDAJA_PROVIDER_SECRET", "must-not-leak");
+            env::set_var("OPENAI_API_KEY", "auth-sentinel");
+        }
+        let cfg = Config {
+            sub_llm_cmd: format!(
+                "{} --json {{isolated_env}} -C {{sandbox_dir}}",
+                codex.display()
+            ),
+            ..Config::default()
+        };
+        let result = call_model_command_in_state("prompt", "codex-model", &cfg, 0, Some(&state));
+        unsafe {
+            match old_secret {
+                Some(value) => env::set_var("AZDAJA_PROVIDER_SECRET", value),
+                None => env::remove_var("AZDAJA_PROVIDER_SECRET"),
+            }
+            match old_key {
+                Some(value) => env::set_var("OPENAI_API_KEY", value),
+                None => env::remove_var("OPENAI_API_KEY"),
+            }
+        }
+        let reply = result.unwrap();
+        assert_eq!(reply.reply.text, "unset|unset");
+        assert_eq!(
+            fs::read_dir(state.join("provider-cwds")).unwrap().count(),
+            0
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn isolated_codex_provider_environment_scrubs_inherited_credentials() {
+        let _guard = model_trace_test_lock().lock().unwrap();
+        let root = temp_test_dir("provider-sandbox-isolated-env");
+        let state = root.join("state");
+        let codex_home = root.join("codex-home");
+        fs::create_dir_all(&codex_home).unwrap();
+        let codex = root.join("codex");
+        write_executable(
+            &codex,
+            "#!/bin/sh\nopenai=${OPENAI_API_KEY-unset}\ncodex_key=${CODEX_API_KEY-unset}\ncodex_token=${CODEX_ACCESS_TOKEN-unset}\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"%s|%s|%s|%s\"}}\\n' \"$openai\" \"$codex_key\" \"$codex_token\" \"$CODEX_HOME\"\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":1,\"reasoning_output_tokens\":0}}\\n'\n",
+        );
+        let values = [
+            ("OPENAI_API_KEY", "openai-sentinel"),
+            ("CODEX_API_KEY", "codex-key-sentinel"),
+            ("CODEX_ACCESS_TOKEN", "codex-token-sentinel"),
+        ];
+        let old_values: Vec<_> = values.iter().map(|(key, _)| env::var_os(key)).collect();
+        let old_codex_home = env::var_os("CODEX_HOME");
+        unsafe {
+            for (key, value) in values {
+                env::set_var(key, value);
+            }
+            env::set_var("CODEX_HOME", &codex_home);
+        }
+        let cfg = Config {
+            sub_llm_cmd: format!(
+                "{} --json {{isolated_env}} -C {{sandbox_dir}}",
+                codex.display()
+            ),
+            ..Config::default()
+        };
+        let result = call_model_command_in_state("prompt", "codex-model", &cfg, 0, Some(&state));
+        unsafe {
+            for ((key, _), old) in values.into_iter().zip(old_values) {
+                match old {
+                    Some(value) => env::set_var(key, value),
+                    None => env::remove_var(key),
+                }
+            }
+            match old_codex_home {
+                Some(value) => env::set_var("CODEX_HOME", value),
+                None => env::remove_var("CODEX_HOME"),
+            }
+        }
+        let reply = result.unwrap();
+        assert_eq!(
+            reply.reply.text,
+            format!("unset|unset|unset|{}", codex_home.display())
+        );
+        assert_eq!(
+            fs::read_dir(state.join("provider-cwds")).unwrap().count(),
+            0
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn isolated_environment_marker_is_standalone_and_codex_only() {
+        let root = temp_test_dir("provider-environment-marker");
+        fs::create_dir_all(&root).unwrap();
+        let sandbox = root.join("empty-cwd");
+        let sandbox_directory = create_new_private_directory(&sandbox).unwrap();
+        for command in [
+            "codex --json prefix-{isolated_env} -C {sandbox_dir}",
+            "codex --json {isolated_env} {isolated_env} -C {sandbox_dir}",
+            "custom-provider {isolated_env} -C {sandbox_dir}",
+        ] {
+            let cfg = Config {
+                sub_llm_cmd: command.into(),
+                ..Config::default()
+            };
+            assert!(call_model_inner("prompt", None, Some(&sandbox), "model", &cfg, 0).is_err());
+        }
+        cleanup_owned_directory(&sandbox, &sandbox_directory);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn provider_sandbox_parent_must_be_outside_project_roots() {
+        let root = temp_test_dir("provider-sandbox-root");
+        let outer = root.join("outer");
+        let cwd = outer.join("work");
+        let nested = outer.join("state/provider-cwds");
+        let external = root.join("external/provider-cwds");
+        let other_project = root.join("other-project/provider-cwds");
+        for directory in [&cwd, &nested, &external, &other_project] {
+            fs::create_dir_all(directory).unwrap();
+        }
+        fs::create_dir(outer.join(".git")).unwrap();
+        fs::create_dir(root.join("other-project/.git")).unwrap();
+
+        assert!(validate_provider_sandbox_parent(&nested, &cwd).is_err());
+        validate_provider_sandbox_parent(&external, &cwd).unwrap();
+        assert!(validate_provider_sandbox_parent(&other_project, &cwd).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn provider_sandboxes_clean_up_across_execution_outcomes_and_concurrency() {
+        let root = temp_test_dir("provider-sandbox-cleanup");
+        let state = root.join("state");
+        fs::create_dir_all(&root).unwrap();
+        let success = root.join("codex");
+        write_executable(
+            &success,
+            "#!/bin/sh\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"ok\"}}\\n'\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":7,\"cached_input_tokens\":2,\"cache_write_input_tokens\":0,\"output_tokens\":3,\"reasoning_output_tokens\":1}}\\n'\n",
+        );
+        let failure = root.join("failing-provider");
+        write_executable(&failure, "#!/bin/sh\nexit 9\n");
+        let slow = root.join("slow-provider");
+        write_executable(&slow, "#!/bin/sh\nsleep 2\n");
+        let command = |program: &Path, timeout| Config {
+            sub_llm_cmd: format!("{} --json -C {{sandbox_dir}}", program.display()),
+            sub_timeout: timeout,
+            ..Config::default()
+        };
+        let assert_empty = || {
+            let directory = state.join("provider-cwds");
+            assert!(directory.is_dir());
+            assert_eq!(fs::read_dir(directory).unwrap().count(), 0);
+        };
+
+        let reply = call_model_command_in_state(
+            "prompt",
+            "codex-model",
+            &command(&success, 5),
+            0,
+            Some(&state),
+        )
+        .unwrap();
+        assert_eq!(reply.reply.text, "ok");
+        assert_eq!(reply.reply.usage.input, 7);
+        assert_eq!(reply.reply.usage.cache_read, 2);
+        assert_eq!(reply.reply.usage.output, 3);
+        assert_empty();
+
+        for cfg in [
+            command(&failure, 5),
+            command(&slow, 1),
+            command(&root.join("missing-provider"), 5),
+        ] {
+            assert!(
+                call_model_command_in_state("prompt", "codex-model", &cfg, 0, Some(&state))
+                    .is_err()
+            );
+            assert_empty();
+        }
+
+        let cfg = command(&success, 5);
+        thread::scope(|scope| {
+            let workers: Vec<_> = (0..8)
+                .map(|_| {
+                    scope.spawn(|| {
+                        call_model_command_in_state("prompt", "codex-model", &cfg, 0, Some(&state))
+                            .unwrap();
+                    })
+                })
+                .collect();
+            for worker in workers {
+                worker.join().unwrap();
+            }
+        });
+        assert_empty();
         fs::remove_dir_all(root).unwrap();
     }
 
