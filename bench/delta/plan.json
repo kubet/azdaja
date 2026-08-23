@@ -1,6 +1,6 @@
 {
   "schema": "azdaja-delta-ladder-v3",
-  "stage": "synthetic-clear-sms-metadata-projection-r7",
+  "stage": "synthetic-clear-sms-metadata-projection-r8",
   "model": {
     "codex": "gpt-5.6-luna",
     "opencode": "openai/gpt-5.6-luna",
@@ -18,14 +18,14 @@
   },
   "fixture": {
     "generator": "fixture.py",
-    "generator_sha256": "505ffc67318ec4d0f3c9f3dea74ffcbffbd555e1e6704ffac14b9a84f33aeb73",
-    "generated_context_sha256": "d09d8b823db598a53a2fa405448ae1b08f1f2f64650f7a3f09af98d7135284eb",
-    "context_bytes": 1306076,
+    "generator_sha256": "7766da301184c649eb093431327a62e50832b035c833ea3ec458cf86b24dfd5e",
+    "generated_context_sha256": "cb2b72c4a945c07186044aad2ddfcb94fa9e1bbadd4bae03f59843568d655d79",
+    "context_bytes": 1306163,
     "total_records": 306,
-    "selected_records": 226,
-    "unique_decision_evidence": 226,
-    "expected_answer": 149,
-    "compact_evidence_bytes": 27053
+    "selected_records": 64,
+    "unique_decision_evidence": 64,
+    "expected_answer": 42,
+    "compact_evidence_bytes": 7655
   },
   "prompts": {
     "shared": "prompt.txt",
@@ -35,7 +35,7 @@
   },
   "runner": {
     "path": "run.py",
-    "sha256": "0da611b3696d3563bc2d22776318c8e6468670489d803fe7d8e7e7962eff1b77"
+    "sha256": "6db73454b5d68e52117d5a28a3853a822bab661b188f076bbe3c296b7226c983"
   },
   "execution": {
     "repetitions": 1,
@@ -44,6 +44,7 @@
     "candidate_inner_attempt_ceiling": 1,
     "candidate_transaction_ceiling": 1,
     "candidate_config_max_calls_per_cell": 1,
+    "candidate_config_cell_timeout_seconds": 180,
     "max_unique_items_per_shard": 256,
     "max_chars_per_shard": 65536,
     "workers": 6,
@@ -59,7 +60,7 @@
     ],
     "codex_sandbox": "workspace-write",
     "codex_workspace_network_access": true,
-    "codex_add_dir": "AZDAJA_HOME"
+    "codex_add_dir": "owner-private arm root"
   },
   "accounting": {
     "outer_usage_fields": [

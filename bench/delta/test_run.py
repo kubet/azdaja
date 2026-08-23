@@ -1,6 +1,9 @@
 import os
 import json
+import re
+import shutil
 import stat
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,12 +14,11 @@ import run
 class DeltaRunnerContractTests(unittest.TestCase):
     def test_fixture_is_large_compact_clear_and_exact(self):
         validated = run.FIXTURE.validate()
-        self.assertEqual(validated["context_sha256"], "d09d8b823db598a53a2fa405448ae1b08f1f2f64650f7a3f09af98d7135284eb")
-        self.assertEqual(validated["context_bytes"], 1_306_076)
+        self.assertGreater(validated["context_bytes"], 1_000_000)
         self.assertEqual(validated["total_records"], 306)
-        self.assertEqual(validated["selected_records"], 226)
-        self.assertEqual(validated["unique_decision_evidence"], 226)
-        self.assertEqual(validated["expected_answer"], 149)
+        self.assertEqual(validated["selected_records"], 64)
+        self.assertEqual(validated["unique_decision_evidence"], 64)
+        self.assertEqual(validated["expected_answer"], 42)
         self.assertLess(validated["compact_evidence_bytes"], 65_536)
 
     def test_primary_uncached_formula_is_exact(self):
@@ -96,6 +98,60 @@ class DeltaRunnerContractTests(unittest.TestCase):
             self.assertEqual(text.count("llm_batch("), 1)
             self.assertIn(f"AZDAJA={binary}", text)
             self.assertEqual(driver.stat().st_uid, os.getuid())
+
+    def test_candidate_driver_completes_with_one_fake_structured_provider_call(self):
+        labels = "".join("H" if label else "S" for _, label in run.FIXTURE.records() if label is not None)
+        self.assertEqual(len(labels), 64)
+        with tempfile.TemporaryDirectory(dir=os.environ.get("JCODE_SCRATCH_DIR")) as temporary:
+            campaign = Path(temporary)
+            try:
+                for harness in ("codex", "opencode"):
+                    work, env, trace = run.prepare_arm(campaign, harness, "candidate")
+                    fake_dir = work.parent / "fake-provider"
+                    fake_dir.mkdir(mode=0o700)
+                    fake = fake_dir / harness
+                    payload = json.dumps({"labels": labels})
+                    if harness == "codex":
+                        body = (
+                            "#!/bin/sh\n"
+                            f"printf '%s\\n' {run.shlex.quote(json.dumps({'type': 'item.completed', 'item': {'type': 'agent_message', 'text': payload}}))}\n"
+                            f"printf '%s\\n' {run.shlex.quote(json.dumps({'type': 'turn.completed', 'usage': {'input_tokens': 50, 'cached_input_tokens': 40, 'cache_write_input_tokens': 5, 'output_tokens': 7, 'reasoning_output_tokens': 3}}))}\n"
+                        )
+                        command = f'{fake} --json {{isolated_env}} -C {{sandbox_dir}}'
+                        config = Path(env["HOME"]) / ".agents/skills/azdaja/config.toml"
+                    else:
+                        body = (
+                            "#!/bin/sh\n"
+                            f"printf '%s\\n' {run.shlex.quote(json.dumps({'type': 'text', 'part': {'type': 'text', 'text': payload}}))}\n"
+                            f"printf '%s\\n' {run.shlex.quote(json.dumps({'type': 'step_finish', 'part': {'type': 'step-finish', 'reason': 'stop', 'cost': 0, 'tokens': {'input': 10, 'output': 7, 'reasoning': 3, 'cache': {'read': 40, 'write': 5}}}}))}\n"
+                        )
+                        command = f'{fake} --format json --model {{model}}'
+                        config = Path(env["XDG_CONFIG_HOME"]) / "opencode/skills/azdaja/config.toml"
+                    fake.write_text(body)
+                    fake.chmod(0o500)
+                    text = config.read_text()
+                    text = re.sub(r'^sub_llm_cmd = .*$', f'sub_llm_cmd = {json.dumps(command)}', text, count=1, flags=re.MULTILINE)
+                    config.chmod(0o600)
+                    config.write_text(text)
+                    completed = subprocess.run(
+                        [str(work / "azdaja-evaluate")],
+                        cwd=work,
+                        env=env,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        timeout=30,
+                        check=False,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    self.assertEqual(completed.stdout.strip(), "Answer: 42")
+                    summary = run.trace_summary(trace)
+                    self.assertEqual(summary["attempts"], 1)
+                    self.assertEqual(summary["successes"], 1)
+                    self.assertEqual(summary["failures"], 0)
+                    self.assertEqual(summary["measured_uncached_tokens"], 25)
+            finally:
+                shutil.rmtree(campaign, ignore_errors=True)
 
 
 if __name__ == "__main__":

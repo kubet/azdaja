@@ -59,7 +59,7 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
         "plan",
     )
     require(plan["schema"] == "azdaja-delta-ladder-v3", "schema")
-    require(plan["stage"] == "synthetic-clear-sms-metadata-projection-r7", "stage")
+    require(plan["stage"] == "synthetic-clear-sms-metadata-projection-r8", "stage")
 
     model = exact_keys(plan["model"], {"codex", "opencode", "outer_reasoning", "inner_reasoning"}, "model")
     require(model == {
@@ -149,9 +149,9 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     }, "generated fixture identity")
     require(fixture["context_bytes"] > 1_000_000, "large context threshold")
     require(fixture["total_records"] == 306, "total record count")
-    require(fixture["selected_records"] == 226, "selected record count")
-    require(fixture["unique_decision_evidence"] == 226, "unique evidence count")
-    require(fixture["expected_answer"] == 149, "expected answer")
+    require(fixture["selected_records"] == 64, "selected record count")
+    require(fixture["unique_decision_evidence"] == 64, "unique evidence count")
+    require(fixture["expected_answer"] == 42, "expected answer")
     require(fixture["compact_evidence_bytes"] < 65536, "compact evidence ceiling")
 
     prompts = exact_keys(
@@ -165,7 +165,10 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     require(sha256(prefix) == prompts["candidate_prefix_sha256"], "candidate prefix hash")
     shared_text = shared.read_text(encoding="utf-8")
     prefix_text = prefix.read_text(encoding="utf-8")
-    require("149" not in shared_text and "132" not in shared_text and "8638" not in shared_text, "prompt leaks gold")
+    require(
+        all(gold not in shared_text for gold in ("42", "149", "132", "8638")),
+        "prompt leaks gold",
+    )
     require("Group byte-identical" in shared_text and "Return exactly `Answer: number`" in shared_text, "shared prompt contract")
     for term in (
         "./azdaja-evaluate",
@@ -186,7 +189,7 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
         "ensure_owner_directory(root)",
         "ensure_owner_directory(work)",
         '"--sandbox",\n            "workspace-write"',
-        '"--add-dir",\n            env["AZDAJA_HOME"]',
+        '"--add-dir",\n            str(work.parent)',
         '"sandbox_workspace_write.network_access=true"',
         '"--cd",\n            str(work)',
         "write_candidate_driver(work, env, harness)",
@@ -198,7 +201,7 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
 
     execution = exact_keys(
         plan["execution"],
-        {"repetitions", "retry", "timeout_seconds", "candidate_inner_attempt_ceiling", "candidate_transaction_ceiling", "candidate_config_max_calls_per_cell", "max_unique_items_per_shard", "max_chars_per_shard", "workers", "codex_sandbox", "codex_workspace_network_access", "codex_add_dir", "parallel_groups"},
+        {"repetitions", "retry", "timeout_seconds", "candidate_inner_attempt_ceiling", "candidate_transaction_ceiling", "candidate_config_max_calls_per_cell", "candidate_config_cell_timeout_seconds", "max_unique_items_per_shard", "max_chars_per_shard", "workers", "codex_sandbox", "codex_workspace_network_access", "codex_add_dir", "parallel_groups"},
         "execution",
     )
     require(execution["repetitions"] == 1 and execution["retry"] is False, "one-shot no-retry contract")
@@ -206,12 +209,13 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     require(execution["candidate_inner_attempt_ceiling"] == 1, "inner call ceiling")
     require(execution["candidate_transaction_ceiling"] == 1, "transaction ceiling")
     require(execution["candidate_config_max_calls_per_cell"] == 1, "runtime call ceiling")
+    require(execution["candidate_config_cell_timeout_seconds"] == 180, "candidate cell timeout")
     require(execution["max_unique_items_per_shard"] == 256, "item shard cap")
     require(execution["max_chars_per_shard"] == 65536, "character shard cap")
     require(execution["workers"] == 6, "worker cap")
     require(execution["codex_sandbox"] == "workspace-write", "Codex sandbox")
     require(execution["codex_workspace_network_access"] is True, "Codex nested-provider network")
-    require(execution["codex_add_dir"] == "AZDAJA_HOME", "Codex owner-private state add-dir")
+    require(execution["codex_add_dir"] == "owner-private arm root", "Codex owner-private arm add-dir")
     require(execution["parallel_groups"] == [
         ["codex/native", "opencode/native"],
         ["codex/candidate", "opencode/candidate"],

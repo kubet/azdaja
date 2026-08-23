@@ -95,7 +95,7 @@ for raw in lines:
         positions[value] = len(items)
         items.append(value)
         multiplicities.append(1)
-if len(items) != 226:
+if len(items) != {FIXTURE.SELECTED_RECORDS}:
     raise ValueError("selected evidence count mismatch")
 payload = []
 for index in range(len(items)):
@@ -315,6 +315,8 @@ def trace_summary(path: Path) -> dict[str, Any]:
             "providers": [],
             "categories": [],
             "error_categories": [],
+            "error_sha256": [],
+            "error_summaries": [],
         }
     rows = jsonl(path.read_bytes())
     attempts = [row for row in rows if row.get("event") == "model_attempt"]
@@ -343,6 +345,16 @@ def trace_summary(path: Path) -> dict[str, Any]:
     uncached = usage["input"] - usage["cache_read"]
     if uncached < 0:
         raise ValueError("inner cached input exceeds input")
+    failure_errors = [row.get("error") for row in attempts if row.get("outcome") == "failed"]
+    if not all(isinstance(error, str) for error in failure_errors):
+        raise ValueError("failed inner attempts require string errors")
+    scratch = os.environ.get("JCODE_SCRATCH_DIR", "")
+    summaries = []
+    for error in failure_errors:
+        summary = error.replace(str(Path.home()), "$HOME")
+        if scratch:
+            summary = summary.replace(scratch, "$JCODE_SCRATCH_DIR")
+        summaries.append(summary[-500:])
     return {
         "attempts": len(attempts),
         "failures": failures,
@@ -357,6 +369,8 @@ def trace_summary(path: Path) -> dict[str, Any]:
         "providers": sorted({row["provider"] for row in successes if isinstance(row.get("provider"), str)}),
         "categories": [row.get("category") for row in attempts],
         "error_categories": [row.get("error_category") for row in attempts],
+        "error_sha256": [hashlib.sha256(error.encode()).hexdigest() for error in failure_errors],
+        "error_summaries": summaries,
     }
 
 
@@ -434,11 +448,17 @@ def prepare_arm(campaign: Path, harness: str, arm: str) -> tuple[Path, dict[str,
             else Path(env["XDG_CONFIG_HOME"]) / "opencode/skills/azdaja/config.toml"
         )
         text = config.read_text(encoding="utf-8")
-        if text.count("max_calls_per_cell = 64") != 1:
+        if text.count("max_calls_per_cell = 64") != 1 or text.count("cell_timeout = 60") != 1:
             raise RuntimeError(f"{harness} candidate call-limit source drift")
-        config.write_text(text.replace("max_calls_per_cell = 64", "max_calls_per_cell = 1"), encoding="utf-8")
+        config.write_text(
+            text.replace("max_calls_per_cell = 64", "max_calls_per_cell = 1").replace(
+                "cell_timeout = 60", "cell_timeout = 180"
+            ),
+            encoding="utf-8",
+        )
         config.chmod(0o600)
-        if "max_calls_per_cell = 1" not in config.read_text(encoding="utf-8"):
+        patched = config.read_text(encoding="utf-8")
+        if "max_calls_per_cell = 1" not in patched or "cell_timeout = 180" not in patched:
             raise RuntimeError(f"{harness} candidate call-limit patch failed")
         write_candidate_driver(work, env, harness)
     return work, env, trace
@@ -483,7 +503,7 @@ def invoke(campaign: Path, harness: str, arm: str) -> dict[str, Any]:
             "--sandbox",
             "workspace-write",
             "--add-dir",
-            env["AZDAJA_HOME"],
+            str(work.parent),
             "-c",
             "model_reasoning_effort=low",
             "-c",
@@ -534,7 +554,7 @@ def invoke(campaign: Path, harness: str, arm: str) -> dict[str, Any]:
     try:
         inner = trace_summary(trace)
     except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
-        inner = {"error": str(exc), "attempts": -1, "failures": -1, "successes": -1, "usage": {}, "measured_uncached_tokens": None, "measured_gross_tokens": None, "usage_complete": False, "usage_complete_successes": 0, "missing_usage_fields": [], "models": [], "providers": [], "categories": [], "error_categories": []}
+        inner = {"error": str(exc), "attempts": -1, "failures": -1, "successes": -1, "usage": {}, "measured_uncached_tokens": None, "measured_gross_tokens": None, "usage_complete": False, "usage_complete_successes": 0, "missing_usage_fields": [], "models": [], "providers": [], "categories": [], "error_categories": [], "error_sha256": [], "error_summaries": []}
     outer_uncached = usage_uncached_total(usage)
     outer_gross = usage_gross_total(usage)
     inner_uncached = inner.get("measured_uncached_tokens")

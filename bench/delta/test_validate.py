@@ -53,8 +53,8 @@ class DeltaPlanTests(unittest.TestCase):
     def test_valid_plan(self):
         result = validate.validate(self.plan_path, HERE.parents[1])
         self.assertTrue(result["valid"])
-        self.assertEqual(result["selected_records"], 226)
-        self.assertEqual(result["unique_decision_evidence"], 226)
+        self.assertEqual(result["selected_records"], 64)
+        self.assertEqual(result["unique_decision_evidence"], 64)
         self.assertEqual(result["maximum_candidate_inner_attempts_per_harness"], 1)
 
     def test_model_and_reasoning_are_luna_low_only(self):
@@ -65,6 +65,7 @@ class DeltaPlanTests(unittest.TestCase):
         self.assert_blocked(lambda p: p["execution"].__setitem__("retry", True))
         self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_inner_attempt_ceiling", 2))
         self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_config_max_calls_per_cell", 2))
+        self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_config_cell_timeout_seconds", 60))
         self.assert_blocked(lambda p: p["execution"].__setitem__("candidate_transaction_ceiling", 2))
         self.assert_blocked(lambda p: p["gates"].__setitem__("native_inner_attempts_must_equal", 1))
 
@@ -99,7 +100,7 @@ class DeltaPlanTests(unittest.TestCase):
         self.assert_runner_blocked(lambda text: text.replace('"--cd",\n            str(work)', '"-C",\n            str(work)'))
         self.assert_runner_blocked(lambda text: text.replace('"workspace-write"', '"read-only"', 1))
         self.assert_runner_blocked(lambda text: text.replace('"sandbox_workspace_write.network_access=true"', '"sandbox_workspace_write.network_access=false"', 1))
-        self.assert_runner_blocked(lambda text: text.replace('            "--add-dir",\n            env["AZDAJA_HOME"],\n', '', 1))
+        self.assert_runner_blocked(lambda text: text.replace('            "--add-dir",\n            str(work.parent),\n', '', 1))
         self.assert_runner_blocked(lambda text: text.replace("    ensure_owner_directory(work)\n", "", 1))
 
     def test_quality_and_efficiency_gates_are_required(self):

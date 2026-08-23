@@ -2,9 +2,9 @@
 
 This is a one-shot diagnostic of Azdaja's intended metadata-projection advantage. It is not a general benchmark or a claim of broad superiority.
 
-## Frozen r7 fixture
+## Frozen r8 fixture
 
-`fixture.py` deterministically generates a public 1,306,076-byte context with 306 records. Exactly 226 May records require semantic spam-versus-ham classification. Their long `User` fields are irrelevant synthetic metadata, while each `Instance` is complete decision evidence. The selected set has 226 unique instances, a 27,053-byte compact projection, and a frozen answer of 149 ham messages.
+`fixture.py` deterministically generates a public 1,306,163-byte context with 306 records. Exactly 64 May records require semantic spam-versus-ham classification. Their long `User` fields are irrelevant synthetic metadata, while each `Instance` is complete decision evidence. The selected set has 64 unique instances, a 7,655-byte compact projection, and a frozen answer of 42 ham messages.
 
 The messages use clear legitimate and unsolicited-scam categories. This reduces quality variance while retaining the workload property under test: the native harness must discover and perform the projection, while the Azdaja arm receives a pinned one-call execution shim that performs deterministic filtering and projection inside Azdaja before one semantic batch.
 
@@ -18,8 +18,9 @@ Both harnesses use GPT-5.6 Luna at low reasoning.
 - Every arm runs in an owner-only `0700` work directory.
 - The release Azdaja binary and resolved Codex/OpenCode executable paths, versions, and SHA-256 hashes are exact plan pins.
 - Codex is pinned to `--sandbox workspace-write --cd <arm-workdir>`.
-- Codex adds only the owner-private `AZDAJA_HOME` state directory as writable and enables workspace network transport so the nested Luna provider call can complete. Web search remains disabled.
+- Codex adds the isolated owner-private arm root as writable so nested provider state and temporary files remain usable without exposing any other campaign arm. Workspace network transport is enabled for the nested Luna call. Web search remains disabled.
 - Candidate config is runtime-patched to `max_calls_per_cell = 1`.
+- Candidate config is runtime-patched to a 180-second cell timeout inside the unchanged 300-second arm timeout.
 - The candidate outer harness must run `./azdaja-evaluate` exactly once and must not read the context itself.
 - The shim runs one literal `start`, `load`, `exec`, `final`, and `kill` lifecycle.
 - The cell makes exactly one `llm_batch` call with one compact prompt, six workers, and the same harness-specific Luna model.
@@ -51,6 +52,7 @@ The normalized `input` field is total prompt input including cache reads. Codex 
 - r5 pinned owner-only work directories and explicit Codex sandbox/cwd arguments. Its single paired result is frozen at `results/r5-result.json`. The gate failed because passive skill activation produced zero candidate inner attempts, and OpenCode-native was not exact. No efficiency claim was made.
 - r6 was a new diagnostic fixture and an outcome-independent activation repair. Its one live attempt stopped while resolving the parallel native group because OpenCode's fresh-input counter was incorrectly treated as total input. The empty result artifact and exception are recorded in `results/r6-failure.json`. The candidate group never started, and no efficiency claim was made.
 - r7 kept the frozen r6 fixture and execution contract, but normalized OpenCode fresh input plus cache reads into the same terminal representation as Codex before applying the preregistered uncached-token formula. Its exact result is frozen at `results/r7-result.json`. Both native arms returned the exact answer. Both candidate arms entered exactly one inner attempt, but those attempts failed before producing usage or an answer. No efficiency claim was made.
+- r8 reduces the semantic batch from 226 to 64 clear messages while retaining a context above 1 MiB, binds the full isolated arm root for nested Codex state, raises only the candidate cell timeout, and adds a provider-free end-to-end candidate lifecycle test for both structured harness transports. It was frozen and pushed before any r8 provider call.
 
 ## Provider-free validation
 
