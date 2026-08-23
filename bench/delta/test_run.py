@@ -71,6 +71,8 @@ class DeltaRunnerContractTests(unittest.TestCase):
             self.assertIn(f'model="{model}"', cell)
             self.assertEqual(cell.count("FINAL("), 1)
             self.assertIn('FINAL("Answer: " + str(ham))', cell)
+            self.assertIn('line.startswith("Answer: ")', cell)
+            self.assertNotIn('decoded["labels"]', cell)
 
     def test_followup_launches_only_the_direct_candidate_driver(self):
         invoke_source = inspect.getsource(run.invoke_candidate_direct)
@@ -110,8 +112,6 @@ class DeltaRunnerContractTests(unittest.TestCase):
             self.assertEqual(driver.stat().st_uid, os.getuid())
 
     def test_candidate_driver_completes_with_one_fake_structured_provider_call(self):
-        labels = "".join("H" if label else "S" for _, label in run.FIXTURE.records() if label is not None)
-        self.assertEqual(len(labels), 64)
         with tempfile.TemporaryDirectory(dir=os.environ.get("JCODE_SCRATCH_DIR")) as temporary:
             campaign = Path(temporary)
             try:
@@ -120,7 +120,7 @@ class DeltaRunnerContractTests(unittest.TestCase):
                     fake_dir = work.parent / "fake-provider"
                     fake_dir.mkdir(mode=0o700)
                     fake = fake_dir / harness
-                    payload = json.dumps({"labels": labels})
+                    payload = "Answer: 42"
                     if harness == "codex":
                         body = (
                             "#!/bin/sh\n"

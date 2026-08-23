@@ -59,7 +59,7 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
         "plan",
     )
     require(plan["schema"] == "azdaja-delta-followup-v1", "schema")
-    require(plan["stage"] == "synthetic-clear-sms-metadata-projection-r9-direct-followup", "stage")
+    require(plan["stage"] == "synthetic-clear-sms-metadata-projection-r10-answer-followup", "stage")
 
     model = exact_keys(plan["model"], {"codex", "opencode", "outer_reasoning", "inner_reasoning"}, "model")
     require(model == {
@@ -190,6 +190,9 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
         "ensure_owner_directory(work)",
         "write_candidate_driver(work, env, harness)",
         "llm_batch([prompt], workers=6, model=",
+        'line.startswith("Answer: ")',
+        'raise ValueError("semantic answer contract mismatch")',
+        '>exec.stdout 2>exec.stderr',
         '"$AZDAJA" final "$sid"',
         "def invoke_candidate_direct",
         'command = [str(work / "azdaja-evaluate")]',

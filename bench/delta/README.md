@@ -2,7 +2,7 @@
 
 This is a one-shot diagnostic of Azdaja's intended metadata-projection advantage. It is not a general benchmark or a claim of broad superiority.
 
-## Frozen r9 direct follow-up
+## Frozen r10 answer follow-up
 
 `fixture.py` deterministically generates a public 1,306,163-byte context with 306 records. Exactly 64 May records require semantic spam-versus-ham classification. Their long `User` fields are irrelevant synthetic metadata, while each `Instance` is complete decision evidence. The selected set has 64 unique instances, a 7,655-byte compact projection, and a frozen answer of 42 ham messages.
 
@@ -10,9 +10,9 @@ The messages use clear legitimate and unsolicited-scam categories. This reduces 
 
 ## Execution contract
 
-Both harnesses use GPT-5.6 Luna at low reasoning. r9 reuses only the exact correct native rows from the frozen r8 result, then makes exactly two new model calls through Azdaja.
+Both harnesses use GPT-5.6 Luna at low reasoning. r10 reuses only the exact correct native rows from the frozen r8 result, then makes exactly two new model calls through Azdaja.
 
-- The r8 Codex-native and OpenCode-native rows are hash-bound as the baseline. r9 makes no new native or outer-model call.
+- The r8 Codex-native and OpenCode-native rows are hash-bound as the baseline. r10 makes no new native or outer-model call.
 - The direct Codex-backed and OpenCode-backed Azdaja candidates run in parallel.
 - Each new candidate has one 300-second timeout and no retry.
 - Every arm runs in an owner-only `0700` work directory.
@@ -54,6 +54,7 @@ The normalized `input` field is total prompt input including cache reads. Codex 
 - r7 kept the frozen r6 fixture and execution contract, but normalized OpenCode fresh input plus cache reads into the same terminal representation as Codex before applying the preregistered uncached-token formula. Its exact result is frozen at `results/r7-result.json`. Both native arms returned the exact answer. Both candidate arms entered exactly one inner attempt, but those attempts failed before producing usage or an answer. No efficiency claim was made.
 - r8 reduced the semantic batch from 226 to 64 clear messages while retaining a context above 1 MiB, bound the full isolated arm root for nested Codex state, raised only the candidate cell timeout, and added a provider-free end-to-end candidate lifecycle test for both structured harness transports. Its exact result is frozen at `results/r8-result.json`. Both native arms were exact. Both candidate inner calls succeeded with complete usage and large token reductions, but the unnecessary outer model relay did not return the driver's answer unchanged. No efficiency claim was made.
 - r9 removed that redundant relay. It was explicitly a candidate-only follow-up against the hash-bound r8 native rows, not a fresh concurrent paired run. Its exact result is frozen at `results/r9-result.json`. Both direct candidate calls entered exactly one successful inner Luna turn with complete usage and were materially below the frozen native rows in uncached tokens and wall time. The cell then rejected the model-formatted 64-label payload before writing a final answer, so quality failed and no efficiency claim is made.
+- r10 keeps the direct candidate execution and replaces only the fragile 64-label serialization with a minimal aggregate `Answer: <H count>` response contract. It remains one semantic call per harness, with the same projected evidence, model, reasoning, baseline, accounting, quality gate, and no-retry schedule.
 
 ## Provider-free validation
 

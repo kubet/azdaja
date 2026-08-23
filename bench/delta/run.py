@@ -79,7 +79,6 @@ def managed_binary(env: dict[str, str], harness: str) -> Path:
 def candidate_cell(model: str) -> str:
     return f'''lines = source.splitlines()
 items = []
-multiplicities = []
 positions = {{}}
 for raw in lines:
     pieces = raw.split(" || ")
@@ -90,35 +89,30 @@ for raw in lines:
     value = pieces[2][10:]
     if value == "":
         raise ValueError("empty decision evidence")
-    if value in positions:
-        multiplicities[positions[value]] += 1
-    else:
+    if value not in positions:
         positions[value] = len(items)
         items.append(value)
-        multiplicities.append(1)
 if len(items) != {FIXTURE.SELECTED_RECORDS}:
     raise ValueError("selected evidence count mismatch")
 payload = []
 for index in range(len(items)):
     payload.append(str(index) + "\\t" + json.dumps(items[index]))
-prompt = "Classify every SMS below. H means a legitimate requested personal, work, school, travel, appointment, delivery, repair, or community message. S means unsolicited prize, phishing, fee, gambling, miracle-product, guaranteed-income, guaranteed-return, premium-rate, or credential-stealing promotion. Return exactly one JSON object with key labels and a string of exactly " + str(len(items)) + " H/S characters in row order, with no prose.\\n" + "\\n".join(payload)
+prompt = "Classify every SMS below. Count H, where H means a legitimate requested personal, work, school, travel, appointment, delivery, repair, or community message. Treat unsolicited prize, phishing, fee, gambling, miracle-product, guaranteed-income, guaranteed-return, premium-rate, or credential-stealing promotions as not H. Return exactly one line: Answer: <H count>.\\n" + "\\n".join(payload)
 if len(prompt) > 65536:
     raise ValueError("compact prompt exceeds character ceiling")
 semantic_rows = llm_batch([prompt], workers=6, model={json.dumps(model)})
 if len(semantic_rows) != 1:
     raise ValueError("semantic result count mismatch")
-decoded = json.loads(semantic_rows[0])
-if len(decoded) != 1 or "labels" not in decoded or not isinstance(decoded["labels"], str):
-    raise ValueError("semantic schema mismatch")
-labels = decoded["labels"]
-if len(labels) != len(items):
-    raise ValueError("semantic coverage mismatch")
-ham = 0
-for index in range(len(labels)):
-    if labels[index] == "H":
-        ham += multiplicities[index]
-    elif labels[index] != "S":
-        raise ValueError("semantic label domain mismatch")
+answer_lines = []
+for line in semantic_rows[0].splitlines():
+    line = line.strip()
+    if line.startswith("Answer: "):
+        answer_lines.append(line[8:])
+if len(answer_lines) != 1 or not answer_lines[0].isdigit():
+    raise ValueError("semantic answer contract mismatch")
+ham = int(answer_lines[0])
+if ham < 0 or ham > len(items):
+    raise ValueError("semantic answer range mismatch")
 FINAL("Answer: " + str(ham))
 '''
 
@@ -131,6 +125,7 @@ def write_candidate_driver(work: Path, env: dict[str, str], harness: str) -> Non
     driver = work / "azdaja-evaluate"
     script = f'''#!/bin/sh
 set -eu
+umask 077
 AZDAJA={shlex.quote(str(binary))}
 sid=
 cleanup() {{
@@ -141,8 +136,13 @@ cleanup() {{
 trap cleanup EXIT HUP INT TERM
 sid="$("$AZDAJA" start)"
 "$AZDAJA" load "$sid" context.txt source >/dev/null
-cat <<'PY' | "$AZDAJA" exec "$sid" >/dev/null
+if ! cat <<'PY' | "$AZDAJA" exec "$sid" >exec.stdout 2>exec.stderr
 {candidate_cell(model)}PY
+then
+  cat exec.stdout >&2
+  cat exec.stderr >&2
+  exit 1
+fi
 "$AZDAJA" final "$sid"
 '''
     driver.write_text(script, encoding="utf-8")
