@@ -9,6 +9,7 @@ import os
 import re
 import signal
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -44,6 +45,16 @@ def clean_copy(source: Path, target: Path, mode: int = 0o600) -> None:
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     shutil.copyfile(source, target)
     target.chmod(mode)
+
+
+def ensure_owner_directory(path: Path) -> None:
+    path.mkdir(parents=False, exist_ok=False, mode=0o700)
+    path.chmod(0o700)
+    metadata = path.lstat()
+    if not stat.S_ISDIR(metadata.st_mode) or path.is_symlink():
+        raise RuntimeError(f"unsafe benchmark directory: {path}")
+    if metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) != 0o700:
+        raise RuntimeError(f"benchmark directory custody mismatch: {path}")
 
 
 def jsonl(raw: bytes) -> list[dict[str, Any]]:
@@ -286,7 +297,8 @@ def base_env(root: Path, harness: str) -> dict[str, str]:
 def prepare_arm(campaign: Path, harness: str, arm: str) -> tuple[Path, dict[str, str], Path]:
     root = campaign / f"{harness}-{arm}"
     work = root / "work"
-    work.mkdir(parents=True, mode=0o700)
+    ensure_owner_directory(root)
+    ensure_owner_directory(work)
     shutil.copyfile(CONTEXT, work / "context.txt")
     (work / "context.txt").chmod(0o400)
     env = base_env(root, harness)
@@ -371,7 +383,7 @@ def invoke(campaign: Path, harness: str, arm: str) -> dict[str, Any]:
             "--json",
             "--model",
             "gpt-5.6-luna",
-            "-C",
+            "--cd",
             str(work),
             "-",
         ]

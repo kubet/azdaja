@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import shutil
 import tempfile
@@ -40,6 +41,15 @@ class DeltaPlanTests(unittest.TestCase):
         with self.assertRaises(validate.PlanError):
             validate.validate(self.plan_path, HERE.parents[1])
 
+    def assert_runner_blocked(self, mutate):
+        runner = self.delta / "run.py"
+        runner.write_text(mutate((HERE / "run.py").read_text()))
+        plan = copy.deepcopy(self.plan)
+        plan["runner"]["sha256"] = hashlib.sha256(runner.read_bytes()).hexdigest()
+        self.write(plan)
+        with self.assertRaises(validate.PlanError):
+            validate.validate(self.plan_path, HERE.parents[1])
+
     def test_valid_plan(self):
         result = validate.validate(self.plan_path, HERE.parents[1])
         self.assertTrue(result["valid"])
@@ -73,6 +83,11 @@ class DeltaPlanTests(unittest.TestCase):
         self.assert_blocked(lambda p: p["runner"].__setitem__("sha256", "0" * 64))
         self.assert_blocked(lambda p: p["accounting"]["inner_trace_fields"].remove("reasoning_tokens"))
         self.assert_blocked(lambda p: p["accounting"].__setitem__("missing_usage_blocks_efficiency", False))
+
+    def test_codex_workspace_write_and_owner_only_workdir_are_exact(self):
+        self.assert_runner_blocked(lambda text: text.replace('"--cd",\n            str(work)', '"-C",\n            str(work)'))
+        self.assert_runner_blocked(lambda text: text.replace('"workspace-write"', '"read-only"', 1))
+        self.assert_runner_blocked(lambda text: text.replace("    ensure_owner_directory(work)\n", "", 1))
 
     def test_quality_and_efficiency_gates_are_required(self):
         self.assert_blocked(lambda p: p["gates"].__setitem__("quality_first", False))

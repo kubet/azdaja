@@ -57,7 +57,7 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
         "plan",
     )
     require(plan["schema"] == "azdaja-delta-ladder-v2", "schema")
-    require(plan["stage"] == "oolong-row645-may-cheap-gate-r4", "stage")
+    require(plan["stage"] == "oolong-row645-may-cheap-gate-r5", "stage")
 
     model = exact_keys(plan["model"], {"codex", "opencode", "outer_reasoning", "inner_reasoning"}, "model")
     require(model == {
@@ -147,6 +147,14 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
     runner_text = runner_path.read_text(encoding="utf-8")
     for field in ("reasoning_tokens", "cache_write_tokens", "usage_complete", "measured_total_tokens"):
         require(field in runner_text, f"runner missing {field}")
+    for field in (
+        "ensure_owner_directory(root)",
+        "ensure_owner_directory(work)",
+        '"--sandbox",\n            "workspace-write"',
+        '"--cd",\n            str(work)',
+    ):
+        require(field in runner_text, f"runner missing workdir custody contract: {field}")
+    require('"-C",\n            str(work)' not in runner_text, "runner must use explicit --cd")
 
     execution = exact_keys(
         plan["execution"],
