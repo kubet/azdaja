@@ -646,11 +646,11 @@ fn public_v013_site_assets_match_the_bound_checksum_manifest() {
     let expected = [
         (
             "azdaja-v0.1.3-darwin-arm64",
-            "74f3fabadb19d0121eae6663fec06387c449961091be2f7c01bea1cb043c13bd",
+            "6898a1d47b6edf0b1b3759a56102603f3486704e16b332bc1060bd044e8e0948",
         ),
         (
             "azdaja-v0.1.3-linux-x86_64",
-            "62770d1bdb9b9ab5623cd2a757738493555b1e990ddac958ccb4dceeea61061c",
+            "99b96b85b1d9d03917fcc7b4958ec61750addd400e4b32996a6d0ca47ac1c10c",
         ),
         (
             "LICENSE",
