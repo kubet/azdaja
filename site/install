@@ -3,7 +3,7 @@ set -eu
 
 VERSION=0.1.2
 GLIBC_MIN=2.35
-RELEASE_BASE=https://github.com/kubet/azdaja/releases/download/v$VERSION
+RELEASE_BASE=https://azdaja.dev/releases/v$VERSION
 HARNESS=
 BIN_DIR=${AZDAJA_INSTALL_DIR:-}
 

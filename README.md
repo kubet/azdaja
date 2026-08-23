@@ -24,8 +24,10 @@ What makes it different:
 The curl installer adds the standalone command and integrates with supported tools it finds, without calling a model provider. It supports Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh
+curl -fsSL https://azdaja.dev/install | sh
 ```
+
+The stable `azdaja.dev/install` URL serves the current published installer. Its versioned release payloads are fetched from `azdaja.dev` and verified against `SHA256SUMS` before installation.
 
 Alternatively, install from source with Rust 1.95:
 

@@ -503,6 +503,7 @@ fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
 
     let text = String::from_utf8(site).unwrap();
     assert_eq!(text.matches("VERSION=0.1.2").count(), 1);
+    assert!(text.contains("RELEASE_BASE=https://azdaja.dev/releases/v$VERSION"));
     assert!(text.contains("$BASE_URL/SHA256SUMS"));
     assert!(text.contains("azdaja-v$VERSION-darwin-arm64"));
     assert!(text.contains("azdaja-v$VERSION-linux-x86_64"));
@@ -520,6 +521,39 @@ fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
     assert!(!text.contains("\"$BIN_DIR/config.toml\""));
     assert!(text.contains("run az doctor"));
     assert!(text.contains("run azdaja doctor"));
+}
+
+#[test]
+fn public_v012_site_assets_match_the_bound_checksum_manifest() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let release = root.join("site/releases/v0.1.2");
+    let sums = fs::read_to_string(release.join("SHA256SUMS")).unwrap();
+    let expected = [
+        (
+            "azdaja-v0.1.2-darwin-arm64",
+            "74f3fabadb19d0121eae6663fec06387c449961091be2f7c01bea1cb043c13bd",
+        ),
+        (
+            "azdaja-v0.1.2-linux-x86_64",
+            "62770d1bdb9b9ab5623cd2a757738493555b1e990ddac958ccb4dceeea61061c",
+        ),
+        (
+            "LICENSE",
+            "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096",
+        ),
+        (
+            "THIRD-PARTY-NOTICES.md",
+            "ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6",
+        ),
+    ];
+    let expected_sums = expected
+        .iter()
+        .map(|(name, digest)| format!("{digest}  {name}\n"))
+        .collect::<String>();
+    assert_eq!(sums, expected_sums);
+    for (name, digest) in expected {
+        assert_eq!(sha256(&release.join(name)), digest);
+    }
 }
 
 #[test]

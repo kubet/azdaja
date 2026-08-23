@@ -27,8 +27,8 @@
     </div>
     <section class="install" aria-label="Install Azdaja">
       <p>For Apple Silicon macOS 11+ or x86-64 Linux with glibc 2.35 or newer. On Linux the installer checks <code>getconf GNU_LIBC_VERSION</code>; musl, older glibc, and an unverifiable libc are refused before any download or <code>HOME</code> mutation, with a Rust 1.95 source build as the alternative. The bare one-liner requires a detected Jcode, Claude, Codex, Gemini, or OpenCode harness; otherwise it exits before downloading or writing anything.</p>
-      <code class="install-command">$ curl -fsSL https://raw.githubusercontent.com/kubet/azdaja/main/site/install | sh</code>
-      <p>Use <strong>az</strong> only when the installer reports its alias; otherwise use <strong>azdaja</strong>. A foreign <strong>az</strong>, including Azure CLI, is untouched.</p>
+      <code class="install-command">$ curl -fsSL https://azdaja.dev/install | sh</code>
+      <p>The stable URL installs the current published version and verifies its versioned azdaja.dev payload before changing the installation. Use <strong>az</strong> only when the installer reports its alias; otherwise use <strong>azdaja</strong>. A foreign <strong>az</strong>, including Azure CLI, is untouched.</p>
     </section>
     <footer><a href="https://github.com/kubet/azdaja">github</a> · <a href="https://github.com/kubet/azdaja/blob/main/LICENSE">license</a> · <a href="https://github.com/kubet/azdaja/blob/main/THIRD-PARTY-NOTICES.md">third-party notices</a></footer>
   </main>
