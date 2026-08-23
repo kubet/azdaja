@@ -50,7 +50,7 @@ The normalized `input` field is total prompt input including cache reads. Codex 
 - r4 moved state outside the work directory. Separate minimal Codex and OpenCode preflights then passed with one successful Luna inner attempt and complete usage.
 - r5 pinned owner-only work directories and explicit Codex sandbox/cwd arguments. Its single paired result is frozen at `results/r5-result.json`. The gate failed because passive skill activation produced zero candidate inner attempts, and OpenCode-native was not exact. No efficiency claim was made.
 - r6 was a new diagnostic fixture and an outcome-independent activation repair. Its one live attempt stopped while resolving the parallel native group because OpenCode's fresh-input counter was incorrectly treated as total input. The empty result artifact and exception are recorded in `results/r6-failure.json`. The candidate group never started, and no efficiency claim was made.
-- r7 keeps the frozen r6 fixture and execution contract, but normalizes OpenCode fresh input plus cache reads into the same terminal representation as Codex before applying the preregistered uncached-token formula. It was frozen and pushed before any r7 provider call.
+- r7 kept the frozen r6 fixture and execution contract, but normalized OpenCode fresh input plus cache reads into the same terminal representation as Codex before applying the preregistered uncached-token formula. Its exact result is frozen at `results/r7-result.json`. Both native arms returned the exact answer. Both candidate arms entered exactly one inner attempt, but those attempts failed before producing usage or an answer. No efficiency claim was made.
 
 ## Provider-free validation
 
