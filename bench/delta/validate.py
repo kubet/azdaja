@@ -57,7 +57,7 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
         "plan",
     )
     require(plan["schema"] == "azdaja-delta-ladder-v2", "schema")
-    require(plan["stage"] == "oolong-row645-may-cheap-gate-r3", "stage")
+    require(plan["stage"] == "oolong-row645-may-cheap-gate-r4", "stage")
 
     model = exact_keys(plan["model"], {"codex", "opencode", "outer_reasoning", "inner_reasoning"}, "model")
     require(model == {

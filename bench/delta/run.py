@@ -245,7 +245,7 @@ def base_env(root: Path, harness: str) -> dict[str, str]:
     xdg_cache = root / "xdg-cache"
     codex_home = root / "codex-home"
     tmp = root / "tmp"
-    state = root / "work/.azdaja-state"
+    state = root / "state"
     for directory in (home, xdg_config, xdg_data, xdg_cache, codex_home, tmp, state):
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         directory.chmod(0o700)
