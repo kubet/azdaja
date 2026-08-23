@@ -790,7 +790,7 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
             "haiku",
         ),
         "codex" => (
-            "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -",
+            "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c model_reasoning_effort=low -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -",
             "gpt-5.4-mini",
         ),
         "gemini" => ("gemini --model {model} -p \"\"", "gemini-2.5-flash"),
@@ -802,6 +802,7 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
 const LEGACY_MANAGED_CODEX_CONFIGS: &[&[u8]] = &[
     include_bytes!("../assets/legacy/codex-config-a9da6615.toml"),
     include_bytes!("../assets/legacy/codex-config-41f19430.toml"),
+    include_bytes!("../assets/legacy/codex-config-ae85a189.toml"),
 ];
 
 const DEFAULT_SKILL_DESCRIPTION: &str = "Mandatory for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja, asks if it is installed or available, or names the az virtual-memory tool. Invoke before reading or solving natively.";
@@ -6570,7 +6571,7 @@ mod tests {
         assert_eq!(model, "gpt-5.4-mini");
         assert_eq!(
             command,
-            "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -"
+            "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c model_reasoning_effort=low -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -"
         );
         validate_codex_nested_adapter_command(command).unwrap();
         validate_codex_nested_adapter_command(&command.replacen("codex", "/opt/bin/codex", 1))
@@ -6579,6 +6580,7 @@ mod tests {
         for required in [
             "--ignore-user-config",
             "{isolated_env}",
+            "model_reasoning_effort=low",
             "features.shell_tool=false",
             "features.view_image=false",
             "features.multi_agent=false",
@@ -6594,6 +6596,7 @@ mod tests {
             );
         }
         for suffix in [
+            " -c model_reasoning_effort=high",
             " -c features.shell_tool=true",
             " --sandbox danger-full-access",
             " -C /tmp",
@@ -6612,6 +6615,7 @@ mod tests {
         let expected_commands = [
             "codex exec --ephemeral --skip-git-repo-check --model {model} -",
             "codex exec --ephemeral --skip-git-repo-check --ignore-rules -c skills.include_instructions=false --json --model {model} -",
+            "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -",
         ];
         for (historical, expected_command) in
             LEGACY_MANAGED_CODEX_CONFIGS.iter().zip(expected_commands)

@@ -5470,11 +5470,12 @@ fn codex_reinstall_migrates_byte_exact_legacy_adapter_to_isolated_workers() {
     let target = t.join(".agents/skills/azdaja");
     let config_path = target.join("config.toml");
     let current = fs::read_to_string(&config_path).unwrap();
-    let current_command = "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -";
+    let current_command = "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c model_reasoning_effort=low -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -";
     assert!(current.contains(current_command), "{current}");
-    let legacy_configs: [&[u8]; 2] = [
+    let legacy_configs: [&[u8]; 3] = [
         include_bytes!("../assets/legacy/codex-config-a9da6615.toml"),
         include_bytes!("../assets/legacy/codex-config-41f19430.toml"),
+        include_bytes!("../assets/legacy/codex-config-ae85a189.toml"),
     ];
     for legacy in legacy_configs {
         assert_ne!(legacy, current.as_bytes());
