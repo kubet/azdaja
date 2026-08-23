@@ -172,10 +172,7 @@ const COMMAND_USAGES: [(&str, &str); 11] = [
         "doctor",
         "Usage: az doctor [jcode|claude|codex|gemini|opencode|all|--caps]",
     ),
-    (
-        "install",
-        "Usage: az install [jcode|claude|codex|gemini|opencode|all]",
-    ),
+    ("install", "Usage: az install [TARGET[,TARGET...]|all]"),
     (
         "uninstall",
         "Usage: az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]",
@@ -583,6 +580,32 @@ fn harnesses(which: Option<&str>) -> Result<(Vec<&'static str>, String)> {
         )
     }
     Ok((detected, report.join(", ")))
+}
+
+fn install_harnesses(which: Option<&str>) -> Result<(Vec<&'static str>, String)> {
+    let Some(which) = which else {
+        return harnesses(None);
+    };
+    if !which.contains(',') {
+        return harnesses(Some(which));
+    }
+
+    let mut selected = Vec::new();
+    for name in which.split(',') {
+        if name.is_empty() {
+            bail!("install target list contains an empty name")
+        }
+        let harness = ALL_HARNESSES
+            .into_iter()
+            .find(|harness| *harness == name)
+            .ok_or_else(|| anyhow!("unknown tool '{name}'"))?;
+        if selected.contains(&harness) {
+            bail!("install target list contains duplicate tool '{name}'")
+        }
+        selected.push(harness);
+    }
+    let report = format!("{} (selected explicitly)", selected.join(", "));
+    Ok((selected, report))
 }
 fn home() -> Result<PathBuf> {
     for name in ["HOME", "USERPROFILE"] {
@@ -2045,9 +2068,9 @@ fn install_cmd(args: &[String]) -> Result<()> {
         println!(
             "{}",
             concat!(
-                "Usage: az install [jcode|claude|codex|gemini|opencode|all]\n",
+                "Usage: az install [TARGET[,TARGET...]|all]\n",
                 "No name: detect and install every supported tool found on this computer.\n",
-                "Examples:\n  az install\n  az install jcode\n  az install all"
+                "Examples:\n  az install\n  az install jcode\n  az install jcode,codex\n  az install all"
             )
         );
         return Ok(());
@@ -2066,7 +2089,7 @@ fn install_cmd(args: &[String]) -> Result<()> {
         }
         _ => return Err(usage_error("install")),
     };
-    let (selected, detection_report) = harnesses(which)?;
+    let (selected, detection_report) = install_harnesses(which)?;
     let home = home()?;
 
     // P1b stays strictly read-only. For a real lifecycle change, this first
@@ -6776,19 +6799,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "928922c3366f4a0e43a6c9dfb67637be1e6c98e89c877da6f9374e5568fadc59",
+                "e547eb4633555987d3aaacce0e45267afa4a15ef83650bb849c2af88ac1c79f9",
             ),
             (
                 "jcode",
-                "7dab3f56536fe87def7ed6882b87e9e245f2b88c576089ef6cf9ea825704f152",
+                "ebdaeec4b5858e3c7e6979079840b4d5ce80fae4cf12174e963f8a687d28bff5",
             ),
             (
                 "codex",
-                "de8267b95c43d3471778fd8b3d61be1439c3f832446be1d78adab579e39d5333",
+                "1e0a722a57c36c94e6a354fb14261febe6a6558beccbf77a03b204fcebca1b15",
             ),
             (
                 "gemini",
-                "5783e9f48de4de266606386f40b32ac314b9c554f8c38da24127d3322c27e463",
+                "716029fa73de10eca7499a78fa7789b47aa60a443b5267c68cf9ef3b29986dae",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);

@@ -5,6 +5,7 @@ use std::{
     fs,
     io::Write,
     os::unix::fs::{MetadataExt, PermissionsExt},
+    os::unix::process::CommandExt,
     path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
     sync::atomic::{AtomicU64, Ordering},
@@ -207,7 +208,7 @@ fn local_candidate(scratch: &Path) -> PathBuf {
 fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     let release = root.join(name);
     fs::create_dir_all(&release).unwrap();
-    for asset in ["azdaja-v0.1.2-darwin-arm64", "azdaja-v0.1.2-linux-x86_64"] {
+    for asset in ["azdaja-v0.1.3-darwin-arm64", "azdaja-v0.1.3-linux-x86_64"] {
         fs::copy(candidate, release.join(asset)).unwrap();
     }
     let source = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -222,7 +223,7 @@ fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     fs::write(
         release.join("SHA256SUMS"),
         format!(
-            "{digest}  azdaja-v0.1.2-darwin-arm64\n{digest}  azdaja-v0.1.2-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
+            "{digest}  azdaja-v0.1.3-darwin-arm64\n{digest}  azdaja-v0.1.3-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
         ),
     )
     .unwrap();
@@ -268,6 +269,8 @@ fn run_installer_with_jcode_home(run: InstallRun<'_>, jcode_home: Option<&Path>)
     }
     if let Some(harness) = run.harness {
         command.arg(harness);
+    } else {
+        command.env("AZDAJA_INSTALL_SELECTION", "all");
     }
     if let Some(bin_dir) = run.bin_dir {
         command.arg("--bin-dir").arg(bin_dir);
@@ -303,6 +306,8 @@ fn run_installer_with_extra(run: InstallRun<'_>, extra: &[(&str, &OsStr)]) -> Ou
     }
     if let Some(harness) = run.harness {
         command.arg(harness);
+    } else {
+        command.env("AZDAJA_INSTALL_SELECTION", "all");
     }
     if let Some(bin_dir) = run.bin_dir {
         command.arg("--bin-dir").arg(bin_dir);
@@ -438,14 +443,7 @@ fn assert_off_path_doctor(next: &str, bin: &Path) {
     assert!(
         [literal, canonical]
             .iter()
-            .any(|absolute| next.starts_with(&format!(
-                "Next: run {} doctor, then ",
-                shell_quoted(absolute)
-            ))),
-        "{next}"
-    );
-    assert!(
-        next.contains("; add ") && next.contains(" to PATH"),
+            .any(|absolute| next == format!("Next: {} doctor", shell_quoted(absolute))),
         "{next}"
     );
 }
@@ -466,7 +464,7 @@ fn assert_alias_identity_and_local_caps(home: &Path, bin: &Path, path: &str) {
             let help = String::from_utf8(short_output.stdout).unwrap();
             assert_eq!(
                 help,
-                "AZDAJA v0.1.2 — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
+                "AZDAJA v0.1.3 — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
             );
         }
     }
@@ -485,8 +483,7 @@ fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
         .unwrap();
     assert!(help.status.success());
     assert!(help.stderr.is_empty());
-    let expected_help =
-        "Usage: install.sh [jcode|claude|codex|gemini|opencode|all] [--bin-dir DIR]\n";
+    let expected_help = "Usage: install.sh [--all | TARGET[,TARGET...]] [--bin-dir DIR]\n";
     assert_eq!(String::from_utf8(help.stdout).unwrap(), expected_help);
 
     let legacy_help = Command::new("sh")
@@ -501,8 +498,20 @@ fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
         expected_help
     );
 
+    let all_flag_help = Command::new("sh")
+        .arg(root.join("site/install"))
+        .args(["--all", "--help"])
+        .output()
+        .unwrap();
+    assert!(all_flag_help.status.success());
+    assert!(all_flag_help.stderr.is_empty());
+    assert_eq!(
+        String::from_utf8(all_flag_help.stdout).unwrap(),
+        expected_help
+    );
+
     let text = String::from_utf8(site).unwrap();
-    assert_eq!(text.matches("VERSION=0.1.2").count(), 1);
+    assert_eq!(text.matches("VERSION=0.1.3").count(), 1);
     assert!(text.contains("RELEASE_BASE=https://azdaja.dev/releases/v$VERSION"));
     assert!(text.contains("$BASE_URL/SHA256SUMS"));
     assert!(text.contains("azdaja-v$VERSION-darwin-arm64"));
@@ -516,25 +525,131 @@ fn installers_are_identical_and_bind_fresh_v012_assets_and_sums() {
     assert!(text.contains("mv -f \"$STAGED\" \"$DEST\""));
     assert!(text.contains("ln -s azdaja \"$ALIAS\""));
     assert!(text.contains("PATH_AZ=$PATH_ENTRY/az"));
-    assert!(text.contains("short alias skipped"));
+    assert!(text.contains("az alias unavailable"));
     assert!(text.contains("azdaja-config.toml.managed"));
     assert!(!text.contains("\"$BIN_DIR/config.toml\""));
-    assert!(text.contains("run az doctor"));
-    assert!(text.contains("run azdaja doctor"));
+    assert!(text.contains("printf 'Next: az doctor"));
+    assert!(text.contains("printf 'Next: azdaja doctor"));
+    assert!(text.contains("Select integrations (space-separated numbers):"));
+    assert!(text.contains("interactive selection needs a terminal"));
 }
 
 #[test]
-fn public_v012_site_assets_match_the_bound_checksum_manifest() {
+fn interactive_selection_installs_only_the_chosen_detected_subset() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let home = scratch.0.join("interactive-home");
+    let bin = home.join("bin");
+    fs::create_dir_all(&home).unwrap();
+    for harness in ["jcode", "claude", "codex"] {
+        mark_detected(&home, harness);
+    }
+    let output = run_installer_with_extra(
+        InstallRun {
+            home: &home,
+            base: &format!("{}/good", server.base),
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: None,
+            bin_dir: Some(&bin),
+            path: "/usr/bin:/bin",
+        },
+        &[("AZDAJA_INSTALL_SELECTION", OsStr::new("1 3"))],
+    );
+    let stdout = assert_success(&output);
+    assert_eq!(
+        stdout,
+        format!(
+            "Installed: azdaja v0.1.3\nIntegrations: jcode, codex\nNext: {} doctor\n",
+            shell_quoted(&bin.join("azdaja"))
+        )
+    );
+    assert!(target(&home, "jcode").join("azdaja").is_file());
+    assert!(!target(&home, "claude").exists());
+    assert!(target(&home, "codex").join("azdaja").is_file());
+    assert!(!target(&home, "gemini").exists());
+    assert!(!target(&home, "opencode").exists());
+    assert!(
+        fs::read_to_string(bin.join("azdaja-config.toml"))
+            .unwrap()
+            .contains("jcode-api")
+    );
+
+    let invalid_home = scratch.0.join("interactive-invalid");
+    fs::create_dir_all(&invalid_home).unwrap();
+    mark_detected(&invalid_home, "jcode");
+    let before = tree_identity(&invalid_home);
+    let invalid = run_installer_with_extra(
+        InstallRun {
+            home: &invalid_home,
+            base: &format!("{}/good", server.base),
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: None,
+            bin_dir: Some(&invalid_home.join("bin")),
+            path: "/usr/bin:/bin",
+        },
+        &[("AZDAJA_INSTALL_SELECTION", OsStr::new("9"))],
+    );
+    assert_eq!(invalid.status.code(), Some(2));
+    assert!(invalid.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&invalid.stderr).contains("invalid integration selection '9'"));
+    assert_eq!(tree_identity(&invalid_home), before);
+}
+
+#[test]
+fn bare_installer_without_a_terminal_requires_an_explicit_selection() {
+    let scratch = Scratch::new();
+    let home = scratch.0.join("no-terminal-home");
+    fs::create_dir_all(&home).unwrap();
+    mark_detected(&home, "jcode");
+    let before = tree_identity(&home);
+    let mut command = Command::new("/bin/sh");
+    command
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install"))
+        .env("HOME", &home)
+        .env("PATH", "/usr/bin:/bin")
+        .env_remove("AZDAJA_INSTALL_TEST_MODE")
+        .env_remove("AZDAJA_INSTALL_SELECTION")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 {
+                Err(std::io::Error::last_os_error())
+            } else {
+                Ok(())
+            }
+        });
+    }
+    let output = command.output().unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("interactive selection needs a terminal")
+    );
+    assert_eq!(tree_identity(&home), before);
+}
+
+#[test]
+fn public_v013_site_assets_match_the_bound_checksum_manifest() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let release = root.join("site/releases/v0.1.2");
+    let release = root.join("site/releases/v0.1.3");
     let sums = fs::read_to_string(release.join("SHA256SUMS")).unwrap();
     let expected = [
         (
-            "azdaja-v0.1.2-darwin-arm64",
+            "azdaja-v0.1.3-darwin-arm64",
             "74f3fabadb19d0121eae6663fec06387c449961091be2f7c01bea1cb043c13bd",
         ),
         (
-            "azdaja-v0.1.2-linux-x86_64",
+            "azdaja-v0.1.3-linux-x86_64",
             "62770d1bdb9b9ab5623cd2a757738493555b1e990ddac958ccb4dceeea61061c",
         ),
         (
@@ -721,10 +836,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     let server = FixtureServer::start(&scratch.0, &fixture_root);
     let system_path = "/usr/bin:/bin";
 
-    for (os, arch, asset) in [
-        ("Darwin", "arm64", "azdaja-v0.1.2-darwin-arm64"),
-        ("Linux", "x86_64", "azdaja-v0.1.2-linux-x86_64"),
-    ] {
+    for (os, arch) in [("Darwin", "arm64"), ("Linux", "x86_64")] {
         let home = scratch.0.join(format!("platform-{os}"));
         let bin = home.join("bin");
         fs::create_dir_all(&home).unwrap();
@@ -740,24 +852,21 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         });
         let stdout = assert_success(&output);
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
-        assert!(stdout.contains(asset));
-        assert!(stdout.contains("add ") && stdout.contains(" to PATH"));
+        assert!(stdout.starts_with("Installed: azdaja v0.1.3\nIntegrations: claude\n"));
         assert_eq!(sha256(&bin.join("azdaja")), digest);
         let active = fs::read_to_string(bin.join("azdaja-config.toml")).unwrap();
         assert!(active.contains("claude -p --model {model}"));
         assert!(active.contains("--effort medium"));
         assert!(active.contains("Use careful evidence-grounded reasoning"));
         assert!(target(&home, "claude").join("azdaja").is_file());
-        assert!(stdout.contains("azdaja ->") && stdout.contains("az ->"));
         let next = stdout.lines().last().unwrap();
         assert_off_path_doctor(next, &bin);
-        assert!(next.contains("restart Claude to reload its skills"));
         assert_alias_identity_and_local_caps(&home, &bin, system_path);
     }
     let requests = fs::read_to_string(&server.log).unwrap();
     assert!(requests.contains("/good/SHA256SUMS"));
-    assert!(requests.contains("/good/azdaja-v0.1.2-darwin-arm64"));
-    assert!(requests.contains("/good/azdaja-v0.1.2-linux-x86_64"));
+    assert!(requests.contains("/good/azdaja-v0.1.3-darwin-arm64"));
+    assert!(requests.contains("/good/azdaja-v0.1.3-linux-x86_64"));
 
     let home = scratch.0.join("atomic-home");
     let bin = home.join("bin");
@@ -793,7 +902,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     });
     assert_success(&good);
     let version = Command::new(&existing).arg("--version").output().unwrap();
-    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.2 "));
+    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.3 "));
     assert_alias_identity_and_local_caps(&home, &bin, system_path);
 
     let home = scratch.0.join("path-home");
@@ -817,14 +926,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     });
     let stdout = assert_success(&good);
     assert!(path_bin.join("azdaja").is_file());
-    assert!(stdout.contains("is on PATH"));
-    assert!(
-        stdout
-            .lines()
-            .last()
-            .unwrap()
-            .contains("az doctor, then restart Claude to reload its skills")
-    );
+    assert_eq!(stdout.lines().last().unwrap(), "Next: az doctor");
     assert_alias_identity_and_local_caps(&home, &path_bin, &path);
     assert!(
         fs::read_to_string(path_bin.join("azdaja-config.toml"))
@@ -872,25 +974,19 @@ fn standalone_installer_honors_authoritative_custom_jcode_home() {
     );
     let stdout = assert_success(&output);
     assert_eq!(stdout.lines().count(), 3, "{stdout}");
-    assert!(stdout.lines().next().unwrap().contains("jcode"));
+    assert_eq!(stdout.lines().nth(1).unwrap(), "Integrations: jcode");
     assert!(custom.join("skills/azdaja/azdaja").is_file());
     assert!(!home.join(".jcode/skills/azdaja").exists());
     let next = stdout.lines().last().unwrap();
     assert_off_path_doctor(next, &bin);
-    assert!(next.contains("skill_manage reload_all"), "{next}");
 
     // Extract the advertised command exactly as a user would. A deliberately
     // missing config makes doctor stop before evaluator/provider work while
     // still proving the spaces/Unicode/apostrophe shell quoting is executable.
-    let command = next
-        .strip_prefix("Next: run ")
-        .unwrap()
-        .split_once(", then ")
-        .unwrap()
-        .0;
+    let command = next.strip_prefix("Next: ").unwrap().to_owned();
     let missing_config = home.join("missing-provider-free-config.toml");
     let executed = Command::new("sh")
-        .args(["-c", command])
+        .args(["-c", &command])
         .env("HOME", &home)
         .env("JCODE_HOME", &custom)
         .env("XDG_CONFIG_HOME", home.join(".config"))
@@ -956,18 +1052,12 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             });
             let stdout = assert_success(&output);
             assert_eq!(stdout.lines().count(), 3, "{stdout}");
-            assert!(stdout.lines().next().unwrap().contains(harness));
-            assert!(stdout.contains("azdaja ->") && stdout.contains("az ->"));
-            let reload = match harness {
-                "jcode" => "skill_manage reload_all or /skills -> Reload all",
-                "claude" => "restart Claude to reload its skills",
-                "codex" => "restart Codex to reload its skills",
-                "gemini" => "restart Gemini to reload its skills",
-                _ => "restart OpenCode to reload its skills",
-            };
+            assert_eq!(
+                stdout.lines().nth(1).unwrap(),
+                format!("Integrations: {harness}")
+            );
             let next = stdout.lines().last().unwrap();
             assert_off_path_doctor(next, &bin);
-            assert!(next.contains(reload), "harness={harness} next={next}");
             assert!(target(&home, harness).join("azdaja").is_file());
             assert_eq!(
                 fs::read(bin.join("azdaja-config.toml")).unwrap(),
@@ -995,7 +1085,10 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
         let next = stdout.lines().last().unwrap();
         assert_off_path_doctor(next, &bin);
-        assert!(next.contains("reload/restart all five tools"));
+        assert_eq!(
+            stdout.lines().nth(1).unwrap(),
+            "Integrations: jcode, claude, codex, gemini, opencode"
+        );
         for harness in ["jcode", "claude", "codex", "gemini", "opencode"] {
             assert!(target(&home, harness).join("azdaja").is_file());
         }
@@ -1138,17 +1231,9 @@ fn alias_safety_failures_leave_home_and_foreign_paths_unchanged() {
         });
         let stdout = assert_success(&output);
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
-        assert!(
-            stdout
-                .lines()
-                .nth(1)
-                .unwrap()
-                .contains("short alias skipped")
-        );
+        assert_eq!(stdout.lines().nth(1).unwrap(), "Integrations: claude");
         let next = stdout.lines().last().unwrap();
         assert_off_path_doctor(next, &bin);
-        assert!(next.contains("short alias skipped"));
-        assert!(!stdout.contains("; az ->"));
         assert!(bin.join("azdaja").is_file());
         assert_owned_adjacent_config(&bin);
         assert_eq!(fs::read_dir(&bin).unwrap().count(), 4);
@@ -1201,10 +1286,11 @@ fn foreign_az_anywhere_on_path_skips_alias_without_changing_resolution() {
         });
         let stdout = assert_success(&output);
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
-        let written = stdout.lines().nth(1).unwrap();
-        assert!(written.contains("short alias skipped"), "{written}");
-        assert!(!written.contains("; az ->"), "{written}");
-        assert!(stdout.lines().last().unwrap().contains("azdaja doctor"));
+        assert_eq!(stdout.lines().nth(1).unwrap(), "Integrations: claude");
+        assert_eq!(
+            stdout.lines().last().unwrap(),
+            "Next: azdaja doctor (az alias unavailable)"
+        );
         assert!(!bin.join("az").exists());
         assert_owned_adjacent_config(&bin);
 
@@ -1262,13 +1348,7 @@ fn adjacent_config_ownership_preserves_custom_state_and_generic_config() {
     );
     fs::write(bin.join("azdaja-config.toml"), custom.as_bytes()).unwrap();
     let stdout = assert_success(&run());
-    assert!(
-        stdout
-            .lines()
-            .nth(1)
-            .unwrap()
-            .contains("config preserved ->")
-    );
+    assert_eq!(stdout.lines().nth(1).unwrap(), "Integrations: claude");
     assert_eq!(
         fs::read(bin.join("azdaja-config.toml")).unwrap(),
         custom.as_bytes()
@@ -1856,13 +1936,7 @@ fn custom_xdg_unicode_space_apostrophe_reinstall_is_exact_and_idempotent() {
     };
     let first = assert_success(&run_once());
     assert_eq!(first.lines().count(), 3);
-    assert!(
-        first
-            .lines()
-            .nth(1)
-            .unwrap()
-            .contains(&format!("docs -> {}", xdg.join("azdaja").display()))
-    );
+    assert_eq!(first.lines().nth(1).unwrap(), "Integrations: claude");
     let docs = xdg.join("azdaja");
     assert_eq!(
         fs::read(docs.join("LICENSE")).unwrap(),

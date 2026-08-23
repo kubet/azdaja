@@ -4426,7 +4426,7 @@ exit 9
     );
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
-    assert!(skill.contains("Azdaja 0.1.2") && skill.contains(dst.join("azdaja").to_str().unwrap()));
+    assert!(skill.contains("Azdaja 0.1.3") && skill.contains(dst.join("azdaja").to_str().unwrap()));
     assert!(skill.contains("one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle"));
     assert!(skill.contains("llm_batch(prompts, workers=4)"));
     assert!(skill.contains("Scan the complete loaded source"));
@@ -7002,10 +7002,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
             "doctor",
             "Usage: az doctor [jcode|claude|codex|gemini|opencode|all|--caps]",
         ),
-        (
-            "install",
-            "Usage: az install [jcode|claude|codex|gemini|opencode|all]",
-        ),
+        ("install", "Usage: az install [TARGET[,TARGET...]|all]"),
         (
             "uninstall",
             "Usage: az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]",
@@ -7052,7 +7049,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
                 "install" => assert_eq!(
                     stdout,
                     format!(
-                        "{usage}\nNo name: detect and install every supported tool found on this computer.\nExamples:\n  az install\n  az install jcode\n  az install all\n"
+                        "{usage}\nNo name: detect and install every supported tool found on this computer.\nExamples:\n  az install\n  az install jcode\n  az install jcode,codex\n  az install all\n"
                     )
                 ),
                 "uninstall" => assert_eq!(

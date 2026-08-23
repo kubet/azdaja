@@ -115,7 +115,7 @@ fn help_alias_is_concise_and_command_help_uses_plain_targets() {
     let (stdout, stderr) = utf8(&install);
     assert!(install.status.success());
     assert!(stderr.is_empty());
-    assert!(stdout.starts_with("Usage: az install [jcode|claude|codex|gemini|opencode|all]\n"));
+    assert!(stdout.starts_with("Usage: az install [TARGET[,TARGET...]|all]\n"));
     assert!(stdout.contains("az install\n"));
     assert!(stdout.contains("az install jcode\n"));
     assert!(!stdout.contains("--harness"));

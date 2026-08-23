@@ -21,7 +21,7 @@ What makes it different:
 
 ## Install
 
-The curl installer adds the standalone command and integrates with supported tools it finds, without calling a model provider. It supports Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer.
+The curl installer adds the standalone command, detects supported tools, and prompts you to choose integrations. Pass `--all` for an unattended install of every integration. It never calls a model provider. It supports Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer.
 
 ```bash
 curl -fsSL https://azdaja.dev/install | sh
@@ -32,7 +32,7 @@ The stable `azdaja.dev/install` URL serves the current published installer. Its 
 Alternatively, install from source with Rust 1.95:
 
 ```bash
-cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.2 --locked
+cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.3 --locked
 ```
 
 `azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.

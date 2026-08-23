@@ -1,14 +1,15 @@
 #!/bin/sh
 set -eu
+set -f
 
-VERSION=0.1.2
+VERSION=0.1.3
 GLIBC_MIN=2.35
 RELEASE_BASE=https://azdaja.dev/releases/v$VERSION
 HARNESS=
 BIN_DIR=${AZDAJA_INSTALL_DIR:-}
 
 usage() {
-  printf '%s\n' 'Usage: install.sh [jcode|claude|codex|gemini|opencode|all] [--bin-dir DIR]'
+  printf '%s\n' 'Usage: install.sh [--all | TARGET[,TARGET...]] [--bin-dir DIR]'
 }
 fail() {
   printf 'azdaja install: %s\n' "$1" >&2
@@ -41,7 +42,12 @@ linux_libc_unavailable() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    jcode|claude|codex|gemini|opencode|all)
+    --all)
+      [ -z "$HARNESS" ] || fail 'choose only one install target selection' 2
+      HARNESS=all
+      shift
+      ;;
+    jcode|claude|codex|gemini|opencode|all|*,*)
       [ -z "$HARNESS" ] || fail 'choose only one install target' 2
       HARNESS=$1
       shift
@@ -67,11 +73,6 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
-
-case "$HARNESS" in
-  ''|jcode|claude|codex|gemini|opencode|all) ;;
-  *) fail "unknown install target '$HARNESS' (choose jcode, claude, codex, gemini, opencode, or all)" 2 ;;
-esac
 
 case "${HOME-}" in
   /*) ;;
@@ -123,41 +124,119 @@ if [ -d "$CONFIG_ROOT/opencode" ] || command -v opencode >/dev/null 2>&1; then
   add_detected opencode
 fi
 
-if [ -z "$HARNESS" ]; then
-  [ -n "$DETECTED" ] || fail 'no supported tool found; install Jcode, Claude, Codex, Gemini, or OpenCode, or name one: install.sh jcode'
-  INSTALL_NAMES=$DETECTED
-  DISPLAY=$(printf '%s' "$DETECTED" | tr ' ' ',')
-  DISPLAY=$(printf '%s' "$DISPLAY" | sed 's/,/, /g')
-  DETECTION_REPORT="$DISPLAY (config/skill directories and PATH only)"
-else
-  if [ "$HARNESS" = all ]; then
-    INSTALL_NAMES='jcode claude codex gemini opencode'
-    DETECTION_REPORT='jcode, claude, codex, gemini, opencode (selected explicitly)'
-  else
-    INSTALL_NAMES=$HARNESS
-    DETECTION_REPORT="$HARNESS (selected explicitly)"
-  fi
-fi
+display_names() {
+  display=
+  for display_name in $1; do
+    display="${display}${display:+, }$display_name"
+  done
+  printf '%s' "$display"
+}
 
-case "$INSTALL_NAMES" in
-  jcode)
-    RELOAD_INSTRUCTION='in Jcode run skill_manage reload_all or /skills -> Reload all (or restart Jcode)'
-    ;;
-  claude) RELOAD_INSTRUCTION='restart Claude to reload its skills' ;;
-  codex) RELOAD_INSTRUCTION='restart Codex to reload its skills' ;;
-  gemini) RELOAD_INSTRUCTION='restart Gemini to reload its skills' ;;
-  opencode) RELOAD_INSTRUCTION='restart OpenCode to reload its skills' ;;
-  'jcode claude codex gemini opencode') RELOAD_INSTRUCTION='reload/restart all five tools' ;;
-  *)
-    RELOAD_NAMES=$(printf '%s' "$INSTALL_NAMES" | tr ' ' ',')
-    RELOAD_NAMES=$(printf '%s' "$RELOAD_NAMES" | sed 's/,/, /g')
-    RELOAD_INSTRUCTION="reload/restart the selected tools ($RELOAD_NAMES)"
-    ;;
-esac
+explicit_targets() {
+  requested=$1
+  if [ "$requested" = all ]; then
+    INSTALL_NAMES='jcode claude codex gemini opencode'
+    HARNESS=all
+    DETECTION_REPORT='jcode, claude, codex, gemini, opencode'
+    return
+  fi
+  case "$requested" in
+    ''|,*|*,|*,,*) fail 'install target list contains an empty name' 2 ;;
+  esac
+  names=
+  csv=
+  old_ifs=$IFS
+  IFS=,
+  for name in $requested; do
+    IFS=$old_ifs
+    case "$name" in
+      jcode|claude|codex|gemini|opencode) ;;
+      *) fail "unknown install target '$name'" 2 ;;
+    esac
+    case " $names " in
+      *" $name "*) fail "install target list contains duplicate tool '$name'" 2 ;;
+      *)
+        names="${names}${names:+ }$name"
+        csv="${csv}${csv:+,}$name"
+        ;;
+    esac
+    IFS=,
+  done
+  IFS=$old_ifs
+  INSTALL_NAMES=$names
+  HARNESS=$csv
+  DETECTION_REPORT=$(display_names "$INSTALL_NAMES")
+}
+
+prompt_targets() {
+  [ -n "$DETECTED" ] || fail 'no supported tool found; install Jcode, Claude, Codex, Gemini, or OpenCode, or name one: install.sh jcode'
+  selection_from_env=false
+  if [ "${AZDAJA_INSTALL_TEST_MODE:-}" = local ] && [ "${AZDAJA_INSTALL_SELECTION+x}" = x ]; then
+    prompt_target=/dev/null
+    answer=$AZDAJA_INSTALL_SELECTION
+    selection_from_env=true
+  else
+    ( : < /dev/tty ) 2>/dev/null && ( : > /dev/tty ) 2>/dev/null || \
+      fail 'interactive selection needs a terminal; rerun with --all or name targets, for example: install.sh jcode,codex' 2
+    prompt_target=/dev/tty
+    answer=
+  fi
+
+  {
+    printf 'Select integrations (space-separated numbers):\n'
+    index=1
+    for name in $DETECTED; do
+      printf '  [ ] %s  %s\n' "$index" "$name"
+      index=$((index + 1))
+    done
+    printf '  [a] all detected\n> '
+  } > "$prompt_target"
+  if [ "$selection_from_env" = false ]; then
+    IFS= read -r answer < /dev/tty || fail 'could not read integration selection' 2
+  fi
+  [ -n "$answer" ] || fail 'select at least one integration' 2
+
+  case "$answer" in
+    a|all)
+      INSTALL_NAMES=$DETECTED
+      ;;
+    *)
+      INSTALL_NAMES=
+      for choice in $(printf '%s' "$answer" | tr ',' ' '); do
+        selected=
+        index=1
+        for name in $DETECTED; do
+          if [ "$choice" = "$index" ] || [ "$choice" = "$name" ]; then
+            selected=$name
+            break
+          fi
+          index=$((index + 1))
+        done
+        [ -n "$selected" ] || fail "invalid integration selection '$choice'" 2
+        case " $INSTALL_NAMES " in
+          *" $selected "*) ;;
+          *) INSTALL_NAMES="${INSTALL_NAMES}${INSTALL_NAMES:+ }$selected" ;;
+        esac
+      done
+      ;;
+  esac
+  [ -n "$INSTALL_NAMES" ] || fail 'select at least one integration' 2
+  HARNESS=
+  for name in $INSTALL_NAMES; do
+    HARNESS="${HARNESS}${HARNESS:+,}$name"
+  done
+  DETECTION_REPORT=$(display_names "$INSTALL_NAMES")
+}
+
+if [ -z "$HARNESS" ]; then
+  prompt_targets
+else
+  explicit_targets "$HARNESS"
+fi
 
 case "${AZDAJA_INSTALL_TEST_MODE:-}" in
   '')
-    [ -z "${AZDAJA_INSTALL_BASE_URL:-}${AZDAJA_INSTALL_OS:-}${AZDAJA_INSTALL_ARCH:-}${AZDAJA_INSTALL_GLIBC_VERSION:-}" ] || \
+    [ -z "${AZDAJA_INSTALL_BASE_URL:-}${AZDAJA_INSTALL_OS:-}${AZDAJA_INSTALL_ARCH:-}${AZDAJA_INSTALL_GLIBC_VERSION:-}${AZDAJA_INSTALL_SELECTION:-}" ] || \
       fail 'validation overrides require AZDAJA_INSTALL_TEST_MODE=local' 2
     [ "${AZDAJA_INSTALL_DOC_DIR+x}" != x ] || \
       fail 'validation overrides require AZDAJA_INSTALL_TEST_MODE=local' 2
@@ -505,7 +584,6 @@ fi
 # path in BIN_DIR is preserved and causes the optional alias to be skipped.
 ALIAS_MANAGED=false
 ALIAS_SKIP=false
-FOREIGN_AZ=
 if [ -L "$ALIAS" ]; then
   command -v readlink >/dev/null 2>&1 || fail 'readlink is required to validate the existing az alias'
   ALIAS_TARGET=$(readlink "$ALIAS") || fail "cannot inspect existing az alias: $ALIAS"
@@ -513,11 +591,9 @@ if [ -L "$ALIAS" ]; then
     ALIAS_MANAGED=true
   else
     ALIAS_SKIP=true
-    FOREIGN_AZ=$ALIAS
   fi
 elif [ -e "$ALIAS" ]; then
   ALIAS_SKIP=true
-  FOREIGN_AZ=$ALIAS
 fi
 
 # Scan every PATH component, including non-executable files, dangling links,
@@ -554,7 +630,6 @@ while :; do
     PATH_ENTRY_KEY=$(path_dir_key "$PATH_ENTRY")
     if [ "$PATH_ENTRY_KEY" != "$BIN_DIR_KEY" ] || [ "$ALIAS_MANAGED" != true ]; then
       ALIAS_SKIP=true
-      [ -n "$FOREIGN_AZ" ] || FOREIGN_AZ=$PATH_AZ
     fi
   fi
   [ "$PATH_LAST" = false ] || break
@@ -569,17 +644,11 @@ DEST_BACKUP=$BIN_DIR/.azdaja-previous.$$
 # first performs a read-only selected-set preflight, then locks, re-preflights,
 # stages every target, and commits or rolls back as one unit. The shell never
 # copies or recursively removes a harness target.
-if [ -z "$HARNESS" ]; then
-  "$TMP/azdaja" install --preflight-only >/dev/null
-else
-  "$TMP/azdaja" install "$HARNESS" --preflight-only >/dev/null
-fi
+"$TMP/azdaja" install "$HARNESS" --preflight-only >/dev/null
 
 PRIMARY_TARGET=
-HARNESS_WRITTEN=
 for harness in $INSTALL_NAMES; do
   TARGET=$(harness_target "$harness")
-  HARNESS_WRITTEN="$HARNESS_WRITTEN; $harness -> $TARGET"
   [ -n "$PRIMARY_TARGET" ] || PRIMARY_TARGET=$TARGET
 done
 
@@ -668,11 +737,7 @@ fi
 
 # Commit the verified Rust harness transaction after document creation. If it
 # refuses or rolls back, the shell trap removes the fresh document set.
-if [ -z "$HARNESS" ]; then
-  "$TMP/azdaja" install >/dev/null
-else
-  "$TMP/azdaja" install "$HARNESS" >/dev/null
-fi
+"$TMP/azdaja" install "$HARNESS" >/dev/null
 
 (umask 077 && mkdir -p "$BIN_DIR") || fail "cannot create binary directory $BIN_DIR"
 if [ "$BIN_DIR_WAS_DIR" = false ]; then
@@ -693,8 +758,6 @@ fi
 DEST_MUTATED=true
 mv -f "$STAGED" "$DEST"
 STAGED=
-
-WRITTEN="azdaja -> $DEST ($ASSET); docs -> $DOC_DIR$HARNESS_WRITTEN"
 
 # Bind the standalone PATH binary to the first selected harness. The generic
 # adjacent config.toml name is never written: Config::load support for this
@@ -729,9 +792,6 @@ if [ "$CONFIG_STATE" = fresh ]; then
   rm -f "$CONFIG_STAGE" "$OWNER_STAGE"
   STAGED=
   STAGED_EXTRA=
-  WRITTEN="$WRITTEN; config -> $CONFIG_PATH; config owner -> $CONFIG_OWNER"
-else
-  WRITTEN="$WRITTEN; config preserved -> $CONFIG_PATH; config owner -> $CONFIG_OWNER"
 fi
 
 # A direct relative symlink creation is atomic. If a foreign az exists anywhere
@@ -744,7 +804,6 @@ if [ "$ALIAS_SKIP" = true ]; then
     rm -f "$ALIAS" || fail "cannot remove managed az alias after foreign PATH collision: $ALIAS"
     ALIAS_REMOVED=true
   fi
-  WRITTEN="$WRITTEN; short alias skipped (foreign az: $FOREIGN_AZ)"
 else
   if [ "$ALIAS_MANAGED" = true ]; then
     [ -L "$ALIAS" ] && [ "$(readlink "$ALIAS")" = azdaja ] || \
@@ -754,7 +813,6 @@ else
       fail "cannot create az alias without overwriting an existing path: $ALIAS"
     ALIAS_CREATED=true
   fi
-  WRITTEN="$WRITTEN; az -> $ALIAS (alias to azdaja)"
 fi
 
 # Every preflighted standalone surface is committed. Subsequent cleanup is
@@ -783,18 +841,18 @@ while :; do
   fi
   [ "$PATH_LAST" = false ] || break
 done
-printf 'Detected: %s\n' "$DETECTION_REPORT"
-printf 'Written: %s\n' "$WRITTEN"
+printf 'Installed: azdaja v%s\n' "$VERSION"
+printf 'Integrations: %s\n' "$DETECTION_REPORT"
 if [ "$ALIAS_SKIP" = true ]; then
   if [ "$ON_PATH" = true ]; then
-    printf 'Next: run azdaja doctor, then %s (%s is on PATH; short alias skipped)\n' "$RELOAD_INSTRUCTION" "$BIN_DIR"
+    printf 'Next: azdaja doctor (az alias unavailable)\n'
   else
     DOCTOR_COMMAND=$(shell_quote "$BIN_DIR_KEY/azdaja")
-    printf 'Next: run %s doctor, then %s; add %s to PATH for bare azdaja commands (short alias skipped)\n' "$DOCTOR_COMMAND" "$RELOAD_INSTRUCTION" "$BIN_DIR"
+    printf 'Next: %s doctor\n' "$DOCTOR_COMMAND"
   fi
 elif [ "$ON_PATH" = true ]; then
-  printf 'Next: run az doctor, then %s (%s is on PATH)\n' "$RELOAD_INSTRUCTION" "$BIN_DIR"
+  printf 'Next: az doctor\n'
 else
   DOCTOR_COMMAND=$(shell_quote "$BIN_DIR_KEY/azdaja")
-  printf 'Next: run %s doctor, then %s; add %s to PATH for az/azdaja commands\n' "$DOCTOR_COMMAND" "$RELOAD_INSTRUCTION" "$BIN_DIR"
+  printf 'Next: %s doctor\n' "$DOCTOR_COMMAND"
 fi
