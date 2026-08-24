@@ -934,6 +934,7 @@ fn corrupt_observability_sidecars_do_not_block_authoritative_loads() {
         "",
     ));
     fs::write(t.join("state").join(&id).join("observability.json"), "{").unwrap();
+    fs::create_dir_all(t.join("state/observability")).unwrap();
     fs::write(t.join("state/observability/recent.json"), "{").unwrap();
 
     let loaded = ok(run(
