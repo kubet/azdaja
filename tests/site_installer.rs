@@ -205,6 +205,67 @@ fn local_candidate(scratch: &Path) -> PathBuf {
     candidate
 }
 
+fn alias_free_system_path(root: &Path) -> String {
+    let tools = root.join("alias-free-system-tools");
+    fs::create_dir(&tools).unwrap();
+    let source_path = std::env::var_os("PATH").unwrap_or_default();
+    for name in [
+        "awk",
+        "cat",
+        "chmod",
+        "cmp",
+        "cp",
+        "curl",
+        "cut",
+        "date",
+        "dd",
+        "find",
+        "getconf",
+        "grep",
+        "head",
+        "id",
+        "ln",
+        "mkdir",
+        "mv",
+        "od",
+        "readlink",
+        "rm",
+        "rmdir",
+        "sed",
+        "sha256sum",
+        "shasum",
+        "sort",
+        "stty",
+        "tail",
+        "tr",
+        "uname",
+        "wc",
+    ] {
+        let source = std::env::split_paths(&source_path)
+            .map(|directory| directory.join(name))
+            .find(|candidate| {
+                fs::metadata(candidate)
+                    .map(|metadata| {
+                        metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
+                    })
+                    .unwrap_or(false)
+            });
+        if let Some(source) = source {
+            std::os::unix::fs::symlink(source, tools.join(name)).unwrap();
+        }
+    }
+    for required in [
+        "awk", "cat", "curl", "find", "id", "ln", "mkdir", "mv", "rm", "sed", "tr", "wc",
+    ] {
+        assert!(
+            tools.join(required).exists(),
+            "missing test tool: {required}"
+        );
+    }
+    assert!(!tools.join("az").exists());
+    tools.to_string_lossy().into_owned()
+}
+
 fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     let release = root.join(name);
     fs::create_dir_all(&release).unwrap();
@@ -241,7 +302,7 @@ struct InstallRun<'a> {
 }
 fn run_installer_with_jcode_home(run: InstallRun<'_>, jcode_home: Option<&Path>) -> Output {
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install");
-    let mut command = Command::new("sh");
+    let mut command = Command::new("/bin/sh");
     command
         .arg(script)
         .env("HOME", run.home)
@@ -283,7 +344,7 @@ fn run_installer(run: InstallRun<'_>) -> Output {
 
 fn run_installer_with_extra(run: InstallRun<'_>, extra: &[(&str, &OsStr)]) -> Output {
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install");
-    let mut command = Command::new("sh");
+    let mut command = Command::new("/bin/sh");
     command
         .arg(script)
         .env("HOME", run.home)
@@ -838,7 +899,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     write_release(&fixture_root, "good", &candidate, &digest);
     write_release(&fixture_root, "bad", &candidate, &"0".repeat(64));
     let server = FixtureServer::start(&scratch.0, &fixture_root);
-    let system_path = "/usr/bin:/bin";
+    let system_path = alias_free_system_path(&scratch.0);
 
     for (os, arch) in [("Darwin", "arm64"), ("Linux", "x86_64")] {
         let home = scratch.0.join(format!("platform-{os}"));
@@ -852,7 +913,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
             glibc_version: (os == "Linux").then_some("2.35"),
             harness: Some("claude"),
             bin_dir: Some(&bin),
-            path: system_path,
+            path: &system_path,
         });
         let stdout = assert_success(&output);
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
@@ -865,7 +926,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         assert!(target(&home, "claude").join("azdaja").is_file());
         let next = stdout.lines().last().unwrap();
         assert_off_path_doctor(next, &bin);
-        assert_alias_identity_and_local_caps(&home, &bin, system_path);
+        assert_alias_identity_and_local_caps(&home, &bin, &system_path);
     }
     let requests = fs::read_to_string(&server.log).unwrap();
     assert!(requests.contains("/good/SHA256SUMS"));
@@ -885,7 +946,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         glibc_version: None,
         harness: Some("claude"),
         bin_dir: Some(&bin),
-        path: system_path,
+        path: &system_path,
     });
     assert_eq!(bad.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&bad.stderr).contains("SHA-256 mismatch"));
@@ -902,12 +963,12 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         glibc_version: None,
         harness: Some("claude"),
         bin_dir: Some(&bin),
-        path: system_path,
+        path: &system_path,
     });
     assert_success(&good);
     let version = Command::new(&existing).arg("--version").output().unwrap();
     assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.4 "));
-    assert_alias_identity_and_local_caps(&home, &bin, system_path);
+    assert_alias_identity_and_local_caps(&home, &bin, &system_path);
 
     let home = scratch.0.join("path-home");
     let path_bin = home.join("path-bin");
@@ -1034,7 +1095,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
     write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
     let server = FixtureServer::start(&scratch.0, &fixture_root);
     let base = format!("{}/good", server.base);
-    let system_path = "/usr/bin:/bin";
+    let system_path = alias_free_system_path(&scratch.0);
     let mut positive_cells = 0;
     let mut expected_refusals = 0;
 
@@ -1052,7 +1113,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
                 glibc_version: (os == "Linux").then_some("2.35"),
                 harness: None,
                 bin_dir: Some(&bin),
-                path: system_path,
+                path: &system_path,
             });
             let stdout = assert_success(&output);
             assert_eq!(stdout.lines().count(), 3, "{stdout}");
@@ -1068,7 +1129,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
                 fs::read(target(&home, harness).join("config.toml")).unwrap(),
                 "PATH binary must bind the selected {harness} route"
             );
-            assert_alias_identity_and_local_caps(&home, &bin, system_path);
+            assert_alias_identity_and_local_caps(&home, &bin, &system_path);
             positive_cells += 1;
         }
 
@@ -1083,7 +1144,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             glibc_version: (os == "Linux").then_some("2.35"),
             harness: Some("all"),
             bin_dir: Some(&bin),
-            path: system_path,
+            path: &system_path,
         });
         let stdout = assert_success(&output);
         assert_eq!(stdout.lines().count(), 3, "{stdout}");
@@ -1101,7 +1162,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
                 .unwrap()
                 .contains("jcode-api")
         );
-        assert_alias_identity_and_local_caps(&home, &bin, system_path);
+        assert_alias_identity_and_local_caps(&home, &bin, &system_path);
         positive_cells += 1;
 
         let before = fs::read_to_string(&server.log).unwrap_or_default();
@@ -1115,7 +1176,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             glibc_version: (os == "Linux").then_some("2.35"),
             harness: None,
             bin_dir: Some(&home.join("bin")),
-            path: system_path,
+            path: &system_path,
         });
         assert_eq!(output.status.code(), Some(1));
         assert!(output.stdout.is_empty());
@@ -1139,10 +1200,10 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             glibc_version: (os == "Linux").then_some("2.35"),
             harness: Some("claude"),
             bin_dir: Some(&bin),
-            path: system_path,
+            path: &system_path,
         });
         assert_success(&output);
-        assert_alias_identity_and_local_caps(&home, &bin, system_path);
+        assert_alias_identity_and_local_caps(&home, &bin, &system_path);
         assert_ne!(fs::read(bin.join("azdaja")).unwrap(), b"old-managed-binary");
         // A second update proves the exact managed link is accepted idempotently.
         let output = run_installer(InstallRun {
@@ -1153,10 +1214,10 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             glibc_version: (os == "Linux").then_some("2.35"),
             harness: Some("claude"),
             bin_dir: Some(&bin),
-            path: system_path,
+            path: &system_path,
         });
         assert_success(&output);
-        assert_alias_identity_and_local_caps(&home, &bin, system_path);
+        assert_alias_identity_and_local_caps(&home, &bin, &system_path);
         positive_cells += 1;
     }
 
@@ -1323,6 +1384,7 @@ fn adjacent_config_ownership_preserves_custom_state_and_generic_config() {
     let candidate = local_candidate(&scratch.0);
     write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
     let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let system_path = alias_free_system_path(&scratch.0);
     let home = scratch.0.join("owned-config-home");
     let bin = home.join("bin");
     fs::create_dir_all(&bin).unwrap();
@@ -1336,7 +1398,7 @@ fn adjacent_config_ownership_preserves_custom_state_and_generic_config() {
             glibc_version: Some("2.35"),
             harness: Some("claude"),
             bin_dir: Some(&bin),
-            path: "/usr/bin:/bin",
+            path: &system_path,
         })
     };
 
@@ -1361,7 +1423,7 @@ fn adjacent_config_ownership_preserves_custom_state_and_generic_config() {
         fs::read(bin.join("config.toml")).unwrap(),
         b"unrelated = 'keep-me'\n"
     );
-    assert_alias_identity_and_local_caps(&home, &bin, "/usr/bin:/bin");
+    assert_alias_identity_and_local_caps(&home, &bin, &system_path);
 }
 
 #[test]
@@ -1573,6 +1635,7 @@ fn installed_alias_matches_solo_through_a_provider_free_fixture() {
     let candidate = local_candidate(&scratch.0);
     write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
     let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let system_path = alias_free_system_path(&scratch.0);
     let home = scratch.0.join("solo-home");
     let bin = home.join("bin");
     let tools = home.join("tools");
@@ -1584,7 +1647,7 @@ fn installed_alias_matches_solo_through_a_provider_free_fixture() {
     )
     .unwrap();
     fs::set_permissions(&claude, fs::Permissions::from_mode(0o755)).unwrap();
-    let path = format!("{}:/usr/bin:/bin", tools.display());
+    let path = format!("{}:{system_path}", tools.display());
     let output = run_installer(InstallRun {
         home: &home,
         base: &format!("{}/good", server.base),
