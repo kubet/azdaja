@@ -26,7 +26,7 @@ fn reviewed_notice_license_and_font_ofl_bytes_are_preserved() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     assert_eq!(
         sha256(&root.join("THIRD-PARTY-NOTICES.md")),
-        "fae203180584839b6269a323a663d0247b823f9c23a4869b7a0a9687c908c69a"
+        "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
     );
     assert_eq!(
         sha256(&root.join("LICENSE")),
@@ -108,8 +108,8 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads()
         std::process::id()
     ));
     fs::create_dir(&dist).unwrap();
-    let darwin = dist.join("azdaja-v0.1.4-darwin-arm64");
-    let linux = dist.join("azdaja-v0.1.4-linux-x86_64");
+    let darwin = dist.join("azdaja-v0.1.5-darwin-arm64");
+    let linux = dist.join("azdaja-v0.1.5-linux-x86_64");
     fs::write(&darwin, b"raw darwin binary").unwrap();
     fs::write(&linux, b"raw linux binary").unwrap();
     let output = Command::new("sh")
@@ -136,8 +136,8 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads()
     let lines: Vec<_> = sums.lines().collect();
     assert_eq!(lines.len(), 4);
     for name in [
-        "azdaja-v0.1.4-darwin-arm64",
-        "azdaja-v0.1.4-linux-x86_64",
+        "azdaja-v0.1.5-darwin-arm64",
+        "azdaja-v0.1.5-linux-x86_64",
         "LICENSE",
         "THIRD-PARTY-NOTICES.md",
     ] {

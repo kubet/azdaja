@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-VERSION=0.1.4
+VERSION=0.1.5
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 OUT=${1:-$ROOT/dist-v$VERSION}
 DARWIN=azdaja-v$VERSION-darwin-arm64
@@ -29,7 +29,7 @@ sha256_file() {
   printf '%s\n' 'assemble-standalone-assets: root LICENSE identity mismatch' >&2
   exit 2
 }
-[ "$(sha256_file "$ROOT/THIRD-PARTY-NOTICES.md")" = fae203180584839b6269a323a663d0247b823f9c23a4869b7a0a9687c908c69a ] || {
+[ "$(sha256_file "$ROOT/THIRD-PARTY-NOTICES.md")" = 0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3 ] || {
   printf '%s\n' 'assemble-standalone-assets: reviewed notice identity mismatch' >&2
   exit 2
 }

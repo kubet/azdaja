@@ -1,9 +1,9 @@
 [package]
 name = "azdaja"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 license = "MIT"
-description = "Minimal harness-agnostic recursive language model layer"
+description = "Virtual memory for language models with a bounded model-facing surface"
 repository = "https://github.com/kubet/azdaja"
 rust-version = "1.95"
 publish = false

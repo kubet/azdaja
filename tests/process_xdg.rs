@@ -413,12 +413,18 @@ fn shell_ignores_empty_and_relative_xdg_config_during_detection() {
             .env("HOME", &home)
             .env("XDG_CONFIG_HOME", value)
             .env("PATH", "/usr/bin:/bin")
-            .env("AZDAJA_INSTALL_BASE_URL", "must-not-reach-validation")
             .output()
             .unwrap();
         assert!(!output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
-            String::from_utf8_lossy(&output.stderr).contains("no supported tool found"),
+            stdout.contains("Checking tools... none found"),
+            "{output:?}"
+        );
+        assert!(!stdout.contains("opencode found"), "{output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("interactive selection needs a terminal"),
             "{output:?}"
         );
     }

@@ -69,7 +69,7 @@ jobs:
             cargo install --path . --locked --root "$source_root"
           source_binary="$source_root/bin/azdaja"
           test -x "$source_binary"
-          test "$("$source_binary" --version)" = "azdaja 0.1.4 (monty 0.0.21)"
+          test "$("$source_binary" --version)" = "azdaja 0.1.5 (monty 0.0.21)"
           HOME="$source_home" PATH="$guard:$PATH" \
             "$source_binary" doctor --caps > "$scratch/source-caps.json"
           python3 - "$scratch/source-caps.json" <<'PY'
@@ -78,7 +78,7 @@ jobs:
           import sys
 
           caps = json.loads(pathlib.Path(sys.argv[1]).read_text())
-          assert caps["azdaja"] == "0.1.4", caps
+          assert caps["azdaja"] == "0.1.5", caps
           assert caps["monty"] == "0.0.21", caps
           assert caps["dump_version"] == 5, caps
           assert "persistent-repl" in caps["capabilities"], caps
@@ -88,12 +88,12 @@ jobs:
           test -z "$(find "$source_home" -mindepth 1 -print -quit)"
 
           case "$(uname -s)-$(uname -m)" in
-            Darwin-arm64) asset=azdaja-v0.1.4-darwin-arm64 ;;
-            Linux-x86_64) asset=azdaja-v0.1.4-linux-x86_64 ;;
+            Darwin-arm64) asset=azdaja-v0.1.5-darwin-arm64 ;;
+            Linux-x86_64) asset=azdaja-v0.1.5-linux-x86_64 ;;
             *) printf 'unsupported CI host: %s-%s\n' "$(uname -s)" "$(uname -m)" >&2; exit 1 ;;
           esac
-          cp "$source_binary" "$fixture/azdaja-v0.1.4-darwin-arm64"
-          cp "$source_binary" "$fixture/azdaja-v0.1.4-linux-x86_64"
+          cp "$source_binary" "$fixture/azdaja-v0.1.5-darwin-arm64"
+          cp "$source_binary" "$fixture/azdaja-v0.1.5-linux-x86_64"
           cp LICENSE THIRD-PARTY-NOTICES.md "$fixture/"
           digest="$(python3 - "$source_binary" <<'PY'
           import hashlib
@@ -108,8 +108,8 @@ jobs:
           import sys
           fixture, binary_digest = pathlib.Path(sys.argv[1]), sys.argv[2]
           payloads = [
-              ("azdaja-v0.1.4-darwin-arm64", binary_digest),
-              ("azdaja-v0.1.4-linux-x86_64", binary_digest),
+              ("azdaja-v0.1.5-darwin-arm64", binary_digest),
+              ("azdaja-v0.1.5-linux-x86_64", binary_digest),
               ("LICENSE", hashlib.sha256((fixture / "LICENSE").read_bytes()).hexdigest()),
               ("THIRD-PARTY-NOTICES.md", hashlib.sha256((fixture / "THIRD-PARTY-NOTICES.md").read_bytes()).hexdigest()),
           ]
@@ -162,7 +162,7 @@ jobs:
           cmp THIRD-PARTY-NOTICES.md "$install_home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
 
           cat > "$scratch/expected-help" <<'EOF'
-          AZDAJA v0.1.4 — virtual memory for language models
+          AZDAJA v0.1.5 — virtual memory for language models
           Usage: az <command>
           Commands: help solo install doctor start load exec final list kill uninstall
           Install: az install  (auto-detects supported tools)

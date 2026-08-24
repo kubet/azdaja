@@ -3451,7 +3451,7 @@ const DOCUMENT_OWNER_V1_MAGIC: &[u8] = b"azdaja-installer-owned-docs-v1\n";
 const DOCUMENT_OWNER_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
-THIRD-PARTY-NOTICES.md.sha256=fae203180584839b6269a323a663d0247b823f9c23a4869b7a0a9687c908c69a\n";
+THIRD-PARTY-NOTICES.md.sha256=0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3\n";
 const DISTRIBUTED_LICENSE: &[u8] = include_bytes!("../LICENSE");
 const DISTRIBUTED_NOTICES: &[u8] = include_bytes!("../THIRD-PARTY-NOTICES.md");
 
@@ -6863,19 +6863,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "70e9a3a5089df132c10ce642f2fbd87d0bcc0d6a7dab811645be6038f27cce73",
+                "63eed9824db67ddcbc221745026bbe871c0c1a53d05a9e45d9ca6350ee0383ef",
             ),
             (
                 "jcode",
-                "b564e3636e2c7b99afd2c0e3937ed3da937101065460ab107602b8808b337f85",
+                "aed4332f2588059b973f9cfb704da5861724bf14fcb7e32f859ca7eba721e4c4",
             ),
             (
                 "codex",
-                "a66d53a952091cf6f2dc6f179c36be6bc90a312f8b090a665fb446d18c941dda",
+                "5d195c1379907ceb8f6231a2a657b30a5cebe7ce78607d27372a9acc3e4ab85d",
             ),
             (
                 "gemini",
-                "5288f5fe9f9dcb7a990c436a2613bea559429652e90e12646ce4d595def38713",
+                "f20a5ac3c9ff6436e67dc6034cd5b323cd5f34bc85c3415b062cc1f8e76429af",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);

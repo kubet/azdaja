@@ -220,10 +220,11 @@ where
         terminal.draw(|frame| render(frame, &state))?;
         if event::poll(POLL_INTERVAL)? {
             match event::read()? {
-                Event::Key(key) if should_handle_key(key) => {
-                    if handle_key(key, &mut state, load_snapshot, load_integrations) {
-                        break;
-                    }
+                Event::Key(key)
+                    if should_handle_key(key)
+                        && handle_key(key, &mut state, load_snapshot, load_integrations) =>
+                {
+                    break;
                 }
                 Event::Resize(_, 0) | Event::Resize(0, _) => break,
                 _ => {}

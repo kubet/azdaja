@@ -1,6 +1,6 @@
 # Virtual-memory observability console
 
-Status: implementation design for the post-v0.1.4 CLI.
+Status: implemented for the v0.1.5 CLI.
 
 ## Product thesis
 
@@ -229,7 +229,7 @@ The curl bootstrap remains line-oriented POSIX shell because the binary does not
 Immediate disclosure:
 
 ```text
-Azdaja installer v0.1.4
+Azdaja installer v0.1.5
 Provider-free install. No model provider will be called.
 Checking platform... macOS arm64 supported
 Checking tools... jcode, claude, codex, opencode found
@@ -237,8 +237,8 @@ Checking tools... jcode, claude, codex, opencode found
 
 Detection language:
 
-- `tool found` means executable detection;
-- `integration active` means managed files validate;
+- `found` means executable detection;
+- `integration present` means the managed files validate;
 - never label a host directory or stale managed skill as the tool being installed;
 - do not detect Gemini merely because `~/.gemini/skills/azdaja` exists.
 
@@ -247,19 +247,19 @@ Interactive selection:
 ```text
 Select integrations
 
-› [x] jcode      found · integration active
-  [x] claude     found · integration active
+› [x] jcode      found · integration present
+  [x] claude     found · integration present
   [x] codex      found · not integrated
   [ ] gemini     not found
-  [x] opencode   found · integration active
+  [x] opencode   found · integration present
 
-↑/↓ or j/k move  space toggle  a found  n none  enter continue  q cancel
+↑/↓ or j/k move  Space toggle  a detected  n none  Enter install  q cancel
 ```
 
 Before mutation, print the exact plan and destinations. Every long phase announces itself before work starts:
 
 ```text
-Downloading azdaja v0.1.4... 
+Downloading azdaja v0.1.5...
 Verifying SHA-256... ok
 Staging files... ok
 Writing command... ok
