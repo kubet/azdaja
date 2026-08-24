@@ -107,7 +107,7 @@ fn non_primary_supplementary_group() -> Option<u32> {
     if count <= 0 {
         return None;
     }
-    let mut groups = vec![0 as libc::gid_t; count as usize];
+    let mut groups: Vec<libc::gid_t> = vec![0; count as usize];
     let count = unsafe { libc::getgroups(count, groups.as_mut_ptr()) };
     if count < 0 {
         return None;
@@ -115,13 +115,12 @@ fn non_primary_supplementary_group() -> Option<u32> {
     groups
         .into_iter()
         .take(count as usize)
-        .map(|gid| gid as u32)
-        .find(|gid| *gid != unsafe { libc::getgid() as u32 })
+        .find(|gid| *gid != unsafe { libc::getgid() })
 }
 
 fn set_file_group(path: &Path, gid: u32) -> std::io::Result<()> {
     let path = CString::new(path.as_os_str().as_bytes())?;
-    let result = unsafe { libc::chown(path.as_ptr(), libc::getuid(), gid as libc::gid_t) };
+    let result = unsafe { libc::chown(path.as_ptr(), libc::getuid(), gid) };
     if result == 0 {
         Ok(())
     } else {
