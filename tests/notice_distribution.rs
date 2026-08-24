@@ -71,7 +71,10 @@ fn cargo_package_list_matches_the_reviewed_file_allowlist() {
             "assets/legacy/codex-config-41f19430.toml",
             "assets/legacy/codex-config-a9da6615.toml",
             "assets/legacy/codex-config-ae85a189.toml",
+            "assets/legacy/codex-config-e6467dc6.toml",
+            "assets/legacy/jcode-config-bc956890.toml",
             "assets/legacy/jcode-config-d890a0fa.toml",
+            "assets/legacy/opencode-config-f077082c.toml",
             "src/banner.rs",
             "src/dashboard.rs",
             "src/lib.rs",
@@ -112,8 +115,8 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads()
         std::process::id()
     ));
     fs::create_dir(&dist).unwrap();
-    let darwin = dist.join("azdaja-v0.1.6-darwin-arm64");
-    let linux = dist.join("azdaja-v0.1.6-linux-x86_64");
+    let darwin = dist.join("azdaja-v0.1.7-darwin-arm64");
+    let linux = dist.join("azdaja-v0.1.7-linux-x86_64");
     fs::write(&darwin, b"raw darwin binary").unwrap();
     fs::write(&linux, b"raw linux binary").unwrap();
     let output = Command::new("sh")
@@ -140,8 +143,8 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads()
     let lines: Vec<_> = sums.lines().collect();
     assert_eq!(lines.len(), 4);
     for name in [
-        "azdaja-v0.1.6-darwin-arm64",
-        "azdaja-v0.1.6-linux-x86_64",
+        "azdaja-v0.1.7-darwin-arm64",
+        "azdaja-v0.1.7-linux-x86_64",
         "LICENSE",
         "THIRD-PARTY-NOTICES.md",
     ] {

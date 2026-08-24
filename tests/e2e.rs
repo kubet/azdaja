@@ -4461,7 +4461,7 @@ exit 9
     );
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
-    assert!(skill.contains("Azdaja 0.1.6") && skill.contains(dst.join("azdaja").to_str().unwrap()));
+    assert!(skill.contains("Azdaja 0.1.7") && skill.contains(dst.join("azdaja").to_str().unwrap()));
     assert!(skill.contains("one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle"));
     assert!(skill.contains("llm_batch(prompts, workers=4)"));
     assert!(skill.contains("Scan the complete loaded source"));
@@ -5506,10 +5506,11 @@ fn codex_reinstall_migrates_byte_exact_legacy_adapter_to_isolated_workers() {
     let current = fs::read_to_string(&config_path).unwrap();
     let current_command = "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c model_reasoning_effort=low -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -";
     assert!(current.contains(current_command), "{current}");
-    let legacy_configs: [&[u8]; 3] = [
+    let legacy_configs: [&[u8]; 4] = [
         include_bytes!("../assets/legacy/codex-config-a9da6615.toml"),
         include_bytes!("../assets/legacy/codex-config-41f19430.toml"),
         include_bytes!("../assets/legacy/codex-config-ae85a189.toml"),
+        include_bytes!("../assets/legacy/codex-config-e6467dc6.toml"),
     ];
     for legacy in legacy_configs {
         assert_ne!(legacy, current.as_bytes());
@@ -5531,6 +5532,10 @@ fn codex_reinstall_migrates_byte_exact_legacy_adapter_to_isolated_workers() {
         );
         let migrated = fs::read_to_string(&config_path).unwrap();
         assert!(migrated.contains(current_command), "{migrated}");
+        assert!(
+            migrated.contains("default_model = \"gpt-5.6-sol\""),
+            "{migrated}"
+        );
     }
 
     let doctor = doctor_codex_fixture(&t, &codex_home, &t);
