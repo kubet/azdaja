@@ -444,7 +444,9 @@ pub struct SessionStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DashboardSnapshot {
     pub default_model: String,
+    /// Runner configured for new work, not a route observed from an existing session.
     pub provider: String,
+    /// Thinking level configured for new work, when the selected runner exposes one.
     pub reasoning: String,
     pub max_sessions: usize,
     pub idle_timeout: u64,
@@ -1169,6 +1171,139 @@ fn dashboard_sessions(
     Ok(sessions)
 }
 
+fn command_program_name(program: &str) -> String {
+    Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(program)
+        .to_ascii_lowercase()
+}
+
+fn explicit_argv_value(args: &[String], options: &[&str]) -> Option<String> {
+    for (index, arg) in args.iter().enumerate() {
+        for option in options {
+            if arg == option {
+                if let Some(value) = args.get(index + 1).and_then(|value| quoted_value(value)) {
+                    return Some(value);
+                }
+            }
+            if let Some(value) = arg
+                .strip_prefix(option)
+                .and_then(|value| value.strip_prefix('='))
+                .and_then(quoted_value)
+            {
+                return Some(value);
+            }
+        }
+    }
+    None
+}
+
+fn quoted_value(value: &str) -> Option<String> {
+    let value = value.trim();
+    let value = if value.len() >= 2
+        && ((value.starts_with('"') && value.ends_with('"'))
+            || (value.starts_with('\'') && value.ends_with('\'')))
+    {
+        &value[1..value.len() - 1]
+    } else {
+        value
+    };
+    (!value.is_empty()).then(|| value.to_owned())
+}
+
+fn assigned_argv_value(args: &[String], key: &str) -> Option<String> {
+    for (index, arg) in args.iter().enumerate() {
+        if arg == key {
+            if let Some(value) = args.get(index + 1).and_then(|value| quoted_value(value)) {
+                return Some(value);
+            }
+        }
+        let Some(position) = arg.find(key) else {
+            continue;
+        };
+        let prefix = &arg[..position];
+        if !prefix.is_empty() && !prefix.ends_with('=') {
+            continue;
+        }
+        if let Some(value) = arg[position + key.len()..]
+            .strip_prefix('=')
+            .and_then(quoted_value)
+        {
+            return Some(value);
+        }
+    }
+    None
+}
+
+fn explicit_reasoning(args: &[String]) -> Option<String> {
+    explicit_argv_value(
+        args,
+        &[
+            "--effort",
+            "--reasoning-effort",
+            "--reasoning",
+            "--thinking",
+            "--thinking-level",
+        ],
+    )
+    .or_else(|| assigned_argv_value(args, "reasoning_effort"))
+    .or_else(|| assigned_argv_value(args, "thinking_level"))
+}
+
+fn jcode_runner_label(provider: &str) -> String {
+    let provider = provider.trim();
+    if provider.is_empty() {
+        return "Jcode API".into();
+    }
+    let provider = match provider.to_ascii_lowercase().as_str() {
+        "openai" => "OpenAI",
+        "anthropic" => "Anthropic",
+        "google" => "Google",
+        _ => provider,
+    };
+    format!("Jcode/{provider}")
+}
+
+/// Describes the configured default command for new work. It deliberately does not infer an
+/// observed provider route from an existing session.
+fn configured_default_command_provenance(cfg: &Config) -> (String, String) {
+    if cfg.sub_llm_cmd == "jcode-api" {
+        return (
+            jcode_runner_label(&cfg.jcode_provider),
+            cfg.jcode_reasoning.trim().to_owned(),
+        );
+    }
+    let Some(argv) = shlex::split(&cfg.sub_llm_cmd) else {
+        return ("custom command".into(), String::new());
+    };
+    let Some((program, args)) = argv.split_first() else {
+        return ("custom command".into(), String::new());
+    };
+    let program = command_program_name(program);
+    match program.as_str() {
+        "claude" | "claude.exe" => (
+            "Claude CLI".into(),
+            explicit_argv_value(args, &["--effort"]).unwrap_or_default(),
+        ),
+        "codex" | "codex.exe" => (
+            "Codex CLI".into(),
+            assigned_argv_value(args, "model_reasoning_effort")
+                .or_else(|| explicit_reasoning(args))
+                .unwrap_or_default(),
+        ),
+        "gemini" | "gemini.exe" => (
+            "Gemini CLI".into(),
+            explicit_reasoning(args).unwrap_or_default(),
+        ),
+        "opencode" | "opencode.exe" => (
+            "OpenCode".into(),
+            explicit_reasoning(args).unwrap_or_default(),
+        ),
+        _ => ("custom command".into(), String::new()),
+    }
+}
+
 pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
     let ids = list(cfg)?;
     let base = state_home()?;
@@ -1181,10 +1316,11 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
             observability::RecentAggregateSummary::empty()
         }
     };
+    let (provider, reasoning) = configured_default_command_provenance(cfg);
     Ok(DashboardSnapshot {
         default_model: cfg.default_model.clone(),
-        provider: cfg.jcode_provider.clone(),
-        reasoning: cfg.jcode_reasoning.clone(),
+        provider,
+        reasoning,
         max_sessions: cfg.max_sessions,
         idle_timeout: cfg.idle_timeout,
         state_root: base,
@@ -1192,6 +1328,15 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
         recent_observability,
         observability_degraded,
     })
+}
+
+fn new_session_meta(cfg: &Config, sub_model: Option<String>) -> Meta {
+    Meta {
+        version: VERSION.into(),
+        monty: MONTY_VERSION.into(),
+        created: now(),
+        sub_model: Some(sub_model.unwrap_or_else(|| cfg.default_model.clone())),
+    }
 }
 
 pub fn start(cfg: &Config, sub_model: Option<String>) -> Result<String> {
@@ -1228,12 +1373,7 @@ pub fn start(cfg: &Config, sub_model: Option<String>) -> Result<String> {
             repl.feed_run(PRELUDE, vec![], PrintWriter::Disabled)
                 .context("Monty capability canary failed")?;
             save_repl(&stage, &repl)?;
-            let meta = Meta {
-                version: VERSION.into(),
-                monty: MONTY_VERSION.into(),
-                created: now(),
-                sub_model: sub_model.clone(),
-            };
+            let meta = new_session_meta(cfg, sub_model.clone());
             atomic_write(&stage.join("meta.json"), &serde_json::to_vec(&meta)?)?;
             Ok(())
         })();
@@ -8044,6 +8184,142 @@ mod unit_tests {
         let shipped: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
         assert_eq!(Config::default().cell_timeout, 60);
         assert_eq!(shipped.cell_timeout, Config::default().cell_timeout);
+    }
+
+    #[test]
+    fn new_session_metadata_persists_default_model_and_explicit_override() {
+        let cfg = Config {
+            default_model: "configured-default".into(),
+            ..Config::default()
+        };
+        assert_eq!(
+            new_session_meta(&cfg, None).sub_model.as_deref(),
+            Some("configured-default")
+        );
+        assert_eq!(
+            new_session_meta(&cfg, Some("explicit-model".into()))
+                .sub_model
+                .as_deref(),
+            Some("explicit-model")
+        );
+    }
+
+    #[test]
+    fn legacy_none_model_is_displayed_as_none_without_rewriting_metadata() {
+        let root = temp_test_dir("legacy-none-model");
+        let root_directory = create_new_private_directory(&root).unwrap();
+        let id = "0123456789abcdef";
+        let session = root.join(id);
+        let session_directory = create_new_private_directory(&session).unwrap();
+        let meta = Meta {
+            version: VERSION.into(),
+            monty: MONTY_VERSION.into(),
+            created: 1,
+            sub_model: None,
+        };
+        atomic_write(
+            &session.join("meta.json"),
+            &serde_json::to_vec(&meta).unwrap(),
+        )
+        .unwrap();
+        atomic_write(&session.join("state.monty"), b"legacy-state").unwrap();
+        let before = read_regular_nofollow(&session.join("meta.json"))
+            .unwrap()
+            .unwrap();
+
+        let mut observability_degraded = false;
+        let statuses =
+            dashboard_sessions(&root, vec![id.into()], &mut observability_degraded).unwrap();
+
+        assert_eq!(statuses.len(), 1);
+        assert_eq!(statuses[0].sub_model, None);
+        assert_eq!(
+            read_regular_nofollow(&session.join("meta.json"))
+                .unwrap()
+                .unwrap(),
+            before
+        );
+        drop(session_directory);
+        drop(root_directory);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn configured_default_command_provenance_covers_managed_and_custom_commands() {
+        let cases = [
+            ("jcode-api", "openai", "xhigh", "Jcode/OpenAI", "xhigh"),
+            (
+                "/opt/provider/claude --model {model} --effort high",
+                "ignored",
+                "ignored",
+                "Claude CLI",
+                "high",
+            ),
+            (
+                r#"codex exec --json -c model_reasoning_effort=\"medium\""#,
+                "ignored",
+                "ignored",
+                "Codex CLI",
+                "medium",
+            ),
+            (
+                "gemini --model {model}",
+                "ignored",
+                "ignored",
+                "Gemini CLI",
+                "",
+            ),
+            (
+                "opencode run --format json --reasoning=low",
+                "ignored",
+                "ignored",
+                "OpenCode",
+                "low",
+            ),
+            (
+                "my-model-runner --effort high",
+                "ignored",
+                "ignored",
+                "custom command",
+                "",
+            ),
+        ];
+        for (command, jcode_provider, jcode_reasoning, provider, reasoning) in cases {
+            let cfg = Config {
+                sub_llm_cmd: command.into(),
+                jcode_provider: jcode_provider.into(),
+                jcode_reasoning: jcode_reasoning.into(),
+                ..Config::default()
+            };
+            assert_eq!(
+                configured_default_command_provenance(&cfg),
+                (provider.into(), reasoning.into()),
+                "command: {command}"
+            );
+        }
+    }
+
+    #[test]
+    fn configured_default_command_provenance_parses_equivalent_explicit_reasoning_values() {
+        let cases = [
+            (
+                "codex exec --config=model_reasoning_effort=high",
+                ("Codex CLI", "high"),
+            ),
+            ("gemini --thinking-level medium", ("Gemini CLI", "medium")),
+            ("opencode --reasoning-effort=xhigh", ("OpenCode", "xhigh")),
+        ];
+        for (command, (provider, reasoning)) in cases {
+            let cfg = Config {
+                sub_llm_cmd: command.into(),
+                ..Config::default()
+            };
+            assert_eq!(
+                configured_default_command_provenance(&cfg),
+                (provider.into(), reasoning.into()),
+                "command: {command}"
+            );
+        }
     }
 
     fn codex_success_jsonl() -> String {
