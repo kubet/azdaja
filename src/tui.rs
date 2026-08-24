@@ -59,7 +59,7 @@ enum ConsoleView {
 enum Tone {
     Normal,
     Good,
-    Route,
+    Accent,
     Attention,
     Dim,
 }
@@ -457,7 +457,7 @@ fn render_runtime_narrow(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
         ]
     } else if let Some(snapshot) = state.snapshot.as_ref() {
         let mut lines = vec![Line::from(styled(
-            "azdaja ● awake",
+            "azdaja · memory constellation",
             heading_style(state.color),
         ))];
         for row in summary_rows(snapshot) {
@@ -492,18 +492,13 @@ fn summary_rows(snapshot: &DashboardSnapshot) -> Vec<VisualRow> {
     vec![
         status,
         VisualRow {
-            label: "route",
-            value: format!(
-                "{} · {} · {}",
-                clean(&snapshot.default_model),
-                clean(&snapshot.provider),
-                clean(&snapshot.reasoning)
-            ),
-            tone: Tone::Route,
+            label: "new work",
+            value: new_work_line(snapshot),
+            tone: Tone::Accent,
         },
         VisualRow {
-            label: "nest",
-            value: nest_line(snapshot),
+            label: "live",
+            value: live_line(snapshot),
             tone: Tone::Normal,
         },
         VisualRow {
@@ -512,8 +507,8 @@ fn summary_rows(snapshot: &DashboardSnapshot) -> Vec<VisualRow> {
             tone: Tone::Normal,
         },
         VisualRow {
-            label: "texture",
-            value: texture_line(snapshot),
+            label: "pattern",
+            value: pattern_line(snapshot),
             tone: Tone::Dim,
         },
     ]
@@ -521,13 +516,21 @@ fn summary_rows(snapshot: &DashboardSnapshot) -> Vec<VisualRow> {
 
 fn overview_rows(snapshot: &DashboardSnapshot, timestamp: u64, selected: usize) -> Vec<VisualRow> {
     let mut rows = summary_rows(snapshot);
+    rows.push(VisualRow {
+        label: "recent",
+        value: recent_summary_line(
+            snapshot,
+            timestamp,
+            if snapshot.sessions.is_empty() {
+                selected
+            } else {
+                0
+            },
+        )
+        .unwrap_or_else(|| "no source summary yet".to_owned()),
+        tone: Tone::Dim,
+    });
     if snapshot.sessions.is_empty() {
-        rows.push(VisualRow {
-            label: "recent",
-            value: recent_trace_line(snapshot, timestamp, selected)
-                .unwrap_or_else(|| "no memory trace yet".to_owned()),
-            tone: Tone::Dim,
-        });
         return rows;
     }
 
@@ -535,26 +538,13 @@ fn overview_rows(snapshot: &DashboardSnapshot, timestamp: u64, selected: usize) 
     for (offset, session) in snapshot.sessions[visible.clone()].iter().enumerate() {
         let index = visible.start + offset;
         rows.push(VisualRow {
-            label: if offset == 0 { "recent" } else { "" },
-            value: session_summary(
-                session,
-                &snapshot.default_model,
-                timestamp,
-                index == selected,
-            ),
+            label: "",
+            value: session_summary(session, timestamp, index == selected),
             tone: if session.busy {
                 Tone::Good
             } else {
                 Tone::Normal
             },
-        });
-    }
-    let hidden = snapshot.sessions.len().saturating_sub(visible.len());
-    if hidden > 0 {
-        rows.push(VisualRow {
-            label: "",
-            value: format!("+{hidden} tucked away"),
-            tone: Tone::Dim,
         });
     }
     rows
@@ -571,47 +561,58 @@ fn visible_session_range(len: usize, selected: usize) -> std::ops::Range<usize> 
     start..start + RECENT_ROWS
 }
 
-fn nest_line(snapshot: &DashboardSnapshot) -> String {
-    let constellation = memory_constellation(snapshot);
-    let trace_count = constellation.as_ref().map_or(0, |value| value.trace_count);
-    if snapshot.sessions.is_empty() {
-        return if trace_count == 0 {
-            format!("empty · cold · 0/{} slots", snapshot.max_sessions)
-        } else {
-            let history = history_count_label(constellation.as_ref().expect("checked history"));
-            format!(
-                "0 resident · cold · 0/{} slots · {} · {} observed",
-                snapshot.max_sessions,
-                history,
-                human_bytes(
-                    constellation
-                        .as_ref()
-                        .map_or(0, |value| value.total_source_bytes)
-                )
-            )
-        };
-    }
-    let active = active_sessions(snapshot);
-    let pressure = if snapshot.sessions.len() >= snapshot.max_sessions {
-        "full"
-    } else if active > 0 {
-        "warm"
+fn new_work_line(snapshot: &DashboardSnapshot) -> String {
+    let model = clean(snapshot.default_model.trim());
+    let model = if model.is_empty() {
+        "model unknown".to_owned()
     } else {
-        "resting"
+        model
     };
-    let mut line = format!(
-        "{} resident state · {pressure} · {}/{} slots",
-        human_bytes(total_state_bytes(snapshot)),
-        snapshot.sessions.len(),
-        snapshot.max_sessions
-    );
-    if trace_count > 0 {
-        line.push_str(&format!(
-            " · {}",
-            history_count_label(constellation.as_ref().expect("checked history"))
-        ));
+    let runner = clean(snapshot.provider.trim());
+    let runner = if runner.is_empty() {
+        "runner unknown".to_owned()
+    } else {
+        runner
+    };
+    let mut line = format!("{model} via {runner}");
+    let reasoning = clean(snapshot.reasoning.trim());
+    match reasoning.to_ascii_lowercase().as_str() {
+        "" | "unknown" => {}
+        "none" | "off" => line.push_str(" · thinking off"),
+        _ => line.push_str(&format!(" · {reasoning} thinking")),
     }
     line
+}
+
+fn known_value(value: &str) -> Option<&str> {
+    let value = value.trim();
+    if value.is_empty()
+        || matches!(
+            value.to_ascii_lowercase().as_str(),
+            "unknown" | "unset" | "none" | "n/a"
+        )
+    {
+        None
+    } else {
+        Some(value)
+    }
+}
+
+fn live_line(snapshot: &DashboardSnapshot) -> String {
+    let used = snapshot.sessions.len();
+    if used == 0 {
+        let free = snapshot.max_sessions;
+        return format!(
+            "none · {free} {} free",
+            if free == 1 { "slot" } else { "slots" }
+        );
+    }
+    let active = active_sessions(snapshot);
+    let idle = used.saturating_sub(active);
+    format!(
+        "{active} running · {idle} idle · {used}/{} slots used",
+        snapshot.max_sessions
+    )
 }
 
 fn memory_constellation(snapshot: &DashboardSnapshot) -> Option<MemoryConstellation> {
@@ -635,64 +636,50 @@ fn memory_constellation(snapshot: &DashboardSnapshot) -> Option<MemoryConstellat
 }
 
 fn memory_line(snapshot: &DashboardSnapshot) -> String {
-    match memory_constellation(snapshot) {
-        Some(constellation) => format!(
-            "H→ {} · {}",
-            constellation.render_strip(18),
-            history_count_label(&constellation)
-        ),
-        None => "H→ ·················· · no traces yet".to_owned(),
-    }
-}
-
-fn trace_count_label(count: usize) -> String {
-    if count == 1 {
-        "1 trace".to_owned()
-    } else {
-        format!("{count} traces")
-    }
-}
-
-fn memory_count_label(count: usize) -> String {
-    if count == 1 {
-        "1 memory".to_owned()
-    } else {
-        format!("{count} memories")
-    }
-}
-
-fn history_count_label(constellation: &MemoryConstellation) -> String {
-    if constellation.completed_count == 0 {
-        return trace_count_label(constellation.trace_count);
-    }
-    let loads = constellation
+    let Some(constellation) = memory_constellation(snapshot) else {
+        return "none yet · summaries keep numbers, not source text".to_owned();
+    };
+    let loaded = constellation
         .trace_count
         .saturating_sub(constellation.completed_count);
-    if loads == 0 {
-        memory_count_label(constellation.completed_count)
-    } else {
-        format!(
-            "{} · {}",
-            memory_count_label(constellation.completed_count),
-            trace_count_label(loads)
-        )
+    let mut counts = Vec::new();
+    if constellation.completed_count > 0 {
+        counts.push(summary_count(constellation.completed_count, "finished"));
     }
+    if loaded > 0 {
+        counts.push(summary_count(loaded, "loaded"));
+    }
+    format!(
+        "{} · {} measured · numbers only",
+        counts.join(" · "),
+        human_bytes(constellation.total_source_bytes)
+    )
+}
+
+fn summary_count(count: usize, state: &str) -> String {
+    format!(
+        "{count} {state} {}",
+        if count == 1 { "summary" } else { "summaries" }
+    )
 }
 
 fn percent(millipercent: u16) -> u32 {
     (u32::from(millipercent.min(1000)) * 100 + 500) / 1000
 }
 
-fn texture_line(snapshot: &DashboardSnapshot) -> String {
+fn pattern_line(snapshot: &DashboardSnapshot) -> String {
     match memory_constellation(snapshot) {
         Some(constellation) => format!(
-            "H₀ {:.1}/8 · redundancy {}% · lines {}% nonempty",
-            constellation.weighted_byte_entropy_bits(),
-            percent(constellation.zero_order_redundancy_millipercent()),
-            percent(constellation.nonempty_line_millipercent)
+            "repeated ← {} → varied · avg {}%",
+            constellation.render_strip(18),
+            100 - percent(constellation.zero_order_redundancy_millipercent())
         ),
-        None => "unmeasured · load one source".to_owned(),
+        None => "appears after the first source".to_owned(),
     }
+}
+
+fn variety_percent_from_entropy(byte_entropy_millibits: u16) -> u32 {
+    (u32::from(byte_entropy_millibits.min(8000)) * 100 + 4000) / 8000
 }
 
 fn constellation_lines(
@@ -703,7 +690,7 @@ fn constellation_lines(
     let mut lines = Vec::new();
     if let Some(constellation) = memory_constellation(snapshot) {
         lines.push(Line::from(styled(
-            "mass ↑ · exact-local aggregate traces",
+            "source size ↑ · local numeric summaries",
             heading_style(color),
         )));
         let labels = ["≥16 MiB", "≥1 MiB", "≥64 KiB", "<64 KiB"];
@@ -721,34 +708,37 @@ fn constellation_lines(
                 Span::raw(row),
             ]));
         }
+        lines.push(Line::from("          repeated ← source variety → varied"));
         lines.push(Line::from(
-            "          0  H₀ byte texture  8 → · ● newest · ○ older · 2 collision",
+            "          ● selected/newest · ○ earlier · 2 overlap",
         ));
+        lines.push(Line::from("each point is one local numeric source summary"));
     } else {
         lines.push(Line::from(styled(
-            "constellation empty · load one source to create a private aggregate trace",
+            "no local numeric source summaries yet",
             subtle_style(color),
         )));
     }
+    lines.push(Line::from(
+        "summaries contain no source text, paths, prompts, or answers",
+    ));
     lines.push(Line::from(vec![
         Span::styled("next  ", subtle_style(color)),
-        Span::styled("solo \"question\" -f ./document.txt", route_style(color)),
+        Span::styled("solo \"question\" -f ./document.txt", accent_style(color)),
         Span::raw(" · list · doctor · help"),
     ]));
     lines
 }
 
-fn recent_trace_line(
+fn recent_summary_line(
     snapshot: &DashboardSnapshot,
     timestamp: u64,
     selected: usize,
 ) -> Option<String> {
     let run = snapshot.recent_observability.runs.get(selected)?;
     let kind = match run.kind {
-        RunKind::SessionLoad => "session load",
-        RunKind::SoloLoad => "solo load",
-        RunKind::SessionFinal => "session memory",
-        RunKind::SoloFinal => "solo memory",
+        RunKind::SessionLoad | RunKind::SoloLoad => "loaded",
+        RunKind::SessionFinal | RunKind::SoloFinal => "finished",
     };
     Some(format!(
         "{kind} · {} · {} lines · {} ago",
@@ -761,17 +751,18 @@ fn recent_trace_line(
 fn details_lines(snapshot: &DashboardSnapshot, selected: usize, color: bool) -> Vec<Line<'static>> {
     let mut lines = vec![
         Line::from(styled(
-            "measured details · exact-local",
+            "measured details · local numeric summaries",
             heading_style(color),
         )),
         Line::from(format!(
             "telemetry       {}",
             if snapshot.observability_degraded {
-                "degraded · core memory remains available"
+                "degraded · live work remains available"
             } else {
-                "healthy · aggregate-only sidecars"
+                "healthy · numeric summaries available"
             }
         )),
+        Line::from("privacy         summaries contain no source text, paths, prompts, or answers"),
         Line::from("model boundary  unmeasured · no boundary telemetry recorded"),
         Line::from("coverage        n/a · no evidence-selection contract recorded"),
     ];
@@ -779,19 +770,19 @@ fn details_lines(snapshot: &DashboardSnapshot, selected: usize, color: bool) -> 
     if let Some(session) = snapshot.sessions.get(selected) {
         if let Some(source) = session.source.as_ref() {
             lines.push(Line::from(format!(
-                "resident source  {}",
+                "source summary   {}",
                 source_line(source)
             )));
             lines.push(Line::from(entropy_line(source)));
-            lines.push(Line::from(redundancy_line(source)));
-            lines.push(Line::from(effective_alphabet_line(source)));
+            lines.push(Line::from(variety_line(source)));
+            lines.push(Line::from(repetition_line(source)));
             lines.push(Line::from(line_density_line(source)));
         } else {
-            lines.push(Line::from("resident source  unmeasured for this session"));
+            lines.push(Line::from("source summary   unmeasured for this live work"));
         }
         lines.push(Line::from(""));
         lines.push(Line::from(styled(
-            "selected resident",
+            "selected live work",
             heading_style(color),
         )));
         lines.push(Line::from(format!(
@@ -804,55 +795,47 @@ fn details_lines(snapshot: &DashboardSnapshot, selected: usize, color: bool) -> 
             "{} state · {} source load(s) · {}",
             human_bytes(session.state_bytes),
             session.loaded_sources,
-            clean(
-                session
-                    .sub_model
-                    .as_deref()
-                    .unwrap_or(&snapshot.default_model)
-            )
+            session_model(session)
         )));
     } else if let Some(run) = snapshot.recent_observability.runs.get(selected) {
         let source = &run.source;
         let state = if matches!(run.kind, RunKind::SessionFinal | RunKind::SoloFinal) {
-            "completed memory"
+            "finished"
         } else {
-            "past source load"
+            "loaded"
         };
         lines.push(Line::from(format!(
-            "recent source    {} · {state}, not resident",
+            "recent summary  {} · {state}",
             source_line(source),
         )));
         lines.push(Line::from(entropy_line(source)));
-        lines.push(Line::from(redundancy_line(source)));
-        lines.push(Line::from(effective_alphabet_line(source)));
+        lines.push(Line::from(variety_line(source)));
+        lines.push(Line::from(repetition_line(source)));
         lines.push(Line::from(line_density_line(source)));
     } else {
-        lines.push(Line::from("resident source  none measured yet"));
+        lines.push(Line::from("source summary   none measured yet"));
     }
     lines
 }
 
 fn entropy_line(source: &SourceLocalAggregate) -> String {
     format!(
-        "byte entropy     H₀ {:.1} / 8.0 bits/byte · distribution only, not quality",
+        "entropy         {:.1} / 8 bits · higher means more byte variety",
         source.byte_entropy_bits(),
     )
 }
 
-fn redundancy_line(source: &SourceLocalAggregate) -> String {
-    let redundancy = 1000u16.saturating_sub(
-        ((u32::from(source.byte_entropy_millibits.min(8000)) * 1000 + 4000) / 8000) as u16,
-    );
+fn variety_line(source: &SourceLocalAggregate) -> String {
     format!(
-        "byte redundancy  {}% · zero-order bound, not measured compression",
-        percent(redundancy)
+        "variety         {}% · distribution only, not quality",
+        variety_percent_from_entropy(source.byte_entropy_millibits)
     )
 }
 
-fn effective_alphabet_line(source: &SourceLocalAggregate) -> String {
+fn repetition_line(source: &SourceLocalAggregate) -> String {
     format!(
-        "effective bytes  {:.1} / 256 · 2^H₀ distribution size",
-        2.0f64.powf(source.byte_entropy_bits())
+        "repetition      {}% · estimate, not file compression",
+        100u32.saturating_sub(variety_percent_from_entropy(source.byte_entropy_millibits))
     )
 }
 
@@ -860,9 +843,9 @@ fn line_density_line(source: &SourceLocalAggregate) -> String {
     let density = if source.physical_lines == 0 {
         0
     } else {
-        ((u128::from(source.nonempty_lines.min(source.physical_lines)) * 1000
+        ((u128::from(source.nonempty_lines.min(source.physical_lines)) * 100
             + u128::from(source.physical_lines / 2))
-            / u128::from(source.physical_lines)) as u16
+            / u128::from(source.physical_lines)) as u32
     };
     let mean = if source.physical_lines == 0 {
         0.0
@@ -870,8 +853,8 @@ fn line_density_line(source: &SourceLocalAggregate) -> String {
         source.utf8_chars as f64 / source.physical_lines as f64
     };
     format!(
-        "line structure   {}% nonempty · {mean:.1} chars/line",
-        percent(density)
+        "line density    {}% nonempty · {mean:.1} chars per line",
+        density
     )
 }
 
@@ -944,9 +927,9 @@ fn key_hint(view: ConsoleView, history_selected: bool, color: bool) -> Line<'sta
             "↑/↓ select · Enter inspect · d details · i integrations · r refresh · q quit"
         }
         ConsoleView::Details if history_selected => {
-            "↑/↓ memory · d overview · i integrations · r refresh · q quit"
+            "↑/↓ summary · d overview · i integrations · r refresh · q quit"
         }
-        ConsoleView::Details => "↑/↓ resident · d overview · i integrations · r refresh · q quit",
+        ConsoleView::Details => "↑/↓ work · d overview · i integrations · r refresh · q quit",
         ConsoleView::Integrations => "i overview · r refresh · d details · q quit",
     };
     Line::from(Span::styled(text, subtle_style(color)))
@@ -960,14 +943,6 @@ fn active_sessions(snapshot: &DashboardSnapshot) -> usize {
         .count()
 }
 
-fn total_state_bytes(snapshot: &DashboardSnapshot) -> u64 {
-    snapshot
-        .sessions
-        .iter()
-        .map(|session| session.state_bytes)
-        .sum()
-}
-
 fn source_line(source: &SourceLocalAggregate) -> String {
     format!(
         "{} · {} chars · {} lines · {} nonempty",
@@ -978,22 +953,25 @@ fn source_line(source: &SourceLocalAggregate) -> String {
     )
 }
 
-fn session_summary(
-    session: &SessionStatus,
-    default_model: &str,
-    timestamp: u64,
-    selected: bool,
-) -> String {
+fn session_summary(session: &SessionStatus, timestamp: u64, selected: bool) -> String {
     let pointer = if selected { "›" } else { " " };
     let marker = if session.busy { "●" } else { "○" };
     let state = if session.busy { "running" } else { "idle" };
-    let model = session.sub_model.as_deref().unwrap_or(default_model);
     format!(
         "{pointer} {marker} {} {state} {} · {}",
         clean(&session.id[..session.id.len().min(8)]),
         human_duration(timestamp.saturating_sub(session.updated)),
-        clean(model),
+        session_model(session),
     )
+}
+
+fn session_model(session: &SessionStatus) -> String {
+    session
+        .sub_model
+        .as_deref()
+        .and_then(known_value)
+        .map(|model| format!("default {}", clean(model)))
+        .unwrap_or_else(|| "default model unknown".to_owned())
 }
 
 fn now_secs() -> u64 {
@@ -1071,7 +1049,7 @@ fn subtle_style(color: bool) -> Style {
     Style::default().fg(if color { Color::DarkGray } else { Color::Reset })
 }
 
-fn route_style(color: bool) -> Style {
+fn accent_style(color: bool) -> Style {
     Style::default().fg(if color { Color::Cyan } else { Color::Reset })
 }
 
@@ -1091,7 +1069,7 @@ fn tone_style(tone: Tone, color: bool) -> Style {
     match tone {
         Tone::Normal => Style::default(),
         Tone::Good => good_style(color),
-        Tone::Route => route_style(color),
+        Tone::Accent => accent_style(color),
         Tone::Attention => bad_style(color),
         Tone::Dim => subtle_style(color),
     }
@@ -1104,6 +1082,7 @@ mod tests {
         EvidenceTier, ObservabilityPrivacyContract, RecentAggregateSummary, RecentRunAggregate,
         RunKind,
     };
+    use ratatui::{Terminal, backend::TestBackend};
     use std::path::PathBuf;
 
     fn source() -> SourceLocalAggregate {
@@ -1134,7 +1113,7 @@ mod tests {
         }];
         DashboardSnapshot {
             default_model: "gpt-5.6-sol".into(),
-            provider: "openai".into(),
+            provider: "Jcode/OpenAI".into(),
             reasoning: "medium".into(),
             max_sessions: 4,
             idle_timeout: 1800,
@@ -1168,63 +1147,67 @@ mod tests {
         }
     }
 
-    #[test]
-    fn overview_is_compact_cute_and_free_of_badge_clutter() {
-        let rows = overview_rows(&snapshot(), 1000, 0);
-        let text = rows
-            .iter()
+    fn rows_text(rows: Vec<VisualRow>) -> String {
+        rows.into_iter()
             .map(|row| format!("{} {}", row.label, row.value))
             .collect::<Vec<_>>()
-            .join("\n");
-        assert!(rows.len() <= 7);
-        assert!(text.contains("status ● awake · source stays local"));
-        assert!(text.contains("route gpt-5.6-sol · openai · medium"));
-        assert!(
-            text.contains("nest 1.5 MiB resident state · warm · 2/4 slots · 1 memory · 1 trace")
-        );
-        assert!(text.contains("memory H→"));
-        assert!(text.contains("texture H₀"));
-        assert!(text.contains("redundancy"));
-        assert!(!text.contains("[exact-local]"));
-        assert!(!text.contains("coverage"));
+            .join("\n")
     }
 
-    #[test]
-    fn completed_memories_remain_visible_without_claiming_resident_source() {
-        let mut empty = snapshot();
-        empty.sessions.clear();
-        let rows = overview_rows(&empty, 1000, 0);
-        let text = rows
-            .iter()
-            .map(|row| format!("{} {}", row.label, row.value))
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(text.contains("0 resident · cold · 0/4 slots · 1 memory"));
-        assert!(text.contains("memory H→"));
-        assert!(text.contains("solo memory · 62.5 KiB · 1000 lines · 20s ago"));
-        assert!(!text.contains("recent source"));
-    }
-
-    #[test]
-    fn truly_empty_state_teaches_one_action_without_fake_metrics() {
-        let mut empty = snapshot();
-        empty.sessions.clear();
-        empty.recent_observability = RecentAggregateSummary::empty();
-        let text = overview_rows(&empty, 1000, 0)
+    fn lines_text(lines: Vec<Line<'static>>) -> String {
+        lines
             .into_iter()
-            .map(|row| format!("{} {}", row.label, row.value))
+            .map(|line| line.to_string())
             .collect::<Vec<_>>()
-            .join("\n");
-        assert!(text.contains("empty · cold · 0/4 slots"));
-        assert!(text.contains("no traces yet"));
-        assert!(text.contains("unmeasured · load one source"));
-        assert!(text.contains("no memory trace yet"));
+            .join("\n")
+    }
+
+    fn rendered_text(data: DashboardSnapshot, width: u16, height: u16) -> String {
+        let backend = TestBackend::new(width, height);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut state = AppState::new(false);
+        state.snapshot = Some(data);
+        terminal.draw(|frame| render(frame, &state)).unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..height)
+            .map(|y| {
+                let mut line = String::new();
+                for x in 0..width {
+                    line.push_str(buffer[(x, y)].symbol());
+                }
+                line.trim_end().to_owned()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[test]
-    fn recent_source_load_is_not_misrepresented_as_resident() {
+    fn truly_empty_overview_has_plain_rows_without_fake_measurements() {
         let mut data = snapshot();
         data.sessions.clear();
+        data.recent_observability = RecentAggregateSummary::empty();
+        let rows = overview_rows(&data, 1000, 0);
+        assert_eq!(
+            rows.iter().map(|row| row.label).collect::<Vec<_>>(),
+            ["status", "new work", "live", "memory", "pattern", "recent"]
+        );
+        let text = rows_text(rows);
+        assert!(text.contains("new work gpt-5.6-sol via Jcode/OpenAI · medium thinking"));
+        assert!(text.contains("live none · 4 slots free"));
+        assert!(text.contains("memory none yet · summaries keep numbers, not source text"));
+        assert!(text.contains("pattern appears after the first source"));
+        assert!(text.contains("recent no source summary yet"));
+        assert!(!text.contains("avg 0%"));
+    }
+
+    #[test]
+    fn history_only_overview_reports_finished_and_loaded_summaries_plainly() {
+        let mut data = snapshot();
+        data.sessions.clear();
+        let finished = rows_text(overview_rows(&data, 1000, 0));
+        assert!(finished.contains("1 finished summary · 62.5 KiB measured · numbers only"));
+        assert!(finished.contains("recent finished · 62.5 KiB · 1000 lines · 20s ago"));
+
         data.recent_observability = RecentAggregateSummary {
             schema_version: 1,
             updated_unix: 1000,
@@ -1236,103 +1219,136 @@ mod tests {
                 source: source(),
             }],
         };
-        assert!(nest_line(&data).starts_with("0 resident · cold"));
-        let details = details_lines(&data, 0, false)
-            .into_iter()
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(details.contains("past source load, not resident"));
+        let loaded = rows_text(overview_rows(&data, 1000, 0));
+        assert!(loaded.contains("1 loaded summary · 2.3 MiB measured · numbers only"));
+        assert!(loaded.contains("recent loaded · 2.3 MiB · 9421 lines · 0s ago"));
     }
 
     #[test]
-    fn history_selection_moves_across_memories_without_residents() {
+    fn active_mixed_model_sessions_show_persisted_defaults_without_fallback() {
+        let data = snapshot();
+        let first = rows_text(overview_rows(&data, 1000, 0));
+        assert!(first.contains("live 1 running · 1 idle · 2/4 slots used"));
+        assert!(first.contains("01234567 running 10s · default model unknown"));
+        assert!(!first.contains("01234567 running 10s · default gpt-5.6-sol"));
+
+        let second = rows_text(overview_rows(&data, 1000, 1));
+        assert!(second.contains("fedcba98 idle 2m · default small-model"));
+        let details = lines_text(details_lines(&data, 1, false));
+        assert!(details.contains("default small-model"));
+    }
+
+    #[test]
+    fn new_work_uses_the_authoritative_runner_label_and_known_thinking_only() {
         let mut data = snapshot();
-        data.sessions.clear();
-        data.recent_observability.runs.push(RecentRunAggregate {
+        data.provider = "Claude CLI".into();
+        assert_eq!(
+            new_work_line(&data),
+            "gpt-5.6-sol via Claude CLI · medium thinking"
+        );
+        data.reasoning = "unknown".into();
+        assert_eq!(new_work_line(&data), "gpt-5.6-sol via Claude CLI");
+        data.reasoning = "off".into();
+        assert_eq!(
+            new_work_line(&data),
+            "gpt-5.6-sol via Claude CLI · thinking off"
+        );
+    }
+
+    #[test]
+    fn narrow_runtime_keeps_the_title_and_plain_summary_rows() {
+        let text = rendered_text(snapshot(), 48, 16);
+        assert!(text.contains("azdaja · memory constellation"));
+        assert!(text.contains("new work"));
+        assert!(text.contains("live"));
+        assert!(text.contains("memory"));
+        assert!(text.contains("pattern"));
+        assert!(!text.contains("route"));
+    }
+
+    #[test]
+    fn constellation_is_a_minimal_labeled_source_summary_graph() {
+        let text = lines_text(constellation_lines(&snapshot(), 0, false));
+        assert!(text.contains("source size ↑ · local numeric summaries"));
+        for label in ["≥16 MiB", "≥1 MiB", "≥64 KiB", "<64 KiB"] {
+            assert!(text.contains(label));
+        }
+        assert!(text.contains("repeated ← source variety → varied"));
+        assert!(text.contains("● selected/newest · ○ earlier · 2 overlap"));
+        assert!(text.contains("each point is one local numeric source summary"));
+        assert!(text.contains("summaries contain no source text, paths, prompts, or answers"));
+    }
+
+    #[test]
+    fn details_translate_entropy_and_scope_privacy_to_summaries() {
+        let text = lines_text(details_lines(&snapshot(), 0, false));
+        assert!(text.contains("entropy         4.8 / 8 bits · higher means more byte variety"));
+        assert!(text.contains("variety         60% · distribution only, not quality"));
+        assert!(text.contains("repetition      40% · estimate, not file compression"));
+        assert!(text.contains("line density"));
+        assert!(
+            text.contains("94% nonempty · 19.3 chars per line"),
+            "{text}"
+        );
+        assert!(text.contains("summaries contain no source text, paths, prompts, or answers"));
+        assert!(text.contains("selected live work"));
+        assert!(text.contains("default model unknown"));
+        assert!(!text.contains("effective"));
+        assert!(!text.contains("2^"));
+        assert!(!text.contains("/private/state"));
+        assert!(!text.contains("live session state contains no source"));
+    }
+
+    #[test]
+    fn overview_has_no_forbidden_jargon_or_metric_headlines() {
+        let text = rows_text(overview_rows(&snapshot(), 1000, 0)).to_lowercase();
+        for forbidden in [
+            "route",
+            "nest",
+            "resident",
+            "cold",
+            "warm",
+            "trace",
+            "observed",
+            "h₀",
+            "entropy",
+            "redundancy",
+        ] {
+            assert!(
+                !text.contains(forbidden),
+                "overview contained {forbidden:?}: {text}"
+            );
+        }
+    }
+
+    #[test]
+    fn selection_moves_across_history_and_live_work() {
+        let mut history = snapshot();
+        history.sessions.clear();
+        history.recent_observability.runs.push(RecentRunAggregate {
             kind: RunKind::SessionLoad,
             observed_unix: 900,
             source: source(),
         });
         let mut state = AppState::new(false);
-        state.snapshot = Some(data.clone());
+        state.snapshot = Some(history);
         state.move_selection(1);
         assert_eq!(state.selected, 1);
-        let overview = overview_rows(&data, 1000, state.selected)
-            .into_iter()
-            .map(|row| format!("{} {}", row.label, row.value))
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(overview.contains("session load · 2.3 MiB · 9421 lines · 1m ago"));
-        let details = details_lines(&data, state.selected, false)
-            .into_iter()
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(details.contains("past source load, not resident"));
+
+        state.snapshot = Some(snapshot());
+        state.selected = 0;
+        state.move_selection(1);
+        assert_eq!(state.selected, 1);
     }
 
     #[test]
-    fn details_put_entropy_behind_a_caveat_and_hide_internal_paths() {
-        let text = details_lines(&snapshot(), 0, false)
-            .into_iter()
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(text.contains("4.8 / 8.0 bits/byte"));
-        assert!(text.contains("distribution only, not quality"));
-        assert!(text.contains("not measured compression"));
-        assert!(text.contains("effective bytes"));
-        assert!(text.contains("chars/line"));
-        assert!(text.contains("model boundary  unmeasured"));
-        assert!(!text.contains("/private/state"));
-    }
-
-    #[test]
-    fn hidden_residents_are_disclosed_without_expanding_the_card() {
-        let mut data = snapshot();
-        data.sessions.extend([
-            SessionStatus {
-                id: "aaaaaaaaaaaaaaaa".into(),
-                created: 700,
-                updated: 700,
-                sub_model: None,
-                busy: false,
-                state_bytes: 1,
-                source: None,
-                loaded_sources: 0,
-                completed_sources: 0,
-            },
-            SessionStatus {
-                id: "bbbbbbbbbbbbbbbb".into(),
-                created: 600,
-                updated: 600,
-                sub_model: None,
-                busy: false,
-                state_bytes: 1,
-                source: None,
-                loaded_sources: 0,
-                completed_sources: 0,
-            },
-        ]);
-        let rows = overview_rows(&data, 1000, 3);
-        assert!(rows.len() <= 7);
-        assert!(rows.iter().any(|row| row.value == "+3 tucked away"));
-        assert!(rows.iter().any(|row| row.value.contains("bbbbbbbb")));
-    }
-
-    #[test]
-    fn degraded_telemetry_is_visible_but_does_not_claim_core_failure() {
+    fn degraded_telemetry_is_visible_without_claiming_live_work_failed() {
         let mut data = snapshot();
         data.observability_degraded = true;
         let rows = summary_rows(&data);
-        assert!(rows[0].value.contains("metrics need attention"));
-        let details = details_lines(&data, 0, false)
-            .into_iter()
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(details.contains("core memory remains available"));
+        assert!(rows[0].value.contains("local metrics need attention"));
+        let details = lines_text(details_lines(&data, 0, false));
+        assert!(details.contains("degraded · live work remains available"));
     }
 
     #[test]
@@ -1354,18 +1370,14 @@ mod tests {
                 health: IntegrationHealth::NeedsAttention,
             },
         ];
-        let text = integration_lines(Some(&statuses), None, false)
-            .into_iter()
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
+        let text = lines_text(integration_lines(Some(&statuses), None, false));
         assert!(text.contains("jcode     found · ready"));
         assert!(text.contains("gemini    not found · not integrated"));
         assert!(text.contains("codex     found · needs repair"));
     }
 
     #[test]
-    fn centered_card_clamps_to_the_jcode_like_width() {
+    fn centered_card_preserves_wide_and_narrow_width_behavior() {
         let centered = centered_width(Rect::new(0, 0, 140, 30));
         assert_eq!(centered.width, 78);
         assert_eq!(centered.x, 31);
@@ -1378,12 +1390,9 @@ mod tests {
     fn control_sequences_are_removed_from_snapshot_strings() {
         let mut data = snapshot();
         data.default_model = "bad\x1b[2J\nmodel".into();
-        let text = summary_rows(&data)
-            .into_iter()
-            .map(|row| row.value)
-            .collect::<Vec<_>>()
-            .join("\n");
-        assert!(text.contains("bad[2Jmodel"));
-        assert!(!text.contains("\x1b"));
+        data.provider = "custom\x1b[31m\nrunner".into();
+        let text = rows_text(summary_rows(&data));
+        assert!(text.contains("bad[2Jmodel via custom[31mrunner"));
+        assert!(!text.contains('\x1b'));
     }
 }
