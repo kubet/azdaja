@@ -275,7 +275,7 @@ fn alias_free_system_path(root: &Path) -> String {
 fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     let release = root.join(name);
     fs::create_dir_all(&release).unwrap();
-    for asset in ["azdaja-v0.1.5-darwin-arm64", "azdaja-v0.1.5-linux-x86_64"] {
+    for asset in ["azdaja-v0.1.6-darwin-arm64", "azdaja-v0.1.6-linux-x86_64"] {
         fs::copy(candidate, release.join(asset)).unwrap();
     }
     let source = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -290,7 +290,7 @@ fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     fs::write(
         release.join("SHA256SUMS"),
         format!(
-            "{digest}  azdaja-v0.1.5-darwin-arm64\n{digest}  azdaja-v0.1.5-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
+            "{digest}  azdaja-v0.1.6-darwin-arm64\n{digest}  azdaja-v0.1.6-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
         ),
     )
     .unwrap();
@@ -419,7 +419,7 @@ fn installer_line<'a>(stdout: &'a str, prefix: &str) -> &'a str {
 fn assert_installer_preamble(stdout: &str) {
     assert!(
         stdout.starts_with(
-            "Azdaja installer v0.1.5\nProvider-free install. No model provider will be called.\n"
+            "Azdaja installer v0.1.6\nProvider-free install. No model provider will be called.\n"
         ),
         "{stdout}"
     );
@@ -566,14 +566,14 @@ fn assert_alias_identity_and_local_caps(home: &Path, bin: &Path, path: &str) {
             let help = String::from_utf8(short_output.stdout).unwrap();
             assert_eq!(
                 help,
-                "AZDAJA v0.1.5 — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
+                "AZDAJA v0.1.6 — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
             );
         }
     }
 }
 
 #[test]
-fn installers_are_identical_and_bind_fresh_v015_assets_and_sums() {
+fn installers_are_identical_and_bind_fresh_v016_assets_and_sums() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let site = fs::read(root.join("site/install")).unwrap();
     let top = fs::read(root.join("install.sh")).unwrap();
@@ -613,7 +613,7 @@ fn installers_are_identical_and_bind_fresh_v015_assets_and_sums() {
     );
 
     let text = String::from_utf8(site).unwrap();
-    assert_eq!(text.matches("VERSION=0.1.5").count(), 1);
+    assert_eq!(text.matches("VERSION=0.1.6").count(), 1);
     assert!(text.contains("RELEASE_BASE=https://azdaja.dev/releases/v$VERSION"));
     assert!(text.contains("$BASE_URL/SHA256SUMS"));
     assert!(text.contains("azdaja-v$VERSION-darwin-arm64"));
@@ -692,8 +692,8 @@ fn interactive_selection_installs_only_the_chosen_detected_subset() {
     assert_installer_preamble(&stdout);
     for phase in [
         "Plan:\n",
-        "Downloading azdaja v0.1.5...\n",
-        "Downloading azdaja v0.1.5... ok\n",
+        "Downloading azdaja v0.1.6...\n",
+        "Downloading azdaja v0.1.6... ok\n",
         "Verifying SHA-256...\n",
         "Verifying SHA-256... ok\n",
         "Checking destinations...\n",
@@ -714,7 +714,7 @@ fn interactive_selection_installs_only_the_chosen_detected_subset() {
     }
     assert_eq!(
         installer_line(&stdout, "Installed:"),
-        "Installed: azdaja v0.1.5"
+        "Installed: azdaja v0.1.6"
     );
     assert_eq!(
         installer_line(&stdout, "Integrations:"),
@@ -1054,7 +1054,7 @@ fn linux_glibc_floor_refuses_below_and_accepts_exact_boundary_and_above() {
         assert_installer_preamble(&stdout);
         assert_eq!(
             installer_line(&stdout, "Installed:"),
-            "Installed: azdaja v0.1.5"
+            "Installed: azdaja v0.1.6"
         );
         assert!(bin.join("azdaja").is_file());
     }
@@ -1172,7 +1172,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         assert_installer_preamble(&stdout);
         assert_eq!(
             installer_line(&stdout, "Installed:"),
-            "Installed: azdaja v0.1.5"
+            "Installed: azdaja v0.1.6"
         );
         assert_eq!(
             installer_line(&stdout, "Integrations:"),
@@ -1190,8 +1190,8 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     }
     let requests = fs::read_to_string(&server.log).unwrap();
     assert!(requests.contains("/good/SHA256SUMS"));
-    assert!(requests.contains("/good/azdaja-v0.1.5-darwin-arm64"));
-    assert!(requests.contains("/good/azdaja-v0.1.5-linux-x86_64"));
+    assert!(requests.contains("/good/azdaja-v0.1.6-darwin-arm64"));
+    assert!(requests.contains("/good/azdaja-v0.1.6-linux-x86_64"));
 
     let home = scratch.0.join("atomic-home");
     let bin = home.join("bin");
@@ -1227,7 +1227,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     });
     assert_success(&good);
     let version = Command::new(&existing).arg("--version").output().unwrap();
-    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.5 "));
+    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.6 "));
     assert_alias_identity_and_local_caps(&home, &bin, &system_path);
 
     let home = scratch.0.join("path-home");
@@ -1756,7 +1756,7 @@ fn exact_legacy_jcode_configs_migrate_but_customized_bytes_are_preserved() {
     assert_ne!(migrated, LEGACY_JCODE_CONFIG);
     let migrated_text = String::from_utf8(migrated.clone()).unwrap();
     assert!(migrated_text.contains("sub_llm_cmd = \"jcode-api\""));
-    assert!(migrated_text.contains("default_model = \"gpt-5.6-luna\""));
+    assert!(migrated_text.contains("default_model = \"gpt-5.6-sol\""));
     assert_success(&run());
     assert_eq!(fs::read(&adjacent).unwrap(), migrated);
 

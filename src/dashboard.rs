@@ -650,7 +650,7 @@ mod tests {
             },
         ];
         DashboardSnapshot {
-            default_model: "gpt-5.6-luna".into(),
+            default_model: "gpt-5.6-sol".into(),
             provider: "openai".into(),
             reasoning: "medium".into(),
             max_sessions: 4,
@@ -690,7 +690,7 @@ mod tests {
         let rendered = render_at(&snapshot(), false, 72, 1000);
         assert!(rendered.starts_with("╭─ azdaja · memory constellation"));
         assert!(rendered.contains("● awake · source stays local"));
-        assert!(rendered.contains("gpt-5.6-luna · openai · medium"));
+        assert!(rendered.contains("gpt-5.6-sol · openai · medium"));
         assert!(rendered.contains("1.5 MiB resident state · warm · 2/4 slots · 2 traces"));
         assert!(rendered.contains("H→"));
         assert!(rendered.contains('●'));
@@ -739,7 +739,7 @@ mod tests {
         assert!(rendered.contains("● 0123456789abcdef"));
         assert!(rendered.contains("running"));
         assert!(rendered.contains("1.0 MiB"));
-        assert!(rendered.contains("gpt-5.6-luna"));
+        assert!(rendered.contains("gpt-5.6-sol"));
         assert!(rendered.contains("○ fedcba9876543210"));
         assert!(rendered.contains("512.0 KiB"));
         assert!(rendered.contains("small-model"));
@@ -754,7 +754,7 @@ mod tests {
         let narrow = render_list_at(&data, false, 45, 1000);
         assert!(narrow.contains("azdaja nest · 1/4 slots · 1.0 MiB resident"));
         assert!(narrow.contains("● 0123456789abcdef running 10s"));
-        assert!(narrow.contains("1.0 MiB · gpt-5.6-luna"));
+        assert!(narrow.contains("1.0 MiB · gpt-5.6-sol"));
         assert!(narrow.contains("commands  final <id>"));
 
         data.sessions.clear();

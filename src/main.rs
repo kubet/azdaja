@@ -878,14 +878,14 @@ fn adapter(h: &str) -> (&'static str, &'static str) {
         ),
         "codex" => (
             "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c model_reasoning_effort=low -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -",
-            "gpt-5.6-luna",
+            "gpt-5.6-sol",
         ),
         "gemini" => ("gemini --model {model} -p \"\"", "gemini-2.5-flash"),
         "opencode" => (
             "opencode --pure run --format json --model {model}",
-            "openai/gpt-5.6-luna",
+            "openai/gpt-5.6-sol",
         ),
-        _ => ("jcode-api", "gpt-5.6-luna"),
+        _ => ("jcode-api", "gpt-5.6-sol"),
     }
 }
 
@@ -6838,7 +6838,7 @@ mod tests {
     #[test]
     fn codex_nested_adapter_disables_skill_instructions_and_stays_ephemeral() {
         let (command, model) = adapter("codex");
-        assert_eq!(model, "gpt-5.6-luna");
+        assert_eq!(model, "gpt-5.6-sol");
         assert_eq!(
             command,
             "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c model_reasoning_effort=low -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -"
@@ -6881,9 +6881,9 @@ mod tests {
     }
 
     #[test]
-    fn managed_coworker_adapters_are_luna_only_and_call_bounded() {
-        assert_eq!(adapter("codex").1, "gpt-5.6-luna");
-        assert_eq!(adapter("opencode").1, "openai/gpt-5.6-luna");
+    fn managed_coworker_adapters_are_sol_only_and_call_bounded() {
+        assert_eq!(adapter("codex").1, "gpt-5.6-sol");
+        assert_eq!(adapter("opencode").1, "openai/gpt-5.6-sol");
         assert!(adapter("opencode").0.contains("--format json"));
         assert_eq!(MANAGED_COWORKER_CALL_LIMIT, 64);
         assert!(!adapter("codex").1.contains("gpt-5.4"));
@@ -6938,7 +6938,7 @@ mod tests {
         assert!(
             String::from_utf8(current)
                 .unwrap()
-                .contains("default_model = \"gpt-5.6-luna\"")
+                .contains("default_model = \"gpt-5.6-sol\"")
         );
     }
 
@@ -7007,19 +7007,19 @@ mod tests {
         for (harness, expected) in [
             (
                 "default",
-                "63eed9824db67ddcbc221745026bbe871c0c1a53d05a9e45d9ca6350ee0383ef",
+                "8176f62fb8faec34162e2bcfae032ad862e13f1adad6e2f6a6148cdecfc3de58",
             ),
             (
                 "jcode",
-                "aed4332f2588059b973f9cfb704da5861724bf14fcb7e32f859ca7eba721e4c4",
+                "c513dcd5f3f2bec7173e30fc5b0687a304d7826a05d34b5d6793d3df317756a5",
             ),
             (
                 "codex",
-                "5d195c1379907ceb8f6231a2a657b30a5cebe7ce78607d27372a9acc3e4ab85d",
+                "9b5d9ba3de69a581a908270b9edd65bfc1c5fbbbb44e3c93b0155892d08ca70a",
             ),
             (
                 "gemini",
-                "f20a5ac3c9ff6436e67dc6034cd5b323cd5f34bc85c3415b062cc1f8e76429af",
+                "33bb373f8b6d80493c1b3d6ee84fec3d2d373fe8782994c631337f083248eb0e",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);

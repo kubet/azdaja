@@ -209,7 +209,7 @@ Only render fields backed by observations. For example, omit `boundary` until pr
 ```text
 ╭─ azdaja · memory constellation ─────────────────────────╮
 │ status    ○ dormant · source stays local                 │
-│ route     gpt-5.6-luna · openai · medium                 │
+│ route     gpt-5.6-sol · openai · medium                  │
 │ nest      empty · cold · 0/4 slots                       │
 │ memory    H→ ·················· · no traces yet         │
 │ texture   unmeasured · load one source                   │
@@ -251,7 +251,7 @@ The curl bootstrap remains line-oriented POSIX shell because the binary does not
 Immediate disclosure:
 
 ```text
-Azdaja installer v0.1.5
+Azdaja installer v0.1.6
 Provider-free install. No model provider will be called.
 Checking platform... macOS arm64 supported
 Checking tools... jcode, claude, codex, opencode found
@@ -281,7 +281,7 @@ Select integrations
 Before mutation, print the exact plan and destinations. Every long phase announces itself before work starts:
 
 ```text
-Downloading azdaja v0.1.5...
+Downloading azdaja v0.1.6...
 Verifying SHA-256... ok
 Staging files... ok
 Writing command... ok

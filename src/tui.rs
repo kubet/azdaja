@@ -1133,7 +1133,7 @@ mod tests {
             },
         }];
         DashboardSnapshot {
-            default_model: "gpt-5.6-luna".into(),
+            default_model: "gpt-5.6-sol".into(),
             provider: "openai".into(),
             reasoning: "medium".into(),
             max_sessions: 4,
@@ -1178,7 +1178,7 @@ mod tests {
             .join("\n");
         assert!(rows.len() <= 7);
         assert!(text.contains("status ● awake · source stays local"));
-        assert!(text.contains("route gpt-5.6-luna · openai · medium"));
+        assert!(text.contains("route gpt-5.6-sol · openai · medium"));
         assert!(
             text.contains("nest 1.5 MiB resident state · warm · 2/4 slots · 1 memory · 1 trace")
         );

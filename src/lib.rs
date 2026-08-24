@@ -334,7 +334,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             sub_llm_cmd: "jcode-api".into(),
-            default_model: "gpt-5.6-luna".into(),
+            default_model: "gpt-5.6-sol".into(),
             output_cap: 8192,
             max_depth: 1,
             sub_timeout: 300,
@@ -8175,10 +8175,10 @@ mod unit_tests {
     #[test]
     fn opencode_jsonl_parser_returns_final_text_and_complete_usage() {
         let reply =
-            parse_opencode_jsonl_reply(&opencode_success_jsonl(), "openai/gpt-5.6-luna").unwrap();
+            parse_opencode_jsonl_reply(&opencode_success_jsonl(), "openai/gpt-5.6-sol").unwrap();
         assert_eq!(reply.text, "final answer");
         assert_eq!(reply.provider, "opencode");
-        assert_eq!(reply.model, "openai/gpt-5.6-luna");
+        assert_eq!(reply.model, "openai/gpt-5.6-sol");
         assert_eq!(reply.usage.input, 31);
         assert_eq!(reply.usage.output, 7);
         assert_eq!(reply.usage.reasoning, 3);
@@ -8327,7 +8327,7 @@ JSONL
             ..Config::default()
         };
         unsafe { env::set_var("AZDAJA_MODEL_TRACE", &trace) };
-        let reply = call_model_reply("prompt", "openai/gpt-5.6-luna", &cfg, 0).unwrap();
+        let reply = call_model_reply("prompt", "openai/gpt-5.6-sol", &cfg, 0).unwrap();
         unsafe { env::remove_var("AZDAJA_MODEL_TRACE") };
 
         assert_eq!(reply.text, "final answer");
@@ -8338,7 +8338,7 @@ JSONL
         assert_eq!(reply.usage.cache_write, 7);
         let row: ModelTrace = serde_json::from_str(&fs::read_to_string(&trace).unwrap()).unwrap();
         assert_eq!(row.provider.as_deref(), Some("opencode"));
-        assert_eq!(row.model.as_deref(), Some("openai/gpt-5.6-luna"));
+        assert_eq!(row.model.as_deref(), Some("openai/gpt-5.6-sol"));
         assert_eq!(row.input_tokens, Some(44));
         assert_eq!(row.output_tokens, Some(17));
         assert_eq!(row.reasoning_tokens, Some(5));
