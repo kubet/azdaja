@@ -8730,7 +8730,7 @@ JSONL
     fn jcode_bridge_health_requires_both_public_and_daemon_sockets() {
         use std::os::unix::net::UnixListener;
 
-        let root = temp_test_dir("jcode-bridge-health");
+        let root = temp_test_dir("jbh");
         let run = root.join("run");
         let home = root.join("home");
         fs::create_dir_all(&run).unwrap();
@@ -8780,7 +8780,7 @@ JSONL
     fn stale_private_jcode_bridge_process_group_and_descendants_are_retired() {
         use std::os::unix::{net::UnixListener, process::CommandExt};
 
-        let root = temp_test_dir("jcode-bridge-retirement");
+        let root = temp_test_dir("jbr");
         let run = root.join("run");
         let home = root.join("home");
         fs::create_dir_all(&run).unwrap();
