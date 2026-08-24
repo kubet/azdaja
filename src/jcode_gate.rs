@@ -20,8 +20,6 @@ use std::os::unix::fs::{DirBuilderExt, FileTypeExt, MetadataExt, OpenOptionsExt,
 
 /// Environment variable passed to a successful Azdaja `solo` process.
 pub const CHALLENGE_ENV: &str = "AZDAJA_JCODE_CHALLENGE";
-/// Optional absolute path to the managed Azdaja binary used in block instructions.
-pub const MANAGED_BINARY_ENV: &str = "AZDAJA_JCODE_BINARY";
 /// A challenge may be completed for ten minutes after it is issued.
 pub const CHALLENGE_TTL_SECONDS: u64 = 10 * 60;
 /// Aggregate allowance for bounded reads in one Jcode session.
@@ -522,7 +520,7 @@ fn block_with_challenge(
     };
 
     Ok(Decision::Block(format!(
-        "Azdaja should carry this broad read.\nRun the exact challenged command once and continue from its answer:\n  {CHALLENGE_ENV}={token} {} solo \"<user task>\" --repo {}\nDo not retry the blocked broad read. Narrow reads, Git, builds, and tests are still available.",
+        "Azdaja should carry this broad read.\nRun the exact challenged command once and continue from its answer:\n  {CHALLENGE_ENV}={token} {} solo \"<user task>\" --repo {}\nDo not retry the blocked broad read. Narrow reads, Git, builds, and tests are still available. Git means ordinary workflows only; content-emitting Git commands remain blocked.",
         shell_quote(binary),
         shell_quote(&context.canonical_cwd)
     )))
@@ -778,6 +776,9 @@ fn classify_bash(input: &Value) -> Requirement {
     let Some(command) = input.get("command").and_then(Value::as_str) else {
         return Requirement::Memory;
     };
+    if git_workflow_requires_memory(command) {
+        return Requirement::Memory;
+    }
     if is_git_build_test_lint_or_format(command) {
         return Requirement::Free;
     }
@@ -810,7 +811,7 @@ fn is_git_build_test_lint_or_format(command: &str) -> bool {
             let program = program.rsplit('/').next().unwrap_or(program);
             let first = arguments.first().copied().unwrap_or("");
             let allowed = match program {
-                "git" => true,
+                "git" => git_command_is_safe(arguments),
                 "cargo" => matches!(
                     first,
                     "build" | "check" | "test" | "clippy" | "fmt" | "bench" | "doc"
@@ -835,10 +836,244 @@ fn is_git_build_test_lint_or_format(command: &str) -> bool {
     saw_command
 }
 
+fn git_workflow_requires_memory(command: &str) -> bool {
+    let has_shell_expansion = command.contains("$(") || command.contains('`');
+    for segment in command.split(['\n', ';']).flat_map(|part| part.split("&&")) {
+        for alternative in segment.split("||") {
+            let segment = alternative.trim();
+            if segment.is_empty() {
+                continue;
+            }
+            let words: Vec<&str> = segment.split_whitespace().collect();
+            let Some((program, arguments)) = command_words(&words) else {
+                continue;
+            };
+            if program.rsplit('/').next().unwrap_or(program) != "git" {
+                continue;
+            }
+            if has_shell_expansion
+                || segment.contains('|')
+                || segment.contains('>')
+                || segment.contains('<')
+                || !git_command_is_safe(arguments)
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn git_command_is_safe(arguments: &[&str]) -> bool {
+    let Some((subcommand, arguments)) = git_subcommand(arguments) else {
+        return arguments.is_empty();
+    };
+    match subcommand {
+        "--help" | "--version" | "help" | "version" => true,
+        "status" => !arguments
+            .iter()
+            .any(|argument| argument.starts_with("-v") || argument.starts_with("--verbose")),
+        "add" | "checkout" | "switch" | "restore" | "reset" => !arguments.iter().any(|argument| {
+            matches!(*argument, "-p" | "--patch" | "-i" | "--interactive")
+                || argument.starts_with("--patch=")
+        }),
+        "commit" => !arguments
+            .iter()
+            .any(|argument| argument.starts_with("-v") || argument.starts_with("--verbose")),
+        "rebase" => !arguments.iter().any(|argument| {
+            matches!(*argument, "-x" | "--exec" | "--show-current-patch")
+                || argument.starts_with("-x")
+                || argument.starts_with("--exec=")
+        }),
+        "diff" => git_diff_is_metadata_only(arguments),
+        "log" => git_log_is_bounded_or_metadata_only(arguments),
+        "branch" | "rev-parse" | "fetch" | "pull" | "push" | "merge" | "worktree" | "tag"
+        | "clean" | "init" | "clone" | "remote" | "rm" | "mv" | "cherry-pick" | "revert"
+        | "describe" | "ls-files" | "ls-tree" | "show-ref" | "for-each-ref" | "symbolic-ref"
+        | "update-ref" | "gc" | "maintenance" => true,
+        _ => false,
+    }
+}
+
+fn git_subcommand<'a>(arguments: &'a [&'a str]) -> Option<(&'a str, &'a [&'a str])> {
+    let mut index = 0;
+    while let Some(argument) = arguments.get(index).copied() {
+        match argument {
+            "-C" | "--git-dir" | "--work-tree" => {
+                index += 2;
+                if index > arguments.len() {
+                    return None;
+                }
+            }
+            "--no-pager"
+            | "--paginate"
+            | "--literal-pathspecs"
+            | "--glob-pathspecs"
+            | "--noglob-pathspecs"
+            | "--icase-pathspecs" => index += 1,
+            "--help" | "--version" => return Some((argument, &arguments[index + 1..])),
+            _ if argument.starts_with("--git-dir=") || argument.starts_with("--work-tree=") => {
+                index += 1;
+            }
+            _ if argument.starts_with('-') => return None,
+            _ => return Some((argument, &arguments[index + 1..])),
+        }
+    }
+    None
+}
+
+fn git_diff_is_metadata_only(arguments: &[&str]) -> bool {
+    let mut metadata_output = false;
+    let mut paths_only = false;
+    for argument in arguments {
+        if paths_only || *argument == "--" {
+            paths_only = true;
+            continue;
+        }
+        if !argument.starts_with('-') {
+            continue;
+        }
+        if matches!(
+            *argument,
+            "--stat"
+                | "--shortstat"
+                | "--numstat"
+                | "--dirstat"
+                | "--dirstat-by-file"
+                | "--summary"
+                | "--name-only"
+                | "--name-status"
+                | "--raw"
+                | "--quiet"
+                | "--exit-code"
+                | "--no-patch"
+                | "-s"
+        ) || argument.starts_with("--stat=")
+            || argument.starts_with("--dirstat=")
+            || argument.starts_with("--dirstat-by-file=")
+        {
+            metadata_output = true;
+            continue;
+        }
+        if matches!(
+            *argument,
+            "--cached"
+                | "--staged"
+                | "--merge-base"
+                | "--no-index"
+                | "--relative"
+                | "--no-renames"
+                | "--find-renames"
+                | "--ignore-space-at-eol"
+                | "--ignore-space-change"
+                | "--ignore-all-space"
+                | "--ignore-blank-lines"
+                | "--ignore-submodules"
+                | "-z"
+        ) || argument.starts_with("--relative=")
+            || argument.starts_with("--find-renames=")
+            || argument.starts_with("--diff-filter=")
+            || argument.starts_with("--ignore-submodules=")
+            || argument.starts_with("--color=")
+        {
+            continue;
+        }
+        return false;
+    }
+    metadata_output
+}
+
+fn git_log_is_bounded_or_metadata_only(arguments: &[&str]) -> bool {
+    let mut bounded_or_metadata = false;
+    let mut expect_count = false;
+    for argument in arguments {
+        if expect_count {
+            if argument.parse::<u64>().is_err() {
+                return false;
+            }
+            bounded_or_metadata = true;
+            expect_count = false;
+            continue;
+        }
+        if matches!(*argument, "-n" | "--max-count") {
+            expect_count = true;
+            continue;
+        }
+        if argument
+            .strip_prefix("--max-count=")
+            .is_some_and(|count| count.parse::<u64>().is_ok())
+            || (argument.starts_with("-n")
+                && argument.len() > 2
+                && argument[2..].parse::<u64>().is_ok())
+            || (argument.starts_with('-')
+                && argument.len() > 1
+                && argument[1..].bytes().all(|byte| byte.is_ascii_digit()))
+        {
+            bounded_or_metadata = true;
+            continue;
+        }
+        if matches!(
+            *argument,
+            "--stat"
+                | "--shortstat"
+                | "--numstat"
+                | "--summary"
+                | "--name-only"
+                | "--name-status"
+                | "--raw"
+        ) {
+            bounded_or_metadata = true;
+            continue;
+        }
+        if matches!(
+            *argument,
+            "-p" | "-u"
+                | "--patch"
+                | "--full-diff"
+                | "--binary"
+                | "--patch-with-stat"
+                | "--patch-with-raw"
+                | "--cc"
+                | "-c"
+                | "--remerge-diff"
+                | "-L"
+        ) || argument.starts_with("--unified")
+            || argument.starts_with("--word-diff")
+            || argument.starts_with("--color-words")
+            || argument.starts_with("-L")
+        {
+            return false;
+        }
+    }
+    !expect_count && bounded_or_metadata
+}
+
 fn command_words<'a>(words: &'a [&'a str]) -> Option<(&'a str, &'a [&'a str])> {
     let mut index = 0;
     if words.first().copied() == Some("env") {
         index += 1;
+        loop {
+            match words.get(index).copied() {
+                Some("-i" | "--ignore-environment") => index += 1,
+                Some("-u" | "--unset" | "-C" | "--chdir") => {
+                    index += 2;
+                    if index > words.len() {
+                        return None;
+                    }
+                }
+                Some("--") => {
+                    index += 1;
+                    break;
+                }
+                Some(argument)
+                    if argument.starts_with("--unset=") || argument.starts_with("--chdir=") =>
+                {
+                    index += 1;
+                }
+                Some(argument) if argument.starts_with('-') => return None,
+                _ => break,
+            }
+        }
     }
     while words
         .get(index)
@@ -930,11 +1165,6 @@ fn bash_reads_content(command: &str) -> bool {
 }
 
 fn managed_binary_path() -> GateResult<PathBuf> {
-    for name in [MANAGED_BINARY_ENV, "AZDAJA_BINARY"] {
-        if let Some(value) = env::var_os(name) {
-            return absolute_override(name, value);
-        }
-    }
     let binary = env::current_exe()?;
     if !binary.is_absolute() {
         return Err(contract(
@@ -1387,7 +1617,7 @@ mod tests {
         let challenge = token(&decision);
         assert!(is_lower_hex(&challenge, 32));
         let expected = format!(
-            "Azdaja should carry this broad read.\nRun the exact challenged command once and continue from its answer:\n  {CHALLENGE_ENV}={challenge} /managed/azdaja solo \"<user task>\" --repo {}\nDo not retry the blocked broad read. Narrow reads, Git, builds, and tests are still available.",
+            "Azdaja should carry this broad read.\nRun the exact challenged command once and continue from its answer:\n  {CHALLENGE_ENV}={challenge} /managed/azdaja solo \"<user task>\" --repo {}\nDo not retry the blocked broad read. Narrow reads, Git, builds, and tests are still available. Git means ordinary workflows only; content-emitting Git commands remain blocked.",
             scratch.cwd.display()
         );
         assert_eq!(decision, Decision::Block(expected));
@@ -1440,11 +1670,33 @@ mod tests {
     }
 
     #[test]
-    fn git_build_test_lint_and_format_commands_are_allowed() {
+    fn ordinary_git_build_test_lint_and_format_commands_are_allowed() {
         let scratch = Scratch::new();
         let state = scratch.state();
         for command in [
+            "git status --short",
+            "env -i git status --short",
+            "git -C . status --short",
+            "git branch --show-current",
+            "git rev-parse --show-toplevel",
+            "git add README.md",
+            "git commit --dry-run",
+            "git checkout main",
+            "git switch main",
+            "git restore README.md",
+            "git fetch --dry-run",
+            "git pull --ff-only",
+            "git push --dry-run",
+            "git merge --no-commit topic",
+            "git rebase --onto main base topic",
+            "git worktree list",
+            "git tag --list",
+            "git clean -nd",
             "git diff --stat",
+            "git diff --name-only HEAD~1",
+            "git log -10 --oneline",
+            "git --no-pager log -1 --oneline",
+            "git log --stat",
             "cargo build --locked",
             "cargo test --all-targets",
             "cargo clippy --all-targets",
@@ -1466,31 +1718,51 @@ mod tests {
     }
 
     #[test]
-    fn broad_content_reading_bash_is_blocked_but_git_inspection_is_allowed() {
+    fn broad_content_reading_and_git_source_extraction_are_blocked() {
         let scratch = Scratch::new();
         let state = scratch.state();
-        assert!(matches!(
-            call(
-                &state,
-                &scratch.cwd,
-                "bash",
-                json!({"command":"cat src/lib.rs"}),
-                NOW,
-            )
-            .unwrap(),
-            Decision::Block(_)
-        ));
-        assert_eq!(
-            call(
-                &state,
-                &scratch.cwd,
-                "bash",
-                json!({"command":"git show HEAD:src/lib.rs"}),
-                NOW,
-            )
-            .unwrap(),
-            Decision::Allow
-        );
+        for command in [
+            "cat src/lib.rs",
+            "git show HEAD:src/lib.rs",
+            "git cat-file -p HEAD:src/lib.rs",
+            "git grep receipt",
+            "git archive HEAD",
+            "git blame src/lib.rs",
+            "git diff",
+            "git diff --cached",
+            "git diff -p",
+            "git diff --stat -p",
+            "git diff --check",
+            "git log",
+            "git log -p -1",
+            "git status -vv",
+            "env -i git show HEAD:src/lib.rs",
+            "git add -p",
+            "git commit -vv --dry-run",
+            "git checkout -p -- src/lib.rs",
+            "git restore -p src/lib.rs",
+            "git rebase --show-current-patch",
+        ] {
+            assert!(
+                matches!(
+                    call(
+                        &state,
+                        &scratch.cwd,
+                        "bash",
+                        json!({"command":command}),
+                        NOW,
+                    )
+                    .unwrap(),
+                    Decision::Block(_)
+                ),
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn challenge_command_uses_the_running_executable() {
+        assert_eq!(managed_binary_path().unwrap(), env::current_exe().unwrap());
     }
 
     #[test]
