@@ -26,7 +26,7 @@ fn reviewed_notice_license_and_font_ofl_bytes_are_preserved() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     assert_eq!(
         sha256(&root.join("THIRD-PARTY-NOTICES.md")),
-        "ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6"
+        "fae203180584839b6269a323a663d0247b823f9c23a4869b7a0a9687c908c69a"
     );
     assert_eq!(
         sha256(&root.join("LICENSE")),

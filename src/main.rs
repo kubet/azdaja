@@ -3406,7 +3406,7 @@ const DOCUMENT_OWNER_V1_MAGIC: &[u8] = b"azdaja-installer-owned-docs-v1\n";
 const DOCUMENT_OWNER_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
-THIRD-PARTY-NOTICES.md.sha256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6\n";
+THIRD-PARTY-NOTICES.md.sha256=fae203180584839b6269a323a663d0247b823f9c23a4869b7a0a9687c908c69a\n";
 const DISTRIBUTED_LICENSE: &[u8] = include_bytes!("../LICENSE");
 const DISTRIBUTED_NOTICES: &[u8] = include_bytes!("../THIRD-PARTY-NOTICES.md");
 
