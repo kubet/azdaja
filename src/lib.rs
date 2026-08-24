@@ -8294,7 +8294,7 @@ JSONL
         let success = root.join("codex");
         write_executable(
             &success,
-            "#!/bin/sh\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"ok\"}}\\n'\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":7,\"cached_input_tokens\":2,\"cache_write_input_tokens\":0,\"output_tokens\":3,\"reasoning_output_tokens\":1}}\\n'\n",
+            "#!/bin/sh\ncat >/dev/null\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"ok\"}}\\n'\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":7,\"cached_input_tokens\":2,\"cache_write_input_tokens\":0,\"output_tokens\":3,\"reasoning_output_tokens\":1}}\\n'\n",
         );
         let failure = root.join("failing-provider");
         write_executable(&failure, "#!/bin/sh\nexit 9\n");
