@@ -1,4 +1,4 @@
-//! Deterministic, bounded repository-to-JSON bundling for future `az solo --repo` wiring.
+//! Deterministic, bounded repository-to-JSON bundling for `az solo --repo`.
 //!
 //! The builder deliberately uses only crate dependencies plus the standard library so this
 //! module can be compiled and tested in isolation. Git worktrees are enumerated through Git so
@@ -20,11 +20,11 @@ use std::{
 /// Bundle schema version emitted in the top-level `version` field.
 pub const REPO_BUNDLE_VERSION: u32 = 1;
 /// Maximum number of UTF-8 files included in one bundle.
-pub const MAX_INCLUDED_FILES: usize = 4_096;
+pub const MAX_INCLUDED_FILES: usize = 50_000;
 /// Maximum raw byte length of one candidate file.
-pub const MAX_FILE_BYTES: usize = 8 * 1024 * 1024;
+pub const MAX_FILE_BYTES: usize = 64 * 1024 * 1024;
 /// Maximum sum of raw UTF-8 source bytes included in one bundle.
-pub const MAX_TOTAL_SOURCE_BYTES: usize = 32 * 1024 * 1024;
+pub const MAX_TOTAL_SOURCE_BYTES: usize = 64 * 1024 * 1024;
 
 /// Prompt guidance for a model receiving the encoded bundle as `ctx`.
 pub const REPO_BUNDLE_PROMPT_NOTE: &str = "`ctx` is JSON: parse it, require version 1, then read `files` in order; each item has a slash-normalized relative `path` and UTF-8 `text`.";
@@ -1041,8 +1041,8 @@ mod tests {
             r#"{"version":1,"files":[{"path":"file.txt","text":"x"}]}"#
         );
         assert!(!bundle.text.contains("included_files"));
-        assert_eq!(MAX_INCLUDED_FILES, 4_096);
-        assert_eq!(MAX_FILE_BYTES, 8 * 1024 * 1024);
-        assert_eq!(MAX_TOTAL_SOURCE_BYTES, 32 * 1024 * 1024);
+        assert_eq!(MAX_INCLUDED_FILES, 50_000);
+        assert_eq!(MAX_FILE_BYTES, 64 * 1024 * 1024);
+        assert_eq!(MAX_TOTAL_SOURCE_BYTES, 64 * 1024 * 1024);
     }
 }

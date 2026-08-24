@@ -24,7 +24,9 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+pub mod jcode_gate;
 pub mod observability;
+pub mod repo_source;
 
 #[cfg(unix)]
 use std::os::unix::{
@@ -4342,17 +4344,28 @@ impl SoloSession {
     }
     pub fn load(&mut self, path: &Path, var: &str, cfg: &Config) -> Result<String> {
         // Every load attempt invalidates prior prompt evidence before validation or I/O.
+        self.invalidate_loaded_source();
+        let text = fs::read_to_string(path)
+            .with_context(|| format!("input is not UTF-8: {}", path.display()))?;
+        self.load_text_inner(text, var, cfg)
+    }
+    pub fn load_text(&mut self, text: String, var: &str, cfg: &Config) -> Result<String> {
+        // In-memory repository bundles receive the same complete-source treatment as files.
+        self.invalidate_loaded_source();
+        self.load_text_inner(text, var, cfg)
+    }
+    fn invalidate_loaded_source(&mut self) {
         self.structural_sample = None;
         self.authoritative_source = None;
         self.source_aggregate = None;
+    }
+    fn load_text_inner(&mut self, text: String, var: &str, cfg: &Config) -> Result<String> {
         if !Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*$")
             .unwrap()
             .is_match(var)
         {
             bail!("invalid variable name")
         }
-        let text = fs::read_to_string(path)
-            .with_context(|| format!("input is not UTF-8: {}", path.display()))?;
         let source_aggregate = observability::SourceLocalAggregate::from_text(&text);
         let chars = text.chars().count();
         let lines = text.lines().count();
@@ -7768,6 +7781,7 @@ const PROVIDER_ENV_ALLOWLIST: &[&str] = &[
 ];
 
 fn configure_provider_environment(command: &mut Command, depth: u32, isolate: bool) {
+    command.env_remove(jcode_gate::CHALLENGE_ENV);
     if !isolate {
         command.env("RLM_DEPTH", depth.to_string());
         return;

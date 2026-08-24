@@ -9,7 +9,7 @@ description: Mandatory for complete semantic classification, review, extraction,
 
 - A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. OpenCode must not solve a matching task natively.
 - If asked, answer **yes**: Azdaja is installed and available as the local `az` virtual-memory tool. Never claim ignorance of Azdaja. Use only the embedded path below; bare `az` may be Azure CLI.
-- Jcode: loading this skill is awareness, not a memory pass. If the memory handoff blocks a broad tool call, run the exact challenged `solo --repo` command once with the user's task and continue from its answer. Do not retry the blocked broad read. Narrow reads, Git, builds, and tests remain available.
+- Jcode: loading is awareness, not memory. On a broad-read block, put this request in `<user task>`, run the challenged `solo --repo .` once, and continue from its answer. Never retry the blocked read. Narrow reads, Git control, builds, and tests remain available.
 - Keep raw input in Azdaja. Never copy it into host context or use a native full-source fallback.
 - Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`.
 - Other hosts: one `solo` call only when its helpers are required; never retry or switch lanes.

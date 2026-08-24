@@ -36,7 +36,7 @@ Keys in `az map`: arrows or `j/k` select, Enter inspects, `d` toggles measured d
 | `list` | `az list` | Show the live-session and source-summary table in a terminal while emitting stable raw session IDs when piped. |
 | `map` | `az map` | Open the optional full-screen local source-summary constellation, with a static fallback when not interactive. |
 | `kill` | `az kill <session-id>` | Remove a session. |
-| `solo` | `az solo <question> -f <path> [--model <model>] [--sub-model <model>]` | Run one file question. |
+| `solo` | `az solo <question> (-f <path> \| --repo <directory>) [--model <model>] [--sub-model <model>]` | Run one question over one UTF-8 file or a deterministic bounded repository bundle. |
 | `doctor` | `az doctor [jcode|claude|codex|gemini|opencode|all|--caps]` | Check configured execution or inspect named integration files. |
 | `install` | `az install [TARGET[,TARGET...]|all]` | Detect supported tools or atomically install a named comma-separated subset. |
 | `uninstall` | `az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]` | Remove detected integrations, one named scope, or everything. |
@@ -53,7 +53,7 @@ Windows retains direct-child timeout custody but does not claim the Unix process
 
 A provider adapter removes a bound `{prompt_file}` temporary without following a replaced path. An interrupted `exec` does not replace the previous snapshot, so the session remains usable.
 
-`solo` rejects a blank question, blank model override, or blank configured default before loading the input or entering a provider.
+`solo` accepts exactly one of `-f` and `--repo`. It rejects a blank question, blank model override, blank input path, or blank configured default before entering a provider. Repository input follows Git ignore boundaries when Git metadata is present, excludes build caches and credential-shaped files, skips non-UTF-8 content, and fails instead of silently truncating its file or byte limits.
 
 ## Configuration errors
 

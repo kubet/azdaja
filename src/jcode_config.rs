@@ -1,11 +1,16 @@
-//! Pure, byte-preserving patch planning for Azdaja-managed Jcode hooks.
+//! Pure, byte-preserving patch planning for Azdaja-managed synchronous Jcode hooks.
 //!
 //! This module does no filesystem I/O. Callers read `JCODE_HOME/config.toml`, pass its
-//! bytes (or `None` when absent), and then apply the returned [`PatchPlan`].
+//! bytes (or `None` when absent), and then apply the returned [`PatchPlan`]. Azdaja owns only
+//! `hooks.pre_tool`; observer hooks such as `turn_end` and `session_end` remain foreign.
 
 use std::{error::Error, fmt};
 
-const MANAGED_KEYS: [&str; 3] = ["pre_tool", "turn_end", "session_end"];
+/// Lowest `hooks.pre_tool_timeout_ms` value that is safe for the synchronous managed hook.
+pub const MIN_SAFE_PRE_TOOL_TIMEOUT_MS: i64 = 1_000;
+
+const MAX_MANAGED_COMMAND_BYTES: usize = 1_024;
+const MANAGED_KEYS: [&str; 1] = ["pre_tool"];
 const BEGIN: &str = "# >>> azdaja managed Jcode hooks >>>";
 const BEGIN_AFTER_UNTERMINATED: &str =
     "# >>> azdaja managed Jcode hooks; preceding newline is managed >>>";
@@ -38,6 +43,9 @@ pub enum PatchError {
         expected: String,
         found: String,
     },
+    InvalidPreToolTimeout {
+        found: String,
+    },
     UnmanagedMatchingHook(&'static str),
     ModifiedManagedBlock(String),
 }
@@ -68,6 +76,10 @@ impl fmt::Display for PatchError {
                 f,
                 "refusing to overwrite foreign hooks.{key}: expected managed value {expected:?}, found {found:?}; remove or rename that setting and retry"
             ),
+            Self::InvalidPreToolTimeout { found } => write!(
+                f,
+                "refusing unsafe hooks.pre_tool_timeout_ms value {found}: expected an integer of at least {MIN_SAFE_PRE_TOOL_TIMEOUT_MS} ms"
+            ),
             Self::UnmanagedMatchingHook(key) => write!(
                 f,
                 "refusing to take ownership of hooks.{key}: its value matches, but it is not inside the exact Azdaja-managed block; remove the unmanaged setting and retry"
@@ -82,16 +94,19 @@ impl fmt::Display for PatchError {
 
 impl Error for PatchError {}
 
-/// Plan enabling `pre_tool`, `turn_end`, and `session_end` with one managed command.
+/// Plan enabling synchronous `pre_tool` with one managed command.
 ///
 /// `managed_binary` must be an absolute UTF-8 POSIX, drive-letter, or UNC-style path.
-/// The command is shell-word quoted and receives the single argument `jcode-hook`.
+/// The command is shell-word quoted, receives the single argument `jcode-hook`, and must not
+/// exceed 1024 bytes. An existing `hooks.pre_tool_timeout_ms` must be an integer of at least
+/// [`MIN_SAFE_PRE_TOOL_TIMEOUT_MS`]; valid values and all foreign observer hooks are preserved.
 pub fn plan_enable(original: Option<&[u8]>, managed_binary: &str) -> Result<PatchPlan, PatchError> {
     let command = managed_command(managed_binary)?;
     let original_was_absent = original.is_none();
     let bytes = original.unwrap_or_default();
     let text = input_text(bytes)?;
     let parsed = parse_toml(text, "input config.toml")?;
+    ensure_safe_pre_tool_timeout(&parsed)?;
     let scan = scan_hooks_headers(text)?;
     let newline = preferred_newline(text);
     let blocks = Blocks::new(&command, newline);
@@ -148,11 +163,12 @@ pub fn plan_enable(original: Option<&[u8]>, managed_binary: &str) -> Result<Patc
     })
 }
 
-/// Plan disabling the exact managed block for `managed_binary`.
+/// Plan disabling the exact managed synchronous `pre_tool` block for `managed_binary`.
 ///
-/// No individual key is removed. If the byte-exact delimited block is not present, foreign or
-/// customized hook settings cause an actionable refusal. A config containing no managed keys is
-/// an idempotent no-op. Removing a wholly managed file produces `result: None`.
+/// No individual key is removed. If the byte-exact delimited block is not present, unrelated
+/// foreign hook values are preserved as an idempotent no-op. An unmanaged value that still points
+/// at this Azdaja binary, ambiguous TOML, or a customized managed block causes an actionable
+/// refusal. Removing a wholly managed file produces `result: None`.
 pub fn plan_disable(
     original: Option<&[u8]>,
     managed_binary: &str,
@@ -196,7 +212,7 @@ pub fn plan_disable(
 
     if hooks_table(&parsed).is_some() {
         require_one_exact_hooks_header(&scan)?;
-        ensure_no_occupied_managed_keys(&parsed, &command)?;
+        ensure_no_unmanaged_matching_hooks(&parsed, &command)?;
     } else if hooks_entry(&parsed).is_some() {
         return Err(PatchError::AmbiguousHooks(
             "top-level hooks exists but is not a table".into(),
@@ -211,6 +227,33 @@ pub fn plan_disable(
         original_was_absent,
         changed: false,
         result: Some(bytes.to_vec()),
+    })
+}
+
+fn ensure_no_unmanaged_matching_hooks(
+    parsed: &toml::Value,
+    command: &str,
+) -> Result<(), PatchError> {
+    for key in MANAGED_KEYS {
+        if hook_value(parsed, key).and_then(toml::Value::as_str) == Some(command) {
+            return Err(PatchError::UnmanagedMatchingHook(key));
+        }
+    }
+    Ok(())
+}
+
+fn ensure_safe_pre_tool_timeout(parsed: &toml::Value) -> Result<(), PatchError> {
+    let Some(value) = hook_value(parsed, "pre_tool_timeout_ms") else {
+        return Ok(());
+    };
+    if value
+        .as_integer()
+        .is_some_and(|timeout| timeout >= MIN_SAFE_PRE_TOOL_TIMEOUT_MS)
+    {
+        return Ok(());
+    }
+    Err(PatchError::InvalidPreToolTimeout {
+        found: value.to_string(),
     })
 }
 
@@ -270,7 +313,14 @@ fn managed_command(binary: &str) -> Result<String, PatchError> {
     let quoted = shlex::try_quote(binary).map_err(|error| {
         PatchError::InvalidManagedBinary(format!("managed binary path cannot be quoted: {error}"))
     })?;
-    Ok(format!("{quoted} jcode-hook"))
+    let command = format!("{quoted} jcode-hook");
+    if command.len() > MAX_MANAGED_COMMAND_BYTES {
+        return Err(PatchError::InvalidManagedBinary(format!(
+            "shell-quoted managed command is {} bytes; maximum is {MAX_MANAGED_COMMAND_BYTES} bytes",
+            command.len()
+        )));
+    }
+    Ok(command)
 }
 
 fn is_absolute_portable(path: &str) -> bool {
@@ -747,30 +797,45 @@ mod tests {
     }
 
     #[test]
-    fn enables_current_live_hooks_shape_without_touching_timeout() {
-        let input = b"[hooks]\npre_tool_timeout_ms = 5000";
+    fn preserves_valid_pre_tool_timeout_byte_for_byte() {
+        let input = b"[hooks]\npre_tool_timeout_ms = 1_000 # keep exact\n";
         let plan = enabled(Some(input), BIN);
-        let output = std::str::from_utf8(bytes(&plan)).unwrap();
+        let command = managed_command(BIN).unwrap();
+        let expected = format!(
+            "[hooks]\npre_tool_timeout_ms = 1_000 # keep exact\n{BEGIN}\npre_tool = {}\n{END}\n",
+            toml_string(&command)
+        );
         assert!(plan.changed);
         assert!(!plan.original_was_absent);
-        assert!(output.starts_with("[hooks]\npre_tool_timeout_ms = 5000\n"));
-        assert!(output.contains(BEGIN_AFTER_UNTERMINATED));
-        assert_eq!(
-            toml::from_str::<toml::Value>(output).unwrap()["hooks"]["pre_tool_timeout_ms"]
-                .as_integer(),
-            Some(5000)
-        );
+        assert_eq!(bytes(&plan), expected.as_bytes());
         let disabled = plan_disable(plan.result.as_deref(), BIN).unwrap();
         assert_eq!(disabled.result.as_deref(), Some(input.as_slice()));
     }
 
     #[test]
-    fn absent_config_creates_and_can_remove_wholly_managed_file() {
+    fn rejects_low_zero_and_non_integer_pre_tool_timeouts() {
+        for (source, found) in [("999", "999"), ("0", "0"), ("\"1000\"", "\"1000\"")] {
+            let input = format!("[hooks]\npre_tool_timeout_ms = {source}\n");
+            assert_eq!(
+                plan_enable(Some(input.as_bytes()), BIN),
+                Err(PatchError::InvalidPreToolTimeout {
+                    found: found.into()
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn absent_config_creates_pre_tool_only_block_and_can_remove_it() {
         let plan = enabled(None, BIN);
         assert!(plan.original_was_absent);
         assert!(plan.changed);
-        let output = std::str::from_utf8(bytes(&plan)).unwrap();
-        assert!(output.starts_with(&format!("{BEGIN}\n[hooks]\n")));
+        let command = managed_command(BIN).unwrap();
+        let expected = format!(
+            "{BEGIN}\n[hooks]\npre_tool = {}\n{END}\n",
+            toml_string(&command)
+        );
+        assert_eq!(bytes(&plan), expected.as_bytes());
         let disabled = plan_disable(plan.result.as_deref(), BIN).unwrap();
         assert!(disabled.changed);
         assert_eq!(disabled.result, None);
@@ -780,14 +845,31 @@ mod tests {
     }
 
     #[test]
-    fn refuses_each_occupied_managed_key() {
+    fn enable_refuses_foreign_pre_tool_and_disable_preserves_it() {
         for key in MANAGED_KEYS {
             let input = format!("[hooks]\n{key} = \"foreign\"\n");
             let error = plan_enable(Some(input.as_bytes()), BIN).unwrap_err();
             assert!(matches!(error, PatchError::ForeignHook { key: found, .. } if found == key));
-            let error = plan_disable(Some(input.as_bytes()), BIN).unwrap_err();
-            assert!(matches!(error, PatchError::ForeignHook { key: found, .. } if found == key));
+            let plan = plan_disable(Some(input.as_bytes()), BIN).unwrap();
+            assert!(!plan.changed);
+            assert_eq!(plan.result.as_deref(), Some(input.as_bytes()));
         }
+    }
+
+    #[test]
+    fn foreign_observer_hooks_are_preserved_byte_for_byte() {
+        let input = b"[hooks]\nturn_end = \"foreign turn observer\"\nsession_end = \"foreign session observer\"\n";
+        let command = managed_command(BIN).unwrap();
+        let expected = format!(
+            "{}{}\npre_tool = {}\n{END}\n",
+            std::str::from_utf8(input).unwrap(),
+            BEGIN,
+            toml_string(&command)
+        );
+        let plan = enabled(Some(input), BIN);
+        assert_eq!(bytes(&plan), expected.as_bytes());
+        let disabled = plan_disable(plan.result.as_deref(), BIN).unwrap();
+        assert_eq!(disabled.result.as_deref(), Some(input.as_slice()));
     }
 
     #[test]
@@ -851,9 +933,23 @@ mod tests {
             shlex::split(command),
             Some(vec![binary.into(), "jcode-hook".into()])
         );
-        for key in MANAGED_KEYS {
-            assert_eq!(parsed["hooks"][key].as_str(), Some(command));
-        }
+        assert_eq!(parsed["hooks"].as_table().unwrap().len(), 1);
+        assert_eq!(parsed["hooks"]["pre_tool"].as_str(), Some(command));
+    }
+
+    #[test]
+    fn refuses_command_over_1024_bytes_after_shell_quoting() {
+        let binary = format!("/{}", "'$".repeat(200));
+        assert!(binary.len() < MAX_MANAGED_COMMAND_BYTES);
+        let command = format!("{} jcode-hook", shlex::try_quote(&binary).unwrap());
+        assert!(command.len() > MAX_MANAGED_COMMAND_BYTES);
+        assert_eq!(
+            plan_enable(None, &binary),
+            Err(PatchError::InvalidManagedBinary(format!(
+                "shell-quoted managed command is {} bytes; maximum is {MAX_MANAGED_COMMAND_BYTES} bytes",
+                command.len()
+            )))
+        );
     }
 
     #[test]
@@ -889,8 +985,7 @@ mod tests {
     fn exact_matching_values_without_delimiters_are_not_claimed() {
         let command = managed_command(BIN).unwrap();
         let value = toml_string(&command);
-        let input =
-            format!("[hooks]\npre_tool = {value}\nturn_end = {value}\nsession_end = {value}\n");
+        let input = format!("[hooks]\npre_tool = {value}\n");
         assert!(matches!(
             plan_enable(Some(input.as_bytes()), BIN),
             Err(PatchError::UnmanagedMatchingHook(_))
@@ -917,9 +1012,7 @@ mod tests {
         let block = std::str::from_utf8(bytes(&generated)).unwrap();
         let command = managed_command(BIN).unwrap();
         let value = toml_string(&command);
-        let input = format!(
-            "message = '''\n{block}'''\n[hooks]\npre_tool = {value}\nturn_end = {value}\nsession_end = {value}\n"
-        );
+        let input = format!("message = '''\n{block}'''\n[hooks]\npre_tool = {value}\n");
         assert!(matches!(
             plan_enable(Some(input.as_bytes()), BIN),
             Err(PatchError::UnmanagedMatchingHook(_))

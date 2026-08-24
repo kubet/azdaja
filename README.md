@@ -40,6 +40,8 @@ cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.8 --locked
 
 `az install` finds supported tools automatically. To target one tool, run `az install jcode`; to install every integration, run `az install all`. Then run the exact `az doctor` command printed by install before reloading the tool. See [edge cases and lifecycle details](docs/install.md) for platform checks, registry reloads, configuration paths, Cargo setup, and safe removal.
 
+The Jcode integration also installs a byte-owned hook block in `JCODE_HOME/config.toml`. Broad repository reads receive a memory handoff: run the challenged `azdaja solo ... --repo .` command once after replacing `<user task>` with the current request, then continue from its answer. Do not retry the blocked broad read. Narrow reads, Git control, builds, tests, lint, and formatting remain available. Existing foreign hooks are never overwritten, and uninstall removes only the exact Azdaja-managed block.
+
 Standalone binaries require exact co-distribution of `LICENSE`, matching `SHA256SUMS`, and the [supported-target third-party notices](THIRD-PARTY-NOTICES.md).
 
 Choose one removal scope:
@@ -60,6 +62,12 @@ Ask one question about one input:
 
 ```bash
 az solo "question about this input" -f ./large.txt
+```
+
+Ask one question across a repository. Azdaja builds a deterministic local JSON bundle, prunes build caches and credential-shaped files, keeps the complete included UTF-8 source in the evaluator, and fails instead of silently truncating its limits:
+
+```bash
+az solo "question about this repository" --repo ./project
 ```
 
 Or use an explicit evaluator session:
@@ -107,6 +115,7 @@ Within this four-row ladder, Azdaja is **4.26 percentage points** above the pape
 - Model-authored code can select source material for a model call; bounded context is not information-flow control.
 - The CLI reads user-supplied paths, and selected context can be sent to the configured provider.
 - Native host tools keep the user's permissions; stronger containment requires a separate trusted inference broker.
+- The Jcode memory handoff is a cooperative workflow guard, not a sandbox against a malicious same-user shell process.
 - Monty 0.0.21 is experimental and snapshot-format-bound. Snapshots are unencrypted owner-only files, and evaluator memory has no configured ceiling.
 - Use synthetic or sanitized issue reproductions. Never post raw inputs, traces, configuration, host paths, OAuth material, tokens, or secrets.
 

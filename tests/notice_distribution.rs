@@ -77,9 +77,12 @@ fn cargo_package_list_matches_the_reviewed_file_allowlist() {
             "assets/legacy/opencode-config-f077082c.toml",
             "src/banner.rs",
             "src/dashboard.rs",
+            "src/jcode_config.rs",
+            "src/jcode_gate.rs",
             "src/lib.rs",
             "src/main.rs",
             "src/observability.rs",
+            "src/repo_source.rs",
             "src/tui.rs",
         ]
     );

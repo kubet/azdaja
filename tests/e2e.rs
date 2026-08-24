@@ -4610,9 +4610,9 @@ fn jcode_install_manages_memory_handoff_and_preserves_foreign_hooks() {
     assert!(managed_text.starts_with("# user config\n[hooks]\npre_tool_timeout_ms = 5000\n"));
     assert!(managed_text.ends_with("[other]\nkeep = true\n"));
     assert!(managed_text.contains("# >>> azdaja managed Jcode hooks"));
-    for key in ["pre_tool", "turn_end", "session_end"] {
-        assert!(managed_text.contains(&format!("{key} = ")));
-    }
+    assert!(managed_text.contains("pre_tool = "));
+    assert!(!managed_text.contains("turn_end = "));
+    assert!(!managed_text.contains("session_end = "));
     assert!(
         managed_text.contains(
             integration
@@ -4630,7 +4630,33 @@ fn jcode_install_manages_memory_handoff_and_preserves_foreign_hooks() {
         String::from_utf8_lossy(&doctor.stdout),
         String::from_utf8_lossy(&doctor.stderr)
     );
-    assert!(String::from_utf8_lossy(&doctor.stdout).contains("memory handoff are installed"));
+    assert!(String::from_utf8_lossy(&doctor.stdout).contains("memory handoff is configured"));
+
+    for (name, value, expected) in [
+        (
+            "JCODE_HOOK_PRE_TOOL",
+            "foreign-command",
+            "overrides the managed pre_tool command",
+        ),
+        ("JCODE_HOOK_PRE_TOOL_TIMEOUT_MS", "999", "is too low"),
+    ] {
+        let overridden = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+            .args(["doctor", "jcode"])
+            .env("HOME", &t)
+            .env("JCODE_HOME", &jcode_home)
+            .env("AZDAJA_HOME", t.join("state"))
+            .env("AZDAJA_CONFIG", &cfg)
+            .env(name, value)
+            .env_remove("RLM_DEPTH")
+            .output()
+            .unwrap();
+        assert!(!overridden.status.success());
+        assert!(
+            String::from_utf8_lossy(&overridden.stdout).contains(expected),
+            "{}",
+            String::from_utf8_lossy(&overridden.stdout)
+        );
+    }
 
     let reinstalled = lifecycle(&["install", "jcode"]);
     assert!(
@@ -4667,6 +4693,33 @@ fn jcode_install_manages_memory_handoff_and_preserves_foreign_hooks() {
     assert!(String::from_utf8_lossy(&refused.stderr).contains("foreign hooks.pre_tool"));
     assert!(!integration.exists());
     assert_eq!(fs::read(&config_path).unwrap(), foreign);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn jcode_install_refuses_unsafe_pre_tool_timeout_without_mutation() {
+    let t = temp("jcode-memory-handoff-timeout");
+    let jcode_home = t.join("custom-jcode");
+    fs::create_dir_all(&jcode_home).unwrap();
+    let config_path = jcode_home.join("config.toml");
+    let original = b"[hooks]\npre_tool_timeout_ms = 999\n\n[other]\nkeep = true\n";
+    fs::write(&config_path, original).unwrap();
+    let cfg = config(&t, "cat", 512, 1, 3, 4);
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args(["install", "jcode"])
+        .env("HOME", &t)
+        .env("JCODE_HOME", &jcode_home)
+        .env("AZDAJA_HOME", t.join("state"))
+        .env("AZDAJA_CONFIG", &cfg)
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("expected an integer of at least 1000 ms")
+    );
+    assert_eq!(fs::read(&config_path).unwrap(), original);
+    assert!(!jcode_home.join("skills/azdaja").exists());
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -4731,13 +4784,18 @@ fn jcode_memory_handoff_returns_answer_without_unlocking_broad_reads() {
     fs::write(repo.join("src/lib.rs"), "pub fn answer() -> u32 { 42 }\n").unwrap();
     fs::write(repo.join("README.md"), "# handoff fixture\n").unwrap();
     let provider = t.join("provider.py");
+    let provider_calls = t.join("provider-calls");
     fs::write(
         &provider,
-        r#"import os, sys
+        format!(
+            r#"import os, sys
 assert "AZDAJA_JCODE_CHALLENGE" not in os.environ
+open({:?}, "a").write("call\n")
 sys.stdin.read()
 print('```python\nFINAL("repo-memory-ok")\n```')
 "#,
+            provider_calls.to_str().unwrap()
+        ),
     )
     .unwrap();
     let cfg = config(
@@ -4781,18 +4839,49 @@ print('```python\nFINAL("repo-memory-ok")\n```')
     assert!(blocked.stdout.is_empty());
     let blocked_text = String::from_utf8(blocked.stderr).unwrap();
     assert!(blocked_text.contains("Azdaja should carry this broad read."));
-    assert!(
-        blocked_text
-            .contains("Run the exact challenged command once and continue from its answer:")
-    );
+    assert!(blocked_text.contains("Run one challenged repository pass now."));
+    assert!(blocked_text.contains("Replace <user task> with the current user request"));
+    assert!(blocked_text.contains("--repo ."));
+    assert!(blocked_text.contains("Continue from its answer."));
     assert!(blocked_text.contains("Do not retry the blocked broad read."));
-    assert!(blocked_text.contains("Narrow reads, Git, builds, and tests are still available."));
+    assert!(
+        blocked_text.contains("Narrow reads, Git control, builds, and tests remain available.")
+    );
     let challenge = blocked_text
         .split_whitespace()
         .find_map(|word| word.strip_prefix("AZDAJA_JCODE_CHALLENGE="))
         .expect("challenge assignment")
         .to_owned();
     assert_eq!(challenge.len(), 32);
+
+    for command in [
+        "cp src/lib.rs /dev/stdout",
+        "dd if=src/lib.rs bs=4096 count=1",
+        "printf '%s' \"$(<src/lib.rs)\"",
+        "base64 src/lib.rs",
+        "sed -n '1,20p' src/lib.rs",
+    ] {
+        let input = serde_json::json!({"command": command}).to_string();
+        let extracted = hook("pre_tool", Some("bash"), &input);
+        assert_eq!(
+            extracted.status.code(),
+            Some(2),
+            "shell content extraction escaped the handoff: {command}; stderr={}",
+            String::from_utf8_lossy(&extracted.stderr)
+        );
+        assert!(extracted.stdout.is_empty(), "{command}");
+    }
+    let safe_build = hook(
+        "pre_tool",
+        Some("bash"),
+        r#"{"command":"cargo test --no-run"}"#,
+    );
+    assert_eq!(
+        safe_build.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&safe_build.stderr)
+    );
 
     let completed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .args([
@@ -4816,18 +4905,8 @@ print('```python\nFINAL("repo-memory-ok")\n```')
         String::from_utf8_lossy(&completed.stderr)
     );
     assert_eq!(completed.stdout, b"repo-memory-ok\n");
+    assert_eq!(fs::read_to_string(&provider_calls).unwrap(), "call\n");
 
-    let blocked_before_turn_end = hook("pre_tool", Some("read"), broad_input);
-    assert_eq!(blocked_before_turn_end.status.code(), Some(2));
-    let blocked_before_turn_end_text = String::from_utf8(blocked_before_turn_end.stderr).unwrap();
-    let outstanding_challenge = blocked_before_turn_end_text
-        .split_whitespace()
-        .find_map(|word| word.strip_prefix("AZDAJA_JCODE_CHALLENGE="))
-        .expect("outstanding challenge assignment")
-        .to_owned();
-
-    let turn_end = hook("turn_end", None, "{}");
-    assert_eq!(turn_end.status.code(), Some(0));
     let blocked_again = hook("pre_tool", Some("read"), broad_input);
     assert_eq!(blocked_again.status.code(), Some(2));
     let blocked_again_text = String::from_utf8(blocked_again.stderr).unwrap();
@@ -4835,7 +4914,7 @@ print('```python\nFINAL("repo-memory-ok")\n```')
         .split_whitespace()
         .find_map(|word| word.strip_prefix("AZDAJA_JCODE_CHALLENGE="))
         .expect("second challenge assignment");
-    assert_ne!(second_challenge, outstanding_challenge);
+    assert_ne!(second_challenge, challenge);
 
     let tiny = repo.join("tiny.txt");
     fs::write(&tiny, "tiny\n").unwrap();
@@ -4852,6 +4931,7 @@ print('```python\nFINAL("repo-memory-ok")\n```')
     assert_eq!(file_only.status.code(), Some(2));
     assert!(file_only.stdout.is_empty());
     assert!(String::from_utf8_lossy(&file_only.stderr).contains("file-scoped Azdaja work"));
+    assert_eq!(fs::read_to_string(&provider_calls).unwrap(), "call\n");
     assert_eq!(
         hook("pre_tool", Some("read"), broad_input).status.code(),
         Some(2)

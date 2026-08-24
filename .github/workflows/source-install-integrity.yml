@@ -146,7 +146,7 @@ jobs:
           HOME="$install_home" PATH="$guard:/usr/bin:/bin:/usr/sbin:/sbin" \
             AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_GLIBC_VERSION=2.35 \
             AZDAJA_INSTALL_BASE_URL="$base" \
-            sh site/install claude --bin-dir "$install_bin"
+            sh site/install jcode,claude --bin-dir "$install_bin"
           installed="$install_bin/azdaja"
           alias="$install_bin/az"
           cmp "$source_binary" "$installed"
@@ -160,6 +160,122 @@ jobs:
           fi
           cmp LICENSE "$install_home/.local/share/azdaja/LICENSE"
           cmp THIRD-PARTY-NOTICES.md "$install_home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
+
+          jcode_binary="$install_home/.jcode/skills/azdaja/azdaja"
+          jcode_config="$install_home/.jcode/config.toml"
+          test -x "$jcode_binary"
+          cmp "$source_binary" "$jcode_binary"
+          grep -F '# >>> azdaja managed Jcode hooks >>>' "$jcode_config"
+          grep -F 'pre_tool = ' "$jcode_config"
+          grep -F 'jcode-hook' "$jcode_config"
+          ! grep -F 'turn_end = ' "$jcode_config"
+          ! grep -F 'session_end = ' "$jcode_config"
+          HOME="$install_home" PATH="$guard:$PATH" \
+            "$installed" doctor jcode > "$scratch/jcode-doctor"
+          grep -F 'PASS jcode: managed skill is installed and memory handoff is configured' \
+            "$scratch/jcode-doctor"
+
+          repo="$scratch/handoff-repo"
+          mkdir -p "$repo/src"
+          printf 'pub fn answer() -> u32 { 42 }\n' > "$repo/src/lib.rs"
+          printf '# local installer handoff\n' > "$repo/README.md"
+          set +e
+          (
+            cd "$repo"
+            printf '%s' '{"file_path":"src/lib.rs","start_line":1,"limit":5000}' | \
+              HOME="$install_home" AZDAJA_HOME="$scratch/handoff-state" \
+              JCODE_HOOK_EVENT=pre_tool JCODE_HOOK_SESSION_ID=source-install-ci \
+              JCODE_HOOK_CWD="$repo" JCODE_HOOK_TOOL_NAME=read \
+              "$jcode_binary" jcode-hook > "$scratch/handoff-blocked.stdout" \
+              2> "$scratch/handoff-blocked.stderr"
+          )
+          blocked_status=$?
+          set -e
+          test "$blocked_status" -eq 2
+          test ! -s "$scratch/handoff-blocked.stdout"
+          grep -F 'Azdaja should carry this broad read.' "$scratch/handoff-blocked.stderr"
+          grep -F 'Replace <user task> with the current user request' "$scratch/handoff-blocked.stderr"
+          grep -F -- '--repo .' "$scratch/handoff-blocked.stderr"
+          challenge="$(sed -n 's/.*AZDAJA_JCODE_CHALLENGE=\([0-9a-f]\{32\}\).*/\1/p' "$scratch/handoff-blocked.stderr" | head -n 1)"
+          test "${#challenge}" -eq 32
+
+          provider="$scratch/handoff-provider.py"
+          provider_calls="$scratch/handoff-provider-calls"
+          cat > "$provider" <<'PY'
+          import os
+          import sys
+
+          assert "AZDAJA_JCODE_CHALLENGE" not in os.environ
+          open(sys.argv[1], "a").write("call\n")
+          sys.stdin.read()
+          print('```python\nFINAL("source-install-memory-ok")\n```')
+          PY
+          provider_python="$(command -v python3)"
+          cat > "$scratch/handoff-config.toml" <<EOF
+          sub_llm_cmd = "$provider_python $provider $provider_calls"
+          default_model = "mock"
+          output_cap = 4096
+          max_depth = 1
+          sub_timeout = 10
+          max_sessions = 4
+          cell_timeout = 2
+          idle_timeout = 1800
+          clean_patterns = []
+          jcode_provider = "openai"
+          jcode_reasoning = "medium"
+          max_calls_per_cell = 64
+          EOF
+          (
+            cd "$repo"
+            HOME="$install_home" AZDAJA_HOME="$scratch/handoff-state" \
+              AZDAJA_CONFIG="$scratch/handoff-config.toml" \
+              AZDAJA_JCODE_CHALLENGE="$challenge" \
+              "$jcode_binary" solo 'summarize the repository implementation' \
+              --repo . > "$scratch/handoff-answer"
+          )
+          test "$(cat "$scratch/handoff-answer")" = source-install-memory-ok
+          test "$(cat "$provider_calls")" = call
+
+          set +e
+          (
+            cd "$repo"
+            printf '%s' '{"file_path":"src/lib.rs","start_line":1,"limit":5000}' | \
+              HOME="$install_home" AZDAJA_HOME="$scratch/handoff-state" \
+              JCODE_HOOK_EVENT=pre_tool JCODE_HOOK_SESSION_ID=source-install-ci \
+              JCODE_HOOK_CWD="$repo" JCODE_HOOK_TOOL_NAME=read \
+              "$jcode_binary" jcode-hook > /dev/null 2> "$scratch/handoff-still-blocked"
+          )
+          blocked_status=$?
+          set -e
+          test "$blocked_status" -eq 2
+          grep -F 'Do not retry the blocked broad read.' "$scratch/handoff-still-blocked"
+          second_challenge="$(sed -n 's/.*AZDAJA_JCODE_CHALLENGE=\([0-9a-f]\{32\}\).*/\1/p' "$scratch/handoff-still-blocked" | head -n 1)"
+          test "${#second_challenge}" -eq 32
+
+          printf 'tiny\n' > "$repo/tiny.txt"
+          set +e
+          (
+            cd "$repo"
+            HOME="$install_home" AZDAJA_HOME="$scratch/handoff-state" \
+              AZDAJA_CONFIG="$scratch/handoff-config.toml" \
+              AZDAJA_JCODE_CHALLENGE="$second_challenge" \
+              "$jcode_binary" solo 'read the tiny file' -f tiny.txt \
+              > "$scratch/handoff-file.stdout" 2> "$scratch/handoff-file.stderr"
+          )
+          file_status=$?
+          set -e
+          test "$file_status" -ne 0
+          test ! -s "$scratch/handoff-file.stdout"
+          grep -F 'file-scoped Azdaja work' "$scratch/handoff-file.stderr"
+          test "$(cat "$provider_calls")" = call
+          (
+            cd "$repo"
+            printf '%s' '{"file_path":"src/lib.rs","start_line":1,"limit":64}' | \
+              HOME="$install_home" AZDAJA_HOME="$scratch/handoff-state" \
+              JCODE_HOOK_EVENT=pre_tool JCODE_HOOK_SESSION_ID=source-install-ci \
+              JCODE_HOOK_CWD="$repo" JCODE_HOOK_TOOL_NAME=read \
+              "$jcode_binary" jcode-hook
+          )
 
           cat > "$scratch/expected-help" <<'EOF'
           AZDAJA v0.1.8 — virtual memory for language models
@@ -183,3 +299,8 @@ jobs:
             "$installed" doctor --caps > "$scratch/installed-caps.json"
           cmp "$scratch/source-caps.json" "$scratch/installed-caps.json"
           test ! -e "$marker"
+
+          HOME="$install_home" PATH="$guard:$PATH" \
+            "$installed" uninstall jcode > "$scratch/jcode-uninstall"
+          test ! -e "$install_home/.jcode/skills/azdaja"
+          test ! -e "$jcode_config"

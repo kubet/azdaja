@@ -626,6 +626,9 @@ printf '  Write integrations:\n'
 for harness in $INSTALL_NAMES; do
   printf '    %s -> %s\n' "$harness" "$(harness_target "$harness")"
 done
+case " $INSTALL_NAMES " in
+  *" jcode "*) printf '  Configure Jcode memory handoff: %s/config.toml\n' "$JCODE_ROOT" ;;
+esac
 if [ "$INTERACTIVE_INSTALL" = true ]; then
   while :; do
     printf '\nPress Enter to install, or q to cancel. ' > /dev/tty
@@ -1294,6 +1297,9 @@ while :; do
 done
 printf 'Installed: azdaja v%s\n' "$VERSION"
 printf 'Integrations: %s\n' "$DETECTION_REPORT"
+case " $INSTALL_NAMES " in
+  *" jcode "*) printf '%s\n' 'Jcode memory handoff: configured' ;;
+esac
 if [ "$ALIAS_SKIP" = true ]; then
   if [ "$ON_PATH" = true ]; then
     printf 'Next: azdaja doctor (az alias unavailable)\n'

@@ -1638,7 +1638,18 @@ fn standalone_installer_honors_authoritative_custom_jcode_home() {
         installer_line(&stdout, "Integrations:"),
         "Integrations: jcode"
     );
+    assert!(stdout.contains(&format!(
+        "  Configure Jcode memory handoff: {}/config.toml",
+        custom.display()
+    )));
+    assert!(stdout.contains("Jcode memory handoff: configured"));
     assert!(custom.join("skills/azdaja/azdaja").is_file());
+    let jcode_config = fs::read_to_string(custom.join("config.toml")).unwrap();
+    assert!(jcode_config.contains("# >>> azdaja managed Jcode hooks >>>"));
+    assert!(jcode_config.contains("pre_tool = "));
+    assert!(!jcode_config.contains("turn_end = "));
+    assert!(!jcode_config.contains("session_end = "));
+    assert!(jcode_config.contains("jcode-hook"));
     assert!(!home.join(".jcode/skills/azdaja").exists());
     let next = installer_line(&stdout, "Next:");
     assert_off_path_doctor(next, &bin);
@@ -1681,7 +1692,7 @@ fn standalone_installer_honors_authoritative_custom_jcode_home() {
         .env_remove("RLM_DEPTH")
         .output()
         .unwrap();
-    assert!(assert_success(&doctor).contains("installed on disk"));
+    assert!(assert_success(&doctor).contains("memory handoff is configured"));
 }
 
 #[test]
