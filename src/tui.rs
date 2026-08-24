@@ -660,7 +660,7 @@ fn percent(millipercent: u16) -> u32 {
 fn pattern_line(snapshot: &DashboardSnapshot) -> String {
     match memory_constellation(snapshot) {
         Some(constellation) => format!(
-            "repeated ← {} → varied · avg {}%",
+            "repeated ← {} → varied · avg variety {}%",
             constellation.render_strip(18),
             100 - percent(constellation.zero_order_redundancy_millipercent())
         ),
@@ -1187,7 +1187,7 @@ mod tests {
         assert!(text.contains("memory none yet · summaries keep numbers, not source text"));
         assert!(text.contains("pattern appears after the first source"));
         assert!(text.contains("recent no source summary yet"));
-        assert!(!text.contains("avg 0%"));
+        assert!(!text.contains("avg variety 0%"));
     }
 
     #[test]

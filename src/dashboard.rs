@@ -233,7 +233,7 @@ fn variety_percent_from_entropy(byte_entropy_millibits: u16) -> u32 {
 fn pattern_line(snapshot: &DashboardSnapshot, strip_width: usize) -> String {
     match memory_constellation(snapshot) {
         Some(constellation) => format!(
-            "repeated ← {} → varied · avg {}%",
+            "repeated ← {} → varied · avg variety {}%",
             constellation.render_strip(strip_width),
             100 - percent(constellation.zero_order_redundancy_millipercent())
         ),
@@ -635,7 +635,7 @@ mod tests {
         assert!(rendered.contains("2 source summaries"));
         assert!(rendered.contains("2.3 MiB measured · numbers only"));
         assert!(rendered.contains("repeated ←"));
-        assert!(rendered.contains("→ varied · avg 60%"));
+        assert!(rendered.contains("→ varied · avg variety 60%"));
         assert!(rendered.contains("recent   finished · 2.3 MiB · 9421 lines · 20s ago"));
         assert!(rendered.contains("01234567 running 10s · default model unknown"));
         assert!(rendered.contains("fedcba98 idle 2m · default small-model"));
