@@ -141,7 +141,8 @@ jobs:
 
           # This is the only download surface: a loopback fixture made from the
           # checked-out source install. No release asset is requested.
-          # Exclude any hosted-runner Azure CLI so the optional `az` alias is deterministic.
+          # Keep a bounded system PATH. Hosted images may still expose Azure CLI as `az`;
+          # the installer must preserve it and omit its optional alias in that case.
           HOME="$install_home" PATH="$guard:/usr/bin:/bin:/usr/sbin:/sbin" \
             AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_GLIBC_VERSION=2.35 \
             AZDAJA_INSTALL_BASE_URL="$base" \
@@ -149,7 +150,14 @@ jobs:
           installed="$install_bin/azdaja"
           alias="$install_bin/az"
           cmp "$source_binary" "$installed"
-          test "$(readlink "$alias")" = azdaja
+          alias_installed=false
+          if [ -L "$alias" ]; then
+            test "$(readlink "$alias")" = azdaja
+            alias_installed=true
+          else
+            test ! -e "$alias"
+            PATH="$guard:/usr/bin:/bin:/usr/sbin:/sbin" command -v az >/dev/null
+          fi
           cmp LICENSE "$install_home/.local/share/azdaja/LICENSE"
           cmp THIRD-PARTY-NOTICES.md "$install_home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
 
@@ -161,11 +169,13 @@ jobs:
           Example: az solo "summarize this file" -f ./document.txt
           EOF
           HOME="$install_home" PATH="$guard:$PATH" "$installed" > "$scratch/help-canonical"
-          HOME="$install_home" PATH="$guard:$PATH" "$alias" > "$scratch/help-alias"
           HOME="$install_home" PATH="$guard:$PATH" NO_COLOR=1 TERM=xterm-256color \
             "$installed" > "$scratch/help-no-color-canonical"
-          HOME="$install_home" PATH="$guard:$PATH" NO_COLOR=1 TERM=xterm-256color \
-            "$alias" > "$scratch/help-no-color-alias"
+          if [ "$alias_installed" = true ]; then
+            HOME="$install_home" PATH="$guard:$PATH" "$alias" > "$scratch/help-alias"
+            HOME="$install_home" PATH="$guard:$PATH" NO_COLOR=1 TERM=xterm-256color \
+              "$alias" > "$scratch/help-no-color-alias"
+          fi
           for output in "$scratch"/help-*; do
             cmp "$scratch/expected-help" "$output"
           done
