@@ -993,6 +993,7 @@ mod tests {
                 observed_unix: 1000,
                 source: source(),
             }],
+            memory_observations: Vec::new(),
         };
         assert!(nest_line(&data).starts_with("empty · cold"));
         let details = details_lines(&data, 0, false)
