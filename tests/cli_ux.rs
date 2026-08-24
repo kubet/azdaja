@@ -135,7 +135,7 @@ fn help_alias_is_concise_and_command_help_uses_plain_targets() {
 }
 
 #[test]
-fn map_keeps_a_private_aggregate_trace_after_the_resident_session_is_killed() {
+fn map_keeps_a_private_numeric_source_summary_after_the_session_is_killed() {
     let scratch = Scratch::new("memory-map");
     let cfg = config(&scratch.0, "cat");
     let source = scratch.0.join("private source.txt");
@@ -169,7 +169,8 @@ fn map_keeps_a_private_aggregate_trace_after_the_resident_session_is_killed() {
         .unwrap();
     assert!(live_map.status.success());
     let live_map = String::from_utf8(live_map.stdout).unwrap();
-    assert!(live_map.contains("1 trace"));
+    assert!(live_map.contains("1 source summary"));
+    assert!(live_map.contains("numbers only"));
     assert!(!live_map.contains("session memory"));
 
     let mut executed = command(&scratch.0)
@@ -210,13 +211,27 @@ fn map_keeps_a_private_aggregate_trace_after_the_resident_session_is_killed() {
     let (stdout, stderr) = utf8(&mapped);
     assert!(stderr.is_empty());
     assert!(stdout.starts_with("╭─ azdaja · memory constellation"));
-    assert!(stdout.contains("0 resident · cold · 0/4 slots · 1 memory"));
-    assert!(stdout.contains("memory"));
-    assert!(stdout.contains("H→"));
-    assert!(stdout.contains("texture"));
-    assert!(stdout.contains("H₀"));
-    assert!(stdout.contains("redundancy"));
-    assert!(stdout.contains("session memory"));
+    assert!(stdout.contains("live     none · 4 slots free"));
+    assert!(stdout.contains("memory   1 source summary"));
+    assert!(stdout.contains("numbers only"));
+    assert!(stdout.contains("pattern  repeated ←"));
+    assert!(stdout.contains("→ varied · avg variety"));
+    assert!(stdout.contains("recent   finished"));
+    for rejected in [
+        "resident",
+        "cold",
+        "trace",
+        "H→",
+        "texture",
+        "H₀",
+        "redundancy",
+        "session memory",
+    ] {
+        assert!(
+            !stdout.contains(rejected),
+            "unexpected {rejected:?}: {stdout}"
+        );
+    }
     assert!(!stdout.contains(secret));
     assert!(!stdout.contains("private constellation source"));
     assert!(!stdout.contains('\u{1b}'));
