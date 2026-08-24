@@ -11,9 +11,11 @@ use serde_json::Value;
 use std::env;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt};
@@ -24,12 +26,27 @@ pub const CHALLENGE_ENV: &str = "AZDAJA_JCODE_CHALLENGE";
 pub const CHALLENGE_TTL_SECONDS: u64 = 10 * 60;
 /// Aggregate allowance for bounded reads in one Jcode session.
 pub const NARROW_SESSION_BUDGET: u64 = 512;
+/// Interval between persisted claim heartbeat updates.
+#[cfg(not(test))]
+pub const CLAIM_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+/// Short heartbeat interval used by the in-module lease tests.
+#[cfg(test)]
+pub const CLAIM_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(50);
+/// A claim without a heartbeat newer than this threshold is recoverable.
+#[cfg(not(test))]
+pub const CLAIM_STALE_THRESHOLD: Duration = Duration::from_secs(30);
+/// Short stale threshold used by the in-module lease tests.
+#[cfg(test)]
+pub const CLAIM_STALE_THRESHOLD: Duration = Duration::from_millis(300);
 
 const GATE_DIRECTORY: &str = "jcode-gate";
 const CHALLENGE_DIRECTORY: &str = "challenges";
 const LOCK_FILE: &str = "gate.lock";
 const MAX_STATE_BYTES: u64 = 64 * 1024;
 const MAX_NARROW_READ_LINES: u64 = 256;
+const MAX_NARROW_READ_BYTES: u64 = 64 * 1024;
+const MAX_NARROW_READ_SCAN_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_BLOCK_MESSAGE_BYTES: usize = 1_900;
 const MAX_NARROW_GREP_REGIONS: u64 = 8;
 const MAX_NARROW_GREP_FILES: u64 = 4;
 
@@ -184,6 +201,10 @@ struct ChallengeRecord {
     workspace_hash: String,
     required_scope: RequiredScope,
     expires_at: u64,
+    #[serde(default)]
+    claim_hash: Option<String>,
+    #[serde(default)]
+    heartbeat_at_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -206,6 +227,69 @@ pub enum CompletionScope<'a> {
     Files { paths: &'a [PathBuf] },
     /// Loading or ingesting inputs without completed semantic work.
     IngestionOnly,
+}
+
+/// Input scope presented before challenged work begins.
+pub enum ChallengeInputScope<'a> {
+    /// A repository pass rooted at this path.
+    Repository(&'a Path),
+    /// Any file-scoped `solo -f` work, which cannot satisfy a repository challenge.
+    Files,
+}
+
+/// An atomically claimed challenge. Dropping an incomplete lease releases the claim so a failed
+/// provider run can be retried while the issuance window remains open.
+#[derive(Debug)]
+pub struct ChallengeLease {
+    state_root: PathBuf,
+    challenge_hash: String,
+    claim_hash: String,
+    completed: bool,
+    heartbeat: Option<ClaimHeartbeat>,
+}
+
+impl Drop for ChallengeLease {
+    fn drop(&mut self) {
+        self.stop_heartbeat();
+        if !self.completed {
+            let _ = release_claim(&self.state_root, &self.challenge_hash, &self.claim_hash);
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ClaimHeartbeat {
+    stop: Sender<()>,
+    join: Option<JoinHandle<()>>,
+}
+
+impl ClaimHeartbeat {
+    fn shutdown(&mut self) {
+        let _ = self.stop.send(());
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+    }
+}
+
+impl Drop for ClaimHeartbeat {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
+impl ChallengeLease {
+    fn stop_heartbeat(&mut self) {
+        if let Some(mut heartbeat) = self.heartbeat.take() {
+            heartbeat.shutdown();
+        }
+    }
+
+    #[cfg(test)]
+    fn abandon_without_releasing_for_test(&mut self) {
+        self.stop_heartbeat();
+        self.completed = true;
+    }
 }
 
 /// Evidence for successful, nonempty Azdaja work. Main should construct this only on the final
@@ -235,6 +319,24 @@ impl Storage {
             challenges,
             _lock: lock,
         })
+    }
+
+    fn try_open(state_root: &Path) -> GateResult<Option<Self>> {
+        ensure_private_directory(state_root)?;
+        let root = state_root.join(GATE_DIRECTORY);
+        ensure_private_directory(&root)?;
+        let challenges = root.join(CHALLENGE_DIRECTORY);
+        ensure_private_directory(&challenges)?;
+        let lock = open_private_lock(&root.join(LOCK_FILE))?;
+        match FileExt::try_lock_exclusive(&lock) {
+            Ok(()) => Ok(Some(Self {
+                root,
+                challenges,
+                _lock: lock,
+            })),
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(None),
+            Err(error) => Err(error.into()),
+        }
     }
 
     fn session_path(&self, session_hash: &str) -> PathBuf {
@@ -286,17 +388,12 @@ impl Storage {
             return Ok(None);
         };
         let record: ChallengeRecord = serde_json::from_slice(&bytes)?;
-        if !is_lower_hex(&record.token, 32)
-            || sha256_hex(record.token.as_bytes()) != challenge_hash
-            || !is_lower_hex(&record.session_hash, 64)
-            || !is_lower_hex(&record.workspace_hash, 64)
-        {
-            return Err(contract("private challenge state binding is invalid"));
-        }
+        validate_challenge_record(challenge_hash, &record)?;
         Ok(Some(record))
     }
 
     fn save_challenge(&self, challenge_hash: &str, record: &ChallengeRecord) -> GateResult<()> {
+        validate_challenge_record(challenge_hash, record)?;
         atomic_private_write(
             &self.challenge_path(challenge_hash),
             &serde_json::to_vec(record)?,
@@ -306,10 +403,24 @@ impl Storage {
     fn remove_challenge(&self, challenge_hash: &str) -> GateResult<()> {
         remove_private_file_if_present(&self.challenge_path(challenge_hash))
     }
+}
 
-    fn remove_session(&self, session_hash: &str) -> GateResult<()> {
-        remove_private_file_if_present(&self.session_path(session_hash))
+fn validate_challenge_record(challenge_hash: &str, record: &ChallengeRecord) -> GateResult<()> {
+    let claim_is_valid = record
+        .claim_hash
+        .as_deref()
+        .is_none_or(|claim_hash| is_lower_hex(claim_hash, 64));
+    if !is_lower_hex(challenge_hash, 64)
+        || !is_lower_hex(&record.token, 32)
+        || sha256_hex(record.token.as_bytes()) != challenge_hash
+        || !is_lower_hex(&record.session_hash, 64)
+        || !is_lower_hex(&record.workspace_hash, 64)
+        || !claim_is_valid
+        || (record.claim_hash.is_none() && record.heartbeat_at_ms.is_some())
+    {
+        return Err(contract("private challenge state binding is invalid"));
     }
+    Ok(())
 }
 
 /// Handle the current event from the documented `JCODE_HOOK_*` environment contract.
@@ -361,33 +472,39 @@ pub fn handle_current_hook_in_crate_state(tool_input: &[u8]) -> GateResult<Decis
     handle_current_hook(&crate_state_root()?, tool_input)
 }
 
-/// Consume the challenge named by [`CHALLENGE_ENV`] after successful, nonempty Azdaja work.
-///
-/// Main must call this only after `solo` has produced its successful final output. Skill loading,
-/// source ingestion, failed work, and intermediate output must never call this function. Empty
-/// final output is rejected. The supplied scope must describe the inputs that the successful run
-/// actually processed. Repository challenges accept only a canonical-root-matching `--repo` bundle.
-/// Completion proves the memory pass and consumes the challenge, but never unlocks native broad
-/// reads; callers must continue from the successful Azdaja answer.
-pub fn complete_challenge(state_root: &Path, work: SuccessfulAzdajaWork<'_>) -> GateResult<bool> {
-    if work.final_output.trim().is_empty() {
-        return Err(contract(
-            "empty Azdaja work cannot complete a Jcode challenge",
-        ));
-    }
+/// Atomically claim the challenge named by [`CHALLENGE_ENV`] before repository loading or provider
+/// work begins. Dropping an incomplete lease releases the claim so a failed run may be retried
+/// while the original issuance window remains open.
+pub fn claim_challenge(
+    state_root: &Path,
+    scope: ChallengeInputScope<'_>,
+) -> GateResult<Option<ChallengeLease>> {
     let Some(token) = env::var(CHALLENGE_ENV)
         .ok()
         .filter(|value| !value.is_empty())
     else {
-        return Ok(false);
+        return Ok(None);
     };
-    complete_at(state_root, &token, &work, unix_time_seconds()?)?;
-    Ok(true)
+    claim_at(state_root, &token, scope, unix_time_seconds()?).map(Some)
 }
 
-/// Complete a challenge using the crate state root.
-pub fn complete_challenge_in_crate_state(work: SuccessfulAzdajaWork<'_>) -> GateResult<bool> {
-    complete_challenge(&crate_state_root()?, work)
+/// Claim a challenge using the crate state root.
+pub fn claim_challenge_in_crate_state(
+    scope: ChallengeInputScope<'_>,
+) -> GateResult<Option<ChallengeLease>> {
+    claim_challenge(&crate_state_root()?, scope)
+}
+
+/// Complete work under a previously claimed lease. Expiry is checked when the lease is claimed,
+/// not after a potentially long provider run.
+pub fn complete_claimed_challenge(
+    lease: &mut ChallengeLease,
+    work: SuccessfulAzdajaWork<'_>,
+) -> GateResult<()> {
+    complete_claimed_at(lease, &work, unix_time_seconds()?)?;
+    lease.completed = true;
+    lease.stop_heartbeat();
+    Ok(())
 }
 
 fn handle_at(
@@ -399,17 +516,7 @@ fn handle_at(
 ) -> GateResult<Decision> {
     match invocation.event.as_str() {
         "pre_tool" => handle_pre_tool(state_root, invocation, tool_input, now, binary),
-        "turn_end" | "session_start" => {
-            let context = invocation.bound_context()?;
-            revoke_turn(state_root, &context)?;
-            Ok(Decision::Allow)
-        }
-        "session_end" => {
-            let context = invocation.bound_context()?;
-            revoke_session(state_root, &context)?;
-            Ok(Decision::Allow)
-        }
-        "post_tool" => Ok(Decision::Allow),
+        "turn_end" | "session_start" | "session_end" | "post_tool" => Ok(Decision::Allow),
         _ => Ok(Decision::Allow),
     }
 }
@@ -428,8 +535,9 @@ fn handle_pre_tool(
         .filter(|value| !value.is_empty())
         .ok_or_else(|| contract("JCODE_HOOK_TOOL_NAME is required for pre_tool"))?;
     let input: Value = serde_json::from_slice(tool_input)?;
-    let requirement = classify_tool(tool_name, &input, 0);
+    let requirement = classify_tool(tool_name, &input, 0, &context.canonical_cwd);
     let storage = Storage::open(state_root)?;
+    let heartbeat_now_ms = unix_time_millis()?;
     let mut state = storage
         .load_session(&context.session_hash)?
         .unwrap_or_else(|| SessionState {
@@ -447,10 +555,20 @@ fn handle_pre_tool(
     if let Some(active) = state.active_challenge.as_ref()
         && now >= active.expires_at
     {
-        let hash = active.challenge_hash.clone();
-        state.active_challenge = None;
-        storage.remove_challenge(&hash)?;
-        storage.save_session(&state)?;
+        let claimed = storage
+            .load_challenge(&active.challenge_hash)?
+            .is_some_and(|record| {
+                record.session_hash == context.session_hash
+                    && record.workspace_hash == context.workspace_hash
+                    && record.expires_at == active.expires_at
+                    && claim_is_live(&record, heartbeat_now_ms)
+            });
+        if !claimed {
+            let hash = active.challenge_hash.clone();
+            state.active_challenge = None;
+            storage.remove_challenge(&hash)?;
+            storage.save_session(&state)?;
+        }
     }
 
     match requirement {
@@ -462,10 +580,24 @@ fn handle_pre_tool(
                 storage.save_session(&state)?;
                 Ok(Decision::Allow)
             } else {
-                block_with_challenge(&storage, &mut state, &context, now, binary)
+                block_with_challenge(
+                    &storage,
+                    &mut state,
+                    &context,
+                    now,
+                    heartbeat_now_ms,
+                    binary,
+                )
             }
         }
-        Requirement::Memory => block_with_challenge(&storage, &mut state, &context, now, binary),
+        Requirement::Memory => block_with_challenge(
+            &storage,
+            &mut state,
+            &context,
+            now,
+            heartbeat_now_ms,
+            binary,
+        ),
     }
 }
 
@@ -474,23 +606,34 @@ fn block_with_challenge(
     state: &mut SessionState,
     context: &BoundContext,
     now: u64,
+    heartbeat_now_ms: u64,
     binary: &Path,
 ) -> GateResult<Decision> {
-    let token = if let Some(active) = state.active_challenge.as_ref() {
-        if active.expires_at > now {
-            storage
-                .load_challenge(&active.challenge_hash)?
-                .filter(|record| {
-                    record.session_hash == context.session_hash
-                        && record.workspace_hash == context.workspace_hash
-                        && record.expires_at == active.expires_at
-                })
-                .map(|record| record.token)
-        } else {
-            None
-        }
-    } else {
-        None
+    let token = match state.active_challenge.as_ref() {
+        Some(active) => match storage
+            .load_challenge(&active.challenge_hash)?
+            .filter(|record| {
+                record.session_hash == context.session_hash
+                    && record.workspace_hash == context.workspace_hash
+                    && record.expires_at == active.expires_at
+            }) {
+            Some(mut record) => {
+                if record.claim_hash.is_some() {
+                    if claim_is_live(&record, heartbeat_now_ms) {
+                        return Ok(Decision::Block(
+                            "Azdaja is already carrying the challenged repository pass. Wait for its answer and do not retry the broad read."
+                                .into(),
+                        ));
+                    }
+                    record.claim_hash = None;
+                    record.heartbeat_at_ms = None;
+                    storage.save_challenge(&active.challenge_hash, &record)?;
+                }
+                (active.expires_at > now).then_some(record.token)
+            }
+            None => None,
+        },
+        None => None,
     };
 
     let token = match token {
@@ -508,6 +651,8 @@ fn block_with_challenge(
                     workspace_hash: context.workspace_hash.clone(),
                     required_scope: RequiredScope::RepositoryBundle,
                     expires_at,
+                    claim_hash: None,
+                    heartbeat_at_ms: None,
                 },
             )?;
             state.active_challenge = Some(ActiveChallenge {
@@ -519,13 +664,201 @@ fn block_with_challenge(
         }
     };
 
-    Ok(Decision::Block(format!(
-        "Azdaja should carry this broad read.\nRun the exact challenged command once and continue from its answer:\n  {CHALLENGE_ENV}={token} {} solo \"<user task>\" --repo {}\nDo not retry the blocked broad read. Narrow reads, Git, builds, and tests are still available. Git means ordinary workflows only; content-emitting Git commands remain blocked.",
-        shell_quote(binary),
-        shell_quote(&context.canonical_cwd)
-    )))
+    let message = format!(
+        "Azdaja should carry this broad read.\nRun one challenged repository pass now. Replace <user task> with the current user request; keep the challenge and binary unchanged:\n  {CHALLENGE_ENV}={token} {} solo \"<user task>\" --repo .\nContinue from its answer. Do not retry the blocked broad read. Narrow reads, Git control, builds, and tests remain available.",
+        shell_quote(binary)
+    );
+    if message.len() > MAX_BLOCK_MESSAGE_BYTES {
+        return Err(contract("Jcode memory-handoff block message is too long"));
+    }
+    Ok(Decision::Block(message))
 }
 
+fn claim_at(
+    state_root: &Path,
+    token: &str,
+    scope: ChallengeInputScope<'_>,
+    now: u64,
+) -> GateResult<ChallengeLease> {
+    if !is_lower_hex(token, 32) {
+        return Err(contract(
+            "AZDAJA_JCODE_CHALLENGE is not a 128-bit challenge",
+        ));
+    }
+    let challenge_hash = sha256_hex(token.as_bytes());
+    let storage = Storage::open(state_root)?;
+    let mut record = storage
+        .load_challenge(&challenge_hash)?
+        .ok_or_else(|| contract("unknown or already completed AZDAJA_JCODE_CHALLENGE"))?;
+    if record.token != token {
+        return Err(contract(
+            "AZDAJA_JCODE_CHALLENGE does not match private state",
+        ));
+    }
+    let heartbeat_now_ms = unix_time_millis()?;
+    if record.claim_hash.is_some() {
+        if claim_is_live(&record, heartbeat_now_ms) {
+            return Err(contract(
+                "AZDAJA_JCODE_CHALLENGE is already claimed by another Azdaja run",
+            ));
+        }
+        record.claim_hash = None;
+        record.heartbeat_at_ms = None;
+        storage.save_challenge(&challenge_hash, &record)?;
+    }
+    if now >= record.expires_at {
+        expire_challenge(&storage, &record, &challenge_hash)?;
+        return Err(contract("AZDAJA_JCODE_CHALLENGE has expired"));
+    }
+    let supplied_workspace_hash = match (&record.required_scope, scope) {
+        (RequiredScope::RepositoryBundle, ChallengeInputScope::Repository(root)) => {
+            let canonical_root = fs::canonicalize(root)?;
+            sha256_hex(path_bytes(&canonical_root).as_ref())
+        }
+        (RequiredScope::RepositoryBundle, ChallengeInputScope::Files) => {
+            return Err(contract(
+                "file-scoped Azdaja work cannot claim a repository challenge",
+            ));
+        }
+    };
+    if record.workspace_hash != supplied_workspace_hash {
+        return Err(contract(
+            "AZDAJA_JCODE_CHALLENGE repository does not match --repo",
+        ));
+    }
+    validate_active_challenge(&storage, &record, &challenge_hash)?;
+
+    let claim_hash = sha256_hex(&os_random_128()?);
+    record.claim_hash = Some(claim_hash.clone());
+    record.heartbeat_at_ms = Some(heartbeat_now_ms);
+    storage.save_challenge(&challenge_hash, &record)?;
+    let heartbeat = match start_claim_heartbeat(state_root, &challenge_hash, &claim_hash) {
+        Ok(heartbeat) => heartbeat,
+        Err(error) => {
+            record.claim_hash = None;
+            record.heartbeat_at_ms = None;
+            storage.save_challenge(&challenge_hash, &record)?;
+            return Err(error);
+        }
+    };
+    Ok(ChallengeLease {
+        state_root: state_root.to_path_buf(),
+        challenge_hash,
+        claim_hash,
+        completed: false,
+        heartbeat: Some(heartbeat),
+    })
+}
+
+fn claim_is_live(record: &ChallengeRecord, now_ms: u64) -> bool {
+    if record.claim_hash.is_none() {
+        return false;
+    }
+    let Some(heartbeat_at_ms) = record.heartbeat_at_ms else {
+        return false;
+    };
+    let stale_after_ms = u64::try_from(CLAIM_STALE_THRESHOLD.as_millis()).unwrap_or(u64::MAX);
+    now_ms.saturating_sub(heartbeat_at_ms) <= stale_after_ms
+}
+
+fn start_claim_heartbeat(
+    state_root: &Path,
+    challenge_hash: &str,
+    claim_hash: &str,
+) -> GateResult<ClaimHeartbeat> {
+    let (stop, receiver) = mpsc::channel();
+    let state_root = state_root.to_path_buf();
+    let challenge_hash = challenge_hash.to_owned();
+    let claim_hash = claim_hash.to_owned();
+    let join = thread::Builder::new()
+        .name("azdaja-jcode-claim-heartbeat".into())
+        .spawn(move || claim_heartbeat_loop(&state_root, &challenge_hash, &claim_hash, receiver))?;
+    Ok(ClaimHeartbeat {
+        stop,
+        join: Some(join),
+    })
+}
+
+fn claim_heartbeat_loop(
+    state_root: &Path,
+    challenge_hash: &str,
+    claim_hash: &str,
+    stop: Receiver<()>,
+) {
+    loop {
+        match stop.recv_timeout(CLAIM_HEARTBEAT_INTERVAL) {
+            Ok(()) | Err(RecvTimeoutError::Disconnected) => break,
+            Err(RecvTimeoutError::Timeout) => {}
+        }
+        match refresh_claim_heartbeat(state_root, challenge_hash, claim_hash) {
+            Ok(true) => {}
+            Ok(false) | Err(_) => break,
+        }
+    }
+}
+
+fn refresh_claim_heartbeat(
+    state_root: &Path,
+    challenge_hash: &str,
+    claim_hash: &str,
+) -> GateResult<bool> {
+    let Some(storage) = Storage::try_open(state_root)? else {
+        return Ok(true);
+    };
+    let Some(mut record) = storage.load_challenge(challenge_hash)? else {
+        return Ok(false);
+    };
+    if record.claim_hash.as_deref() != Some(claim_hash) {
+        return Ok(false);
+    }
+    record.heartbeat_at_ms = Some(unix_time_millis()?);
+    storage.save_challenge(challenge_hash, &record)?;
+    Ok(true)
+}
+
+fn complete_claimed_at(
+    lease: &ChallengeLease,
+    work: &SuccessfulAzdajaWork<'_>,
+    _now: u64,
+) -> GateResult<()> {
+    if work.final_output.trim().is_empty() {
+        return Err(contract(
+            "empty Azdaja work cannot complete a Jcode challenge",
+        ));
+    }
+    let storage = Storage::open(&lease.state_root)?;
+    let record = storage
+        .load_challenge(&lease.challenge_hash)?
+        .ok_or_else(|| contract("unknown or already completed AZDAJA_JCODE_CHALLENGE"))?;
+    if record.claim_hash.as_deref() != Some(lease.claim_hash.as_str()) {
+        return Err(contract("AZDAJA_JCODE_CHALLENGE claim is no longer active"));
+    }
+    let supplied_workspace_hash = completion_workspace_hash(&record, work)?;
+    if record.workspace_hash != supplied_workspace_hash {
+        return Err(contract(
+            "AZDAJA_JCODE_CHALLENGE repository bundle does not match --repo",
+        ));
+    }
+    consume_challenge(&storage, &record, &lease.challenge_hash)
+}
+
+fn release_claim(state_root: &Path, challenge_hash: &str, claim_hash: &str) -> GateResult<()> {
+    if !state_root.join(GATE_DIRECTORY).is_dir() {
+        return Ok(());
+    }
+    let storage = Storage::open(state_root)?;
+    let Some(mut record) = storage.load_challenge(challenge_hash)? else {
+        return Ok(());
+    };
+    if record.claim_hash.as_deref() == Some(claim_hash) {
+        record.claim_hash = None;
+        record.heartbeat_at_ms = None;
+        storage.save_challenge(challenge_hash, &record)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
 fn complete_at(
     state_root: &Path,
     token: &str,
@@ -552,20 +885,29 @@ fn complete_at(
             "AZDAJA_JCODE_CHALLENGE does not match private state",
         ));
     }
+    if record.claim_hash.is_some() {
+        return Err(contract(
+            "AZDAJA_JCODE_CHALLENGE is claimed by another Azdaja run",
+        ));
+    }
     if now >= record.expires_at {
-        storage.remove_challenge(&challenge_hash)?;
-        if let Some(mut state) = storage.load_session(&record.session_hash)?
-            && state
-                .active_challenge
-                .as_ref()
-                .is_some_and(|active| active.challenge_hash == challenge_hash)
-        {
-            state.active_challenge = None;
-            storage.save_session(&state)?;
-        }
+        expire_challenge(&storage, &record, &challenge_hash)?;
         return Err(contract("AZDAJA_JCODE_CHALLENGE has expired"));
     }
-    let supplied_workspace_hash = match (&record.required_scope, &work.scope) {
+    let supplied_workspace_hash = completion_workspace_hash(&record, work)?;
+    if record.workspace_hash != supplied_workspace_hash {
+        return Err(contract(
+            "AZDAJA_JCODE_CHALLENGE repository bundle does not match --repo",
+        ));
+    }
+    consume_challenge(&storage, &record, &challenge_hash)
+}
+
+fn completion_workspace_hash(
+    record: &ChallengeRecord,
+    work: &SuccessfulAzdajaWork<'_>,
+) -> GateResult<String> {
+    match (&record.required_scope, &work.scope) {
         (
             RequiredScope::RepositoryBundle,
             CompletionScope::RepositoryBundle {
@@ -580,25 +922,23 @@ fn complete_at(
                 ));
             }
             let canonical_root = fs::canonicalize(root)?;
-            sha256_hex(path_bytes(&canonical_root).as_ref())
+            Ok(sha256_hex(path_bytes(&canonical_root).as_ref()))
         }
-        (RequiredScope::RepositoryBundle, CompletionScope::Files { .. }) => {
-            return Err(contract(
-                "file-scoped Azdaja work cannot complete a repository challenge",
-            ));
-        }
-        (RequiredScope::RepositoryBundle, CompletionScope::IngestionOnly) => {
-            return Err(contract(
-                "Azdaja ingestion without completed repository work cannot complete a challenge",
-            ));
-        }
-    };
-    if record.workspace_hash != supplied_workspace_hash {
-        return Err(contract(
-            "AZDAJA_JCODE_CHALLENGE repository bundle does not match --repo",
-        ));
+        (RequiredScope::RepositoryBundle, CompletionScope::Files { .. }) => Err(contract(
+            "file-scoped Azdaja work cannot complete a repository challenge",
+        )),
+        (RequiredScope::RepositoryBundle, CompletionScope::IngestionOnly) => Err(contract(
+            "Azdaja ingestion without completed repository work cannot complete a challenge",
+        )),
     }
-    let mut state = storage
+}
+
+fn validate_active_challenge(
+    storage: &Storage,
+    record: &ChallengeRecord,
+    challenge_hash: &str,
+) -> GateResult<SessionState> {
+    let state = storage
         .load_session(&record.session_hash)?
         .ok_or_else(|| contract("AZDAJA_JCODE_CHALLENGE session is no longer active"))?;
     if state.workspace_hash != record.workspace_hash
@@ -608,31 +948,37 @@ fn complete_at(
     {
         return Err(contract("AZDAJA_JCODE_CHALLENGE is revoked or not active"));
     }
+    Ok(state)
+}
+
+fn consume_challenge(
+    storage: &Storage,
+    record: &ChallengeRecord,
+    challenge_hash: &str,
+) -> GateResult<()> {
+    let mut state = validate_active_challenge(storage, record, challenge_hash)?;
     state.active_challenge = None;
     storage.save_session(&state)?;
-    storage.remove_challenge(&challenge_hash)?;
+    storage.remove_challenge(challenge_hash)?;
     Ok(())
 }
 
-fn revoke_turn(state_root: &Path, context: &BoundContext) -> GateResult<()> {
-    let storage = Storage::open(state_root)?;
-    let Some(mut state) = storage.load_session(&context.session_hash)? else {
-        return Ok(());
-    };
-    if state.workspace_hash != context.workspace_hash {
-        return Ok(());
+fn expire_challenge(
+    storage: &Storage,
+    record: &ChallengeRecord,
+    challenge_hash: &str,
+) -> GateResult<()> {
+    storage.remove_challenge(challenge_hash)?;
+    if let Some(mut state) = storage.load_session(&record.session_hash)?
+        && state
+            .active_challenge
+            .as_ref()
+            .is_some_and(|active| active.challenge_hash == challenge_hash)
+    {
+        state.active_challenge = None;
+        storage.save_session(&state)?;
     }
-    discard_active_challenge(&storage, &mut state)?;
-    storage.save_session(&state)
-}
-
-fn revoke_session(state_root: &Path, context: &BoundContext) -> GateResult<()> {
-    let storage = Storage::open(state_root)?;
-    let Some(mut state) = storage.load_session(&context.session_hash)? else {
-        return Ok(());
-    };
-    discard_active_challenge(&storage, &mut state)?;
-    storage.remove_session(&context.session_hash)
+    Ok(())
 }
 
 fn discard_active_challenge(storage: &Storage, state: &mut SessionState) -> GateResult<()> {
@@ -649,15 +995,15 @@ enum Requirement {
     Memory,
 }
 
-fn classify_tool(tool_name: &str, input: &Value, depth: usize) -> Requirement {
+fn classify_tool(tool_name: &str, input: &Value, depth: usize, cwd: &Path) -> Requirement {
     if depth > 16 {
         return Requirement::Memory;
     }
     match normalized_tool_name(tool_name) {
-        "read" => classify_read(input),
+        "read" => classify_read(input, cwd),
         "agentgrep" => classify_agentgrep(input),
         "bash" => classify_bash(input),
-        "batch" => classify_batch(input, depth + 1),
+        "batch" => classify_batch(input, depth + 1, cwd),
         _ => Requirement::Free,
     }
 }
@@ -666,7 +1012,7 @@ fn normalized_tool_name(name: &str) -> &str {
     name.rsplit(['.', ':', '/']).next().unwrap_or(name)
 }
 
-fn classify_read(input: &Value) -> Requirement {
+fn classify_read(input: &Value, cwd: &Path) -> Requirement {
     let Some(object) = input.as_object() else {
         return Requirement::Memory;
     };
@@ -682,13 +1028,78 @@ fn classify_read(input: &Value) -> Requirement {
     if limit == 0 || limit > MAX_NARROW_READ_LINES {
         return Requirement::Memory;
     }
-    if object
-        .get("start_line")
-        .is_some_and(|value| value.as_u64().is_none_or(|line| line == 0))
-    {
+    let start_line = match object.get("start_line") {
+        Some(value) => match value.as_u64() {
+            Some(line) if line > 0 => line,
+            _ => return Requirement::Memory,
+        },
+        None => 1,
+    };
+    if !narrow_read_is_byte_bounded(cwd, path, start_line, limit) {
         return Requirement::Memory;
     }
     Requirement::Narrow(limit.max(1))
+}
+
+fn narrow_read_is_byte_bounded(cwd: &Path, path: &str, start_line: u64, limit: u64) -> bool {
+    let requested = Path::new(path);
+    let joined = if requested.is_absolute() {
+        requested.to_path_buf()
+    } else {
+        cwd.join(requested)
+    };
+    let Ok(named) = fs::symlink_metadata(&joined) else {
+        return false;
+    };
+    if named.file_type().is_symlink() || !named.file_type().is_file() {
+        return false;
+    }
+    let Ok(canonical) = fs::canonicalize(&joined) else {
+        return false;
+    };
+    if !canonical.starts_with(cwd) {
+        return false;
+    }
+    if named.len() <= MAX_NARROW_READ_BYTES {
+        return true;
+    }
+    let Ok(file) = File::open(&canonical) else {
+        return false;
+    };
+    let mut reader = BufReader::new(file);
+    let end_line = start_line.saturating_add(limit.saturating_sub(1));
+    let mut current_line = 1u64;
+    let mut scanned = 0u64;
+    let mut selected = 0u64;
+    loop {
+        let Ok(buffer) = reader.fill_buf() else {
+            return false;
+        };
+        if buffer.is_empty() {
+            return true;
+        }
+        let mut consumed = 0usize;
+        for byte in buffer {
+            consumed += 1;
+            scanned = scanned.saturating_add(1);
+            if scanned > MAX_NARROW_READ_SCAN_BYTES {
+                return false;
+            }
+            if (start_line..=end_line).contains(&current_line) {
+                selected = selected.saturating_add(1);
+                if selected > MAX_NARROW_READ_BYTES {
+                    return false;
+                }
+            }
+            if *byte == b'\n' {
+                current_line = current_line.saturating_add(1);
+                if current_line > end_line {
+                    return true;
+                }
+            }
+        }
+        reader.consume(consumed);
+    }
 }
 
 fn classify_agentgrep(input: &Value) -> Requirement {
@@ -746,7 +1157,7 @@ fn is_narrow_scope(path: &str) -> bool {
     !path.is_empty() && path != "." && path != ".." && path != "/"
 }
 
-fn classify_batch(input: &Value, depth: usize) -> Requirement {
+fn classify_batch(input: &Value, depth: usize, cwd: &Path) -> Requirement {
     let Some(calls) = input.get("tool_calls").and_then(Value::as_array) else {
         return Requirement::Memory;
     };
@@ -759,7 +1170,7 @@ fn classify_batch(input: &Value, depth: usize) -> Requirement {
             return Requirement::Memory;
         };
         let nested_input = call.get("input").unwrap_or(call);
-        match classify_tool(tool, nested_input, depth) {
+        match classify_tool(tool, nested_input, depth, cwd) {
             Requirement::Free => {}
             Requirement::Narrow(value) => units = units.saturating_add(value),
             Requirement::Memory => return Requirement::Memory,
@@ -782,11 +1193,7 @@ fn classify_bash(input: &Value) -> Requirement {
     if is_git_build_test_lint_or_format(command) {
         return Requirement::Free;
     }
-    if bash_reads_content(command) {
-        Requirement::Memory
-    } else {
-        Requirement::Free
-    }
+    Requirement::Memory
 }
 
 fn is_git_build_test_lint_or_format(command: &str) -> bool {
@@ -803,7 +1210,10 @@ fn is_git_build_test_lint_or_format(command: &str) -> bool {
             if segment.contains('|') || segment.contains('>') || segment.contains('<') {
                 return false;
             }
-            let words: Vec<&str> = segment.split_whitespace().collect();
+            let Some(parsed) = shlex::split(segment) else {
+                return false;
+            };
+            let words = parsed.iter().map(String::as_str).collect::<Vec<_>>();
             let Some((program, arguments)) = command_words(&words) else {
                 continue;
             };
@@ -844,20 +1254,23 @@ fn git_workflow_requires_memory(command: &str) -> bool {
             if segment.is_empty() {
                 continue;
             }
-            let words: Vec<&str> = segment.split_whitespace().collect();
-            let Some((program, arguments)) = command_words(&words) else {
-                continue;
-            };
-            if program.rsplit('/').next().unwrap_or(program) != "git" {
-                continue;
-            }
-            if has_shell_expansion
-                || segment.contains('|')
-                || segment.contains('>')
-                || segment.contains('<')
-                || !git_command_is_safe(arguments)
-            {
+            let Some(parsed) = shlex::split(segment) else {
                 return true;
+            };
+            let words = parsed.iter().map(String::as_str).collect::<Vec<_>>();
+            for (index, program) in words.iter().enumerate() {
+                let program = *program;
+                if program.rsplit('/').next().unwrap_or(program) != "git" {
+                    continue;
+                }
+                if has_shell_expansion
+                    || segment.contains('|')
+                    || segment.contains('>')
+                    || segment.contains('<')
+                    || !git_command_is_safe(&words[index + 1..])
+                {
+                    return true;
+                }
             }
         }
     }
@@ -870,16 +1283,12 @@ fn git_command_is_safe(arguments: &[&str]) -> bool {
     };
     match subcommand {
         "--help" | "--version" | "help" | "version" => true,
-        "status" => !arguments
-            .iter()
-            .any(|argument| argument.starts_with("-v") || argument.starts_with("--verbose")),
+        "status" => !arguments.iter().any(|argument| git_verbose_flag(argument)),
         "add" | "checkout" | "switch" | "restore" | "reset" => !arguments.iter().any(|argument| {
             matches!(*argument, "-p" | "--patch" | "-i" | "--interactive")
                 || argument.starts_with("--patch=")
         }),
-        "commit" => !arguments
-            .iter()
-            .any(|argument| argument.starts_with("-v") || argument.starts_with("--verbose")),
+        "commit" => !arguments.iter().any(|argument| git_verbose_flag(argument)),
         "rebase" => !arguments.iter().any(|argument| {
             matches!(*argument, "-x" | "--exec" | "--show-current-patch")
                 || argument.starts_with("-x")
@@ -893,6 +1302,12 @@ fn git_command_is_safe(arguments: &[&str]) -> bool {
         | "update-ref" | "gc" | "maintenance" => true,
         _ => false,
     }
+}
+
+fn git_verbose_flag(argument: &str) -> bool {
+    argument == "--verbose"
+        || argument.starts_with("--verbose=")
+        || (argument.starts_with('-') && !argument.starts_with("--") && argument[1..].contains('v'))
 }
 
 fn git_subcommand<'a>(arguments: &'a [&'a str]) -> Option<(&'a str, &'a [&'a str])> {
@@ -1050,40 +1465,50 @@ fn git_log_is_bounded_or_metadata_only(arguments: &[&str]) -> bool {
 
 fn command_words<'a>(words: &'a [&'a str]) -> Option<(&'a str, &'a [&'a str])> {
     let mut index = 0;
-    if words.first().copied() == Some("env") {
-        index += 1;
-        loop {
-            match words.get(index).copied() {
-                Some("-i" | "--ignore-environment") => index += 1,
-                Some("-u" | "--unset" | "-C" | "--chdir") => {
-                    index += 2;
-                    if index > words.len() {
-                        return None;
+    loop {
+        while words
+            .get(index)
+            .is_some_and(|word| is_environment_assignment(word))
+        {
+            index += 1;
+        }
+        let program = words.get(index).copied()?;
+        match program.rsplit('/').next().unwrap_or(program) {
+            "env" => {
+                index += 1;
+                loop {
+                    match words.get(index).copied() {
+                        Some("-i" | "--ignore-environment") => index += 1,
+                        Some("-u" | "--unset" | "-C" | "--chdir") => {
+                            index += 2;
+                            if index > words.len() {
+                                return None;
+                            }
+                        }
+                        Some("--") => {
+                            index += 1;
+                            break;
+                        }
+                        Some(argument)
+                            if argument.starts_with("--unset=")
+                                || argument.starts_with("--chdir=") =>
+                        {
+                            index += 1;
+                        }
+                        Some(argument) if argument.starts_with('-') => return None,
+                        _ => break,
                     }
                 }
-                Some("--") => {
-                    index += 1;
-                    break;
-                }
-                Some(argument)
-                    if argument.starts_with("--unset=") || argument.starts_with("--chdir=") =>
-                {
-                    index += 1;
-                }
-                Some(argument) if argument.starts_with('-') => return None,
-                _ => break,
             }
+            "command" | "exec" => {
+                index += 1;
+                if words.get(index).copied() == Some("--") {
+                    index += 1;
+                }
+            }
+            _ => return Some((program, &words[index + 1..])),
         }
     }
-    while words
-        .get(index)
-        .is_some_and(|word| is_environment_assignment(word))
-    {
-        index += 1;
-    }
-    words
-        .get(index)
-        .map(|program| (*program, &words[index + 1..]))
 }
 
 fn is_environment_assignment(word: &str) -> bool {
@@ -1094,74 +1519,6 @@ fn is_environment_assignment(word: &str) -> bool {
         && name
             .bytes()
             .all(|byte| byte == b'_' || byte.is_ascii_alphanumeric())
-}
-
-fn bash_reads_content(command: &str) -> bool {
-    let lower = command.to_ascii_lowercase();
-    if lower.contains(".read(")
-        || lower.contains("read_to_string")
-        || lower.contains("fs::read")
-        || lower.contains("path.read_text")
-        || lower.contains("open(")
-    {
-        return true;
-    }
-    lower
-        .split(|character: char| {
-            character.is_whitespace()
-                || matches!(
-                    character,
-                    ';' | '&' | '|' | '(' | ')' | '{' | '}' | '<' | '>'
-                )
-        })
-        .filter(|token| !token.is_empty())
-        .map(|token| token.rsplit('/').next().unwrap_or(token))
-        .any(|program| {
-            matches!(
-                program,
-                "cat"
-                    | "tac"
-                    | "sh"
-                    | "bash"
-                    | "zsh"
-                    | "fish"
-                    | "python"
-                    | "python3"
-                    | "perl"
-                    | "ruby"
-                    | "node"
-                    | "deno"
-                    | "php"
-                    | "sed"
-                    | "awk"
-                    | "gawk"
-                    | "grep"
-                    | "egrep"
-                    | "fgrep"
-                    | "rg"
-                    | "ripgrep"
-                    | "head"
-                    | "tail"
-                    | "less"
-                    | "more"
-                    | "strings"
-                    | "jq"
-                    | "yq"
-                    | "xxd"
-                    | "od"
-                    | "hexdump"
-                    | "nl"
-                    | "fold"
-                    | "comm"
-                    | "diff"
-                    | "find"
-                    | "wc"
-                    | "cut"
-                    | "paste"
-                    | "sort"
-                    | "uniq"
-            )
-        })
 }
 
 fn managed_binary_path() -> GateResult<PathBuf> {
@@ -1189,6 +1546,14 @@ fn unix_time_seconds() -> GateResult<u64> {
         .duration_since(UNIX_EPOCH)
         .map_err(|_| contract("system clock is before the Unix epoch"))?
         .as_secs())
+}
+
+fn unix_time_millis() -> GateResult<u64> {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| contract("system clock is before the Unix epoch"))?
+        .as_millis();
+    u64::try_from(millis).map_err(|_| contract("system clock exceeds supported range"))
 }
 
 fn contract(message: impl Into<String>) -> GateError {
@@ -1541,6 +1906,8 @@ mod tests {
             let other = root.join("other-repo");
             fs::create_dir(&cwd).unwrap();
             fs::create_dir(&other).unwrap();
+            fs::create_dir(cwd.join("src")).unwrap();
+            fs::write(cwd.join("src/lib.rs"), "bounded line\n".repeat(600)).unwrap();
             Self { root, cwd, other }
         }
 
@@ -1617,8 +1984,7 @@ mod tests {
         let challenge = token(&decision);
         assert!(is_lower_hex(&challenge, 32));
         let expected = format!(
-            "Azdaja should carry this broad read.\nRun the exact challenged command once and continue from its answer:\n  {CHALLENGE_ENV}={challenge} /managed/azdaja solo \"<user task>\" --repo {}\nDo not retry the blocked broad read. Narrow reads, Git, builds, and tests are still available. Git means ordinary workflows only; content-emitting Git commands remain blocked.",
-            scratch.cwd.display()
+            "Azdaja should carry this broad read.\nRun one challenged repository pass now. Replace <user task> with the current user request; keep the challenge and binary unchanged:\n  {CHALLENGE_ENV}={challenge} /managed/azdaja solo \"<user task>\" --repo .\nContinue from its answer. Do not retry the blocked broad read. Narrow reads, Git control, builds, and tests remain available."
         );
         assert_eq!(decision, Decision::Block(expected));
         assert_eq!(decision.exit_code(), 2);
@@ -1650,6 +2016,53 @@ mod tests {
     }
 
     #[test]
+    fn one_requested_minified_line_cannot_bypass_the_byte_bound() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        fs::write(scratch.cwd.join("minified.js"), vec![b'x'; 1024 * 1024]).unwrap();
+        assert!(matches!(
+            call(
+                &state,
+                &scratch.cwd,
+                "read",
+                json!({"file_path":"minified.js","start_line":1,"limit":1}),
+                NOW,
+            )
+            .unwrap(),
+            Decision::Block(_)
+        ));
+    }
+
+    #[test]
+    fn narrow_read_fails_closed_when_reaching_the_range_requires_a_large_scan() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        fs::write(
+            scratch.cwd.join("deep.txt"),
+            format!(
+                "{}tail\n",
+                "x\n".repeat((MAX_NARROW_READ_SCAN_BYTES / 2) as usize)
+            ),
+        )
+        .unwrap();
+        assert!(matches!(
+            call(
+                &state,
+                &scratch.cwd,
+                "read",
+                json!({
+                    "file_path":"deep.txt",
+                    "start_line":MAX_NARROW_READ_SCAN_BYTES,
+                    "limit":1
+                }),
+                NOW,
+            )
+            .unwrap(),
+            Decision::Block(_)
+        ));
+    }
+
+    #[test]
     fn recursive_batch_blocks_when_any_nested_call_is_broad() {
         let scratch = Scratch::new();
         let state = scratch.state();
@@ -1676,6 +2089,8 @@ mod tests {
         for command in [
             "git status --short",
             "env -i git status --short",
+            "command git status --short",
+            "/usr/bin/env -i git diff --stat",
             "git -C . status --short",
             "git branch --show-current",
             "git rev-parse --show-toplevel",
@@ -1723,6 +2138,9 @@ mod tests {
         let state = scratch.state();
         for command in [
             "cat src/lib.rs",
+            "cp src/lib.rs /dev/stdout",
+            "dd if=src/lib.rs bs=4096 count=1",
+            "printf '%s' \"$(<src/lib.rs)\"",
             "git show HEAD:src/lib.rs",
             "git cat-file -p HEAD:src/lib.rs",
             "git grep receipt",
@@ -1736,12 +2154,20 @@ mod tests {
             "git log",
             "git log -p -1",
             "git status -vv",
+            "git status -sbv",
             "env -i git show HEAD:src/lib.rs",
             "git add -p",
             "git commit -vv --dry-run",
+            "git commit -anv --dry-run",
             "git checkout -p -- src/lib.rs",
             "git restore -p src/lib.rs",
             "git rebase --show-current-patch",
+            "command git show HEAD:src/lib.rs",
+            "/usr/bin/env -i git show HEAD:src/lib.rs",
+            "sudo git cat-file -p HEAD:src/lib.rs",
+            "xargs git show HEAD:src/lib.rs",
+            "command g\\it show HEAD:src/lib.rs",
+            "command 'git' show HEAD:src/lib.rs",
         ] {
             assert!(
                 matches!(
@@ -1763,6 +2189,22 @@ mod tests {
     #[test]
     fn challenge_command_uses_the_running_executable() {
         assert_eq!(managed_binary_path().unwrap(), env::current_exe().unwrap());
+    }
+
+    #[test]
+    fn overlong_managed_binary_cannot_overflow_jcode_hook_stderr() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        let binary = PathBuf::from(format!("/{}", "a".repeat(MAX_BLOCK_MESSAGE_BYTES)));
+        let error = handle_at(
+            &state,
+            &invocation("pre_tool", &scratch.cwd, Some("read")),
+            &serde_json::to_vec(&broad_read()).unwrap(),
+            NOW,
+            &binary,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("block message is too long"));
     }
 
     #[test]
@@ -1811,70 +2253,187 @@ mod tests {
     }
 
     #[test]
-    fn completion_never_enables_broad_work_before_or_after_delayed_turn_end() {
+    fn challenge_claimed_before_expiry_can_finish_after_a_long_provider_run() {
         let scratch = Scratch::new();
         let state = scratch.state();
         let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
-        complete_at(
+        let mut lease = claim_at(
             &state,
             &token(&blocked),
-            &completed_repo(&scratch.cwd, "answer"),
+            ChallengeInputScope::Repository(&scratch.cwd),
             NOW + 1,
         )
         .unwrap();
-        let blocked_before_turn_end =
-            call(&state, &scratch.cwd, "read", broad_read(), NOW + 2).unwrap();
-        assert!(matches!(blocked_before_turn_end, Decision::Block(_)));
-        let outstanding = token(&blocked_before_turn_end);
-        assert_eq!(
-            handle_at(
+        let in_flight = call(
+            &state,
+            &scratch.cwd,
+            "read",
+            broad_read(),
+            NOW + CHALLENGE_TTL_SECONDS + 30,
+        )
+        .unwrap();
+        assert!(matches!(
+            in_flight,
+            Decision::Block(message) if message.contains("already carrying")
+        ));
+        complete_claimed_at(
+            &lease,
+            &completed_repo(&scratch.cwd, "answer"),
+            NOW + CHALLENGE_TTL_SECONDS + 60,
+        )
+        .unwrap();
+        lease.completed = true;
+        assert!(matches!(
+            call(
                 &state,
-                &invocation("turn_end", &scratch.cwd, None),
-                b"{}",
-                NOW + 3,
-                Path::new("/managed/azdaja"),
+                &scratch.cwd,
+                "read",
+                broad_read(),
+                NOW + CHALLENGE_TTL_SECONDS + 61
             )
             .unwrap(),
-            Decision::Allow
-        );
-        assert!(matches!(
-            call(&state, &scratch.cwd, "read", broad_read(), NOW + 4).unwrap(),
             Decision::Block(_)
         ));
-        let error = complete_at(
-            &state,
-            &outstanding,
-            &completed_repo(&scratch.cwd, "late answer"),
-            NOW + 5,
-        )
-        .unwrap_err();
-        assert!(error.to_string().contains("unknown or already completed"));
     }
 
     #[test]
-    fn session_end_revokes_outstanding_challenge_and_session_state() {
+    fn live_claim_remains_exclusive_after_the_issuance_window_expires() {
         let scratch = Scratch::new();
         let state = scratch.state();
         let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
         let challenge = token(&blocked);
-        handle_at(
-            &state,
-            &invocation("session_end", &scratch.cwd, None),
-            b"{}",
-            NOW + 1,
-            Path::new("/managed/azdaja"),
-        )
-        .unwrap();
-        let error = complete_at(
+        let lease = claim_at(
             &state,
             &challenge,
-            &completed_repo(&scratch.cwd, "late answer"),
+            ChallengeInputScope::Repository(&scratch.cwd),
+            NOW + 1,
+        )
+        .unwrap();
+        let duplicate = claim_at(
+            &state,
+            &challenge,
+            ChallengeInputScope::Repository(&scratch.cwd),
+            NOW + CHALLENGE_TTL_SECONDS + 30,
+        )
+        .unwrap_err();
+        assert!(duplicate.to_string().contains("already claimed"));
+        drop(lease);
+    }
+
+    #[test]
+    fn stale_claim_is_recovered_after_the_claimant_disappears() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
+        let challenge = token(&blocked);
+        let mut abandoned = claim_at(
+            &state,
+            &challenge,
+            ChallengeInputScope::Repository(&scratch.cwd),
+            NOW + 1,
+        )
+        .unwrap();
+        abandoned.abandon_without_releasing_for_test();
+        drop(abandoned);
+        thread::sleep(CLAIM_STALE_THRESHOLD + CLAIM_HEARTBEAT_INTERVAL);
+        let recovered = claim_at(
+            &state,
+            &challenge,
+            ChallengeInputScope::Repository(&scratch.cwd),
+            NOW + 2,
+        )
+        .unwrap();
+        drop(recovered);
+    }
+
+    #[test]
+    fn challenge_claim_is_exclusive_and_drop_releases_it_for_retry() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
+        let challenge = token(&blocked);
+        let lease = claim_at(
+            &state,
+            &challenge,
+            ChallengeInputScope::Repository(&scratch.cwd),
+            NOW + 1,
+        )
+        .unwrap();
+        let duplicate = claim_at(
+            &state,
+            &challenge,
+            ChallengeInputScope::Repository(&scratch.cwd),
             NOW + 2,
         )
         .unwrap_err();
-        assert!(error.to_string().contains("unknown or already completed"));
+        assert!(duplicate.to_string().contains("already claimed"));
+        drop(lease);
+        let mut retry = claim_at(
+            &state,
+            &challenge,
+            ChallengeInputScope::Repository(&scratch.cwd),
+            NOW + 3,
+        )
+        .unwrap();
+        complete_claimed_at(&retry, &completed_repo(&scratch.cwd, "answer"), NOW + 4).unwrap();
+        retry.completed = true;
+    }
+
+    #[test]
+    fn file_scoped_work_is_rejected_when_claiming_before_provider_entry() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
+        let error = claim_at(
+            &state,
+            &token(&blocked),
+            ChallengeInputScope::Files,
+            NOW + 1,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("file-scoped"));
+    }
+
+    #[test]
+    fn detached_observer_events_never_mutate_challenge_state() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
+        let challenge = token(&blocked);
+        for (offset, event) in ["turn_end", "session_start", "session_end", "post_tool"]
+            .into_iter()
+            .enumerate()
+        {
+            assert_eq!(
+                handle_at(
+                    &state,
+                    &invocation(event, &scratch.cwd, None),
+                    b"{}",
+                    NOW + offset as u64 + 1,
+                    Path::new("/managed/azdaja"),
+                )
+                .unwrap(),
+                Decision::Allow
+            );
+            let still_blocked = call(
+                &state,
+                &scratch.cwd,
+                "read",
+                broad_read(),
+                NOW + offset as u64 + 2,
+            )
+            .unwrap();
+            assert_eq!(token(&still_blocked), challenge);
+        }
+        complete_at(
+            &state,
+            &challenge,
+            &completed_repo(&scratch.cwd, "answer"),
+            NOW + 10,
+        )
+        .unwrap();
         assert!(matches!(
-            call(&state, &scratch.cwd, "read", broad_read(), NOW + 3).unwrap(),
+            call(&state, &scratch.cwd, "read", broad_read(), NOW + 11).unwrap(),
             Decision::Block(_)
         ));
     }
