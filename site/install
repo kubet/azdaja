@@ -11,9 +11,22 @@ BIN_DIR=${AZDAJA_INSTALL_DIR:-}
 usage() {
   printf '%s\n' 'Usage: install.sh [--all | TARGET[,TARGET...]] [--bin-dir DIR]'
 }
+CURRENT_STAGE=
 fail() {
-  printf 'azdaja install: %s\n' "$1" >&2
+  if [ -n "$CURRENT_STAGE" ]; then
+    printf 'azdaja install: %s failed: %s\n' "$CURRENT_STAGE" "$1" >&2
+  else
+    printf 'azdaja install: %s\n' "$1" >&2
+  fi
   exit "${2:-1}"
+}
+announce() {
+  CURRENT_STAGE=$1
+  printf '%s...\n' "$CURRENT_STAGE"
+}
+complete_stage() {
+  printf '%s... ok\n' "$1"
+  CURRENT_STAGE=
 }
 
 glibc_version_at_least() {
@@ -74,6 +87,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+printf 'Azdaja installer v%s\n' "$VERSION"
+printf '%s\n' 'Provider-free install. No model provider will be called.'
+
 case "${HOME-}" in
   /*) ;;
   '') fail 'HOME is not set; use --bin-dir DIR and set HOME before installing' ;;
@@ -96,6 +112,30 @@ else
   DATA_ROOT=$HOME/.local/share
 fi
 DOC_DIR=$DATA_ROOT/azdaja
+case "${XDG_CONFIG_HOME-}" in
+  /*) CONFIG_ROOT=$XDG_CONFIG_HOME ;;
+  *) CONFIG_ROOT=$HOME/.config ;;
+esac
+
+sha256_file() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    fail 'shasum or sha256sum is required'
+  fi
+}
+
+harness_target() {
+  case "$1" in
+    jcode) printf '%s' "$JCODE_ROOT/skills/azdaja" ;;
+    claude) printf '%s' "$HOME/.claude/skills/azdaja" ;;
+    codex) printf '%s' "$HOME/.agents/skills/azdaja" ;;
+    gemini) printf '%s' "$HOME/.gemini/skills/azdaja" ;;
+    opencode) printf '%s' "$CONFIG_ROOT/opencode/skills/azdaja" ;;
+  esac
+}
 
 DETECTED=
 add_detected() {
@@ -104,25 +144,56 @@ add_detected() {
     *) DETECTED="${DETECTED}${DETECTED:+ }$1" ;;
   esac
 }
-if [ -d "$JCODE_ROOT" ] || command -v jcode >/dev/null 2>&1 || command -v jcode-api >/dev/null 2>&1; then
-  add_detected jcode
-fi
-if [ -d "$HOME/.claude" ] || command -v claude >/dev/null 2>&1; then
-  add_detected claude
-fi
-if [ -d "$HOME/.codex" ] || [ -d "$HOME/.agents/skills" ] || command -v codex >/dev/null 2>&1; then
-  add_detected codex
-fi
-if [ -d "$HOME/.gemini" ] || command -v gemini >/dev/null 2>&1; then
-  add_detected gemini
-fi
-case "${XDG_CONFIG_HOME-}" in
-  /*) CONFIG_ROOT=$XDG_CONFIG_HOME ;;
-  *) CONFIG_ROOT=$HOME/.config ;;
-esac
-if [ -d "$CONFIG_ROOT/opencode" ] || command -v opencode >/dev/null 2>&1; then
-  add_detected opencode
-fi
+detect_tools() {
+  DETECTED=
+  if command -v jcode >/dev/null 2>&1 || command -v jcode-api >/dev/null 2>&1; then
+    add_detected jcode
+  fi
+  command -v claude >/dev/null 2>&1 && add_detected claude
+  command -v codex >/dev/null 2>&1 && add_detected codex
+  command -v gemini >/dev/null 2>&1 && add_detected gemini
+  command -v opencode >/dev/null 2>&1 && add_detected opencode
+  return 0
+}
+
+manifest_has_file_hash() {
+  manifest_path=$1
+  manifest_name=$2
+  manifest_hash=$3
+  case "$(cat "$manifest_path" 2>/dev/null)" in
+    *"[\"$manifest_name\",\"$manifest_hash\"]"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+managed_file_valid() {
+  managed_root=$1
+  managed_name=$2
+  managed_manifest=$managed_root/.azdaja-managed
+  managed_path=$managed_root/$managed_name
+  [ -f "$managed_path" ] && [ ! -L "$managed_path" ] || return 1
+  managed_hash=$(sha256_file "$managed_path") || return 1
+  manifest_has_file_hash "$managed_manifest" "$managed_name" "$managed_hash"
+}
+
+integration_state() {
+  integration_name=$1
+  integration_root=$(harness_target "$integration_name")
+  if [ ! -e "$integration_root" ] && [ ! -L "$integration_root" ]; then
+    printf '%s' 'not integrated'
+    return
+  fi
+  if [ -d "$integration_root" ] && [ ! -L "$integration_root" ] && \
+     [ -f "$integration_root/.azdaja-managed" ] && [ ! -L "$integration_root/.azdaja-managed" ] && \
+     managed_file_valid "$integration_root" azdaja && \
+     managed_file_valid "$integration_root" SKILL.md && \
+     managed_file_valid "$integration_root" config.toml; then
+    case "$(cat "$integration_root/SKILL.md" 2>/dev/null)" in
+      *"# Azdaja $VERSION"*) printf '%s' 'integration active'; return ;;
+    esac
+  fi
+  printf '%s' 'needs repair'
+}
 
 display_names() {
   display=
@@ -209,41 +280,45 @@ prompt_targets() {
     for name in jcode claude codex gemini opencode; do
       menu_count=$((menu_count + 1))
       eval "menu_name_$menu_count=\$name"
-      eval "menu_selected_$menu_count=false"
       case " $DETECTED " in
-        *" $name "*) eval "menu_installed_$menu_count=true" ;;
-        *) eval "menu_installed_$menu_count=false" ;;
+        *" $name "*)
+          eval "menu_found_$menu_count=true"
+          eval "menu_selected_$menu_count=true"
+          ;;
+        *)
+          eval "menu_found_$menu_count=false"
+          eval "menu_selected_$menu_count=false"
+          ;;
       esac
+      eval "menu_state_$menu_count=\$(integration_state \"$name\")"
     done
     menu_cursor=1
     menu_rendered=false
-    menu_lines=$((menu_count + 1))
-    menu_color=true
-    [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ] || menu_color=false
+    menu_lines=$((menu_count + 2))
 
     render_menu() {
       if [ "$menu_rendered" = true ]; then
         printf '\033[%sA' "$menu_lines" > /dev/tty
       fi
-      printf '\r\033[KSelect integrations  ↑/↓ move  Space toggle  Enter install\n' > /dev/tty
+      printf '\r\033[KSelect integrations\n' > /dev/tty
       menu_index=1
       while [ "$menu_index" -le "$menu_count" ]; do
         eval "menu_name=\$menu_name_$menu_index"
         eval "menu_selected=\$menu_selected_$menu_index"
-        eval "menu_installed=\$menu_installed_$menu_index"
+        eval "menu_found=\$menu_found_$menu_index"
+        eval "menu_state=\$menu_state_$menu_index"
         if [ "$menu_index" -eq "$menu_cursor" ]; then menu_pointer='›'; else menu_pointer=' '; fi
         if [ "$menu_selected" = true ]; then menu_mark='x'; else menu_mark=' '; fi
-        if [ "$menu_installed" = true ]; then
-          if [ "$menu_color" = true ]; then
-            printf '\r\033[K%s [%s] \033[32m%s  ● installed\033[0m\n' "$menu_pointer" "$menu_mark" "$menu_name" > /dev/tty
-          else
-            printf '\r\033[K%s [%s] %s  installed\n' "$menu_pointer" "$menu_mark" "$menu_name" > /dev/tty
-          fi
+        if [ "$menu_found" = true ]; then
+          printf '\r\033[K%s [%s] %-10s found · %s\n' "$menu_pointer" "$menu_mark" "$menu_name" "$menu_state" > /dev/tty
+        elif [ "$menu_state" = 'not integrated' ]; then
+          printf '\r\033[K%s [%s] %-10s not found\n' "$menu_pointer" "$menu_mark" "$menu_name" > /dev/tty
         else
-          printf '\r\033[K%s [%s] %s\n' "$menu_pointer" "$menu_mark" "$menu_name" > /dev/tty
+          printf '\r\033[K%s [%s] %-10s not found · %s\n' "$menu_pointer" "$menu_mark" "$menu_name" "$menu_state" > /dev/tty
         fi
         menu_index=$((menu_index + 1))
       done
+      printf '\r\033[K↑/↓ or j/k move  space toggle  a found  n none  enter continue  q cancel\n' > /dev/tty
       menu_rendered=true
     }
 
@@ -256,7 +331,7 @@ prompt_targets() {
       stty "$menu_stty" < /dev/tty >/dev/null 2>&1 || true
     }
     trap 'restore_menu_terminal; printf "\n" > /dev/tty; exit 130' HUP INT TERM
-    stty -echo -icanon min 1 time 0 < /dev/tty || {
+    stty -echo -icanon min 0 time 1 < /dev/tty || {
       restore_menu_terminal
       trap - HUP INT TERM
       fail 'could not enable interactive selection; rerun with --all or name targets' 2
@@ -266,8 +341,15 @@ prompt_targets() {
     while :; do
       menu_key=$(read_menu_byte)
       case "$menu_key" in
+        '')
+          ;;
         27)
           menu_escape_1=$(read_menu_byte)
+          if [ -z "$menu_escape_1" ]; then
+            restore_menu_terminal
+            trap - HUP INT TERM
+            fail 'cancelled by user' 130
+          fi
           menu_escape_2=$(read_menu_byte)
           if [ "$menu_escape_1" = 91 ]; then
             case "$menu_escape_2" in
@@ -280,16 +362,59 @@ prompt_targets() {
                 render_menu
                 ;;
             esac
+          else
+            restore_menu_terminal
+            trap - HUP INT TERM
+            fail 'cancelled by user' 130
           fi
           ;;
-        32)
-          eval "menu_selected=\$menu_selected_$menu_cursor"
-          if [ "$menu_selected" = true ]; then
-            eval "menu_selected_$menu_cursor=false"
-          else
-            eval "menu_selected_$menu_cursor=true"
-          fi
+        106)
+          if [ "$menu_cursor" -lt "$menu_count" ]; then menu_cursor=$((menu_cursor + 1)); else menu_cursor=1; fi
           render_menu
+          ;;
+        107)
+          if [ "$menu_cursor" -gt 1 ]; then menu_cursor=$((menu_cursor - 1)); else menu_cursor=$menu_count; fi
+          render_menu
+          ;;
+        32)
+          eval "menu_found=\$menu_found_$menu_cursor"
+          if [ "$menu_found" = true ]; then
+            eval "menu_selected=\$menu_selected_$menu_cursor"
+            if [ "$menu_selected" = true ]; then
+              eval "menu_selected_$menu_cursor=false"
+            else
+              eval "menu_selected_$menu_cursor=true"
+            fi
+            render_menu
+          else
+            printf '\a' > /dev/tty
+          fi
+          ;;
+        97)
+          menu_index=1
+          while [ "$menu_index" -le "$menu_count" ]; do
+            eval "menu_found=\$menu_found_$menu_index"
+            if [ "$menu_found" = true ]; then
+              eval "menu_selected_$menu_index=true"
+            else
+              eval "menu_selected_$menu_index=false"
+            fi
+            menu_index=$((menu_index + 1))
+          done
+          render_menu
+          ;;
+        110)
+          menu_index=1
+          while [ "$menu_index" -le "$menu_count" ]; do
+            eval "menu_selected_$menu_index=false"
+            menu_index=$((menu_index + 1))
+          done
+          render_menu
+          ;;
+        113)
+          restore_menu_terminal
+          trap - HUP INT TERM
+          fail 'cancelled by user' 130
           ;;
         10|13)
           INSTALL_NAMES=
@@ -318,12 +443,6 @@ prompt_targets() {
   done
   DETECTION_REPORT=$(display_names "$INSTALL_NAMES")
 }
-
-if [ -z "$HARNESS" ]; then
-  prompt_targets
-else
-  explicit_targets "$HARNESS"
-fi
 
 case "${AZDAJA_INSTALL_TEST_MODE:-}" in
   '')
@@ -355,31 +474,68 @@ case "${AZDAJA_INSTALL_TEST_MODE:-}" in
 esac
 
 case "$OS-$ARCH" in
-  Darwin-arm64) ASSET=azdaja-v$VERSION-darwin-arm64 ;;
+  Darwin-arm64)
+    ASSET=azdaja-v$VERSION-darwin-arm64
+    printf '%s\n' 'Checking platform... macOS arm64 supported'
+    ;;
   Linux-x86_64)
     ASSET=azdaja-v$VERSION-linux-x86_64
     if [ "${AZDAJA_INSTALL_TEST_MODE:-}" = local ]; then
-      [ "${AZDAJA_INSTALL_GLIBC_VERSION+x}" = x ] && [ -n "$AZDAJA_INSTALL_GLIBC_VERSION" ] || \
+      [ "${AZDAJA_INSTALL_GLIBC_VERSION+x}" = x ] && [ -n "$AZDAJA_INSTALL_GLIBC_VERSION" ] || {
+        printf '%s\n' 'Checking platform... Linux x86-64 unsupported'
         fail 'AZDAJA_INSTALL_GLIBC_VERSION is required for a Linux local-validation selector' 2
+      }
       GLIBC_VERSION=$AZDAJA_INSTALL_GLIBC_VERSION
     else
-      command -v getconf >/dev/null 2>&1 || linux_libc_unavailable
-      GLIBC_REPORT=$(getconf GNU_LIBC_VERSION 2>/dev/null) || linux_libc_unavailable
+      command -v getconf >/dev/null 2>&1 || {
+        printf '%s\n' 'Checking platform... Linux x86-64 unsupported'
+        linux_libc_unavailable
+      }
+      GLIBC_REPORT=$(getconf GNU_LIBC_VERSION 2>/dev/null) || {
+        printf '%s\n' 'Checking platform... Linux x86-64 unsupported'
+        linux_libc_unavailable
+      }
       case "$GLIBC_REPORT" in
         glibc\ *) GLIBC_VERSION=${GLIBC_REPORT#glibc } ;;
-        *) linux_libc_unavailable ;;
+        *)
+          printf '%s\n' 'Checking platform... Linux x86-64 unsupported'
+          linux_libc_unavailable
+          ;;
       esac
     fi
     GLIBC_COMPARE_STATUS=0
     glibc_version_at_least "$GLIBC_VERSION" "$GLIBC_MIN" || GLIBC_COMPARE_STATUS=$?
     case "$GLIBC_COMPARE_STATUS" in
-      0) ;;
-      1) fail "Linux x86-64 release binary requires glibc $GLIBC_MIN or newer; found glibc $GLIBC_VERSION. Upgrade glibc/use a newer distribution, or build from source with Rust 1.95." ;;
-      *) fail "Linux x86-64 release binary requires glibc $GLIBC_MIN or newer; getconf returned an invalid version. Use a glibc $GLIBC_MIN+ system or build from source with Rust 1.95." ;;
+      0) printf 'Checking platform... Linux x86-64 glibc %s supported\n' "$GLIBC_VERSION" ;;
+      1)
+        printf 'Checking platform... Linux x86-64 glibc %s unsupported\n' "$GLIBC_VERSION"
+        fail "Linux x86-64 release binary requires glibc $GLIBC_MIN or newer; found glibc $GLIBC_VERSION. Upgrade glibc/use a newer distribution, or build from source with Rust 1.95."
+        ;;
+      *)
+        printf '%s\n' 'Checking platform... Linux x86-64 unsupported'
+        fail "Linux x86-64 release binary requires glibc $GLIBC_MIN or newer; getconf returned an invalid version. Use a glibc $GLIBC_MIN+ system or build from source with Rust 1.95."
+        ;;
     esac
     ;;
-  *) fail "unsupported platform $OS-$ARCH; v$VERSION binaries support Apple Silicon macOS 11+ and Linux x86-64 with glibc $GLIBC_MIN+" ;;
+  *)
+    printf 'Checking platform... %s-%s unsupported\n' "$OS" "$ARCH"
+    fail "unsupported platform $OS-$ARCH; v$VERSION binaries support Apple Silicon macOS 11+ and Linux x86-64 with glibc $GLIBC_MIN+"
+    ;;
 esac
+
+detect_tools
+TOOLS_REPORT=$(display_names "$DETECTED")
+if [ -n "$TOOLS_REPORT" ]; then
+  printf 'Checking tools... %s found\n' "$TOOLS_REPORT"
+else
+  printf '%s\n' 'Checking tools... none found'
+fi
+
+if [ -z "$HARNESS" ]; then
+  prompt_targets
+else
+  explicit_targets "$HARNESS"
+fi
 
 if [ -z "$BIN_DIR" ]; then
   # Prefer a user-owned directory already on PATH. Fall back to the conventional user bin.
@@ -401,15 +557,6 @@ if [ -z "$BIN_DIR" ]; then
 fi
 BIN_DIR=${BIN_DIR:-$HOME/.local/bin}
 
-harness_target() {
-  case "$1" in
-    jcode) printf '%s' "$JCODE_ROOT/skills/azdaja" ;;
-    claude) printf '%s' "$HOME/.claude/skills/azdaja" ;;
-    codex) printf '%s' "$HOME/.agents/skills/azdaja" ;;
-    gemini) printf '%s' "$HOME/.gemini/skills/azdaja" ;;
-    opencode) printf '%s' "$CONFIG_ROOT/opencode/skills/azdaja" ;;
-  esac
-}
 
 # Stage and verify entirely outside HOME. Failure before verification must not
 # create the binary directory, managed harness files, configuration, or alias.
@@ -487,7 +634,11 @@ cleanup() {
   status=$?
   trap - 0
   if [ "$TRANSACTION_ACTIVE" = true ]; then
-    rollback
+    if rollback; then
+      printf 'azdaja install: rollback after failed transaction: ok\n' >&2
+    else
+      printf 'azdaja install: rollback after failed transaction: failed; inspect %s and rerun install.sh with explicit targets\n' "${BIN_DIR:-$HOME/.local/bin}" >&2
+    fi
   fi
   [ -z "$STAGED" ] || rm -f "$STAGED"
   [ -z "$STAGED_EXTRA" ] || rm -f "$STAGED_EXTRA"
@@ -515,11 +666,14 @@ download() {
       "$1" -o "$2"
   fi
 }
+announce "Downloading azdaja v$VERSION"
 download "$BASE_URL/SHA256SUMS" "$TMP/SHA256SUMS"
 download "$BASE_URL/$ASSET" "$TMP/azdaja"
 download "$BASE_URL/LICENSE" "$TMP/LICENSE"
 download "$BASE_URL/THIRD-PARTY-NOTICES.md" "$TMP/THIRD-PARTY-NOTICES.md"
+complete_stage "Downloading azdaja v$VERSION"
 
+announce 'Verifying SHA-256'
 SUMS_SIZE=$(wc -c < "$TMP/SHA256SUMS" | tr -d ' ')
 [ "$SUMS_SIZE" -le 1048576 ] || fail 'SHA256SUMS exceeds the 1 MiB download cap'
 BIN_SIZE=$(wc -c < "$TMP/azdaja" | tr -d ' ')
@@ -565,15 +719,6 @@ ROOT_NOTICES_SHA256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5
 [ "$EXPECTED_LICENSE_SHA256" = "$ROOT_LICENSE_SHA256" ] || fail 'SHA256SUMS does not bind the exact Azdaja LICENSE'
 [ "$EXPECTED_NOTICES_SHA256" = "$ROOT_NOTICES_SHA256" ] || fail 'SHA256SUMS does not bind the exact reviewed THIRD-PARTY-NOTICES.md'
 
-sha256_file() {
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$1" | awk '{print $1}'
-  elif command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | awk '{print $1}'
-  else
-    fail 'shasum or sha256sum is required'
-  fi
-}
 ACTUAL_SHA256=$(sha256_file "$TMP/azdaja")
 ACTUAL_LICENSE_SHA256=$(sha256_file "$TMP/LICENSE")
 ACTUAL_NOTICES_SHA256=$(sha256_file "$TMP/THIRD-PARTY-NOTICES.md")
@@ -586,6 +731,7 @@ case "$VERSION_OUTPUT" in
   "azdaja $VERSION (monty "*) ;;
   *) fail "downloaded binary reported an unexpected version: $VERSION_OUTPUT" ;;
 esac
+complete_stage 'Verifying SHA-256'
 
 DEST=$BIN_DIR/azdaja
 ALIAS=$BIN_DIR/az
@@ -612,6 +758,7 @@ owned_single_link_regular() {
 printf '%s' "$DOC_DIR" > "$TMP/document-lock-key"
 DOC_LOCK_KEY=$(sha256_file "$TMP/document-lock-key")
 DOC_LOCK=${TMPDIR:-/tmp}/azdaja-document-install-$(id -u)-$DOC_LOCK_KEY.lock
+announce 'Checking destinations'
 (umask 077 && mkdir "$DOC_LOCK") 2>/dev/null || \
   fail "another Azdaja document lifecycle is active; retry after it completes"
 DOC_LOCK_ACQUIRED=true
@@ -736,11 +883,20 @@ DEST_BACKUP=$BIN_DIR/.azdaja-previous.$$
 # stages every target, and commits or rolls back as one unit. The shell never
 # copies or recursively removes a harness target.
 "$TMP/azdaja" install "$HARNESS" --preflight-only >/dev/null
+complete_stage 'Checking destinations'
 
 PRIMARY_TARGET=
 for harness in $INSTALL_NAMES; do
   TARGET=$(harness_target "$harness")
   [ -n "$PRIMARY_TARGET" ] || PRIMARY_TARGET=$TARGET
+done
+
+printf 'Plan: install azdaja v%s\n' "$VERSION"
+printf 'Command: %s\n' "$DEST"
+printf 'Alias: %s\n' "$ALIAS"
+printf 'Documents: %s\n' "$DOC_DIR"
+for harness in $INSTALL_NAMES; do
+  printf 'Integration: %s -> %s\n' "$harness" "$(harness_target "$harness")"
 done
 
 # The complete harness and document preflights are read-only. Start one shell
@@ -749,6 +905,7 @@ done
 BIN_DIR_WAS_DIR=false
 [ ! -d "$BIN_DIR" ] || BIN_DIR_WAS_DIR=true
 TRANSACTION_ACTIVE=true
+announce 'Staging files'
 
 if [ "$DOC_STATE" = legacy-v1 ]; then
   DOC_PREVIOUS=$DOC_DIR.azdaja-v1-previous.$$
@@ -778,6 +935,7 @@ if [ "$DOC_STATE" = legacy-v1 ]; then
 fi
 
 if [ "$DOC_STATE" = fresh ]; then
+  printf '%s\n' 'Writing documents...'
   TO_CREATE=
   CURRENT_DIR=$DOC_DIR
   while [ ! -e "$CURRENT_DIR" ] && [ ! -L "$CURRENT_DIR" ]; do
@@ -828,7 +986,9 @@ fi
 
 # Commit the verified Rust harness transaction after document creation. If it
 # refuses or rolls back, the shell trap removes the fresh document set.
+printf '%s\n' 'Writing tool integrations...'
 "$TMP/azdaja" install "$HARNESS" >/dev/null
+printf '%s\n' 'Writing command...'
 
 (umask 077 && mkdir -p "$BIN_DIR") || fail "cannot create binary directory $BIN_DIR"
 if [ "$BIN_DIR_WAS_DIR" = false ]; then
@@ -908,6 +1068,7 @@ fi
 
 # Every preflighted standalone surface is committed. Subsequent cleanup is
 # best-effort and cannot turn the completed install into a reported failure.
+complete_stage 'Staging files'
 TRANSACTION_ACTIVE=false
 if [ "$DEST_BACKUP_CREATED" = true ]; then
   rm -f "$DEST_BACKUP" || :
