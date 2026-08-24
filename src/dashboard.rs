@@ -273,14 +273,18 @@ fn texture_line(snapshot: &DashboardSnapshot) -> String {
     }
 }
 
-fn recent_trace_line(snapshot: &DashboardSnapshot, timestamp: u64) -> Option<String> {
-    let run = snapshot.recent_observability.runs.first()?;
-    let kind = match run.kind {
+fn run_kind_label(kind: RunKind) -> &'static str {
+    match kind {
         RunKind::SessionLoad => "session load",
         RunKind::SoloLoad => "solo load",
         RunKind::SessionFinal => "session memory",
         RunKind::SoloFinal => "solo memory",
-    };
+    }
+}
+
+fn recent_trace_line(snapshot: &DashboardSnapshot, timestamp: u64) -> Option<String> {
+    let run = snapshot.recent_observability.runs.first()?;
+    let kind = run_kind_label(run.kind);
     Some(format!(
         "{kind} · {} · {} lines · {} ago",
         human_bytes(run.source.source_bytes),
@@ -428,6 +432,7 @@ fn render_list_at(
     timestamp: u64,
 ) -> String {
     let width = terminal_columns.max(20);
+    let constellation = memory_constellation(snapshot);
     let resident = if snapshot.sessions.is_empty() {
         "empty".to_owned()
     } else {
@@ -438,9 +443,16 @@ fn render_list_at(
     } else {
         "azdaja memory nest"
     };
+    let history = constellation.as_ref().map_or_else(String::new, |value| {
+        format!(
+            " · {} · {} observed",
+            history_count_label(value),
+            human_bytes(value.total_source_bytes)
+        )
+    });
     let header = truncate(
         &format!(
-            "{title} · {}/{} slots · {resident}",
+            "{title} · {}/{} slots · {resident}{history}",
             snapshot.sessions.len(),
             snapshot.max_sessions
         ),
@@ -449,52 +461,64 @@ fn render_list_at(
     let mut output = format!("{}\n\n", paint(color, BOLD, &header));
 
     if snapshot.sessions.is_empty() {
-        output.push_str("no resident sessions\n\n");
-        if snapshot.observability_degraded {
-            output.push_str(&format!(
-                "{}\n\n",
-                paint(
-                    color,
-                    RED,
-                    &truncate("note  local metrics need attention", width)
-                )
-            ));
+        output.push_str("resident  none\n");
+    } else {
+        output.push_str("resident\n");
+        for session in &snapshot.sessions {
+            let marker = if session.busy { "●" } else { "○" };
+            let state = if session.busy { "running" } else { "idle" };
+            let age = human_duration(timestamp.saturating_sub(session.updated));
+            let model = clean(
+                session
+                    .sub_model
+                    .as_deref()
+                    .unwrap_or(&snapshot.default_model),
+            );
+            let id = clean(&session.id);
+            let style = if session.busy { GREEN } else { "" };
+            if width < 64 {
+                let identity = truncate(&format!("{marker} {id} {state} {age}"), width);
+                let details = truncate(
+                    &format!("  {} · {model}", human_bytes(session.state_bytes)),
+                    width,
+                );
+                output.push_str(&format!("{}\n{details}\n", paint(color, style, &identity)));
+            } else {
+                let line = truncate(
+                    &format!(
+                        "{marker} {id:<16}  {state:<7} {age:>4}  {:>9}  {model}",
+                        human_bytes(session.state_bytes)
+                    ),
+                    width,
+                );
+                output.push_str(&format!("{}\n", paint(color, style, &line)));
+            }
         }
-        output.push_str(&format!(
-            "{}\n",
-            paint(color, CYAN, &truncate("next  start · solo · help", width))
-        ));
-        return output;
     }
 
-    for session in &snapshot.sessions {
-        let marker = if session.busy { "●" } else { "○" };
-        let state = if session.busy { "running" } else { "idle" };
-        let age = human_duration(timestamp.saturating_sub(session.updated));
-        let model = clean(
-            session
-                .sub_model
-                .as_deref()
-                .unwrap_or(&snapshot.default_model),
-        );
-        let id = clean(&session.id);
-        let style = if session.busy { GREEN } else { "" };
-        if width < 64 {
-            let identity = truncate(&format!("{marker} {id} {state} {age}"), width);
-            let details = truncate(
-                &format!("  {} · {model}", human_bytes(session.state_bytes)),
-                width,
-            );
-            output.push_str(&format!("{}\n{details}\n", paint(color, style, &identity)));
-        } else {
-            let line = truncate(
-                &format!(
-                    "{marker} {id:<16}  {state:<7} {age:>4}  {:>9}  {model}",
-                    human_bytes(session.state_bytes)
-                ),
-                width,
-            );
-            output.push_str(&format!("{}\n", paint(color, style, &line)));
+    if snapshot.recent_observability.runs.is_empty() {
+        output.push_str("\nmemory  none yet\n");
+    } else {
+        output.push_str("\nmemory  exact-local aggregates\n");
+        for (index, run) in snapshot.recent_observability.runs.iter().enumerate() {
+            let marker = if index == 0 { "●" } else { "○" };
+            let age = human_duration(timestamp.saturating_sub(run.observed_unix));
+            let kind = run_kind_label(run.kind);
+            let line = if width < 64 {
+                format!(
+                    "{marker} {kind} {age} · {} · H₀ {:.1}/8",
+                    human_bytes(run.source.source_bytes),
+                    run.source.byte_entropy_bits()
+                )
+            } else {
+                format!(
+                    "{marker} {kind:<14} {age:>4}  {:>9}  {:>6} lines  H₀ {:.1}/8",
+                    human_bytes(run.source.source_bytes),
+                    run.source.physical_lines,
+                    run.source.byte_entropy_bits()
+                )
+            };
+            output.push_str(&format!("{}\n", truncate(&line, width)));
         }
     }
     if snapshot.observability_degraded {
@@ -512,7 +536,14 @@ fn render_list_at(
         paint(
             color,
             CYAN,
-            &truncate("commands  final <id> · kill <id> · help", width)
+            &truncate(
+                if snapshot.sessions.is_empty() {
+                    "next  map · start · solo · help"
+                } else {
+                    "commands  final <id> · kill <id> · map · help"
+                },
+                width
+            )
         )
     ));
     output
@@ -735,7 +766,8 @@ mod tests {
     #[test]
     fn list_view_is_an_actionable_details_on_demand_layer() {
         let rendered = render_list_at(&snapshot(), false, 78, 1000);
-        assert!(rendered.starts_with("azdaja memory nest · 2/4 slots · 1.5 MiB resident\n"));
+        assert!(rendered.starts_with("azdaja memory nest · 2/4 slots · 1.5 MiB resident"));
+        assert!(rendered.contains("resident\n"));
         assert!(rendered.contains("● 0123456789abcdef"));
         assert!(rendered.contains("running"));
         assert!(rendered.contains("1.0 MiB"));
@@ -743,7 +775,11 @@ mod tests {
         assert!(rendered.contains("○ fedcba9876543210"));
         assert!(rendered.contains("512.0 KiB"));
         assert!(rendered.contains("small-model"));
-        assert!(rendered.contains("commands  final <id> · kill <id> · help"));
+        assert!(rendered.contains("memory  exact-local aggregates"));
+        assert!(rendered.contains("● solo load"));
+        assert!(rendered.contains("○ session load"));
+        assert!(rendered.contains("H₀ 4.8/8"));
+        assert!(rendered.contains("commands  final <id> · kill <id> · map · help"));
         assert!(!rendered.contains("\x1b["));
     }
 
@@ -752,18 +788,24 @@ mod tests {
         let mut data = snapshot();
         data.sessions.truncate(1);
         let narrow = render_list_at(&data, false, 45, 1000);
-        assert!(narrow.contains("azdaja nest · 1/4 slots · 1.0 MiB resident"));
+        assert!(narrow.starts_with("azdaja nest · 1/4 slots · 1.0 MiB resident"));
         assert!(narrow.contains("● 0123456789abcdef running 10s"));
         assert!(narrow.contains("1.0 MiB · gpt-5.6-sol"));
+        assert!(narrow.contains("memory  exact-local aggregates"));
+        assert!(narrow.contains("● solo load 20s · 2.3 MiB · H₀ 4.8/8"));
         assert!(narrow.contains("commands  final <id>"));
 
         data.sessions.clear();
         data.observability_degraded = true;
         let empty = render_list_at(&data, false, 72, 1000);
         assert!(empty.contains("0/4 slots · empty"));
-        assert!(empty.contains("no resident sessions"));
+        assert!(empty.contains("resident  none"));
+        assert!(empty.contains("memory  exact-local aggregates"));
+        assert!(empty.contains("● solo load"));
+        assert!(empty.contains("○ session load"));
+        assert!(empty.contains("H₀ 4.8/8"));
         assert!(empty.contains("local metrics need attention"));
-        assert!(empty.contains("next  start · solo · help"));
+        assert!(empty.contains("next  map · start · solo · help"));
         assert!(!empty.contains("kill <id>"));
     }
 }
