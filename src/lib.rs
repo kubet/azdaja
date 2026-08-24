@@ -1182,10 +1182,10 @@ fn command_program_name(program: &str) -> String {
 fn explicit_argv_value(args: &[String], options: &[&str]) -> Option<String> {
     for (index, arg) in args.iter().enumerate() {
         for option in options {
-            if arg == option {
-                if let Some(value) = args.get(index + 1).and_then(|value| quoted_value(value)) {
-                    return Some(value);
-                }
+            if arg == option
+                && let Some(value) = args.get(index + 1).and_then(|value| quoted_value(value))
+            {
+                return Some(value);
             }
             if let Some(value) = arg
                 .strip_prefix(option)
@@ -1214,10 +1214,10 @@ fn quoted_value(value: &str) -> Option<String> {
 
 fn assigned_argv_value(args: &[String], key: &str) -> Option<String> {
     for (index, arg) in args.iter().enumerate() {
-        if arg == key {
-            if let Some(value) = args.get(index + 1).and_then(|value| quoted_value(value)) {
-                return Some(value);
-            }
+        if arg == key
+            && let Some(value) = args.get(index + 1).and_then(|value| quoted_value(value))
+        {
+            return Some(value);
         }
         let Some(position) = arg.find(key) else {
             continue;
