@@ -17,7 +17,7 @@ What makes it different:
 - **Context virtualization:** the root works through variables and computed excerpts instead of receiving the complete source in every request.
 - **Deterministic reduction:** Python handles exact operations before the model handles ambiguous language.
 - **Bare recursion:** subcalls are model calls rather than new agent environments.
-- **Measured memory:** the local console separates resident session state from completed-source aggregates and marks model-boundary exposure or coverage as unmeasured instead of inventing a generic context score.
+- **Measured memory:** the provider-free console separates live sessions from local numeric source summaries, labels the configured default for new work, and marks model-boundary exposure or coverage as unmeasured instead of inventing a generic context score.
 - **Tool adapters:** one managed integration supports Jcode, Claude, Codex, Gemini, and OpenCode. Every profile is rendered from the same default skill contract with tool-specific activation, execution, and reload guidance.
 
 ## Install
@@ -33,7 +33,7 @@ The stable `azdaja.dev/install` URL serves the current published installer. Its 
 Alternatively, install from source with Rust 1.95:
 
 ```bash
-cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.7 --locked
+cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.8 --locked
 ```
 
 `azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.
@@ -52,7 +52,9 @@ az uninstall all
 
 ## Use
 
-Run `azdaja` with no arguments in a terminal for the provider-free virtual-memory console. It refreshes validated owner-only state, shows the configured route, resident session-state size, a positional slot map, and recent work, and labels model-boundary or coverage data as unmeasured instead of displaying a fake zero. Details include exact-local source texture such as byte entropy without storing source text, paths, prompts, responses, or hashes. Press `q`, Esc, or Ctrl-C to leave; narrow terminals fall back to plain lines.
+Run `azdaja` with no arguments in a terminal to print a static provider-free snapshot. Its `new work` row describes this invocation's configured default model, runner, and thinking level. It is not an observed universal route. Every live session separately shows the default model persisted when that session was created, so simultaneous sessions can differ, and individual model calls can still override the session default.
+
+Numeric source summaries are shown separately from live sessions. The `repeated ← … → varied` constellation uses only local aggregate numbers, never source text, and its `avg variety` label is a plain distributional summary rather than a quality score. Exact byte entropy is available only in measured details. Run `az map` for the optional full-screen view; narrow terminals fall back to the same static line-oriented snapshot.
 
 Ask one question about one input:
 
@@ -70,7 +72,7 @@ az final "$sid"
 az kill "$sid"
 ```
 
-Commands: `help`, `solo`, `install`, `doctor`, `start`, `load`, `exec`, `final`, `list`, `kill`, and `uninstall`.
+Commands: `help`, `solo`, `map`, `install`, `doctor`, `start`, `load`, `exec`, `final`, `list`, `kill`, and `uninstall`.
 
 See the [CLI reference](docs/cli.md) for signatures, process custody, signal behavior, temporary files, and configuration errors.
 

@@ -2,7 +2,7 @@
 set -eu
 set -f
 
-VERSION=0.1.7
+VERSION=0.1.8
 GLIBC_MIN=2.35
 RELEASE_BASE=https://azdaja.dev/releases/v$VERSION
 HARNESS=

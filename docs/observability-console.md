@@ -1,320 +1,161 @@
 # Virtual-memory observability console
 
-Status: implemented on `main` for the follow-up CLI release.
+Status: implemented on `main` for Azdaja v0.1.8.
 
-## Product thesis
+## Product boundary
 
-Azdaja does not promise "infinite context." It provides:
+Azdaja keeps a complete UTF-8 source in a local evaluator and exposes selected evidence to model calls through explicit bounded operations. The console reports only what local state can support truthfully. It does not claim infinite context, infer one universal model route, or convert missing telemetry into a zero.
 
-- complete local custody of one UTF-8 source;
-- a bounded model-facing surface;
-- deterministic parsing and reduction before semantic work;
-- explicit, bounded model subcalls;
-- fail-closed coverage contracts and auditable runtime receipts.
+The UI has three distinct surfaces:
 
-The console must make those properties visible. Minimal means that every displayed cell answers an operational question. It does not mean an empty status card.
+1. A bare interactive `azdaja` prints a static provider-free snapshot and exits.
+2. `az list` prints the live-session and source-summary table. When piped, it preserves stable raw session IDs for scripting.
+3. `az map` opens the optional full-screen view and refreshes at a low fixed rate. Narrow or incapable terminals receive the static snapshot instead.
 
-## Research basis
+## Plain vocabulary
 
-The design combines:
+The implemented UI uses direct labels rather than theoretical shorthand:
 
-- Recursive Language Models and Recursive Agent Harnesses for externalized context, programmatic inspection, bounded recursion, and explicit subcall accounting;
-- MemGPT and classical virtual-memory working-set theory for resident state, model-facing working sets, faults, pressure, and thrashing language;
-- Lost in the Middle, RULER, LongBench v2, InfiniteBench, NoLiMa, and HELMET for the limits of raw context length as a quality signal;
-- OpenTelemetry GenAI conventions and OpenInference for spans, attempts, token usage, latency, errors, and route identity;
-- Obsidian local graph, Shneiderman's overview/zoom/filter/details-on-demand, Furnas fisheye views, and information foraging for local focus with global context;
-- Shannon entropy and compression as distributional and redundancy measures, never as semantic truth or confidence;
-- CLI Guidelines, Ratatui, Crossterm, NO_COLOR, and WCAG principles for terminal behavior and accessibility.
+- **new work**: this invocation's configured default model, runner, and thinking level;
+- **live sessions**: current evaluator sessions and the default model persisted with each session;
+- **source summary**: local numeric measurements for one loaded or completed source;
+- **memory**: count and total measured bytes of source summaries;
+- **pattern**: source summaries placed from repeated to varied;
+- **variety**: byte-distribution variety expressed as a plain percentage;
+- **recent**: the newest retained source summary;
+- **measured details**: exact local measurements shown only on request.
 
-## Vocabulary
+`source`, `session`, `model`, `runner`, `variety`, `repetition`, `lines`, and `bytes` are preferred in user-facing text. The overview does not headline symbolic entropy notation, redundancy, or an inferred route.
 
-Use one metaphor consistently: virtual memory.
+## Configured defaults and observed work
 
-- **resident**: complete source retained locally;
-- **working set**: source-derived evidence deliberately exposed to model calls;
-- **held local**: source bytes not exposed to a model;
-- **map**: positional source buckets with measured exposure states;
-- **recall**: a model-facing semantic call;
-- **coverage**: a specifically defined structural or record denominator, never generic confidence;
-- **pressure**: resource pressure against a measured configured limit;
-- **fault**: a typed failed attempt or missing required evidence, not any ordinary cache miss.
+The `new work` row is provenance for the current invocation's configuration. It answers: "What default would newly started work use now?" It does not answer which model every existing session used and does not claim an observed provider route.
 
-Avoid mixing brain, nest, lake, graph, cache, and memory metaphors in the primary UI. An Obsidian-like constellation is an aesthetic influence, not the data model.
+A session persists its own default model when it is created. Two simultaneous sessions may therefore show different defaults. This can happen when configuration changes between starts or when a session is started with an explicit model. An individual model call can also override the session default. Because these states are intentionally distinct, the console never presents one observed universal route.
 
-## Evidence tiers
+The configured runner label is derived from the current command configuration. Managed runners have plain labels such as `Jcode/OpenAI`, `Claude CLI`, `Codex CLI`, `Gemini CLI`, or `OpenCode`. Unrecognized commands are labeled `custom command`. The thinking label appears only when the configured runner exposes a value the console can parse.
 
-Every nontrivial metric has an authority tier.
+## Source summaries and privacy
 
-1. `exact-local`: aggregate computed from the complete resident source without revealing content.
-2. `exact-structural`: offsets, ranges, counts, ledgers, and positional buckets without revealing text.
-3. `bounded-sample`: the escaped, overlap-guarded structural sample visible to the root model.
-4. `selected-evidence`: source-derived evidence deliberately included in child prompts.
-5. `model-derived`: semantic labels, clusters, disagreements, or confidence-like estimates.
-6. `benchmark-only`: metrics requiring gold relevance judgments or a native full-context control.
+Numeric source summaries are separate from live sessions. A live session can exist without a measured source summary, and retained source summaries can remain after live work has finished.
 
-The primary view uses tiers 1 and 2. Other tiers appear only when observed and are labelled in detail views.
+The durable source-summary privacy contract excludes:
 
-## Primary observability questions
+- source text;
+- source paths;
+- source hashes;
+- prompts;
+- responses.
 
-The first screen answers, in order:
+This privacy claim is scoped to source summaries. Live-session state is not described as an anonymous aggregate. The UI may show a shortened session ID, running or idle state, age, evaluator-state size, source-load count, and the session's persisted default model.
 
-1. Is memory healthy and private?
-2. How much source is resident?
-3. How much source-derived material crossed the model boundary?
-4. What deterministic and semantic work occurred?
-5. Is the requested coverage proven, partial, failed, or not applicable?
-6. What did the run cost in calls, tokens, latency, and retries?
-7. What is the next useful action?
+For one source, the local summary records:
 
-## Honest metrics
+- source bytes;
+- UTF-8 character count;
+- physical line count;
+- nonempty line count;
+- exact Shannon byte entropy in thousandths of a bit per byte.
 
-### Always safe and exact
+Model-boundary exposure and coverage remain `unmeasured` or `n/a` unless a future receipt records an explicit denominator and authority. They are never displayed as fake zero values.
 
-- source bytes, UTF-8 characters, physical lines, nonempty lines;
-- resident session state bytes;
-- source age and idle expiry;
-- session count and configured session limit;
-- root prompt characters and bounded structural-sample characters;
-- child call count, entered turns, attempts, retries, and typed failures;
-- child prompt and response characters;
-- input, output, cache-read, cache-write, and reasoning tokens when provider usage is authoritative;
-- deterministic evaluator time, model-call wall time, snapshot load/save time;
-- projection ledger occurrence count, selected occurrence count, unique targets, callers, and expanded outputs.
+## Default snapshot
 
-### Source entropy
+The normal static snapshot uses these rows:
 
-Exact byte entropy:
+- `status`: healthy local metrics or a clear degraded-metrics warning;
+- `new work`: current configured default provenance;
+- `live`: running, idle, and slot counts;
+- `memory`: source-summary count and measured bytes, labeled `numbers only`;
+- `pattern`: `repeated ← … → varied · avg variety N%`;
+- `recent`: newest loaded or finished source summary;
+- `session`: up to three live sessions with status, age, and persisted default model;
+- `next`: useful commands including `map`, `solo`, `list`, `doctor`, and `help`.
+
+The overview uses `avg variety`, not entropy notation or redundancy terminology. The value is computed from local source-summary numbers only. It is not a model score, semantic score, compression ratio, or confidence estimate.
+
+## Empty state
+
+A truly empty snapshot stays useful without inventing measurements:
+
+```text
+new work  <configured model> via <configured runner>
+live      none · <N> slots free
+memory    none yet · summaries keep numbers, not source text
+pattern   appears after the first source
+recent    no source summary yet
+```
+
+The configured `new work` row remains visible because it is known before any session exists. The constellation and average variety do not render a misleading zero.
+
+## Narrow state
+
+Narrow terminals preserve the same meaning in sanitized line-oriented output. Values may be truncated, but the labels remain `status`, `new work`, `live`, `memory`, `pattern`, `recent`, and `session`. A terminal that is too small for the full-screen map receives this static fallback rather than a clipped interactive layout.
+
+Control characters from configuration or state are removed before rendering. Tabs become spaces. Color obeys terminal capability and `NO_COLOR`.
+
+## Live-session and source-summary table
+
+`az list` is the detailed table for both kinds of local state.
+
+The first section is `live sessions`. Each row contains a stable session ID, running or idle state, age, persisted default model, state size, and load/completion counts as space allows.
+
+The second section is `source summaries · local numbers only`. Each row identifies loaded or finished state and reports local source measurements. This section is independent of the live-session section. If there are no source summaries, it says `none measured yet`.
+
+## Labeled source-variety constellation
+
+The constellation is a compact plot of local numeric source summaries. Every point is one summary.
+
+- Horizontal position is the plain `repeated ← source variety → varied` axis.
+- Vertical position is a labeled absolute source-size band: `<64 KiB`, `≥64 KiB`, `≥1 MiB`, or `≥16 MiB`.
+- `●` marks the selected or newest summary.
+- `○` marks an earlier summary.
+- A digit marks overlapping summaries.
+
+The overview strip and the full constellation use only local aggregate numbers. They do not use source text, semantic embeddings, prompts, responses, provider telemetry, or model judgments. The plot is not a semantic graph and distance between points is not semantic similarity.
+
+When live sessions are present, selection follows the live-session list and measured details use that session's source summary if one exists. When only retained summaries are present, selection follows the summary history.
+
+## Entropy is details-on-demand
+
+Exact Shannon byte entropy is retained as a local measurement:
 
 ```text
 H_byte = -sum(p_b * log2(p_b)), b in 0..255
 ```
 
-Range: `0..8 bits/byte`. Compute with 256 counters while the source is loaded. It measures byte-distribution spread. It does not measure meaning, importance, truth, uncertainty, or model difficulty.
+Its range is `0..8 bits/byte`. The overview does not show this equation, an `H₀` label, or an exact entropy number. It translates the measurement into the plain variety axis and `avg variety` summary.
 
-The overview may show it only as an explicit texture tuple such as `H₀ 4.8/8`; details retain the caveat that it is distributional, not quality. Do not use a mysterious headline "entropy score."
+In `az map`, Enter or `d` opens measured details. That view can show:
 
-Zero-order byte redundancy is:
+- `entropy`: exact local bits per byte, with the caveat that higher means more byte variety;
+- `variety`: a plain percentage, labeled distribution only and not quality;
+- `repetition`: the complementary estimate, labeled as not file compression;
+- line density and source-size details.
 
-```text
-R₀ = 1 - H_byte / 8
-```
+Entropy is deterministic and exact for the locally measured source bytes. Its interpretation is deliberately narrow. It does not measure semantic diversity, relevance, difficulty, confidence, model quality, model-boundary exposure, or coverage. Encodings and compression can change it without changing meaning.
 
-It is an exact derived property of the observed byte distribution. Label it `redundancy`, never `compression`: it is not a measured compressor ratio and ignores ordering.
+## Full-screen behavior
 
-Optional later metrics:
+`az map` refreshes every two seconds and supports:
 
-- normalized lexical entropy using the same Unicode-alphanumeric run policy as lexical relevance;
-- effective vocabulary `2^H_lex`;
-- deterministic zstd level-3 compression ratio and space saving.
+- arrows or `j/k` to select;
+- Enter to inspect;
+- `d` to toggle measured details;
+- `i` to inspect validated local integrations;
+- `r` to refresh;
+- `q`, Esc, or Ctrl-C to exit.
 
-Compression is a redundancy proxy for one fixed compressor, not Kolmogorov complexity.
+Normal exit and panic restore raw mode, cursor visibility, and the previous terminal screen. Read or validation failures are sanitized and displayed as local errors. A corrupt or unsafe source-summary sidecar degrades observability without making core live-session state unavailable.
 
-### Model-facing working set
+## Non-goals
 
-Track two denominators separately:
+The v0.1.8 console does not claim:
 
-- total child-prompt bytes, including instructions;
-- source-derived evidence bytes with exact provenance.
-
-```text
-exposure = source_derived_evidence_bytes / source_bytes
-held_local = 1 - exposure
-virtualization_gain = source_bytes / max(root_prompt_bytes + child_prompt_bytes, 1)
-```
-
-If exact provenance is unavailable, show total prompt bytes and label source exposure `unmeasured`. Never infer precise source exposure from arbitrary prompt length.
-
-### Coverage and reduction
-
-For exact character ranges:
-
-```text
-range_coverage = union(selected_ranges).chars / source_chars
-range_reduction = source_chars / max(selected_chars, 1)
-```
-
-For declared records:
-
-```text
-record_coverage = expanded_occurrences / ledger_occurrences
-selection_rate = selected_occurrences / ledger_occurrences
-reuse_yield = 1 - unique_targets / max(selected_occurrences, 1)
-```
-
-Render coverage states as:
-
-- `verified 100%` only when a complete denominator and validated expansion exist;
-- `partial 12.4% selected` when selection is measured but semantic completeness is not claimed;
-- `unproven` when arbitrary code or prompts bypass provenance helpers;
-- `failed` when a required coverage contract did not validate;
-- `n/a` when no exhaustive contract was requested.
-
-### Semantic uncertainty
-
-Do not synthesize a generic confidence percentage.
-
-When strict A/B classification is used, show the directly observed disagreement rate and adjudication count. Semantic entropy requires multiple sampled outputs plus a declared equivalence or clustering policy. If added later, label it `model-derived` and show the model, sample count, and policy.
-
-## Memory-trace constellation
-
-Retain at most 24 aggregate-only history entries. New `memory` entries are written only after an explicit session `FINAL` or a successful `solo` answer. Failed, interrupted, rejected, load-only, and killed-unfinalized work does not become a memory. Existing v0.1.5 source-load entries remain readable and are labelled `load` traces until they age out. Every entry contains time, kind, bytes, characters, physical lines, nonempty lines, and byte entropy. It contains no source text, path, prompt, response, hash, session ID, answer, or semantic label.
-
-The constellation is a fixed scatter plot, not a force-directed graph:
-
-- horizontal position: exact `H₀` byte entropy from 0 to 8 bits/byte;
-- vertical position: fixed absolute source-size bands (`<64 KiB`, `≥64 KiB`, `≥1 MiB`, `≥16 MiB`);
-- `●`: newest retained trace;
-- `○`: one older trace;
-- `2` through `9`, then `+`: multiple traces in one exact structural cell.
-
-The compact default collapses the same x-axis into one strip. No edge claims semantic similarity. Full-screen expansion is explicit through `az map`; bare `az` prints a compact snapshot and exits.
-
-## Source memory map
-
-Use a fixed positional strip, not a force-directed graph. Divide the source into 24 to 48 equal byte or record buckets.
-
-Glyphs:
-
-- `░` resident and held local;
-- `▒` deterministically selected or inspected with exact structural provenance;
-- `▓` included as source-derived evidence in a model prompt;
-- `█` included repeatedly or currently active;
-- `·` no source loaded;
-- `?` provenance unavailable.
-
-Color is redundant: glyph and legend carry meaning. The default view may omit the legend when only `░` and `·` appear. Detail view always shows it.
-
-Do not claim that arbitrary evaluator reads are mapped unless the evaluator actually records them. The map is about measured model-boundary exposure, not every local Python character access.
-
-## Default console
-
-Target 58 to 78 columns and five to eight meaningful rows.
-
-```text
-╭─ azdaja · memory constellation ───────────────────────────╮
-│ status   ● awake · source stays local                     │
-│ route    gpt-5.6-sol · openai · low                       │
-│ nest     0 resident · cold · 0/4 slots · 7 traces         │
-│ memory   H→ ○··2····●····○·· · 7 traces                  │
-│ texture  H₀ 4.8/8 · redundancy 40% · lines 94% nonempty  │
-│ recent   solo · 2.4 MiB · 9,421 lines · 4m ago           │
-╰────────────────────────────────────────────────────────────╯
-next  map · solo "question" -f ./document.txt · list · doctor
-```
-
-Only render fields backed by observations. For example, omit `boundary` until prompt provenance exists. Never fill gaps with zero when the correct value is unknown.
-
-### Empty state
-
-```text
-╭─ azdaja · memory constellation ─────────────────────────╮
-│ status    ○ dormant · source stays local                 │
-│ route     gpt-5.6-sol · openai · medium                  │
-│ nest      empty · cold · 0/4 slots                       │
-│ memory    H→ ·················· · no traces yet         │
-│ texture   unmeasured · load one source                   │
-│ recent    no memory trace yet                            │
-╰───────────────────────────────────────────────────────────╯
-next  map · solo "question" -f ./document.txt · list · doctor
-```
-
-The integration row must distinguish:
-
-- `active`: managed Azdaja integration validates on disk;
-- `available`: host tool executable is detected, integration absent;
-- `absent`: host tool not detected;
-- `needs repair`: managed files exist but fail custody validation.
-
-### Narrow fallback
-
-Plain lines, no border, same semantics. Non-TTY output remains the stable machine-friendly help unless an explicit status or JSON command is requested.
-
-## Interaction model
-
-Bare `az` uses the static renderer and exits. `az map` uses Ratatui 0.30 and Crossterm 0.29 for the installed interactive console. It refreshes owner-only state at a low fixed rate and exits cleanly on `q`, Esc, Ctrl-C, or terminal loss.
-
-Primary keys:
-
-- `j/k` or arrows: move through runs or sessions;
-- Enter: inspect selected item;
-- `d`: toggle measured details;
-- `i`: integrations/install view;
-- `r`: refresh;
-- `q`: quit.
-
-Do not add interaction without a visible key hint. Restore raw mode, cursor, and screen state on every exit path and panic boundary.
-
-## Installer contract
-
-The curl bootstrap remains line-oriented POSIX shell because the binary does not exist before download. It must never use a full-screen alternate-screen UI.
-
-Immediate disclosure:
-
-```text
-Azdaja installer v0.1.6
-Provider-free install. No model provider will be called.
-Checking platform... macOS arm64 supported
-Checking tools... jcode, claude, codex, opencode found
-```
-
-Detection language:
-
-- `found` means executable detection;
-- `integration present` means the managed files validate;
-- never label a host directory or stale managed skill as the tool being installed;
-- do not detect Gemini merely because `~/.gemini/skills/azdaja` exists.
-
-Interactive selection:
-
-```text
-Select integrations
-
-› [x] jcode      found · integration present
-  [x] claude     found · integration present
-  [x] codex      found · not integrated
-  [ ] gemini     not found
-  [x] opencode   found · integration present
-
-↑/↓ or j/k move  Space toggle  a detected  n none  Enter install  q cancel
-```
-
-Before mutation, print the exact plan and destinations. Every long phase announces itself before work starts:
-
-```text
-Downloading azdaja v0.1.6...
-Verifying SHA-256... ok
-Staging files... ok
-Writing command... ok
-Writing jcode integration... ok
-```
-
-Non-TTY or explicit-target invocation uses durable lines only. `NO_COLOR` and `TERM=dumb` disable decoration. Errors name the failed stage, rollback result, occupied path, and exact repair command.
-
-After standalone installation, `az install` may use the shared Ratatui component system for richer integration selection. The bootstrap itself must stay robust and inspectable.
-
-## Anti-metrics and anti-patterns
-
-Do not show:
-
-- an unlabeled entropy or intelligence score;
-- semantic coverage inferred from lexical selection;
-- confidence inferred from token usage, latency, or entropy;
-- a force-directed terminal hairball;
-- fake pressure derived only from session count;
-- fake source exposure derived only from total prompt size;
-- a clean success badge after a recovered retry without showing degraded transport;
-- raw source excerpts, rare strings, paths, hashes, or trace responses on the overview;
-- spinners or cursor rewrites in non-TTY logs;
-- color-only state;
-- `installed` when the code only detected a tool or directory;
-- silent download, verification, lock wait, staging, or rollback phases.
-
-## Implementation order
-
-1. Fix managed-skill activation wording and host/integration detection semantics.
-2. Add a privacy-safe persistent run-summary schema containing aggregates only.
-3. Instrument source statistics, prompt boundary, exact provenance, attempts, usage, and timings.
-4. Build the Ratatui console from that schema with a narrow static fallback.
-5. Rework bootstrap copy and progress while preserving the current atomic lifecycle.
-6. Add the richer installed-binary integration selector.
-7. Update dependency legal notices, package allowlists, docs, TTY tests, and release validation.
+- one observed universal model or provider route;
+- semantic similarity from constellation distance;
+- token usage or cost without authoritative provider data;
+- model-boundary exposure without a recorded ledger;
+- coverage without an explicit denominator;
+- answer quality from byte variety;
+- privacy guarantees for fields outside the source-summary contract.
