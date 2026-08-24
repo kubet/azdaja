@@ -106,6 +106,8 @@ pub struct RecentAggregateSummary {
     pub max_recent_runs: usize,
     pub privacy: ObservabilityPrivacyContract,
     pub runs: Vec<RecentRunAggregate>,
+    #[serde(default)]
+    pub memory_observations: Vec<MemoryObservationAggregate>,
 }
 
 impl RecentAggregateSummary {
@@ -116,7 +118,131 @@ impl RecentAggregateSummary {
             max_recent_runs: RECENT_LIMIT,
             privacy: ObservabilityPrivacyContract::default(),
             runs: Vec::new(),
+            memory_observations: Vec::new(),
         }
+    }
+
+    pub fn compact_memory_constellation(&self) -> Option<MemoryConstellation> {
+        MemoryConstellation::from_recent_summary(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemoryObservationAggregate {
+    pub observed_unix: u64,
+    pub observed_sources: u64,
+    pub total_source_bytes: u64,
+    pub total_utf8_chars: u64,
+    pub total_physical_lines: u64,
+    pub total_nonempty_lines: u64,
+    pub mean_byte_entropy_millibits: u16,
+    /// Estimated room for compression, derived only from aggregate byte entropy.
+    /// Range: 0..=1000, where 1000 means maximally repetitive bytes.
+    pub entropy_compression_millipercent: u16,
+    /// Non-empty physical lines over physical lines, in millipercent. Range: 0..=1000.
+    pub coverage_millipercent: u16,
+}
+
+impl MemoryObservationAggregate {
+    pub fn from_sources<'a>(
+        sources: impl IntoIterator<Item = &'a SourceLocalAggregate>,
+    ) -> Option<Self> {
+        Self::from_sources_at(unix_now(), sources)
+    }
+
+    fn from_sources_at<'a>(
+        observed_unix: u64,
+        sources: impl IntoIterator<Item = &'a SourceLocalAggregate>,
+    ) -> Option<Self> {
+        let mut observed_sources = 0u64;
+        let mut total_source_bytes = 0u64;
+        let mut total_utf8_chars = 0u64;
+        let mut total_physical_lines = 0u64;
+        let mut total_nonempty_lines = 0u64;
+        let mut weighted_entropy = 0u128;
+        for source in sources {
+            observed_sources = observed_sources.saturating_add(1);
+            total_source_bytes = total_source_bytes.saturating_add(source.source_bytes);
+            total_utf8_chars = total_utf8_chars.saturating_add(source.utf8_chars);
+            total_physical_lines = total_physical_lines.saturating_add(source.physical_lines);
+            total_nonempty_lines = total_nonempty_lines.saturating_add(source.nonempty_lines);
+            weighted_entropy = weighted_entropy.saturating_add(
+                u128::from(source.byte_entropy_millibits) * u128::from(source.source_bytes.max(1)),
+            );
+        }
+        if observed_sources == 0 {
+            return None;
+        }
+        let entropy_weight = total_source_bytes.max(observed_sources);
+        let mean_byte_entropy_millibits = ((weighted_entropy + u128::from(entropy_weight / 2))
+            / u128::from(entropy_weight))
+        .min(8000) as u16;
+        Some(Self {
+            observed_unix,
+            observed_sources,
+            total_source_bytes,
+            total_utf8_chars,
+            total_physical_lines,
+            total_nonempty_lines,
+            mean_byte_entropy_millibits,
+            entropy_compression_millipercent: entropy_compression_millipercent(
+                mean_byte_entropy_millibits,
+            ),
+            coverage_millipercent: ratio_millipercent(total_nonempty_lines, total_physical_lines),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryConstellation {
+    pub observed_sources: u64,
+    pub nodes: Vec<&'static str>,
+    pub edges: Vec<(&'static str, &'static str)>,
+    pub entropy_millibits: Option<u16>,
+    pub entropy_compression_millipercent: Option<u16>,
+    pub coverage_millipercent: Option<u16>,
+}
+
+impl MemoryConstellation {
+    fn from_recent_summary(summary: &RecentAggregateSummary) -> Option<Self> {
+        let observation = summary.memory_observations.first().cloned().or_else(|| {
+            MemoryObservationAggregate::from_sources(summary.runs.iter().map(|run| &run.source))
+        })?;
+        let mut nodes = vec!["source", "entropy", "coverage"];
+        if observation.entropy_compression_millipercent > 0 {
+            nodes.push("compression");
+        }
+        Some(Self {
+            observed_sources: observation.observed_sources,
+            nodes,
+            edges: vec![
+                ("source", "entropy"),
+                ("source", "coverage"),
+                ("entropy", "compression"),
+            ],
+            entropy_millibits: Some(observation.mean_byte_entropy_millibits),
+            entropy_compression_millipercent: Some(observation.entropy_compression_millipercent),
+            coverage_millipercent: Some(observation.coverage_millipercent),
+        })
+    }
+
+    pub fn render_compact(&self) -> String {
+        let entropy = self
+            .entropy_millibits
+            .map(format_bits)
+            .unwrap_or_else(|| "n/a".to_owned());
+        let compression = self
+            .entropy_compression_millipercent
+            .map(format_millipercent)
+            .unwrap_or_else(|| "n/a".to_owned());
+        let coverage = self
+            .coverage_millipercent
+            .map(format_millipercent)
+            .unwrap_or_else(|| "n/a".to_owned());
+        format!(
+            "[[source]]--[[entropy]]--[[compression]] · [[source]]--[[coverage]] · {} sources · entropy {entropy} · compression {compression} · coverage {coverage}",
+            self.observed_sources
+        )
     }
 }
 
@@ -189,6 +315,30 @@ fn physical_line_has_content(line: &str) -> bool {
     !line.trim().is_empty()
 }
 
+fn ratio_millipercent(numerator: u64, denominator: u64) -> u16 {
+    if denominator == 0 {
+        return 0;
+    }
+    ((u128::from(numerator.min(denominator)) * 1000 + u128::from(denominator / 2))
+        / u128::from(denominator))
+    .min(1000) as u16
+}
+
+fn entropy_compression_millipercent(entropy_millibits: u16) -> u16 {
+    1000u16.saturating_sub(((u32::from(entropy_millibits.min(8000)) * 1000 + 4000) / 8000) as u16)
+}
+
+fn format_bits(millibits: u16) -> String {
+    format!("{:.1}b/B", f64::from(millibits) / 1000.0)
+}
+
+fn format_millipercent(millipercent: u16) -> String {
+    format!(
+        "{}%",
+        (u32::from(millipercent.min(1000)) * 100 + 500) / 1000
+    )
+}
+
 pub(crate) fn record_session_source_load(
     session_dir: &Path,
     source: &SourceLocalAggregate,
@@ -248,6 +398,12 @@ fn append_recent_at(root: &Path, kind: RunKind, source: &SourceLocalAggregate) -
         },
     );
     summary.runs.truncate(RECENT_LIMIT);
+    if let Some(observation) =
+        MemoryObservationAggregate::from_sources(summary.runs.iter().map(|run| &run.source))
+    {
+        summary.memory_observations.insert(0, observation);
+        summary.memory_observations.truncate(RECENT_LIMIT);
+    }
     let bytes = serde_json::to_vec_pretty(&summary)?;
     crate::atomic_write(&recent_path(root), &bytes)
 }
@@ -270,6 +426,7 @@ fn normalize_recent_summary(summary: &mut RecentAggregateSummary) {
     summary.max_recent_runs = RECENT_LIMIT;
     summary.privacy = ObservabilityPrivacyContract::default();
     summary.runs.truncate(RECENT_LIMIT);
+    summary.memory_observations.truncate(RECENT_LIMIT);
 }
 
 fn write_session_summary_at(session_dir: &Path, summary: &SessionAggregateSummary) -> Result<()> {
@@ -419,6 +576,75 @@ mod tests {
         assert!(!json.contains("hash\""));
         let loaded = load_recent_summary_at(&root).expect("load recent");
         assert_eq!(loaded.runs.len(), RECENT_LIMIT);
+        assert_eq!(loaded.memory_observations.len(), RECENT_LIMIT);
+    }
+
+    #[test]
+    fn memory_observations_are_aggregate_only_and_render_constellation() {
+        let root = unique_temp_dir("constellation");
+        let sensitive = "vault note [[private/person]]\nsecret-token\n\n";
+        let aggregate = SourceLocalAggregate::from_text(sensitive);
+        append_recent_at(&root, RunKind::SessionLoad, &aggregate).expect("append recent");
+
+        let json = fs::read_to_string(recent_path(&root)).expect("recent json");
+        assert!(json.contains("memory_observations"));
+        for forbidden in [
+            "vault note",
+            "private/person",
+            "secret-token",
+            "[[private/person]]",
+        ] {
+            assert!(!json.contains(forbidden), "leaked {forbidden:?} in {json}");
+        }
+
+        let loaded = load_recent_summary_at(&root).expect("load recent");
+        let observation = loaded.memory_observations.first().expect("observation");
+        assert_eq!(observation.observed_sources, 1);
+        assert_eq!(observation.total_source_bytes, sensitive.len() as u64);
+        assert_eq!(observation.total_physical_lines, 3);
+        assert_eq!(observation.total_nonempty_lines, 2);
+        assert_eq!(observation.coverage_millipercent, 667);
+        assert!(observation.mean_byte_entropy_millibits > 0);
+        assert!(observation.entropy_compression_millipercent <= 1000);
+
+        let constellation = loaded
+            .compact_memory_constellation()
+            .expect("constellation from aggregate observations");
+        assert_eq!(
+            constellation.nodes,
+            vec!["source", "entropy", "coverage", "compression"]
+        );
+        let rendered = constellation.render_compact();
+        assert!(rendered.contains("[[source]]--[[entropy]]--[[compression]]"));
+        assert!(rendered.contains("coverage 67%"));
+        assert!(!rendered.contains("secret-token"));
+        assert!(!rendered.contains("private/person"));
+    }
+
+    #[test]
+    fn legacy_recent_summary_without_memory_observations_still_loads() {
+        let root = unique_temp_dir("legacy");
+        crate::secure_dir(&root.join(RECENT_DIR)).expect("create observability dir");
+        let aggregate = SourceLocalAggregate::from_text("aaaa\n");
+        let legacy = serde_json::json!({
+            "schema_version": 1,
+            "updated_unix": 1,
+            "max_recent_runs": 24,
+            "privacy": ObservabilityPrivacyContract::default(),
+            "runs": [{
+                "kind": "solo-load",
+                "observed_unix": 1,
+                "source": aggregate,
+            }]
+        });
+        crate::atomic_write(
+            &recent_path(&root),
+            serde_json::to_string_pretty(&legacy).unwrap().as_bytes(),
+        )
+        .expect("write legacy");
+        let loaded = load_recent_summary_at(&root).expect("load legacy");
+        assert!(loaded.memory_observations.is_empty());
+        assert!(loaded.compact_memory_constellation().is_some());
     }
 
     #[test]
