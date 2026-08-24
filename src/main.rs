@@ -5750,6 +5750,7 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
     };
     let mut session = SoloSession::new(cfg, sub_model)?;
     let metadata = session.load(&file, "ctx", cfg)?;
+    azdaja::observability::record_solo_source_load(session.source_aggregate()?)?;
 
     // Fixed, provider-free structural evidence. The complete context remains only in Monty.
     let inspection = session.structural_sample()?.to_owned();

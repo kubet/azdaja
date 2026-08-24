@@ -1,4 +1,4 @@
-use azdaja::{DashboardSnapshot, SessionStatus, VERSION};
+use azdaja::{DashboardSnapshot, SessionStatus, VERSION, observability::SourceLocalAggregate};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const RED: &str = "\x1b[31m";
@@ -140,6 +140,30 @@ fn human_duration(seconds: u64) -> String {
     }
 }
 
+fn current_source(snapshot: &DashboardSnapshot) -> Option<&SourceLocalAggregate> {
+    snapshot
+        .sessions
+        .iter()
+        .find_map(|session| session.source.as_ref())
+        .or_else(|| {
+            snapshot
+                .recent_observability
+                .runs
+                .first()
+                .map(|run| &run.source)
+        })
+}
+
+fn source_line(source: &SourceLocalAggregate) -> String {
+    format!(
+        "{} · {} chars · {} lines · {} nonempty",
+        human_bytes(source.source_bytes),
+        source.utf8_chars,
+        source.physical_lines,
+        source.nonempty_lines
+    )
+}
+
 fn session_line(session: &SessionStatus, default_model: &str, timestamp: u64) -> String {
     let marker = if session.busy { "●" } else { "○" };
     let state = if session.busy { "running" } else { "idle" };
@@ -182,6 +206,9 @@ fn render_compact(snapshot: &DashboardSnapshot, color: bool, timestamp: u64) -> 
         snapshot.max_sessions,
         human_bytes(bytes)
     ));
+    if let Some(source) = current_source(snapshot) {
+        output.push_str(&format!("resident {}\n", source_line(source)));
+    }
     if let Some(session) = snapshot.sessions.first() {
         output.push_str(&format!(
             "recent {}\n",
@@ -246,7 +273,7 @@ fn render_at(
     ));
     output.push_str(&row(
         total,
-        "State",
+        "Session",
         &format!(
             "{} · {} idle expiry",
             human_bytes(state_bytes),
@@ -255,6 +282,9 @@ fn render_at(
         "",
         color,
     ));
+    if let Some(source) = current_source(snapshot) {
+        output.push_str(&row(total, "Resident", &source_line(source), CYAN, color));
+    }
     output.push_str(&separator(total, "recent sessions", color));
     if snapshot.sessions.is_empty() {
         output.push_str(&row(
@@ -328,6 +358,8 @@ mod tests {
                     sub_model: None,
                     busy: true,
                     state_bytes: 1024 * 1024,
+                    source: None,
+                    loaded_sources: 0,
                 },
                 SessionStatus {
                     id: "fedcba9876543210".into(),
@@ -336,8 +368,11 @@ mod tests {
                     sub_model: Some("small-model".into()),
                     busy: false,
                     state_bytes: 512 * 1024,
+                    source: None,
+                    loaded_sources: 0,
                 },
             ],
+            recent_observability: azdaja::observability::RecentAggregateSummary::empty(),
         }
     }
 

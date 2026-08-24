@@ -24,6 +24,8 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+pub mod observability;
+
 #[cfg(unix)]
 use std::os::unix::{
     fs::OpenOptionsExt,
@@ -434,6 +436,8 @@ pub struct SessionStatus {
     pub sub_model: Option<String>,
     pub busy: bool,
     pub state_bytes: u64,
+    pub source: Option<observability::SourceLocalAggregate>,
+    pub loaded_sources: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -445,6 +449,7 @@ pub struct DashboardSnapshot {
     pub idle_timeout: u64,
     pub state_root: PathBuf,
     pub sessions: Vec<SessionStatus>,
+    pub recent_observability: observability::RecentAggregateSummary,
 }
 fn now() -> u64 {
     SystemTime::now()
@@ -1104,6 +1109,7 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
         let state_path = dir.join("state.monty");
         let state = open_private_file(&state_path, false)?;
         let metadata = validate_private_file(&state, &state_path)?;
+        let observability = observability::load_session_summary(&dir)?;
         let updated = metadata
             .modified()
             .unwrap_or(UNIX_EPOCH)
@@ -1117,6 +1123,10 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
             sub_model: meta.sub_model,
             busy: session_is_busy(&base, &id)?,
             state_bytes: metadata.len(),
+            source: observability
+                .as_ref()
+                .and_then(|summary| summary.current_source.clone()),
+            loaded_sources: observability.map_or(0, |summary| summary.loaded_sources),
         });
     }
     sessions.sort_by(|left, right| {
@@ -1134,6 +1144,7 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
         idle_timeout: cfg.idle_timeout,
         state_root: base,
         sessions,
+        recent_observability: observability::load_recent_summary()?,
     })
 }
 
@@ -2385,6 +2396,7 @@ pub fn load(sid: &str, path: &Path, var: &str, cfg: &Config) -> Result<String> {
     validate_private_directory(&directory, &dir)?;
     let text = fs::read_to_string(path)
         .with_context(|| format!("input is not UTF-8: {}", path.display()))?;
+    let source = observability::SourceLocalAggregate::from_text(&text);
     let chars = text.chars().count();
     let lines = text.lines().count();
     let mut repl = load_repl(&dir)?;
@@ -2397,6 +2409,7 @@ pub fn load(sid: &str, path: &Path, var: &str, cfg: &Config) -> Result<String> {
         PrintWriter::Disabled,
     )?;
     save_repl(&dir, &repl)?;
+    observability::record_session_source_load(&dir, &source)?;
     Ok(format!(
         "loaded '{var}' : str, {chars} chars, {lines} lines"
     ))
@@ -4119,6 +4132,7 @@ pub struct SoloSession {
     answer: Option<String>,
     structural_sample: Option<String>,
     authoritative_source: Option<String>,
+    source_aggregate: Option<observability::SourceLocalAggregate>,
 }
 impl SoloSession {
     pub fn new(cfg: &Config, sub_model: Option<String>) -> Result<Self> {
@@ -4134,12 +4148,14 @@ impl SoloSession {
             answer: None,
             structural_sample: None,
             authoritative_source: None,
+            source_aggregate: None,
         })
     }
     pub fn load(&mut self, path: &Path, var: &str, cfg: &Config) -> Result<String> {
         // Every load attempt invalidates prior prompt evidence before validation or I/O.
         self.structural_sample = None;
         self.authoritative_source = None;
+        self.source_aggregate = None;
         if !Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*$")
             .unwrap()
             .is_match(var)
@@ -4148,6 +4164,7 @@ impl SoloSession {
         }
         let text = fs::read_to_string(path)
             .with_context(|| format!("input is not UTF-8: {}", path.display()))?;
+        let source_aggregate = observability::SourceLocalAggregate::from_text(&text);
         let chars = text.chars().count();
         let lines = text.lines().count();
         let sample = structural_sample(&text, chars)?;
@@ -4165,9 +4182,15 @@ impl SoloSession {
         )?;
         self.structural_sample = Some(sample);
         self.authoritative_source = Some(authoritative_source);
+        self.source_aggregate = Some(source_aggregate);
         Ok(format!(
             "loaded '{var}' : str, {chars} chars, {lines} lines"
         ))
+    }
+    pub fn source_aggregate(&self) -> Result<&observability::SourceLocalAggregate> {
+        self.source_aggregate
+            .as_ref()
+            .ok_or_else(|| anyhow!("solo session has no source aggregate"))
     }
     pub fn structural_sample(&self) -> Result<&str> {
         self.structural_sample
