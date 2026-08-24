@@ -535,6 +535,11 @@ const DOCUMENT_OWNER_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
 THIRD-PARTY-NOTICES.md.sha256=0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3\n";
+const DOCUMENT_OWNER_PREVIOUS_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
+schema=azdaja-managed-documents-v2\n\
+LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
+THIRD-PARTY-NOTICES.md.sha256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6\n";
+const PREVIOUS_V2_NOTICES: &[u8] = include_bytes!("../site/releases/v0.1.4/THIRD-PARTY-NOTICES.md");
 
 fn sha256_bytes(bytes: &[u8]) -> String {
     for (tool, args) in [("shasum", vec!["-a", "256"]), ("sha256sum", vec![])] {
@@ -632,6 +637,22 @@ fn legacy_standalone(home: &Path, name: &str) -> Option<PathBuf> {
     Some(binary)
 }
 
+fn previous_v2_standalone(home: &Path, name: &str) -> PathBuf {
+    let binary = standalone(home, name);
+    let documents = home.join(".local/share/azdaja");
+    fs::write(
+        documents.join("THIRD-PARTY-NOTICES.md"),
+        PREVIOUS_V2_NOTICES,
+    )
+    .unwrap();
+    fs::write(
+        documents.join(".azdaja-managed"),
+        DOCUMENT_OWNER_PREVIOUS_V2,
+    )
+    .unwrap();
+    binary
+}
+
 #[test]
 fn unmanaged_standalone_uninstall_points_to_original_installer_or_cargo() {
     let scratch = Scratch::new("unmanaged-standalone");
@@ -718,16 +739,26 @@ fn exact_legacy_v1_standalone_documents_are_safely_removable() {
 }
 
 #[test]
-fn fake_v2_and_mutated_legacy_standalone_documents_refuse_before_mutation() {
-    for state in ["fake-v2", "mutated-legacy"] {
+fn exact_published_previous_v2_standalone_documents_are_safely_removable() {
+    let scratch = Scratch::new("previous-v2-standalone");
+    let binary = previous_v2_standalone(&scratch.0, "bin");
+    let output = run(&binary, &scratch.0, &["uninstall", "--standalone"]);
+    assert_success(&output);
+    assert!(!binary.exists());
+    assert!(!scratch.0.join(".local/share/azdaja").exists());
+}
+
+#[test]
+fn fake_v2_and_mutated_owned_standalone_documents_refuse_before_mutation() {
+    for state in ["fake-v2", "mutated-legacy", "mutated-previous-v2"] {
         if state == "mutated-legacy" && legacy_notices().is_none() {
             continue;
         }
         let scratch = Scratch::new(state);
-        let binary = if state == "fake-v2" {
-            standalone(&scratch.0, "bin")
-        } else {
-            legacy_standalone(&scratch.0, "bin").unwrap()
+        let binary = match state {
+            "fake-v2" => standalone(&scratch.0, "bin"),
+            "mutated-legacy" => legacy_standalone(&scratch.0, "bin").unwrap(),
+            _ => previous_v2_standalone(&scratch.0, "bin"),
         };
         let documents = scratch.0.join(".local/share/azdaja");
         if state == "fake-v2" {
@@ -737,7 +768,11 @@ fn fake_v2_and_mutated_legacy_standalone_documents_refuse_before_mutation() {
             )
             .unwrap();
         } else {
-            let mut notices = legacy_notices().unwrap();
+            let mut notices = if state == "mutated-legacy" {
+                legacy_notices().unwrap()
+            } else {
+                PREVIOUS_V2_NOTICES.to_vec()
+            };
             notices.extend_from_slice(b"mutated");
             fs::write(documents.join("THIRD-PARTY-NOTICES.md"), notices).unwrap();
         }
@@ -751,16 +786,16 @@ fn fake_v2_and_mutated_legacy_standalone_documents_refuse_before_mutation() {
 }
 
 #[test]
-fn standalone_document_quarantine_rolls_back_v2_and_legacy_at_every_injected_step() {
-    for legacy in [false, true] {
-        if legacy && legacy_notices().is_none() {
+fn standalone_document_quarantine_rolls_back_every_owned_generation_at_every_step() {
+    for state in ["current-v2", "previous-v2", "legacy-v1"] {
+        if state == "legacy-v1" && legacy_notices().is_none() {
             continue;
         }
-        let scratch = Scratch::new(if legacy { "rollback-v1" } else { "rollback-v2" });
-        let binary = if legacy {
-            legacy_standalone(&scratch.0, "bin").unwrap()
-        } else {
-            standalone(&scratch.0, "bin")
+        let scratch = Scratch::new(&format!("rollback-{state}"));
+        let binary = match state {
+            "current-v2" => standalone(&scratch.0, "bin"),
+            "previous-v2" => previous_v2_standalone(&scratch.0, "bin"),
+            _ => legacy_standalone(&scratch.0, "bin").unwrap(),
         };
         let documents = scratch.0.join(".local/share/azdaja");
         let binary_before = surface_snapshot(binary.parent().unwrap());
@@ -773,10 +808,7 @@ fn standalone_document_quarantine_rolls_back_v2_and_legacy_at_every_injected_ste
                 &["uninstall", "--standalone"],
                 &[("AZDAJA_LIFECYCLE_TEST_FAIL_AT", &fail_at)],
             );
-            assert!(
-                !output.status.success(),
-                "legacy={legacy} fail_at={fail_at}"
-            );
+            assert!(!output.status.success(), "state={state} fail_at={fail_at}");
             assert!(text(&output).1.contains("injected lifecycle failure"));
             assert_eq!(surface_snapshot(binary.parent().unwrap()), binary_before);
             assert_eq!(surface_snapshot(&documents), documents_before);

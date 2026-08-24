@@ -819,6 +819,7 @@ CONFIG_OWNER=$BIN_DIR/azdaja-config.toml.managed
 OWNER_MAGIC=azdaja-installer-owned-config-v1
 DOC_OWNER_V1_MAGIC=azdaja-installer-owned-docs-v1
 LEGACY_NOTICES_SHA256=dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb
+PREVIOUS_V2_NOTICES_SHA256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6
 printf '%s\n' "$OWNER_MAGIC" > "$TMP/config-owner.expected"
 printf '%s\n' "$DOC_OWNER_V1_MAGIC" > "$TMP/doc-owner-v1.expected"
 cat > "$TMP/doc-owner-v2.expected" <<EOF
@@ -826,6 +827,12 @@ azdaja-installer-owned-docs-v2
 schema=azdaja-managed-documents-v2
 LICENSE.sha256=$ROOT_LICENSE_SHA256
 THIRD-PARTY-NOTICES.md.sha256=$ROOT_NOTICES_SHA256
+EOF
+cat > "$TMP/doc-owner-v2.previous.expected" <<EOF
+azdaja-installer-owned-docs-v2
+schema=azdaja-managed-documents-v2
+LICENSE.sha256=$ROOT_LICENSE_SHA256
+THIRD-PARTY-NOTICES.md.sha256=$PREVIOUS_V2_NOTICES_SHA256
 EOF
 
 owned_single_link_regular() {
@@ -857,6 +864,12 @@ if [ -e "$DOC_DIR" ] || [ -L "$DOC_DIR" ]; then
     cmp -s "$DOC_LICENSE" "$TMP/LICENSE" || fail "refusing changed Azdaja LICENSE: $DOC_LICENSE"
     cmp -s "$DOC_NOTICES" "$TMP/THIRD-PARTY-NOTICES.md" || fail "refusing changed Azdaja notices: $DOC_NOTICES"
     DOC_STATE=owned-v2
+  elif cmp -s "$DOC_OWNER" "$TMP/doc-owner-v2.previous.expected"; then
+    [ "$(sha256_file "$DOC_LICENSE")" = "$ROOT_LICENSE_SHA256" ] || \
+      fail "refusing changed previous Azdaja LICENSE: $DOC_LICENSE"
+    [ "$(sha256_file "$DOC_NOTICES")" = "$PREVIOUS_V2_NOTICES_SHA256" ] || \
+      fail "refusing changed previous Azdaja notices: $DOC_NOTICES"
+    DOC_STATE=previous-v2
   elif cmp -s "$DOC_OWNER" "$TMP/doc-owner-v1.expected"; then
     [ "$(sha256_file "$DOC_LICENSE")" = "$ROOT_LICENSE_SHA256" ] || \
       fail "refusing changed legacy Azdaja LICENSE: $DOC_LICENSE"
@@ -978,30 +991,42 @@ BIN_DIR_WAS_DIR=false
 TRANSACTION_ACTIVE=true
 announce 'Staging files'
 
-if [ "$DOC_STATE" = legacy-v1 ]; then
-  DOC_PREVIOUS=$DOC_DIR.azdaja-v1-previous.$$
+if [ "$DOC_STATE" = legacy-v1 ] || [ "$DOC_STATE" = previous-v2 ]; then
+  DOC_MIGRATION_STATE=$DOC_STATE
+  DOC_PREVIOUS=$DOC_DIR.azdaja-docs-previous.$$
   [ ! -e "$DOC_PREVIOUS" ] && [ ! -L "$DOC_PREVIOUS" ] || \
     fail "document migration quarantine already exists: $DOC_PREVIOUS"
-  mv "$DOC_DIR" "$DOC_PREVIOUS" || fail "cannot quarantine legacy Azdaja documents for migration: $DOC_DIR"
+  mv "$DOC_DIR" "$DOC_PREVIOUS" || fail "cannot quarantine previous Azdaja documents for migration: $DOC_DIR"
   DOC_MIGRATED=true
   PREVIOUS_LICENSE=$DOC_PREVIOUS/LICENSE
   PREVIOUS_NOTICES=$DOC_PREVIOUS/THIRD-PARTY-NOTICES.md
   PREVIOUS_OWNER=$DOC_PREVIOUS/.azdaja-managed
   [ -d "$DOC_PREVIOUS" ] && [ ! -L "$DOC_PREVIOUS" ] || \
-    fail "legacy Azdaja document directory changed during migration"
+    fail "previous Azdaja document directory changed during migration"
   [ "$(find "$DOC_PREVIOUS" -prune -type d -user "$(id -u)" -print)" = "$DOC_PREVIOUS" ] || \
-    fail "legacy Azdaja document directory ownership changed during migration"
+    fail "previous Azdaja document directory ownership changed during migration"
   PREVIOUS_FOREIGN=$(find "$DOC_PREVIOUS" ! -path "$DOC_PREVIOUS" \
     ! -path "$PREVIOUS_LICENSE" ! -path "$PREVIOUS_NOTICES" ! -path "$PREVIOUS_OWNER" -print)
-  [ -z "$PREVIOUS_FOREIGN" ] || fail "legacy Azdaja document directory changed during migration"
-  owned_single_link_regular "$PREVIOUS_LICENSE" || fail "legacy Azdaja LICENSE changed during migration"
-  owned_single_link_regular "$PREVIOUS_NOTICES" || fail "legacy Azdaja notices changed during migration"
-  owned_single_link_regular "$PREVIOUS_OWNER" || fail "legacy Azdaja marker changed during migration"
-  cmp -s "$PREVIOUS_OWNER" "$TMP/doc-owner-v1.expected" || fail "legacy Azdaja marker changed during migration"
+  [ -z "$PREVIOUS_FOREIGN" ] || fail "previous Azdaja document directory changed during migration"
+  owned_single_link_regular "$PREVIOUS_LICENSE" || fail "previous Azdaja LICENSE changed during migration"
+  owned_single_link_regular "$PREVIOUS_NOTICES" || fail "previous Azdaja notices changed during migration"
+  owned_single_link_regular "$PREVIOUS_OWNER" || fail "previous Azdaja marker changed during migration"
   [ "$(sha256_file "$PREVIOUS_LICENSE")" = "$ROOT_LICENSE_SHA256" ] || \
-    fail "legacy Azdaja LICENSE changed during migration"
-  [ "$(sha256_file "$PREVIOUS_NOTICES")" = "$LEGACY_NOTICES_SHA256" ] || \
-    fail "legacy Azdaja notices changed during migration"
+    fail "previous Azdaja LICENSE changed during migration"
+  case "$DOC_MIGRATION_STATE" in
+    previous-v2)
+      cmp -s "$PREVIOUS_OWNER" "$TMP/doc-owner-v2.previous.expected" || \
+        fail "previous Azdaja marker changed during migration"
+      [ "$(sha256_file "$PREVIOUS_NOTICES")" = "$PREVIOUS_V2_NOTICES_SHA256" ] || \
+        fail "previous Azdaja notices changed during migration"
+      ;;
+    legacy-v1)
+      cmp -s "$PREVIOUS_OWNER" "$TMP/doc-owner-v1.expected" || \
+        fail "legacy Azdaja marker changed during migration"
+      [ "$(sha256_file "$PREVIOUS_NOTICES")" = "$LEGACY_NOTICES_SHA256" ] || \
+        fail "legacy Azdaja notices changed during migration"
+      ;;
+  esac
   DOC_STATE=fresh
 fi
 

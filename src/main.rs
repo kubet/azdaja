@@ -3452,6 +3452,10 @@ const DOCUMENT_OWNER_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
 THIRD-PARTY-NOTICES.md.sha256=0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3\n";
+const DOCUMENT_OWNER_PREVIOUS_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
+schema=azdaja-managed-documents-v2\n\
+LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
+THIRD-PARTY-NOTICES.md.sha256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6\n";
 const DISTRIBUTED_LICENSE: &[u8] = include_bytes!("../LICENSE");
 const DISTRIBUTED_NOTICES: &[u8] = include_bytes!("../THIRD-PARTY-NOTICES.md");
 
@@ -3543,9 +3547,20 @@ fn legacy_notices_are_exact(bytes: &[u8]) -> bool {
             0xe6, 0xe8, 0xca, 0xbb,
         ]
 }
+
+fn previous_v2_notices_are_exact(bytes: &[u8]) -> bool {
+    sha256_digest(bytes)
+        == [
+            0xee, 0x90, 0x85, 0x58, 0xc8, 0xd5, 0xf0, 0xd2, 0x08, 0x04, 0x00, 0x55, 0x8d, 0xb3,
+            0x51, 0xd8, 0xf2, 0x4f, 0xb7, 0xad, 0x3c, 0xa9, 0x02, 0xc9, 0x04, 0x82, 0x2d, 0x97,
+            0xd7, 0xb5, 0xea, 0xc6,
+        ]
+}
+
 #[derive(Clone, Copy)]
 enum DocumentVersion {
     CurrentV2,
+    PreviousV2,
     LegacyV1,
 }
 
@@ -3559,6 +3574,9 @@ fn document_bytes_match(
         && match version {
             DocumentVersion::CurrentV2 => {
                 marker == DOCUMENT_OWNER_V2 && notices == DISTRIBUTED_NOTICES
+            }
+            DocumentVersion::PreviousV2 => {
+                marker == DOCUMENT_OWNER_PREVIOUS_V2 && previous_v2_notices_are_exact(notices)
             }
             DocumentVersion::LegacyV1 => {
                 marker == DOCUMENT_OWNER_V1_MAGIC && legacy_notices_are_exact(notices)
@@ -3724,6 +3742,8 @@ fn preflight_document_removal(home: &Path) -> Result<DocumentRemoval> {
     let notices_bytes = read_install_regular(&notices)?;
     let version = if marker_bytes == DOCUMENT_OWNER_V2 {
         DocumentVersion::CurrentV2
+    } else if marker_bytes == DOCUMENT_OWNER_PREVIOUS_V2 {
+        DocumentVersion::PreviousV2
     } else if marker_bytes == DOCUMENT_OWNER_V1_MAGIC {
         DocumentVersion::LegacyV1
     } else {
