@@ -438,6 +438,7 @@ pub struct SessionStatus {
     pub state_bytes: u64,
     pub source: Option<observability::SourceLocalAggregate>,
     pub loaded_sources: u64,
+    pub completed_sources: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1141,7 +1142,12 @@ fn dashboard_sessions(
                 source: observability
                     .as_ref()
                     .and_then(|summary| summary.current_source.clone()),
-                loaded_sources: observability.map_or(0, |summary| summary.loaded_sources),
+                loaded_sources: observability
+                    .as_ref()
+                    .map_or(0, |summary| summary.loaded_sources),
+                completed_sources: observability
+                    .as_ref()
+                    .map_or(0, |summary| summary.completed_loaded_sources),
             })
         })();
         match status {
@@ -4406,6 +4412,11 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         }
     }
     save_repl(&dir, &repl)?;
+    if finalized {
+        // Completion history is aggregate-only and best effort. The authoritative
+        // final value and evaluator snapshot are already committed.
+        let _ = observability::record_session_completion(&dir);
+    }
     Ok(ExecResult {
         output: cap(&output, cfg.output_cap),
         success,

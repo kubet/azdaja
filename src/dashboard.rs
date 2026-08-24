@@ -1,4 +1,7 @@
-use azdaja::{DashboardSnapshot, SessionStatus};
+use azdaja::{
+    DashboardSnapshot, SessionStatus,
+    observability::{MemoryConstellation, RecentRunAggregate, RunKind},
+};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const RED: &str = "\x1b[31m";
@@ -148,8 +151,24 @@ fn status_line(snapshot: &DashboardSnapshot) -> (&'static str, &'static str) {
 }
 
 fn nest_line(snapshot: &DashboardSnapshot) -> String {
+    let constellation = memory_constellation(snapshot);
+    let trace_count = constellation.as_ref().map_or(0, |value| value.trace_count);
     if snapshot.sessions.is_empty() {
-        return format!("empty · cold · 0/{} slots", snapshot.max_sessions);
+        return if trace_count == 0 {
+            format!("empty · cold · 0/{} slots", snapshot.max_sessions)
+        } else {
+            let history = history_count_label(constellation.as_ref().expect("checked history"));
+            format!(
+                "0 resident · cold · 0/{} slots · {} · {} observed",
+                snapshot.max_sessions,
+                history,
+                human_bytes(
+                    constellation
+                        .as_ref()
+                        .map_or(0, |value| value.total_source_bytes)
+                )
+            )
+        };
     }
     let pressure = if snapshot.sessions.len() >= snapshot.max_sessions {
         "full"
@@ -158,38 +177,116 @@ fn nest_line(snapshot: &DashboardSnapshot) -> String {
     } else {
         "resting"
     };
-    format!(
+    let mut line = format!(
         "{} resident state · {pressure} · {}/{} slots",
         human_bytes(total_state_bytes(snapshot)),
         snapshot.sessions.len(),
         snapshot.max_sessions
-    )
+    );
+    if trace_count > 0 {
+        line.push_str(&format!(
+            " · {}",
+            history_count_label(constellation.as_ref().expect("checked history"))
+        ));
+    }
+    line
 }
 
-fn memory_map(snapshot: &DashboardSnapshot) -> String {
-    let capacity = snapshot.max_sessions.max(1);
-    let shown = capacity.min(8);
-    let mut slots = String::new();
-    for index in 0..shown {
-        slots.push(match snapshot.sessions.get(index) {
-            Some(session) if session.busy => '●',
-            Some(_) => '○',
-            None => '·',
-        });
+fn memory_constellation(snapshot: &DashboardSnapshot) -> Option<MemoryConstellation> {
+    let mut summary = snapshot.recent_observability.clone();
+    for session in snapshot.sessions.iter().rev() {
+        if session.loaded_sources > session.completed_sources
+            && let Some(source) = session.source.as_ref()
+        {
+            summary.runs.insert(
+                0,
+                RecentRunAggregate {
+                    kind: RunKind::SessionLoad,
+                    observed_unix: session.updated,
+                    source: source.clone(),
+                },
+            );
+        }
     }
-    if capacity > shown {
-        slots.push_str(&format!("+{}", capacity - shown));
+    summary.runs.truncate(summary.max_recent_runs);
+    summary.compact_memory_constellation()
+}
+
+fn memory_line(snapshot: &DashboardSnapshot) -> String {
+    match memory_constellation(snapshot) {
+        Some(constellation) => format!(
+            "H→ {} · {}",
+            constellation.render_strip(18),
+            history_count_label(&constellation)
+        ),
+        None => "H→ ·················· · no traces yet".to_owned(),
     }
-    let mut mass = String::with_capacity(20);
-    for unit in 0..20usize {
-        let slot = unit.saturating_mul(capacity) / 20;
-        mass.push(match snapshot.sessions.get(slot) {
-            Some(session) if session.busy => '█',
-            Some(_) => '▒',
-            None => '░',
-        });
+}
+
+fn trace_count_label(count: usize) -> String {
+    if count == 1 {
+        "1 trace".to_owned()
+    } else {
+        format!("{count} traces")
     }
-    format!("{slots}  {mass}")
+}
+
+fn memory_count_label(count: usize) -> String {
+    if count == 1 {
+        "1 memory".to_owned()
+    } else {
+        format!("{count} memories")
+    }
+}
+
+fn history_count_label(constellation: &MemoryConstellation) -> String {
+    if constellation.completed_count == 0 {
+        return trace_count_label(constellation.trace_count);
+    }
+    let loads = constellation
+        .trace_count
+        .saturating_sub(constellation.completed_count);
+    if loads == 0 {
+        memory_count_label(constellation.completed_count)
+    } else {
+        format!(
+            "{} · {}",
+            memory_count_label(constellation.completed_count),
+            trace_count_label(loads)
+        )
+    }
+}
+
+fn percent(millipercent: u16) -> u32 {
+    (u32::from(millipercent.min(1000)) * 100 + 500) / 1000
+}
+
+fn texture_line(snapshot: &DashboardSnapshot) -> String {
+    match memory_constellation(snapshot) {
+        Some(constellation) => format!(
+            "H₀ {:.1}/8 · redundancy {}% · lines {}% nonempty",
+            constellation.weighted_byte_entropy_bits(),
+            percent(constellation.zero_order_redundancy_millipercent()),
+            percent(constellation.nonempty_line_millipercent)
+        ),
+        None => "unmeasured · load one source".to_owned(),
+    }
+}
+
+fn recent_trace_line(snapshot: &DashboardSnapshot, timestamp: u64) -> Option<String> {
+    let run = snapshot.recent_observability.runs.first()?;
+    let kind = match run.kind {
+        RunKind::SessionLoad => "session load",
+        RunKind::SoloLoad => "solo load",
+        RunKind::SessionFinal => "session memory",
+        RunKind::SoloFinal => "solo memory",
+    };
+    Some(format!(
+        "{kind} · {} · {} lines · {} ago",
+        human_bytes(run.source.source_bytes),
+        run.source.physical_lines,
+        human_duration(timestamp.saturating_sub(run.observed_unix))
+    ))
 }
 
 fn session_line(session: &SessionStatus, default_model: &str, timestamp: u64) -> String {
@@ -204,7 +301,53 @@ fn session_line(session: &SessionStatus, default_model: &str, timestamp: u64) ->
     )
 }
 
-fn render_compact(snapshot: &DashboardSnapshot, color: bool, timestamp: u64) -> String {
+fn compact_texture_line(snapshot: &DashboardSnapshot) -> String {
+    match memory_constellation(snapshot) {
+        Some(constellation) => format!(
+            "H₀ {:.1}/8 · R₀ {}% · lines {}%",
+            constellation.weighted_byte_entropy_bits(),
+            percent(constellation.zero_order_redundancy_millipercent()),
+            percent(constellation.nonempty_line_millipercent)
+        ),
+        None => "unmeasured · load one source".to_owned(),
+    }
+}
+
+fn compact_nest_line(snapshot: &DashboardSnapshot) -> String {
+    let constellation = memory_constellation(snapshot);
+    let traces = constellation.as_ref().map_or(0, |value| value.trace_count);
+    if snapshot.sessions.is_empty() {
+        return match constellation {
+            Some(value) => format!(
+                "0 resident · {} · {} observed",
+                history_count_label(&value),
+                human_bytes(value.total_source_bytes)
+            ),
+            None => format!("empty · 0/{} slots", snapshot.max_sessions),
+        };
+    }
+    let mut line = format!(
+        "{} resident · {}/{} slots",
+        human_bytes(total_state_bytes(snapshot)),
+        snapshot.sessions.len(),
+        snapshot.max_sessions
+    );
+    if traces > 0 {
+        line.push_str(&format!(
+            " · {}",
+            history_count_label(constellation.as_ref().expect("checked history"))
+        ));
+    }
+    line
+}
+
+fn render_compact(
+    snapshot: &DashboardSnapshot,
+    color: bool,
+    timestamp: u64,
+    terminal_columns: usize,
+) -> String {
+    let width = terminal_columns.max(20);
     let (status, status_style) = status_line(snapshot);
     let mut output = String::new();
     output.push_str(&format!(
@@ -213,22 +356,60 @@ fn render_compact(snapshot: &DashboardSnapshot, color: bool, timestamp: u64) -> 
         paint(color, status_style, status)
     ));
     output.push_str(&format!(
-        "route {} · {} · {}\n",
-        clean(&snapshot.default_model),
-        clean(&snapshot.provider),
-        clean(&snapshot.reasoning)
+        "{}\n",
+        truncate(
+            &format!(
+                "route {} · {} · {}",
+                clean(&snapshot.default_model),
+                clean(&snapshot.provider),
+                clean(&snapshot.reasoning)
+            ),
+            width
+        )
     ));
-    output.push_str(&format!("nest  {}\n", nest_line(snapshot)));
-    output.push_str(&format!("map   {}\n", memory_map(snapshot)));
+    output.push_str(&format!(
+        "{}\n",
+        truncate(&format!("nest  {}", compact_nest_line(snapshot)), width)
+    ));
+    let compact_memory = match memory_constellation(snapshot) {
+        Some(constellation) => format!(
+            "memory H→ {} · {}",
+            constellation.render_strip(12),
+            history_count_label(&constellation)
+        ),
+        None => "memory H→ ············ · no traces".to_owned(),
+    };
+    output.push_str(&format!("{}\n", truncate(&compact_memory, width)));
+    output.push_str(&format!(
+        "{}\n",
+        truncate(
+            &format!("texture {}", compact_texture_line(snapshot)),
+            width
+        )
+    ));
     if let Some(session) = snapshot.sessions.first() {
         output.push_str(&format!(
-            "recent {}\n",
-            session_line(session, &snapshot.default_model, timestamp)
+            "{}\n",
+            truncate(
+                &format!(
+                    "recent {}",
+                    session_line(session, &snapshot.default_model, timestamp)
+                ),
+                width
+            )
+        ));
+    } else if let Some(trace) = recent_trace_line(snapshot, timestamp) {
+        output.push_str(&format!(
+            "{}\n",
+            truncate(&format!("recent {trace}"), width)
         ));
     } else {
-        output.push_str("recent no resident session\n");
+        output.push_str("recent no memory trace yet\n");
     }
-    output.push_str("next  solo · list · doctor · help\n");
+    output.push_str(&format!(
+        "{}\n",
+        truncate("next  map · solo · list · doctor · help", width)
+    ));
     output
 }
 
@@ -344,11 +525,11 @@ fn render_at(
     timestamp: u64,
 ) -> String {
     if terminal_columns < 54 {
-        return render_compact(snapshot, color, timestamp);
+        return render_compact(snapshot, color, timestamp, terminal_columns);
     }
     let total = terminal_columns.clamp(58, 78);
     let (status, status_style) = status_line(snapshot);
-    let mut output = top_border(total, "azdaja · little memory", color);
+    let mut output = top_border(total, "azdaja · memory constellation", color);
     output.push_str(&row(total, "status", status, status_style, color));
     output.push_str(&row(
         total,
@@ -361,9 +542,18 @@ fn render_at(
         color,
     ));
     output.push_str(&row(total, "nest", &nest_line(snapshot), "", color));
-    output.push_str(&row(total, "map", &memory_map(snapshot), "", color));
+    output.push_str(&row(total, "memory", &memory_line(snapshot), "", color));
+    output.push_str(&row(total, "texture", &texture_line(snapshot), DIM, color));
     if snapshot.sessions.is_empty() {
-        output.push_str(&row(total, "recent", "no resident session", DIM, color));
+        output.push_str(&row(
+            total,
+            "recent",
+            recent_trace_line(snapshot, timestamp)
+                .as_deref()
+                .unwrap_or("no memory trace yet"),
+            DIM,
+            color,
+        ));
     } else {
         for (index, session) in snapshot.sessions.iter().take(2).enumerate() {
             output.push_str(&row(
@@ -391,7 +581,7 @@ fn render_at(
         paint(
             color,
             CYAN,
-            "solo \"question\" -f ./document.txt · list · doctor · help"
+            "map · solo \"question\" -f ./document.txt · list · doctor · help"
         )
     ));
     output
@@ -425,9 +615,40 @@ pub fn render_error(message: &str, color: bool, terminal_columns: usize) -> Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use azdaja::observability::{
+        EvidenceTier, RecentAggregateSummary, RecentRunAggregate, SourceLocalAggregate,
+    };
     use std::path::PathBuf;
 
     fn snapshot() -> DashboardSnapshot {
+        let mut recent_observability = RecentAggregateSummary::empty();
+        recent_observability.updated_unix = 990;
+        recent_observability.runs = vec![
+            RecentRunAggregate {
+                kind: RunKind::SoloLoad,
+                observed_unix: 980,
+                source: SourceLocalAggregate {
+                    evidence_tier: EvidenceTier::ExactLocal,
+                    source_bytes: 2_400_000,
+                    utf8_chars: 182_000,
+                    physical_lines: 9_421,
+                    nonempty_lines: 8_900,
+                    byte_entropy_millibits: 4_812,
+                },
+            },
+            RecentRunAggregate {
+                kind: RunKind::SessionLoad,
+                observed_unix: 900,
+                source: SourceLocalAggregate {
+                    evidence_tier: EvidenceTier::ExactLocal,
+                    source_bytes: 64_000,
+                    utf8_chars: 60_000,
+                    physical_lines: 1_000,
+                    nonempty_lines: 800,
+                    byte_entropy_millibits: 3_000,
+                },
+            },
+        ];
         DashboardSnapshot {
             default_model: "gpt-5.6-luna".into(),
             provider: "openai".into(),
@@ -445,6 +666,7 @@ mod tests {
                     state_bytes: 1024 * 1024,
                     source: None,
                     loaded_sources: 0,
+                    completed_sources: 0,
                 },
                 SessionStatus {
                     id: "fedcba9876543210".into(),
@@ -455,24 +677,27 @@ mod tests {
                     state_bytes: 512 * 1024,
                     source: None,
                     loaded_sources: 0,
+                    completed_sources: 0,
                 },
             ],
-            recent_observability: azdaja::observability::RecentAggregateSummary::empty(),
+            recent_observability,
             observability_degraded: false,
         }
     }
 
     #[test]
-    fn dashboard_card_matches_the_minimal_memory_nest() {
+    fn dashboard_card_shows_a_minimal_truthful_memory_constellation() {
         let rendered = render_at(&snapshot(), false, 72, 1000);
-        assert!(rendered.starts_with("╭─ azdaja · little memory"));
+        assert!(rendered.starts_with("╭─ azdaja · memory constellation"));
         assert!(rendered.contains("● awake · source stays local"));
         assert!(rendered.contains("gpt-5.6-luna · openai · medium"));
-        assert!(rendered.contains("1.5 MiB resident state · warm · 2/4 slots"));
-        assert!(rendered.contains("●○··"));
-        assert!(rendered.contains("█████"));
-        assert!(rendered.contains("▒▒▒▒▒"));
-        assert!(rendered.contains("░░░░░"));
+        assert!(rendered.contains("1.5 MiB resident state · warm · 2/4 slots · 2 traces"));
+        assert!(rendered.contains("H→"));
+        assert!(rendered.contains('●'));
+        assert!(rendered.contains('○'));
+        assert!(rendered.contains("H₀"));
+        assert!(rendered.contains("redundancy"));
+        assert!(rendered.contains("lines"));
         assert!(rendered.contains("01234567 running"));
         assert!(rendered.contains("fedcba98 idle"));
         assert!(rendered.contains("next"));
@@ -486,7 +711,7 @@ mod tests {
         let rendered = render_at(&data, true, 40, 1000);
         assert!(rendered.contains("bad[31mmodel"));
         assert!(!rendered.contains("bad\x1b[31m"));
-        assert!(rendered.contains("next  solo · list · doctor · help"));
+        assert!(rendered.contains("next  map · solo · list · doctor · help"));
         assert!(!rendered.contains("q quit"));
     }
 

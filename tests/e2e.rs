@@ -7027,6 +7027,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
         ("exec", "Usage: az exec <session-id>"),
         ("final", "Usage: az final <session-id>"),
         ("list", "Usage: az list"),
+        ("map", "Usage: az map"),
         ("kill", "Usage: az kill <session-id>"),
         (
             "solo",
@@ -7044,7 +7045,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
         ("help", "Usage: az help [command]"),
     ];
     let bare = format!(
-        "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
+        "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
         env!("CARGO_PKG_VERSION")
     );
     for name in ["az", "azdaja"] {
@@ -7097,18 +7098,19 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
             assert!(output.stderr.is_empty());
         }
 
-        let invalid: [(&[&str], &str); 11] = [
+        let invalid: [(&[&str], &str); 12] = [
             (&["start", "extra"], expected[0].1),
             (&["load", "only-one"], expected[1].1),
             (&["exec", "session", "extra"], expected[2].1),
             (&["final"], expected[3].1),
             (&["list", "extra"], expected[4].1),
-            (&["kill"], expected[5].1),
-            (&["solo", "question", "--bogus", "value"], expected[6].1),
-            (&["doctor", "--bogus"], expected[7].1),
-            (&["install", "--bogus"], expected[8].1),
-            (&["uninstall", "--harness"], expected[9].1),
-            (&["help", "start", "extra"], expected[10].1),
+            (&["map", "extra"], expected[5].1),
+            (&["kill"], expected[6].1),
+            (&["solo", "question", "--bogus", "value"], expected[7].1),
+            (&["doctor", "--bogus"], expected[8].1),
+            (&["install", "--bogus"], expected[9].1),
+            (&["uninstall", "--harness"], expected[10].1),
+            (&["help", "start", "extra"], expected[11].1),
         ];
         for (args, usage) in invalid {
             let output = Command::new(&executable).args(args).output().unwrap();

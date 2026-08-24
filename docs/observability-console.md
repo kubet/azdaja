@@ -1,6 +1,6 @@
 # Virtual-memory observability console
 
-Status: implemented for the v0.1.5 CLI.
+Status: implemented on `main` for the follow-up CLI release.
 
 ## Product thesis
 
@@ -91,7 +91,15 @@ H_byte = -sum(p_b * log2(p_b)), b in 0..255
 
 Range: `0..8 bits/byte`. Compute with 256 counters while the source is loaded. It measures byte-distribution spread. It does not measure meaning, importance, truth, uncertainty, or model difficulty.
 
-Display only in an expanded source detail row as `byte entropy 4.8 / 8`, with the label `source texture` or an explicit `H₀ byte` label. Do not use a mysterious headline "entropy score."
+The overview may show it only as an explicit texture tuple such as `H₀ 4.8/8`; details retain the caveat that it is distributional, not quality. Do not use a mysterious headline "entropy score."
+
+Zero-order byte redundancy is:
+
+```text
+R₀ = 1 - H_byte / 8
+```
+
+It is an exact derived property of the observed byte distribution. Label it `redundancy`, never `compression`: it is not a measured compressor ratio and ignores ordering.
 
 Optional later metrics:
 
@@ -147,6 +155,20 @@ Do not synthesize a generic confidence percentage.
 
 When strict A/B classification is used, show the directly observed disagreement rate and adjudication count. Semantic entropy requires multiple sampled outputs plus a declared equivalence or clustering policy. If added later, label it `model-derived` and show the model, sample count, and policy.
 
+## Memory-trace constellation
+
+Retain at most 24 aggregate-only history entries. New `memory` entries are written only after an explicit session `FINAL` or a successful `solo` answer. Failed, interrupted, rejected, load-only, and killed-unfinalized work does not become a memory. Existing v0.1.5 source-load entries remain readable and are labelled `load` traces until they age out. Every entry contains time, kind, bytes, characters, physical lines, nonempty lines, and byte entropy. It contains no source text, path, prompt, response, hash, session ID, answer, or semantic label.
+
+The constellation is a fixed scatter plot, not a force-directed graph:
+
+- horizontal position: exact `H₀` byte entropy from 0 to 8 bits/byte;
+- vertical position: fixed absolute source-size bands (`<64 KiB`, `≥64 KiB`, `≥1 MiB`, `≥16 MiB`);
+- `●`: newest retained trace;
+- `○`: one older trace;
+- `2` through `9`, then `+`: multiple traces in one exact structural cell.
+
+The compact default collapses the same x-axis into one strip. No edge claims semantic similarity. Full-screen expansion is explicit through `az map`; bare `az` prints a compact snapshot and exits.
+
 ## Source memory map
 
 Use a fixed positional strip, not a force-directed graph. Divide the source into 24 to 48 equal byte or record buckets.
@@ -169,16 +191,15 @@ Do not claim that arbitrary evaluator reads are mapped unless the evaluator actu
 Target 58 to 78 columns and five to eight meaningful rows.
 
 ```text
-╭─ azdaja · virtual memory ─────────────────────────────────╮
-│ status    ● awake · complete source stays local           │
-│ route     gpt-5.6-luna · openai · medium                  │
-│ resident  52.4 MiB · 104,857 records · 1 active           │
-│ boundary  82.1 KiB exposed · 99.84% held local            │
-│ map       ░░░░▒▒░░▓▓░░░░░░░░░░░░░░                       │
-│ flow      source → scan → 8 recalls → verify → final      │
-│ coverage  verified 100% · reuse 73% · 0 faults            │
+╭─ azdaja · memory constellation ───────────────────────────╮
+│ status   ● awake · source stays local                     │
+│ route    gpt-5.6-sol · openai · low                       │
+│ nest     0 resident · cold · 0/4 slots · 7 traces         │
+│ memory   H→ ○··2····●····○·· · 7 traces                  │
+│ texture  H₀ 4.8/8 · redundancy 40% · lines 94% nonempty  │
+│ recent   solo · 2.4 MiB · 9,421 lines · 4m ago           │
 ╰────────────────────────────────────────────────────────────╯
-last  5.4k root · 21.3k child · 8.2s   enter inspect · q quit
+next  map · solo "question" -f ./document.txt · list · doctor
 ```
 
 Only render fields backed by observations. For example, omit `boundary` until prompt provenance exists. Never fill gaps with zero when the correct value is unknown.
@@ -186,14 +207,15 @@ Only render fields backed by observations. For example, omit `boundary` until pr
 ### Empty state
 
 ```text
-╭─ azdaja · virtual memory ────────────────────────────────╮
+╭─ azdaja · memory constellation ─────────────────────────╮
 │ status    ○ dormant · source stays local                 │
 │ route     gpt-5.6-luna · openai · medium                 │
-│ resident  no source loaded                               │
-│ map       ························                      │
-│ next      ask your agent about one large input           │
+│ nest      empty · cold · 0/4 slots                       │
+│ memory    H→ ·················· · no traces yet         │
+│ texture   unmeasured · load one source                   │
+│ recent    no memory trace yet                            │
 ╰───────────────────────────────────────────────────────────╯
-installations  jcode active · claude available · gemini absent
+next  map · solo "question" -f ./document.txt · list · doctor
 ```
 
 The integration row must distinguish:
@@ -209,7 +231,7 @@ Plain lines, no border, same semantics. Non-TTY output remains the stable machin
 
 ## Interaction model
 
-Use Ratatui 0.30 and Crossterm 0.29 for the installed interactive console. The dashboard refreshes owner-only state at a low fixed rate and exits cleanly on `q`, Esc, Ctrl-C, or terminal loss.
+Bare `az` uses the static renderer and exits. `az map` uses Ratatui 0.30 and Crossterm 0.29 for the installed interactive console. It refreshes owner-only state at a low fixed rate and exits cleanly on `q`, Esc, Ctrl-C, or terminal loss.
 
 Primary keys:
 

@@ -2,9 +2,10 @@
 
 use std::{
     fs,
+    io::Write,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -79,7 +80,7 @@ fn non_tty_bare_command_is_exactly_five_line_help_without_sprite() {
     assert_eq!(
         stdout,
         format!(
-            "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
+            "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
             env!("CARGO_PKG_VERSION")
         )
     );
@@ -131,6 +132,94 @@ fn help_alias_is_concise_and_command_help_uses_plain_targets() {
         stderr,
         "error: unknown command 'spaceship' (run 'az help')\n"
     );
+}
+
+#[test]
+fn map_keeps_a_private_aggregate_trace_after_the_resident_session_is_killed() {
+    let scratch = Scratch::new("memory-map");
+    let cfg = config(&scratch.0, "cat");
+    let source = scratch.0.join("private source.txt");
+    let secret = "private constellation source\nalpha beta gamma\n\n";
+    fs::write(&source, secret).unwrap();
+
+    let started = command(&scratch.0)
+        .env("AZDAJA_CONFIG", &cfg)
+        .arg("start")
+        .output()
+        .unwrap();
+    assert!(started.status.success());
+    let session = std::str::from_utf8(&started.stdout).unwrap().trim();
+
+    let loaded = command(&scratch.0)
+        .env("AZDAJA_CONFIG", &cfg)
+        .args(["load", session, source.to_str().unwrap(), "source"])
+        .output()
+        .unwrap();
+    assert!(
+        loaded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&loaded.stderr)
+    );
+
+    let live_map = command(&scratch.0)
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("NO_COLOR", "1")
+        .arg("map")
+        .output()
+        .unwrap();
+    assert!(live_map.status.success());
+    let live_map = String::from_utf8(live_map.stdout).unwrap();
+    assert!(live_map.contains("1 trace"));
+    assert!(!live_map.contains("session memory"));
+
+    let mut executed = command(&scratch.0)
+        .env("AZDAJA_CONFIG", &cfg)
+        .args(["exec", session])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    executed
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"FINAL(\"done\")\n")
+        .unwrap();
+    let executed = executed.wait_with_output().unwrap();
+    assert!(
+        executed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&executed.stderr)
+    );
+
+    let killed = command(&scratch.0)
+        .env("AZDAJA_CONFIG", &cfg)
+        .args(["kill", session])
+        .output()
+        .unwrap();
+    assert!(killed.status.success());
+
+    let mapped = command(&scratch.0)
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("NO_COLOR", "1")
+        .arg("map")
+        .output()
+        .unwrap();
+    assert!(mapped.status.success());
+    let (stdout, stderr) = utf8(&mapped);
+    assert!(stderr.is_empty());
+    assert!(stdout.starts_with("╭─ azdaja · memory constellation"));
+    assert!(stdout.contains("0 resident · cold · 0/4 slots · 1 memory"));
+    assert!(stdout.contains("memory"));
+    assert!(stdout.contains("H→"));
+    assert!(stdout.contains("texture"));
+    assert!(stdout.contains("H₀"));
+    assert!(stdout.contains("redundancy"));
+    assert!(stdout.contains("session memory"));
+    assert!(!stdout.contains(secret));
+    assert!(!stdout.contains("private constellation source"));
+    assert!(!stdout.contains('\u{1b}'));
 }
 
 #[test]

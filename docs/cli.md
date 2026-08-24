@@ -1,8 +1,8 @@
 # CLI reference
 
-Use `azdaja` in every command below when the short `az` alias is unavailable. A bare interactive `azdaja` opens the provider-free virtual-memory console from validated configuration, owner-only session state, and aggregate-only observability records; piped/non-terminal invocation keeps the stable five-line help output.
+Use `azdaja` in every command below when the short `az` alias is unavailable. A bare interactive `azdaja` prints a compact provider-free memory snapshot from validated configuration, owner-only session state, and aggregate-only observability records; piped/non-terminal invocation keeps the stable five-line help output. Run `az map` for the optional full-screen view.
 
-The console refreshes local state at a low fixed rate. Its overview shows route, resident session-state size, a positional slot map, and recent work. It says `unmeasured` when exact model-boundary exposure or coverage provenance is unavailable. The details view may show exact-local byte entropy as distributional source texture, never as confidence or semantic quality. Persisted observability excludes source text, paths, hashes, prompts, and responses.
+The snapshot shows route, resident state, retained aggregate traces, a byte-entropy constellation strip, zero-order byte redundancy, nonempty-line density, and recent work. `az map` refreshes local state at a low fixed rate and expands the constellation into a fixed scatter plot: horizontal position is exact byte entropy, vertical position is an absolute source-size band, `●` is the newest trace, `○` is an older trace, and digits are collisions. It is not a semantic graph. Persisted observability excludes source text, paths, hashes, prompts, and responses.
 
 Keys: arrows or `j/k` select, Enter inspects, `d` toggles measured details, `i` opens validated local integration state, `r` refreshes, and `q`, Esc, or Ctrl-C exits. Raw mode, cursor visibility, and the prior screen are restored on normal exit and panic. Narrow terminals use a static line-oriented fallback.
 
@@ -16,6 +16,7 @@ Keys: arrows or `j/k` select, Enter inspects, `d` toggles measured details, `i` 
 | `exec` | `az exec <session-id>` | Read evaluator code from standard input and execute it. |
 | `final` | `az final <session-id>` | Print the session's final value. |
 | `list` | `az list` | Show the memory-nest session table in a terminal while emitting stable raw IDs when piped. |
+| `map` | `az map` | Open the optional full-screen exact-local memory constellation, with a static fallback when not interactive. |
 | `kill` | `az kill <session-id>` | Remove a session. |
 | `solo` | `az solo <question> -f <path> [--model <model>] [--sub-model <model>]` | Run one file question. |
 | `doctor` | `az doctor [jcode|claude|codex|gemini|opencode|all|--caps]` | Check the configured route, or name a tool to check installed files only. |

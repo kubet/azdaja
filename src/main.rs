@@ -159,12 +159,13 @@ fn preflight_repair_solo_trace(
     Ok(())
 }
 
-const COMMAND_USAGES: [(&str, &str); 11] = [
+const COMMAND_USAGES: [(&str, &str); 12] = [
     ("start", "Usage: az start"),
     ("load", "Usage: az load <session-id> <path> <variable>"),
     ("exec", "Usage: az exec <session-id>"),
     ("final", "Usage: az final <session-id>"),
     ("list", "Usage: az list"),
+    ("map", "Usage: az map"),
     ("kill", "Usage: az kill <session-id>"),
     (
         "solo",
@@ -237,7 +238,7 @@ fn help(interactive_banner: bool) {
         print!("{}", banner::banner(color));
     }
     println!(
-        "AZDAJA v{VERSION} — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt"
+        "AZDAJA v{VERSION} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt"
     );
 }
 
@@ -295,19 +296,11 @@ fn run() -> Result<bool> {
             let term = env::var("TERM").ok();
             let no_color = env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty());
             let color = banner::color_enabled(true, no_color, term.as_deref());
-            if io::stdin().is_terminal() {
-                tui::run(
-                    || Config::load().and_then(|config| dashboard_snapshot(&config)),
-                    console_integrations,
-                    color,
-                )?;
-            } else {
-                let snapshot = Config::load().and_then(|config| dashboard_snapshot(&config))?;
-                print!(
-                    "{}",
-                    dashboard::render(&snapshot, color, dashboard::terminal_width())
-                );
-            }
+            let snapshot = Config::load().and_then(|config| dashboard_snapshot(&config))?;
+            print!(
+                "{}",
+                dashboard::render(&snapshot, color, dashboard::terminal_width())
+            );
         } else {
             help(false);
         }
@@ -399,6 +392,26 @@ fn run() -> Result<bool> {
                 for id in list(&config)? {
                     println!("{id}")
                 }
+            }
+        }
+        "map" => {
+            exact(&args, 1, "map")?;
+            let term = env::var("TERM").ok();
+            let no_color = env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty());
+            let color =
+                banner::color_enabled(io::stdout().is_terminal(), no_color, term.as_deref());
+            if io::stdout().is_terminal() && io::stdin().is_terminal() {
+                tui::run(
+                    || Config::load().and_then(|config| dashboard_snapshot(&config)),
+                    console_integrations,
+                    color,
+                )?;
+            } else {
+                let snapshot = Config::load().and_then(|config| dashboard_snapshot(&config))?;
+                print!(
+                    "{}",
+                    dashboard::render(&snapshot, color, dashboard::terminal_width())
+                );
             }
         }
         "kill" => {
@@ -5898,10 +5911,7 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
     };
     let mut session = SoloSession::new(cfg, sub_model)?;
     let metadata = session.load(&file, "ctx", cfg)?;
-    // Aggregate observability must never prevent the actual virtual-memory job.
-    if let Ok(source) = session.source_aggregate() {
-        let _ = azdaja::observability::record_solo_source_load(source);
-    }
+    let solo_source = session.source_aggregate().ok().cloned();
 
     // Fixed, provider-free structural evidence. The complete context remains only in Monty.
     let inspection = session.structural_sample()?.to_owned();
@@ -6444,6 +6454,11 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
         }
     }
     runtime.succeeded = true;
+    if let Some(source) = solo_source.as_ref() {
+        // Completion history is aggregate-only and must never turn a successful
+        // answer into a product failure.
+        let _ = azdaja::observability::record_solo_completion(source);
+    }
     Ok(())
 }
 

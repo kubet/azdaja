@@ -1,5 +1,8 @@
 use anyhow::Result;
-use azdaja::{DashboardSnapshot, SessionStatus, observability::SourceLocalAggregate};
+use azdaja::{
+    DashboardSnapshot, SessionStatus,
+    observability::{MemoryConstellation, RecentRunAggregate, RunKind, SourceLocalAggregate},
+};
 use crossterm::{
     cursor::{Hide, Show},
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
@@ -29,7 +32,7 @@ const MIN_INTERACTIVE_HEIGHT: u16 = 20;
 const MAX_CARD_WIDTH: u16 = 78;
 const REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
-const RECENT_ROWS: usize = 2;
+const RECENT_ROWS: usize = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum IntegrationHealth {
@@ -100,7 +103,12 @@ impl AppState {
     {
         match load_snapshot() {
             Ok(snapshot) => {
-                self.selected = self.selected.min(snapshot.sessions.len().saturating_sub(1));
+                let selectable = if snapshot.sessions.is_empty() {
+                    snapshot.recent_observability.runs.len()
+                } else {
+                    snapshot.sessions.len()
+                };
+                self.selected = self.selected.min(selectable.saturating_sub(1));
                 self.snapshot = Some(snapshot);
                 self.snapshot_error = None;
             }
@@ -126,11 +134,16 @@ impl AppState {
         let Some(snapshot) = self.snapshot.as_ref() else {
             return;
         };
-        if snapshot.sessions.is_empty() {
+        let selectable = if snapshot.sessions.is_empty() {
+            snapshot.recent_observability.runs.len()
+        } else {
+            snapshot.sessions.len()
+        };
+        if selectable == 0 {
             self.selected = 0;
             return;
         }
-        let last = snapshot.sessions.len() - 1;
+        let last = selectable - 1;
         self.selected = if delta.is_negative() {
             self.selected.saturating_sub(delta.unsigned_abs())
         } else {
@@ -356,7 +369,11 @@ fn render(frame: &mut Frame<'_>, state: &AppState) {
         );
     }
     frame.render_widget(
-        Paragraph::new(key_hint(state.view, state.color)),
+        Paragraph::new(key_hint(
+            state.view,
+            history_is_selected(state),
+            state.color,
+        )),
         Rect {
             x: content.x,
             y: footer_y,
@@ -389,7 +406,7 @@ fn card_content(state: &AppState) -> (String, Vec<Line<'static>>) {
     }
     let Some(snapshot) = state.snapshot.as_ref() else {
         return (
-            " azdaja · little memory ".to_string(),
+            " azdaja · memory constellation ".to_string(),
             vec![Line::from("status   ○ waking local state")],
         );
     };
@@ -399,7 +416,7 @@ fn card_content(state: &AppState) -> (String, Vec<Line<'static>>) {
         summary_rows(snapshot)
     };
     (
-        " azdaja · little memory ".to_string(),
+        " azdaja · memory constellation ".to_string(),
         rows.into_iter()
             .map(|row| row_line(row, state.color))
             .collect(),
@@ -421,14 +438,7 @@ fn body_lines(state: &AppState) -> Vec<Line<'static>> {
         return vec![Line::from("reading owner-only local state…")];
     };
     match state.view {
-        ConsoleView::Overview => vec![Line::from(vec![
-            Span::styled("next  ", subtle_style(state.color)),
-            Span::styled(
-                "solo \"question\" -f ./document.txt",
-                route_style(state.color),
-            ),
-            Span::raw(" · list · doctor · help"),
-        ])],
+        ConsoleView::Overview => constellation_lines(snapshot, state.selected, state.color),
         ConsoleView::Details => details_lines(snapshot, state.selected, state.color),
         ConsoleView::Integrations => integration_lines(
             state.integrations.as_deref(),
@@ -443,7 +453,7 @@ fn render_runtime_narrow(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
         vec![
             Line::from(styled("azdaja ● needs attention", bad_style(state.color))),
             Line::from(clean(error)),
-            key_hint(state.view, state.color),
+            key_hint(state.view, history_is_selected(state), state.color),
         ]
     } else if let Some(snapshot) = state.snapshot.as_ref() {
         let mut lines = vec![Line::from(styled(
@@ -453,7 +463,11 @@ fn render_runtime_narrow(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
         for row in summary_rows(snapshot) {
             lines.push(row_line(row, state.color));
         }
-        lines.push(key_hint(state.view, state.color));
+        lines.push(key_hint(
+            state.view,
+            history_is_selected(state),
+            state.color,
+        ));
         lines
     } else {
         vec![Line::from("azdaja ○ waking")]
@@ -493,9 +507,14 @@ fn summary_rows(snapshot: &DashboardSnapshot) -> Vec<VisualRow> {
             tone: Tone::Normal,
         },
         VisualRow {
-            label: "map",
-            value: memory_map(snapshot),
+            label: "memory",
+            value: memory_line(snapshot),
             tone: Tone::Normal,
+        },
+        VisualRow {
+            label: "texture",
+            value: texture_line(snapshot),
+            tone: Tone::Dim,
         },
     ]
 }
@@ -505,7 +524,8 @@ fn overview_rows(snapshot: &DashboardSnapshot, timestamp: u64, selected: usize) 
     if snapshot.sessions.is_empty() {
         rows.push(VisualRow {
             label: "recent",
-            value: "no resident session".to_string(),
+            value: recent_trace_line(snapshot, timestamp, selected)
+                .unwrap_or_else(|| "no memory trace yet".to_owned()),
             tone: Tone::Dim,
         });
         return rows;
@@ -552,8 +572,24 @@ fn visible_session_range(len: usize, selected: usize) -> std::ops::Range<usize> 
 }
 
 fn nest_line(snapshot: &DashboardSnapshot) -> String {
+    let constellation = memory_constellation(snapshot);
+    let trace_count = constellation.as_ref().map_or(0, |value| value.trace_count);
     if snapshot.sessions.is_empty() {
-        return format!("empty · cold · 0/{} slots", snapshot.max_sessions);
+        return if trace_count == 0 {
+            format!("empty · cold · 0/{} slots", snapshot.max_sessions)
+        } else {
+            let history = history_count_label(constellation.as_ref().expect("checked history"));
+            format!(
+                "0 resident · cold · 0/{} slots · {} · {} observed",
+                snapshot.max_sessions,
+                history,
+                human_bytes(
+                    constellation
+                        .as_ref()
+                        .map_or(0, |value| value.total_source_bytes)
+                )
+            )
+        };
     }
     let active = active_sessions(snapshot);
     let pressure = if snapshot.sessions.len() >= snapshot.max_sessions {
@@ -563,39 +599,163 @@ fn nest_line(snapshot: &DashboardSnapshot) -> String {
     } else {
         "resting"
     };
-    format!(
+    let mut line = format!(
         "{} resident state · {pressure} · {}/{} slots",
         human_bytes(total_state_bytes(snapshot)),
         snapshot.sessions.len(),
         snapshot.max_sessions
-    )
+    );
+    if trace_count > 0 {
+        line.push_str(&format!(
+            " · {}",
+            history_count_label(constellation.as_ref().expect("checked history"))
+        ));
+    }
+    line
 }
 
-fn memory_map(snapshot: &DashboardSnapshot) -> String {
-    let capacity = snapshot.max_sessions.max(1);
-    let shown = capacity.min(8);
-    let mut slots = String::new();
-    for index in 0..shown {
-        slots.push(match snapshot.sessions.get(index) {
-            Some(session) if session.busy => '●',
-            Some(_) => '○',
-            None => '·',
-        });
+fn memory_constellation(snapshot: &DashboardSnapshot) -> Option<MemoryConstellation> {
+    let mut summary = snapshot.recent_observability.clone();
+    for session in snapshot.sessions.iter().rev() {
+        if session.loaded_sources > session.completed_sources
+            && let Some(source) = session.source.as_ref()
+        {
+            summary.runs.insert(
+                0,
+                RecentRunAggregate {
+                    kind: RunKind::SessionLoad,
+                    observed_unix: session.updated,
+                    source: source.clone(),
+                },
+            );
+        }
     }
-    if capacity > shown {
-        slots.push_str(&format!("+{}", capacity - shown));
-    }
+    summary.runs.truncate(summary.max_recent_runs);
+    summary.compact_memory_constellation()
+}
 
-    let mut mass = String::with_capacity(20);
-    for unit in 0..20usize {
-        let slot = unit.saturating_mul(capacity) / 20;
-        mass.push(match snapshot.sessions.get(slot) {
-            Some(session) if session.busy => '█',
-            Some(_) => '▒',
-            None => '░',
-        });
+fn memory_line(snapshot: &DashboardSnapshot) -> String {
+    match memory_constellation(snapshot) {
+        Some(constellation) => format!(
+            "H→ {} · {}",
+            constellation.render_strip(18),
+            history_count_label(&constellation)
+        ),
+        None => "H→ ·················· · no traces yet".to_owned(),
     }
-    format!("{slots}  {mass}")
+}
+
+fn trace_count_label(count: usize) -> String {
+    if count == 1 {
+        "1 trace".to_owned()
+    } else {
+        format!("{count} traces")
+    }
+}
+
+fn memory_count_label(count: usize) -> String {
+    if count == 1 {
+        "1 memory".to_owned()
+    } else {
+        format!("{count} memories")
+    }
+}
+
+fn history_count_label(constellation: &MemoryConstellation) -> String {
+    if constellation.completed_count == 0 {
+        return trace_count_label(constellation.trace_count);
+    }
+    let loads = constellation
+        .trace_count
+        .saturating_sub(constellation.completed_count);
+    if loads == 0 {
+        memory_count_label(constellation.completed_count)
+    } else {
+        format!(
+            "{} · {}",
+            memory_count_label(constellation.completed_count),
+            trace_count_label(loads)
+        )
+    }
+}
+
+fn percent(millipercent: u16) -> u32 {
+    (u32::from(millipercent.min(1000)) * 100 + 500) / 1000
+}
+
+fn texture_line(snapshot: &DashboardSnapshot) -> String {
+    match memory_constellation(snapshot) {
+        Some(constellation) => format!(
+            "H₀ {:.1}/8 · redundancy {}% · lines {}% nonempty",
+            constellation.weighted_byte_entropy_bits(),
+            percent(constellation.zero_order_redundancy_millipercent()),
+            percent(constellation.nonempty_line_millipercent)
+        ),
+        None => "unmeasured · load one source".to_owned(),
+    }
+}
+
+fn constellation_lines(
+    snapshot: &DashboardSnapshot,
+    selected: usize,
+    color: bool,
+) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    if let Some(constellation) = memory_constellation(snapshot) {
+        lines.push(Line::from(styled(
+            "mass ↑ · exact-local aggregate traces",
+            heading_style(color),
+        )));
+        let labels = ["≥16 MiB", "≥1 MiB", "≥64 KiB", "<64 KiB"];
+        let selected_trace = if snapshot.sessions.is_empty() {
+            selected
+        } else {
+            0
+        };
+        for (label, row) in labels
+            .into_iter()
+            .zip(constellation.render_grid_selected(24, selected_trace))
+        {
+            lines.push(Line::from(vec![
+                Span::styled(format!("{label:<9} "), subtle_style(color)),
+                Span::raw(row),
+            ]));
+        }
+        lines.push(Line::from(
+            "          0  H₀ byte texture  8 → · ● newest · ○ older · 2 collision",
+        ));
+    } else {
+        lines.push(Line::from(styled(
+            "constellation empty · load one source to create a private aggregate trace",
+            subtle_style(color),
+        )));
+    }
+    lines.push(Line::from(vec![
+        Span::styled("next  ", subtle_style(color)),
+        Span::styled("solo \"question\" -f ./document.txt", route_style(color)),
+        Span::raw(" · list · doctor · help"),
+    ]));
+    lines
+}
+
+fn recent_trace_line(
+    snapshot: &DashboardSnapshot,
+    timestamp: u64,
+    selected: usize,
+) -> Option<String> {
+    let run = snapshot.recent_observability.runs.get(selected)?;
+    let kind = match run.kind {
+        RunKind::SessionLoad => "session load",
+        RunKind::SoloLoad => "solo load",
+        RunKind::SessionFinal => "session memory",
+        RunKind::SoloFinal => "solo memory",
+    };
+    Some(format!(
+        "{kind} · {} · {} lines · {} ago",
+        human_bytes(run.source.source_bytes),
+        run.source.physical_lines,
+        human_duration(timestamp.saturating_sub(run.observed_unix))
+    ))
 }
 
 fn details_lines(snapshot: &DashboardSnapshot, selected: usize, color: bool) -> Vec<Line<'static>> {
@@ -623,6 +783,9 @@ fn details_lines(snapshot: &DashboardSnapshot, selected: usize, color: bool) -> 
                 source_line(source)
             )));
             lines.push(Line::from(entropy_line(source)));
+            lines.push(Line::from(redundancy_line(source)));
+            lines.push(Line::from(effective_alphabet_line(source)));
+            lines.push(Line::from(line_density_line(source)));
         } else {
             lines.push(Line::from("resident source  unmeasured for this session"));
         }
@@ -648,12 +811,21 @@ fn details_lines(snapshot: &DashboardSnapshot, selected: usize, color: bool) -> 
                     .unwrap_or(&snapshot.default_model)
             )
         )));
-    } else if let Some(source) = recent_source(snapshot) {
+    } else if let Some(run) = snapshot.recent_observability.runs.get(selected) {
+        let source = &run.source;
+        let state = if matches!(run.kind, RunKind::SessionFinal | RunKind::SoloFinal) {
+            "completed memory"
+        } else {
+            "past source load"
+        };
         lines.push(Line::from(format!(
-            "recent source    {} · completed run, not resident",
-            source_line(source)
+            "recent source    {} · {state}, not resident",
+            source_line(source),
         )));
         lines.push(Line::from(entropy_line(source)));
+        lines.push(Line::from(redundancy_line(source)));
+        lines.push(Line::from(effective_alphabet_line(source)));
+        lines.push(Line::from(line_density_line(source)));
     } else {
         lines.push(Line::from("resident source  none measured yet"));
     }
@@ -662,8 +834,44 @@ fn details_lines(snapshot: &DashboardSnapshot, selected: usize, color: bool) -> 
 
 fn entropy_line(source: &SourceLocalAggregate) -> String {
     format!(
-        "byte entropy     {:.1} / 8.0 bits/byte · distribution only, not quality",
-        source.byte_entropy_bits()
+        "byte entropy     H₀ {:.1} / 8.0 bits/byte · distribution only, not quality",
+        source.byte_entropy_bits(),
+    )
+}
+
+fn redundancy_line(source: &SourceLocalAggregate) -> String {
+    let redundancy = 1000u16.saturating_sub(
+        ((u32::from(source.byte_entropy_millibits.min(8000)) * 1000 + 4000) / 8000) as u16,
+    );
+    format!(
+        "byte redundancy  {}% · zero-order bound, not measured compression",
+        percent(redundancy)
+    )
+}
+
+fn effective_alphabet_line(source: &SourceLocalAggregate) -> String {
+    format!(
+        "effective bytes  {:.1} / 256 · 2^H₀ distribution size",
+        2.0f64.powf(source.byte_entropy_bits())
+    )
+}
+
+fn line_density_line(source: &SourceLocalAggregate) -> String {
+    let density = if source.physical_lines == 0 {
+        0
+    } else {
+        ((u128::from(source.nonempty_lines.min(source.physical_lines)) * 1000
+            + u128::from(source.physical_lines / 2))
+            / u128::from(source.physical_lines)) as u16
+    };
+    let mean = if source.physical_lines == 0 {
+        0.0
+    } else {
+        source.utf8_chars as f64 / source.physical_lines as f64
+    };
+    format!(
+        "line structure   {}% nonempty · {mean:.1} chars/line",
+        percent(density)
     )
 }
 
@@ -724,10 +932,19 @@ fn row_line(row: VisualRow, color: bool) -> Line<'static> {
     ])
 }
 
-fn key_hint(view: ConsoleView, color: bool) -> Line<'static> {
+fn history_is_selected(state: &AppState) -> bool {
+    state.snapshot.as_ref().is_some_and(|snapshot| {
+        snapshot.sessions.is_empty() && !snapshot.recent_observability.runs.is_empty()
+    })
+}
+
+fn key_hint(view: ConsoleView, history_selected: bool, color: bool) -> Line<'static> {
     let text = match view {
         ConsoleView::Overview => {
             "↑/↓ select · Enter inspect · d details · i integrations · r refresh · q quit"
+        }
+        ConsoleView::Details if history_selected => {
+            "↑/↓ memory · d overview · i integrations · r refresh · q quit"
         }
         ConsoleView::Details => "↑/↓ resident · d overview · i integrations · r refresh · q quit",
         ConsoleView::Integrations => "i overview · r refresh · d details · q quit",
@@ -749,14 +966,6 @@ fn total_state_bytes(snapshot: &DashboardSnapshot) -> u64 {
         .iter()
         .map(|session| session.state_bytes)
         .sum()
-}
-
-fn recent_source(snapshot: &DashboardSnapshot) -> Option<&SourceLocalAggregate> {
-    snapshot
-        .recent_observability
-        .runs
-        .first()
-        .map(|run| &run.source)
 }
 
 fn source_line(source: &SourceLocalAggregate) -> String {
@@ -909,6 +1118,20 @@ mod tests {
     }
 
     fn snapshot() -> DashboardSnapshot {
+        let mut recent_observability = RecentAggregateSummary::empty();
+        recent_observability.updated_unix = 990;
+        recent_observability.runs = vec![RecentRunAggregate {
+            kind: RunKind::SoloFinal,
+            observed_unix: 980,
+            source: SourceLocalAggregate {
+                evidence_tier: EvidenceTier::ExactLocal,
+                source_bytes: 64_000,
+                utf8_chars: 60_000,
+                physical_lines: 1_000,
+                nonempty_lines: 800,
+                byte_entropy_millibits: 3_000,
+            },
+        }];
         DashboardSnapshot {
             default_model: "gpt-5.6-luna".into(),
             provider: "openai".into(),
@@ -926,6 +1149,7 @@ mod tests {
                     state_bytes: 1024 * 1024,
                     source: Some(source()),
                     loaded_sources: 1,
+                    completed_sources: 0,
                 },
                 SessionStatus {
                     id: "fedcba9876543210".into(),
@@ -936,9 +1160,10 @@ mod tests {
                     state_bytes: 512 * 1024,
                     source: None,
                     loaded_sources: 0,
+                    completed_sources: 0,
                 },
             ],
-            recent_observability: RecentAggregateSummary::empty(),
+            recent_observability,
             observability_degraded: false,
         }
     }
@@ -954,17 +1179,18 @@ mod tests {
         assert!(rows.len() <= 7);
         assert!(text.contains("status ● awake · source stays local"));
         assert!(text.contains("route gpt-5.6-luna · openai · medium"));
-        assert!(text.contains("nest 1.5 MiB resident state · warm · 2/4 slots"));
-        assert!(text.contains("map ●○··"));
-        assert!(text.contains("█████"));
-        assert!(text.contains("▒▒▒▒▒"));
-        assert!(text.contains("░░░░░"));
+        assert!(
+            text.contains("nest 1.5 MiB resident state · warm · 2/4 slots · 1 memory · 1 trace")
+        );
+        assert!(text.contains("memory H→"));
+        assert!(text.contains("texture H₀"));
+        assert!(text.contains("redundancy"));
         assert!(!text.contains("[exact-local]"));
         assert!(!text.contains("coverage"));
     }
 
     #[test]
-    fn empty_state_teaches_one_action_without_claiming_resident_source() {
+    fn completed_memories_remain_visible_without_claiming_resident_source() {
         let mut empty = snapshot();
         empty.sessions.clear();
         let rows = overview_rows(&empty, 1000, 0);
@@ -973,14 +1199,30 @@ mod tests {
             .map(|row| format!("{} {}", row.label, row.value))
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(text.contains("empty · cold · 0/4 slots"));
-        assert!(text.contains("····"));
-        assert!(text.contains("no resident session"));
+        assert!(text.contains("0 resident · cold · 0/4 slots · 1 memory"));
+        assert!(text.contains("memory H→"));
+        assert!(text.contains("solo memory · 62.5 KiB · 1000 lines · 20s ago"));
         assert!(!text.contains("recent source"));
     }
 
     #[test]
-    fn recent_completed_source_is_not_misrepresented_as_resident() {
+    fn truly_empty_state_teaches_one_action_without_fake_metrics() {
+        let mut empty = snapshot();
+        empty.sessions.clear();
+        empty.recent_observability = RecentAggregateSummary::empty();
+        let text = overview_rows(&empty, 1000, 0)
+            .into_iter()
+            .map(|row| format!("{} {}", row.label, row.value))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("empty · cold · 0/4 slots"));
+        assert!(text.contains("no traces yet"));
+        assert!(text.contains("unmeasured · load one source"));
+        assert!(text.contains("no memory trace yet"));
+    }
+
+    #[test]
+    fn recent_source_load_is_not_misrepresented_as_resident() {
         let mut data = snapshot();
         data.sessions.clear();
         data.recent_observability = RecentAggregateSummary {
@@ -993,15 +1235,41 @@ mod tests {
                 observed_unix: 1000,
                 source: source(),
             }],
-            memory_observations: Vec::new(),
         };
-        assert!(nest_line(&data).starts_with("empty · cold"));
+        assert!(nest_line(&data).starts_with("0 resident · cold"));
         let details = details_lines(&data, 0, false)
             .into_iter()
             .map(|line| line.to_string())
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(details.contains("completed run, not resident"));
+        assert!(details.contains("past source load, not resident"));
+    }
+
+    #[test]
+    fn history_selection_moves_across_memories_without_residents() {
+        let mut data = snapshot();
+        data.sessions.clear();
+        data.recent_observability.runs.push(RecentRunAggregate {
+            kind: RunKind::SessionLoad,
+            observed_unix: 900,
+            source: source(),
+        });
+        let mut state = AppState::new(false);
+        state.snapshot = Some(data.clone());
+        state.move_selection(1);
+        assert_eq!(state.selected, 1);
+        let overview = overview_rows(&data, 1000, state.selected)
+            .into_iter()
+            .map(|row| format!("{} {}", row.label, row.value))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(overview.contains("session load · 2.3 MiB · 9421 lines · 1m ago"));
+        let details = details_lines(&data, state.selected, false)
+            .into_iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(details.contains("past source load, not resident"));
     }
 
     #[test]
@@ -1013,6 +1281,9 @@ mod tests {
             .join("\n");
         assert!(text.contains("4.8 / 8.0 bits/byte"));
         assert!(text.contains("distribution only, not quality"));
+        assert!(text.contains("not measured compression"));
+        assert!(text.contains("effective bytes"));
+        assert!(text.contains("chars/line"));
         assert!(text.contains("model boundary  unmeasured"));
         assert!(!text.contains("/private/state"));
     }
@@ -1030,6 +1301,7 @@ mod tests {
                 state_bytes: 1,
                 source: None,
                 loaded_sources: 0,
+                completed_sources: 0,
             },
             SessionStatus {
                 id: "bbbbbbbbbbbbbbbb".into(),
@@ -1040,11 +1312,12 @@ mod tests {
                 state_bytes: 1,
                 source: None,
                 loaded_sources: 0,
+                completed_sources: 0,
             },
         ]);
         let rows = overview_rows(&data, 1000, 3);
         assert!(rows.len() <= 7);
-        assert!(rows.iter().any(|row| row.value == "+2 tucked away"));
+        assert!(rows.iter().any(|row| row.value == "+3 tucked away"));
         assert!(rows.iter().any(|row| row.value.contains("bbbbbbbb")));
     }
 

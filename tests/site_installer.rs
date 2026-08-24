@@ -566,7 +566,7 @@ fn assert_alias_identity_and_local_caps(home: &Path, bin: &Path, path: &str) {
             let help = String::from_utf8(short_output.stdout).unwrap();
             assert_eq!(
                 help,
-                "AZDAJA v0.1.5 — virtual memory for language models\nUsage: az <command>\nCommands: help solo install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
+                "AZDAJA v0.1.5 — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
             );
         }
     }
