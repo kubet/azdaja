@@ -160,7 +160,8 @@ jobs:
           test -s "$port_file"
           base="http://127.0.0.1:$(cat "$port_file")"
 
-          HOME="$home" PATH="$guard:$PATH" \
+          # Exclude any hosted-runner Azure CLI so the optional `az` alias is deterministic.
+          HOME="$home" PATH="$guard:/usr/bin:/bin:/usr/sbin:/sbin" \
             AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_GLIBC_VERSION=2.35 \
             AZDAJA_INSTALL_BASE_URL="$base" \
             sh site/install claude --bin-dir "$bin"
@@ -195,7 +196,8 @@ jobs:
           test ! -e "$marker"
           printf '\n# candidate-receipt-custom\n' >> \
             "$home/.claude/skills/azdaja/config.toml"
-          HOME="$home" PATH="$guard:$PATH" \
+          # Exclude any hosted-runner Azure CLI so the optional `az` alias is deterministic.
+          HOME="$home" PATH="$guard:/usr/bin:/bin:/usr/sbin:/sbin" \
             AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_GLIBC_VERSION=2.35 \
             AZDAJA_INSTALL_BASE_URL="$base" \
             sh site/install claude --bin-dir "$bin"
