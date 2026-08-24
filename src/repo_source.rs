@@ -1,10 +1,11 @@
 //! Deterministic, bounded repository-to-JSON bundling for future `az solo --repo` wiring.
 //!
 //! The builder deliberately uses only crate dependencies plus the standard library so this
-//! module can be compiled and tested in isolation. Directory exclusions are pruned without
-//! inspecting their contents. `skipped_files` counts individual non-directory entries that were
-//! encountered but not included, including symlinks, special files, credential-shaped files,
-//! non-UTF-8 paths, and non-UTF-8 contents.
+//! module can be compiled and tested in isolation. Git worktrees are enumerated through Git so
+//! ignored untracked files are never candidates; other directories use a bounded filesystem walk.
+//! Directory exclusions are pruned without inspecting their contents. `skipped_files` counts
+//! individual non-directory entries that were encountered but not included, including symlinks,
+//! special files, credential-shaped files, non-UTF-8 paths, and non-UTF-8 contents.
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
@@ -13,6 +14,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::Read,
     path::{Component, Path, PathBuf},
+    process::Command,
 };
 
 /// Bundle schema version emitted in the top-level `version` field.
@@ -229,6 +231,183 @@ fn validate_root(root: &Path) -> Result<()> {
 }
 
 fn collect_candidates(root: &Path) -> Result<(Vec<Candidate>, usize)> {
+    let git_metadata_present = git_metadata_present(root)?;
+    let git_probe = Command::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .current_dir(root)
+        .output();
+
+    match git_probe {
+        Ok(output)
+            if output.status.success()
+                && String::from_utf8_lossy(&output.stdout).trim() == "true" =>
+        {
+            collect_git_candidates(root)
+        }
+        Ok(output) if git_metadata_present => {
+            let detail = command_failure_detail(&output.stderr);
+            bail!(
+                "Git metadata is present but the repository worktree could not be verified{detail}; refusing filesystem fallback"
+            );
+        }
+        Err(error) if git_metadata_present => bail!(
+            "Git metadata is present but Git could not be started to verify the repository worktree: {error}; refusing filesystem fallback"
+        ),
+        Ok(_) | Err(_) => collect_filesystem_candidates(root),
+    }
+}
+
+fn git_metadata_present(root: &Path) -> Result<bool> {
+    let absolute_root = if root.is_absolute() {
+        root.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .context("cannot determine the current directory while checking Git metadata")?
+            .join(root)
+    };
+
+    for ancestor in absolute_root.ancestors() {
+        match fs::symlink_metadata(ancestor.join(".git")) {
+            Ok(_) => return Ok(true),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "cannot inspect Git metadata boundary at {}",
+                        ancestor.join(".git").display()
+                    )
+                });
+            }
+        }
+    }
+    Ok(false)
+}
+
+fn collect_git_candidates(root: &Path) -> Result<(Vec<Candidate>, usize)> {
+    let output = Command::new("git")
+        .args([
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            ".",
+        ])
+        .current_dir(root)
+        .output()
+        .context("cannot start Git to enumerate repository files")?;
+    if !output.status.success() {
+        let detail = command_failure_detail(&output.stderr);
+        bail!(
+            "cannot enumerate Git worktree files with git ls-files{detail}; refusing filesystem fallback"
+        );
+    }
+    if !output.stdout.is_empty() && !output.stdout.ends_with(&[0]) {
+        bail!("git ls-files returned malformed non-NUL-terminated output");
+    }
+
+    let mut candidates = Vec::new();
+    let mut skipped_files = 0usize;
+    if output.stdout.is_empty() {
+        return Ok((candidates, skipped_files));
+    }
+    let path_bytes = output
+        .stdout
+        .strip_suffix(&[0])
+        .expect("non-empty git ls-files output was checked for NUL termination");
+    for raw_path in path_bytes.split(|byte| *byte == 0) {
+        if raw_path.is_empty() {
+            bail!("git ls-files returned an empty repository path");
+        }
+        let Ok(path_text) = std::str::from_utf8(raw_path) else {
+            increment_skipped(&mut skipped_files)?;
+            continue;
+        };
+        let Some(relative_path) = normalize_relative_path(Path::new(path_text))? else {
+            increment_skipped(&mut skipped_files)?;
+            continue;
+        };
+        let relative_path_buf = PathBuf::from(&relative_path);
+        if has_excluded_parent_directory(&relative_path_buf) {
+            continue;
+        }
+        let Some(name) = relative_path_buf.file_name().and_then(|name| name.to_str()) else {
+            increment_skipped(&mut skipped_files)?;
+            continue;
+        };
+        if is_credential_shaped_file(name)
+            || !is_safe_regular_candidate(root, &relative_path_buf).with_context(|| {
+                format!("cannot safely inspect Git repository entry {relative_path}")
+            })?
+        {
+            increment_skipped(&mut skipped_files)?;
+            continue;
+        }
+        candidates.push(Candidate {
+            absolute_path: root.join(&relative_path_buf),
+            relative_path,
+        });
+    }
+
+    candidates.sort_unstable_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    if candidates
+        .windows(2)
+        .any(|pair| pair[0].relative_path == pair[1].relative_path)
+    {
+        bail!("git ls-files returned a duplicate repository path");
+    }
+    Ok((candidates, skipped_files))
+}
+
+fn command_failure_detail(stderr: &[u8]) -> String {
+    let stderr = String::from_utf8_lossy(stderr);
+    let stderr = stderr.trim();
+    if stderr.is_empty() {
+        String::new()
+    } else {
+        format!(": {stderr}")
+    }
+}
+
+fn has_excluded_parent_directory(path: &Path) -> bool {
+    path.parent().is_some_and(|parent| {
+        parent.components().any(|component| {
+            let Component::Normal(name) = component else {
+                return false;
+            };
+            name.to_str().is_some_and(is_excluded_directory)
+        })
+    })
+}
+
+fn is_safe_regular_candidate(root: &Path, relative_path: &Path) -> Result<bool> {
+    let components = relative_path.components().collect::<Vec<_>>();
+    let mut current = root.to_path_buf();
+    for (index, component) in components.iter().enumerate() {
+        let Component::Normal(component) = component else {
+            bail!("Git repository enumeration produced a non-relative path");
+        };
+        current.push(component);
+        let metadata = match fs::symlink_metadata(&current) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        if metadata.file_type().is_symlink() {
+            return Ok(false);
+        }
+        let is_last = index + 1 == components.len();
+        if (is_last && !metadata.file_type().is_file())
+            || (!is_last && !metadata.file_type().is_dir())
+        {
+            return Ok(false);
+        }
+    }
+    Ok(!components.is_empty())
+}
+
+fn collect_filesystem_candidates(root: &Path) -> Result<(Vec<Candidate>, usize)> {
     let mut candidates = Vec::new();
     let mut skipped_files = 0usize;
     let mut pending_directories = vec![PathBuf::new()];
@@ -547,6 +726,19 @@ mod tests {
             .collect()
     }
 
+    fn git(root: &TestDir, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(root.path())
+            .output()
+            .expect("run git fixture command");
+        assert!(
+            output.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
     #[test]
     fn output_is_deterministic_and_sorted_by_normalized_relative_path() {
         let root = TestDir::new("order");
@@ -577,7 +769,7 @@ mod tests {
         let root = TestDir::new("exclusions");
         root.write("src/main.rs", "safe");
         for path in [
-            ".git/config",
+            ".hg/config",
             "target/debug/app",
             "node_modules/pkg/index.js",
             "build/generated.c",
@@ -610,12 +802,68 @@ mod tests {
         assert!(!bundle.text.contains("excluded directory content"));
     }
 
+    #[test]
+    fn git_worktree_excludes_ignored_secrets_and_includes_tracked_and_nonignored_files() {
+        let root = TestDir::new("git-ignore-boundary");
+        git(&root, &["init", "--quiet"]);
+        root.write(".gitignore", "secrets.yaml\ncredentials.toml\n*.tfvars\n");
+        root.write("tracked.txt", "tracked");
+        root.write("src/nonignored.rs", "nonignored");
+        root.write("z-untracked.txt", "untracked");
+        root.write("secrets.yaml", "ignored-secret-yaml");
+        root.write("credentials.toml", "ignored-credentials-toml");
+        root.write("infra/production.tfvars", "ignored-terraform-secret");
+        root.write("credentials.json", "common-credential-exclusion");
+        git(&root, &["add", ".gitignore", "tracked.txt"]);
+
+        let first = build_repo_bundle(root.path()).expect("first Git-aware bundle");
+        let second = build_repo_bundle(root.path()).expect("second Git-aware bundle");
+        assert_eq!(first, second);
+        assert_eq!(
+            parsed_files(&first),
+            [
+                (
+                    ".gitignore".to_owned(),
+                    "secrets.yaml\ncredentials.toml\n*.tfvars\n".to_owned()
+                ),
+                ("src/nonignored.rs".to_owned(), "nonignored".to_owned()),
+                ("tracked.txt".to_owned(), "tracked".to_owned()),
+                ("z-untracked.txt".to_owned(), "untracked".to_owned()),
+            ]
+        );
+        let included_paths = parsed_files(&first)
+            .into_iter()
+            .map(|(path, _)| path)
+            .collect::<Vec<_>>();
+        assert!(!included_paths.iter().any(|path| path == "secrets.yaml"));
+        assert!(!included_paths.iter().any(|path| path == "credentials.toml"));
+        assert!(!included_paths.iter().any(|path| path.ends_with(".tfvars")));
+        assert!(!included_paths.iter().any(|path| path == "credentials.json"));
+    }
+
+    #[test]
+    fn git_worktree_enumeration_failure_is_fail_closed() {
+        let root = TestDir::new("git-enumeration-failure");
+        git(&root, &["init", "--quiet"]);
+        root.write("safe.txt", "must not be returned through fallback");
+        root.write(".git/index", "not a valid Git index");
+
+        let error = build_repo_bundle(root.path()).expect_err("broken Git index must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("cannot enumerate Git worktree files with git ls-files")
+        );
+        assert!(error.to_string().contains("refusing filesystem fallback"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn rejects_symlink_root_and_skips_nested_symlinks_without_target_leakage() {
         use std::os::unix::fs::symlink;
 
         let actual = TestDir::new("actual-root");
+        git(&actual, &["init", "--quiet"]);
         actual.write("safe.txt", "safe");
         let link_parent = TestDir::new("root-link-parent");
         let root_link = link_parent.path().join("repo-link");
