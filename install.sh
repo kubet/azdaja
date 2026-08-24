@@ -843,6 +843,9 @@ CONFIG_PATH=$BIN_DIR/azdaja-config.toml
 CONFIG_OWNER=$BIN_DIR/azdaja-config.toml.managed
 OWNER_MAGIC=azdaja-installer-owned-config-v1
 LEGACY_JCODE_CONFIG_SHA256=d890a0fad3dfb5faacdd3e6040543097433444b938a48a1d7221ba090656498d
+V015_JCODE_CONFIG_SHA256=bc9568907891304d0861169b4b44e7560ea3bc28402eb17a89da8078a49d74eb
+V015_CODEX_CONFIG_SHA256=e6467dc6454f343427dd4d4472536d20f29d8e89740b01e59a669d497f84ecd9
+V015_OPENCODE_CONFIG_SHA256=f077082c429ca0793747a47518371448500b3a8f4534ebbc071d50e6655271cf
 DOC_OWNER_V1_MAGIC=azdaja-installer-owned-docs-v1
 LEGACY_NOTICES_SHA256=dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb
 PREVIOUS_V2_NOTICES_SHA256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6
@@ -865,6 +868,14 @@ owned_single_link_regular() {
   owned_path=$1
   [ -f "$owned_path" ] && [ ! -L "$owned_path" ] || return 1
   [ "$(find "$owned_path" -prune -type f -links 1 -user "$(id -u)" -print)" = "$owned_path" ]
+}
+
+is_migratable_managed_config() {
+  case "$1:$2" in
+    "jcode:$LEGACY_JCODE_CONFIG_SHA256"|"jcode:$V015_JCODE_CONFIG_SHA256"|\
+    "codex:$V015_CODEX_CONFIG_SHA256"|"opencode:$V015_OPENCODE_CONFIG_SHA256") return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 printf '%s' "$DOC_DIR" > "$TMP/document-lock-key"
@@ -922,7 +933,7 @@ fi
 
 # Refuse ambiguous adjacent configuration before the binary, harnesses, or
 # alias can be changed. User customization is preserved byte-for-byte. Only
-# the exact published legacy Jcode config is eligible for managed migration.
+# exact published managed configs are eligible for route migration.
 PRIMARY_HARNESS=
 for name in $INSTALL_NAMES; do
   [ "$name" != jcode ] || PRIMARY_HARNESS=jcode
@@ -935,13 +946,12 @@ fi
 if [ -e "$CONFIG_PATH" ] || [ -e "$CONFIG_OWNER" ]; then
   if [ -f "$CONFIG_PATH" ] && [ -f "$CONFIG_OWNER" ] && \
      cmp -s "$CONFIG_OWNER" "$TMP/config-owner.expected"; then
-    if [ "$PRIMARY_HARNESS" = jcode ] && \
-       [ "$(sha256_file "$CONFIG_PATH")" = "$LEGACY_JCODE_CONFIG_SHA256" ]; then
+    if is_migratable_managed_config "$PRIMARY_HARNESS" "$(sha256_file "$CONFIG_PATH")"; then
       owned_single_link_regular "$CONFIG_PATH" || \
         fail "refusing unsafe legacy Azdaja config: $CONFIG_PATH"
       owned_single_link_regular "$CONFIG_OWNER" || \
         fail "refusing unsafe Azdaja config owner marker: $CONFIG_OWNER"
-      CONFIG_STATE=legacy-jcode
+      CONFIG_STATE=legacy-managed
     else
       CONFIG_STATE=owned
     fi
@@ -1182,7 +1192,7 @@ if [ "$CONFIG_STATE" = fresh ]; then
   rm -f "$CONFIG_STAGE" "$OWNER_STAGE"
   STAGED=
   STAGED_EXTRA=
-elif [ "$CONFIG_STATE" = legacy-jcode ]; then
+elif [ "$CONFIG_STATE" = legacy-managed ]; then
   CONFIG_STAGE=$BIN_DIR/.azdaja-config.$$
   CONFIG_BACKUP=$BIN_DIR/.azdaja-config-previous.$$
   [ ! -e "$CONFIG_STAGE" ] && [ ! -L "$CONFIG_STAGE" ] || \
@@ -1201,7 +1211,7 @@ elif [ "$CONFIG_STATE" = legacy-jcode ]; then
     fail "Azdaja config owner marker changed during migration: $CONFIG_OWNER"
   cmp -s "$CONFIG_OWNER" "$TMP/config-owner.expected" || \
     fail "Azdaja config owner marker changed during migration: $CONFIG_OWNER"
-  [ "$(sha256_file "$CONFIG_PATH")" = "$LEGACY_JCODE_CONFIG_SHA256" ] || \
+  is_migratable_managed_config "$PRIMARY_HARNESS" "$(sha256_file "$CONFIG_PATH")" || \
     fail "legacy Azdaja config changed during migration: $CONFIG_PATH"
   mv "$CONFIG_PATH" "$CONFIG_BACKUP" || \
     fail "cannot retain the legacy Azdaja config: $CONFIG_PATH"

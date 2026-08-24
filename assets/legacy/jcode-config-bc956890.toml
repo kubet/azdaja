@@ -1,0 +1,12 @@
+sub_llm_cmd = "jcode-api"
+default_model = "gpt-5.6-luna"
+output_cap = 8192
+max_depth = 1
+sub_timeout = 300
+max_sessions = 4
+cell_timeout = 60
+idle_timeout = 1800
+clean_patterns = []
+jcode_provider = "openai"
+jcode_reasoning = "low"
+max_calls_per_cell = 150

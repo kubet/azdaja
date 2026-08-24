@@ -128,6 +128,30 @@ LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\
 THIRD-PARTY-NOTICES.md.sha256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6\n";
 const PREVIOUS_V2_NOTICES: &[u8] = include_bytes!("../site/releases/v0.1.4/THIRD-PARTY-NOTICES.md");
 const LEGACY_JCODE_CONFIG: &[u8] = include_bytes!("../assets/legacy/jcode-config-d890a0fa.toml");
+const V015_JCODE_CONFIG: &[u8] = include_bytes!("../assets/legacy/jcode-config-bc956890.toml");
+const V015_CODEX_CONFIG: &[u8] = include_bytes!("../assets/legacy/codex-config-e6467dc6.toml");
+const V015_OPENCODE_CONFIG: &[u8] =
+    include_bytes!("../assets/legacy/opencode-config-f077082c.toml");
+
+fn fnv1a(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+        (hash ^ u64::from(*byte)).wrapping_mul(0x100_0000_01b3)
+    })
+}
+
+fn replace_managed_config(integration: &Path, bytes: &[u8]) {
+    fs::write(integration.join("config.toml"), bytes).unwrap();
+    let manifest_path = integration.join(".azdaja-managed");
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+    let files = manifest["files"].as_array_mut().unwrap();
+    let config = files
+        .iter_mut()
+        .find(|entry| entry[0] == "config.toml")
+        .unwrap();
+    config[1] = serde_json::Value::from(fnv1a(bytes));
+    fs::write(manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+}
 
 fn sha256_bytes(bytes: &[u8]) -> String {
     for (tool, args) in [("shasum", vec!["-a", "256"]), ("sha256sum", vec![])] {
@@ -1800,25 +1824,6 @@ fn adjacent_config_ownership_preserves_custom_state_and_generic_config() {
 
 #[test]
 fn exact_legacy_jcode_configs_migrate_but_customized_bytes_are_preserved() {
-    fn fnv1a(bytes: &[u8]) -> u64 {
-        bytes.iter().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
-            (hash ^ u64::from(*byte)).wrapping_mul(0x100_0000_01b3)
-        })
-    }
-    fn replace_managed_config(integration: &Path, bytes: &[u8]) {
-        fs::write(integration.join("config.toml"), bytes).unwrap();
-        let manifest_path = integration.join(".azdaja-managed");
-        let mut manifest: serde_json::Value =
-            serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
-        let files = manifest["files"].as_array_mut().unwrap();
-        let config = files
-            .iter_mut()
-            .find(|entry| entry[0] == "config.toml")
-            .unwrap();
-        config[1] = serde_json::Value::from(fnv1a(bytes));
-        fs::write(manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
-    }
-
     let scratch = Scratch::new();
     let fixture_root = scratch.0.join("releases");
     fs::create_dir(&fixture_root).unwrap();
@@ -1918,6 +1923,74 @@ fn exact_legacy_jcode_configs_migrate_but_customized_bytes_are_preserved() {
             .to_string_lossy()
             .contains("azdaja-config-previous")
     }));
+}
+
+#[test]
+fn exact_v015_luna_configs_migrate_to_sol_but_customized_bytes_are_preserved() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let base = format!("{}/good", server.base);
+    let system_path = alias_free_system_path(&scratch.0);
+
+    for (harness, legacy, expected_model) in [
+        ("jcode", V015_JCODE_CONFIG, "gpt-5.6-sol"),
+        ("codex", V015_CODEX_CONFIG, "gpt-5.6-sol"),
+        ("opencode", V015_OPENCODE_CONFIG, "openai/gpt-5.6-sol"),
+    ] {
+        let home = scratch.0.join(format!("v015-{harness}-config-home"));
+        let bin = home.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        mark_detected(&home, harness);
+        let run = || {
+            run_installer(InstallRun {
+                home: &home,
+                base: &base,
+                os: "Darwin",
+                arch: "arm64",
+                glibc_version: None,
+                harness: Some(harness),
+                bin_dir: Some(&bin),
+                path: &system_path,
+            })
+        };
+
+        assert_success(&run());
+        let integration = target(&home, harness);
+        let adjacent = bin.join("azdaja-config.toml");
+        replace_managed_config(&integration, legacy);
+        fs::write(&adjacent, legacy).unwrap();
+
+        assert_success(&run());
+        let migrated = fs::read(integration.join("config.toml")).unwrap();
+        assert_eq!(fs::read(&adjacent).unwrap(), migrated, "{harness}");
+        assert_ne!(migrated, legacy, "{harness}");
+        let migrated_text = String::from_utf8(migrated).unwrap();
+        assert!(
+            migrated_text.contains(&format!("default_model = \"{expected_model}\"")),
+            "{harness}: {migrated_text}"
+        );
+        assert!(!migrated_text.contains("gpt-5.6-luna"), "{harness}");
+
+        let mut customized = legacy.to_vec();
+        customized.extend_from_slice(b"# user customization\n");
+        replace_managed_config(&integration, &customized);
+        fs::write(&adjacent, &customized).unwrap();
+        assert_success(&run());
+        assert_eq!(
+            fs::read(integration.join("config.toml")).unwrap(),
+            customized,
+            "{harness} integration customization"
+        );
+        assert_eq!(
+            fs::read(&adjacent).unwrap(),
+            customized,
+            "{harness} standalone customization"
+        );
+    }
 }
 
 #[test]

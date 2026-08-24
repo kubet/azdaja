@@ -895,9 +895,14 @@ const LEGACY_MANAGED_CODEX_CONFIGS: &[&[u8]] = &[
     include_bytes!("../assets/legacy/codex-config-a9da6615.toml"),
     include_bytes!("../assets/legacy/codex-config-41f19430.toml"),
     include_bytes!("../assets/legacy/codex-config-ae85a189.toml"),
+    include_bytes!("../assets/legacy/codex-config-e6467dc6.toml"),
 ];
-const LEGACY_MANAGED_JCODE_CONFIGS: &[&[u8]] = &[include_bytes!(
-    "../assets/legacy/jcode-config-d890a0fa.toml"
+const LEGACY_MANAGED_JCODE_CONFIGS: &[&[u8]] = &[
+    include_bytes!("../assets/legacy/jcode-config-d890a0fa.toml"),
+    include_bytes!("../assets/legacy/jcode-config-bc956890.toml"),
+];
+const LEGACY_MANAGED_OPENCODE_CONFIGS: &[&[u8]] = &[include_bytes!(
+    "../assets/legacy/opencode-config-f077082c.toml"
 )];
 
 const DEFAULT_SKILL_DESCRIPTION: &str = "Mandatory for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja, asks if it is installed or available, or names the az virtual-memory tool. Invoke before reading or solving natively.";
@@ -1729,6 +1734,10 @@ fn is_byte_exact_legacy_jcode_config(bytes: &[u8]) -> bool {
     LEGACY_MANAGED_JCODE_CONFIGS.contains(&bytes)
 }
 
+fn is_byte_exact_legacy_opencode_config(bytes: &[u8]) -> bool {
+    LEGACY_MANAGED_OPENCODE_CONFIGS.contains(&bytes)
+}
+
 fn nearest_existing_install_ancestor(dst: &Path) -> Result<(PathBuf, fs::File)> {
     let mut current = dst
         .parent()
@@ -1782,7 +1791,9 @@ fn preflight_install(home: &Path, harness: &'static str) -> Result<InstallPlan> 
         config.validate()?
     };
     let staged_config = if let Some(bytes) = &preserved {
-        if harness == "codex" && is_byte_exact_legacy_codex_config(bytes) {
+        if (harness == "codex" && is_byte_exact_legacy_codex_config(bytes))
+            || (harness == "opencode" && is_byte_exact_legacy_opencode_config(bytes))
+        {
             cfg.sub_llm_cmd = cmd.into();
             cfg.default_model = model.into();
             cfg.max_calls_per_cell = MANAGED_COWORKER_CALL_LIMIT;
@@ -6896,6 +6907,7 @@ mod tests {
             "codex exec --ephemeral --skip-git-repo-check --model {model} -",
             "codex exec --ephemeral --skip-git-repo-check --ignore-rules -c skills.include_instructions=false --json --model {model} -",
             "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -",
+            "codex exec --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only {isolated_env} -c model_reasoning_effort=low -c skills.include_instructions=false -c features.shell_tool=false -c features.view_image=false -c features.multi_agent=false -c features.multi_agent_v2=false -c agents.enabled=false -c web_search=disabled --json --model {model} -C {sandbox_dir} -",
         ];
         for (historical, expected_command) in
             LEGACY_MANAGED_CODEX_CONFIGS.iter().zip(expected_commands)
@@ -6920,8 +6932,13 @@ mod tests {
     fn only_byte_exact_legacy_jcode_configs_are_auto_migrated() {
         for historical in LEGACY_MANAGED_JCODE_CONFIGS {
             let parsed: Config = toml::from_str(std::str::from_utf8(historical).unwrap()).unwrap();
-            assert_eq!(parsed.default_model, "claude-haiku-4-5");
-            assert!(parsed.sub_llm_cmd.starts_with("jcode run --no-update"));
+            match parsed.default_model.as_str() {
+                "claude-haiku-4-5" => {
+                    assert!(parsed.sub_llm_cmd.starts_with("jcode run --no-update"));
+                }
+                "gpt-5.6-luna" => assert_eq!(parsed.sub_llm_cmd, "jcode-api"),
+                other => panic!("unexpected legacy Jcode model {other}"),
+            }
             assert!(is_byte_exact_legacy_jcode_config(historical));
 
             let mut customized = historical.to_vec();
@@ -6939,6 +6956,37 @@ mod tests {
             String::from_utf8(current)
                 .unwrap()
                 .contains("default_model = \"gpt-5.6-sol\"")
+        );
+    }
+
+    #[test]
+    fn only_byte_exact_legacy_opencode_configs_are_auto_migrated() {
+        for historical in LEGACY_MANAGED_OPENCODE_CONFIGS {
+            let parsed: Config = toml::from_str(std::str::from_utf8(historical).unwrap()).unwrap();
+            assert_eq!(
+                parsed.sub_llm_cmd,
+                "opencode --pure run --format json --model {model}"
+            );
+            assert_eq!(parsed.default_model, "openai/gpt-5.6-luna");
+            assert_eq!(parsed.max_calls_per_cell, MANAGED_COWORKER_CALL_LIMIT);
+            assert!(is_byte_exact_legacy_opencode_config(historical));
+
+            let mut customized = historical.to_vec();
+            customized.extend_from_slice(b"# user customization\n");
+            assert!(!is_byte_exact_legacy_opencode_config(&customized));
+        }
+        let mut current: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
+        current.sub_llm_cmd = adapter("opencode").0.into();
+        current.default_model = adapter("opencode").1.into();
+        current.max_calls_per_cell = MANAGED_COWORKER_CALL_LIMIT;
+        let current = toml::to_string_pretty(&current.validate().unwrap())
+            .unwrap()
+            .into_bytes();
+        assert!(!is_byte_exact_legacy_opencode_config(&current));
+        assert!(
+            String::from_utf8(current)
+                .unwrap()
+                .contains("default_model = \"openai/gpt-5.6-sol\"")
         );
     }
 
