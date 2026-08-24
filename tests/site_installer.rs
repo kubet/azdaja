@@ -127,6 +127,7 @@ schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
 THIRD-PARTY-NOTICES.md.sha256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6\n";
 const PREVIOUS_V2_NOTICES: &[u8] = include_bytes!("../site/releases/v0.1.4/THIRD-PARTY-NOTICES.md");
+const LEGACY_JCODE_CONFIG: &[u8] = include_bytes!("../assets/legacy/jcode-config-d890a0fa.toml");
 
 fn sha256_bytes(bytes: &[u8]) -> String {
     for (tool, args) in [("shasum", vec!["-a", "256"]), ("sha256sum", vec![])] {
@@ -892,11 +893,11 @@ fn public_v015_site_assets_match_the_bound_checksum_manifest() {
     let expected = [
         (
             "azdaja-v0.1.5-darwin-arm64",
-            "ba3b89aeff1876bee20797f808eb7f02155d94f8ec2115d00f9306eef1b5068c",
+            "3c8470c2205ff81444999f9736e4d96edc3e52414acdd5c3e45bcc2feaf9972d",
         ),
         (
             "azdaja-v0.1.5-linux-x86_64",
-            "d074cd2cc6485bd78970e4e94ac714861313f4345590687b22a3ffc617f9340b",
+            "4a44948f1594a50335147f0e879597e6f6596f8353e8a7b11639ee1013b610a1",
         ),
         (
             "LICENSE",
@@ -950,6 +951,38 @@ fn public_v015_binary_headers_match_the_advertised_platforms() {
         fs::metadata(&linux_path).unwrap().permissions().mode() & 0o111,
         0
     );
+}
+
+#[test]
+fn public_v015_binaries_expose_the_installer_config_staging_protocol() {
+    let release = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.5");
+    for name in ["azdaja-v0.1.5-darwin-arm64", "azdaja-v0.1.5-linux-x86_64"] {
+        let bytes = fs::read(release.join(name)).unwrap();
+        assert!(
+            bytes
+                .windows(b"--print-config".len())
+                .any(|window| window == b"--print-config"),
+            "{name} must expose the bootstrap config-staging protocol"
+        );
+    }
+
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        let scratch = Scratch::new();
+        let home = scratch.0.join("print-config-home");
+        fs::create_dir(&home).unwrap();
+        let output = Command::new(release.join("azdaja-v0.1.5-darwin-arm64"))
+            .args(["install", "jcode", "--print-config"])
+            .env("HOME", &home)
+            .env("JCODE_HOME", home.join(".jcode"))
+            .env_remove("AZDAJA_HOME")
+            .output()
+            .unwrap();
+        let config = assert_success(&output);
+        assert!(config.contains("sub_llm_cmd = \"jcode-api\""));
+        assert!(config.contains("default_model = \"gpt-5.6-luna\""));
+        assert_eq!(fs::read_dir(home).unwrap().count(), 0);
+    }
 }
 
 #[test]
@@ -1663,6 +1696,128 @@ fn adjacent_config_ownership_preserves_custom_state_and_generic_config() {
         b"unrelated = 'keep-me'\n"
     );
     assert_alias_identity_and_local_caps(&home, &bin, &system_path);
+}
+
+#[test]
+fn exact_legacy_jcode_configs_migrate_but_customized_bytes_are_preserved() {
+    fn fnv1a(bytes: &[u8]) -> u64 {
+        bytes.iter().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+            (hash ^ u64::from(*byte)).wrapping_mul(0x100_0000_01b3)
+        })
+    }
+    fn replace_managed_config(integration: &Path, bytes: &[u8]) {
+        fs::write(integration.join("config.toml"), bytes).unwrap();
+        let manifest_path = integration.join(".azdaja-managed");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+        let files = manifest["files"].as_array_mut().unwrap();
+        let config = files
+            .iter_mut()
+            .find(|entry| entry[0] == "config.toml")
+            .unwrap();
+        config[1] = serde_json::Value::from(fnv1a(bytes));
+        fs::write(manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    }
+
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let base = format!("{}/good", server.base);
+    let system_path = alias_free_system_path(&scratch.0);
+    let home = scratch.0.join("legacy-jcode-config-home");
+    let bin = home.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    mark_detected(&home, "jcode");
+    let run = || {
+        run_installer(InstallRun {
+            home: &home,
+            base: &base,
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: Some("jcode"),
+            bin_dir: Some(&bin),
+            path: &system_path,
+        })
+    };
+
+    assert_success(&run());
+    let integration = target(&home, "jcode");
+    let adjacent = bin.join("azdaja-config.toml");
+    replace_managed_config(&integration, LEGACY_JCODE_CONFIG);
+    fs::write(&adjacent, LEGACY_JCODE_CONFIG).unwrap();
+
+    assert_success(&run());
+    let migrated = fs::read(integration.join("config.toml")).unwrap();
+    assert_eq!(fs::read(&adjacent).unwrap(), migrated);
+    assert_ne!(migrated, LEGACY_JCODE_CONFIG);
+    let migrated_text = String::from_utf8(migrated.clone()).unwrap();
+    assert!(migrated_text.contains("sub_llm_cmd = \"jcode-api\""));
+    assert!(migrated_text.contains("default_model = \"gpt-5.6-luna\""));
+    assert_success(&run());
+    assert_eq!(fs::read(&adjacent).unwrap(), migrated);
+
+    replace_managed_config(&integration, LEGACY_JCODE_CONFIG);
+    fs::write(&adjacent, LEGACY_JCODE_CONFIG).unwrap();
+    let reversed = run_installer(InstallRun {
+        home: &home,
+        base: &base,
+        os: "Darwin",
+        arch: "arm64",
+        glibc_version: None,
+        harness: Some("claude,jcode"),
+        bin_dir: Some(&bin),
+        path: &system_path,
+    });
+    assert_success(&reversed);
+    assert_eq!(fs::read(integration.join("config.toml")).unwrap(), migrated);
+    assert_eq!(fs::read(&adjacent).unwrap(), migrated);
+
+    let mut customized = migrated.clone();
+    customized.extend_from_slice(b"# user customization\n");
+    replace_managed_config(&integration, &customized);
+    fs::write(&adjacent, &customized).unwrap();
+    assert_success(&run());
+    assert_eq!(
+        fs::read(integration.join("config.toml")).unwrap(),
+        customized
+    );
+    assert_eq!(fs::read(&adjacent).unwrap(), customized);
+
+    replace_managed_config(&integration, LEGACY_JCODE_CONFIG);
+    fs::write(&adjacent, LEGACY_JCODE_CONFIG).unwrap();
+    let failed = run_installer_with_extra(
+        InstallRun {
+            home: &home,
+            base: &base,
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: Some("jcode"),
+            bin_dir: Some(&bin),
+            path: &system_path,
+        },
+        &[(
+            "AZDAJA_INSTALL_TEST_FAIL_AFTER_CONFIG_MIGRATION",
+            OsStr::new("1"),
+        )],
+    );
+    assert!(!failed.status.success());
+    assert_eq!(
+        fs::read(integration.join("config.toml")).unwrap(),
+        LEGACY_JCODE_CONFIG
+    );
+    assert_eq!(fs::read(&adjacent).unwrap(), LEGACY_JCODE_CONFIG);
+    assert!(fs::read_dir(&bin).unwrap().all(|entry| {
+        !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains("azdaja-config-previous")
+    }));
 }
 
 #[test]

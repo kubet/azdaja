@@ -15,7 +15,7 @@ Keys: arrows or `j/k` select, Enter inspects, `d` toggles measured details, `i` 
 | `load` | `az load <session-id> <path> <variable>` | Load one UTF-8 file into a session variable. |
 | `exec` | `az exec <session-id>` | Read evaluator code from standard input and execute it. |
 | `final` | `az final <session-id>` | Print the session's final value. |
-| `list` | `az list` | List sessions. |
+| `list` | `az list` | Show the memory-nest session table in a terminal while emitting stable raw IDs when piped. |
 | `kill` | `az kill <session-id>` | Remove a session. |
 | `solo` | `az solo <question> -f <path> [--model <model>] [--sub-model <model>]` | Run one file question. |
 | `doctor` | `az doctor [jcode|claude|codex|gemini|opencode|all|--caps]` | Check the configured route, or name a tool to check installed files only. |

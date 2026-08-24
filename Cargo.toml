@@ -16,6 +16,7 @@ include = [
     "/src/**",
     "/assets/SKILL.md",
     "/assets/config.toml",
+    "/assets/legacy/*.toml",
 ]
 
 [dependencies]

@@ -503,7 +503,7 @@ prompt_targets() {
 
 case "${AZDAJA_INSTALL_TEST_MODE:-}" in
   '')
-    [ -z "${AZDAJA_INSTALL_BASE_URL:-}${AZDAJA_INSTALL_OS:-}${AZDAJA_INSTALL_ARCH:-}${AZDAJA_INSTALL_GLIBC_VERSION:-}${AZDAJA_INSTALL_SELECTION:-}" ] || \
+    [ -z "${AZDAJA_INSTALL_BASE_URL:-}${AZDAJA_INSTALL_OS:-}${AZDAJA_INSTALL_ARCH:-}${AZDAJA_INSTALL_GLIBC_VERSION:-}${AZDAJA_INSTALL_SELECTION:-}${AZDAJA_INSTALL_TEST_FAIL_AFTER_CONFIG_MIGRATION:-}" ] || \
       fail 'validation overrides require AZDAJA_INSTALL_TEST_MODE=local' 2
     [ "${AZDAJA_INSTALL_DOC_DIR+x}" != x ] || \
       fail 'validation overrides require AZDAJA_INSTALL_TEST_MODE=local' 2
@@ -654,6 +654,10 @@ DEST_BACKUP_CREATED=false
 DEST_BACKUP=
 CONFIG_CREATED=false
 OWNER_CREATED=false
+CONFIG_MIGRATED=false
+CONFIG_BACKUP_CREATED=false
+CONFIG_BACKUP=
+CONFIG_NEW_SHA256=
 ALIAS_CREATED=false
 ALIAS_REMOVED=false
 CONFIG_PATH=
@@ -676,6 +680,7 @@ DOC_STAGE_OWNER=
 
 rollback() {
   set +e
+  ROLLBACK_FAILED=false
   [ "$DOC_OWNER_CREATED" = false ] || rm -f "$DOC_OWNER"
   [ "$DOC_NOTICES_CREATED" = false ] || rm -f "$DOC_NOTICES"
   [ "$DOC_LICENSE_CREATED" = false ] || rm -f "$DOC_LICENSE"
@@ -695,6 +700,25 @@ rollback() {
   fi
   [ "$OWNER_CREATED" = false ] || rm -f "$CONFIG_OWNER"
   [ "$CONFIG_CREATED" = false ] || rm -f "$CONFIG_PATH"
+  if [ "$CONFIG_BACKUP_CREATED" = true ] && [ -n "$CONFIG_BACKUP" ]; then
+    if [ "$CONFIG_MIGRATED" = true ]; then
+      if owned_single_link_regular "$CONFIG_PATH" && \
+         [ "$(sha256_file "$CONFIG_PATH")" = "$CONFIG_NEW_SHA256" ]; then
+        rm -f "$CONFIG_PATH" || ROLLBACK_FAILED=true
+      else
+        ROLLBACK_FAILED=true
+      fi
+    fi
+    if [ ! -e "$CONFIG_PATH" ] && [ ! -L "$CONFIG_PATH" ]; then
+      if mv "$CONFIG_BACKUP" "$CONFIG_PATH"; then
+        CONFIG_BACKUP_CREATED=false
+      else
+        ROLLBACK_FAILED=true
+      fi
+    else
+      ROLLBACK_FAILED=true
+    fi
+  fi
   if [ "$DEST_MUTATED" = true ]; then
     rm -f "$DEST"
     if [ "$DEST_HAD_OLD" = true ] && [ -n "$DEST_BACKUP" ]; then
@@ -709,6 +733,7 @@ rollback() {
     rmdir "$BIN_DIR" 2>/dev/null || :
   fi
   set -e
+  [ "$ROLLBACK_FAILED" = false ]
 }
 
 cleanup() {
@@ -817,6 +842,7 @@ complete_stage 'Verifying SHA-256'
 CONFIG_PATH=$BIN_DIR/azdaja-config.toml
 CONFIG_OWNER=$BIN_DIR/azdaja-config.toml.managed
 OWNER_MAGIC=azdaja-installer-owned-config-v1
+LEGACY_JCODE_CONFIG_SHA256=d890a0fad3dfb5faacdd3e6040543097433444b938a48a1d7221ba090656498d
 DOC_OWNER_V1_MAGIC=azdaja-installer-owned-docs-v1
 LEGACY_NOTICES_SHA256=dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb
 PREVIOUS_V2_NOTICES_SHA256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6
@@ -895,8 +921,13 @@ if [ -L "$BIN_DIR" ] || { [ -e "$BIN_DIR" ] && [ ! -d "$BIN_DIR" ]; }; then
 fi
 
 # Refuse ambiguous adjacent configuration before the binary, harnesses, or
-# alias can be changed. A matching owner manifest permits user customization:
-# an owned config is deliberately preserved byte-for-byte on reinstall.
+# alias can be changed. User customization is preserved byte-for-byte. Only
+# the exact published legacy Jcode config is eligible for managed migration.
+PRIMARY_HARNESS=
+for name in $INSTALL_NAMES; do
+  [ "$name" != jcode ] || PRIMARY_HARNESS=jcode
+  [ -n "$PRIMARY_HARNESS" ] || PRIMARY_HARNESS=$name
+done
 CONFIG_STATE=fresh
 if [ -L "$CONFIG_PATH" ] || [ -L "$CONFIG_OWNER" ]; then
   fail "refusing ambiguous Azdaja config symlink or owner marker in $BIN_DIR"
@@ -904,7 +935,16 @@ fi
 if [ -e "$CONFIG_PATH" ] || [ -e "$CONFIG_OWNER" ]; then
   if [ -f "$CONFIG_PATH" ] && [ -f "$CONFIG_OWNER" ] && \
      cmp -s "$CONFIG_OWNER" "$TMP/config-owner.expected"; then
-    CONFIG_STATE=owned
+    if [ "$PRIMARY_HARNESS" = jcode ] && \
+       [ "$(sha256_file "$CONFIG_PATH")" = "$LEGACY_JCODE_CONFIG_SHA256" ]; then
+      owned_single_link_regular "$CONFIG_PATH" || \
+        fail "refusing unsafe legacy Azdaja config: $CONFIG_PATH"
+      owned_single_link_regular "$CONFIG_OWNER" || \
+        fail "refusing unsafe Azdaja config owner marker: $CONFIG_OWNER"
+      CONFIG_STATE=legacy-jcode
+    else
+      CONFIG_STATE=owned
+    fi
   else
     fail "refusing unowned or incomplete Azdaja config state in $BIN_DIR"
   fi
@@ -970,18 +1010,19 @@ DEST_BACKUP=$BIN_DIR/.azdaja-previous.$$
 [ ! -e "$DEST_BACKUP" ] && [ ! -L "$DEST_BACKUP" ] || \
   fail "temporary binary backup path already exists: $DEST_BACKUP"
 
-# Delegate the complete harness lifecycle to the verified Rust transaction. It
-# first performs a read-only selected-set preflight, then locks, re-preflights,
-# stages every target, and commits or rolls back as one unit. The shell never
-# copies or recursively removes a harness target.
+# Delegate harness validation and final mutation to the verified Rust
+# transaction. Render the primary managed config read-only now, but defer the
+# real harness commit until every shell-owned path is ready. That makes a Rust
+# failure roll the shell transaction back without ever leaving a migrated
+# integration behind.
 "$TMP/azdaja" install "$HARNESS" --preflight-only >/dev/null
+PRIMARY_CONFIG=$TMP/primary-config.toml
+(umask 077 && set -C && : > "$PRIMARY_CONFIG") 2>/dev/null || \
+  fail 'cannot create staged managed config'
+"$TMP/azdaja" install "$PRIMARY_HARNESS" --print-config > "$PRIMARY_CONFIG"
+[ -s "$PRIMARY_CONFIG" ] || fail 'managed config renderer returned an empty file'
+chmod 600 "$PRIMARY_CONFIG"
 complete_stage 'Checking destinations'
-
-PRIMARY_TARGET=
-for harness in $INSTALL_NAMES; do
-  TARGET=$(harness_target "$harness")
-  [ -n "$PRIMARY_TARGET" ] || PRIMARY_TARGET=$TARGET
-done
 
 # The complete harness and document preflights are read-only. Start one shell
 # transaction; the Rust harness mutation remains independently transactional.
@@ -1085,12 +1126,6 @@ else
   printf '%s\n' 'Writing documents... already current'
 fi
 
-# Commit the verified Rust harness transaction after document creation. If it
-# refuses or rolls back, the shell trap removes the fresh document set.
-CURRENT_STAGE='Writing tool integrations'
-printf '%s\n' 'Writing tool integrations...'
-"$TMP/azdaja" install "$HARNESS" >/dev/null
-printf '%s\n' 'Writing tool integrations... ok'
 CURRENT_STAGE='Writing command'
 printf '%s\n' 'Writing command...'
 
@@ -1128,7 +1163,7 @@ if [ "$CONFIG_STATE" = fresh ]; then
   STAGED_EXTRA=$OWNER_STAGE
   (umask 077 && set -C && : > "$CONFIG_STAGE") 2>/dev/null || \
     fail 'cannot create atomic config file'
-  cat "$PRIMARY_TARGET/config.toml" > "$CONFIG_STAGE"
+  cat "$PRIMARY_CONFIG" > "$CONFIG_STAGE"
   chmod 600 "$CONFIG_STAGE"
   (umask 077 && set -C && : > "$OWNER_STAGE") 2>/dev/null || \
     fail 'cannot create atomic config owner file'
@@ -1147,6 +1182,40 @@ if [ "$CONFIG_STATE" = fresh ]; then
   rm -f "$CONFIG_STAGE" "$OWNER_STAGE"
   STAGED=
   STAGED_EXTRA=
+elif [ "$CONFIG_STATE" = legacy-jcode ]; then
+  CONFIG_STAGE=$BIN_DIR/.azdaja-config.$$
+  CONFIG_BACKUP=$BIN_DIR/.azdaja-config-previous.$$
+  [ ! -e "$CONFIG_STAGE" ] && [ ! -L "$CONFIG_STAGE" ] || \
+    fail "temporary config path already exists: $CONFIG_STAGE"
+  [ ! -e "$CONFIG_BACKUP" ] && [ ! -L "$CONFIG_BACKUP" ] || \
+    fail "temporary config backup path already exists: $CONFIG_BACKUP"
+  STAGED=$CONFIG_STAGE
+  (umask 077 && set -C && : > "$CONFIG_STAGE") 2>/dev/null || \
+    fail 'cannot create atomic config file'
+  cat "$PRIMARY_CONFIG" > "$CONFIG_STAGE"
+  chmod 600 "$CONFIG_STAGE"
+  CONFIG_NEW_SHA256=$(sha256_file "$CONFIG_STAGE")
+  owned_single_link_regular "$CONFIG_PATH" || \
+    fail "legacy Azdaja config changed during migration: $CONFIG_PATH"
+  owned_single_link_regular "$CONFIG_OWNER" || \
+    fail "Azdaja config owner marker changed during migration: $CONFIG_OWNER"
+  cmp -s "$CONFIG_OWNER" "$TMP/config-owner.expected" || \
+    fail "Azdaja config owner marker changed during migration: $CONFIG_OWNER"
+  [ "$(sha256_file "$CONFIG_PATH")" = "$LEGACY_JCODE_CONFIG_SHA256" ] || \
+    fail "legacy Azdaja config changed during migration: $CONFIG_PATH"
+  mv "$CONFIG_PATH" "$CONFIG_BACKUP" || \
+    fail "cannot retain the legacy Azdaja config: $CONFIG_PATH"
+  CONFIG_BACKUP_CREATED=true
+  mv "$CONFIG_STAGE" "$CONFIG_PATH" || \
+    fail "cannot install the migrated Azdaja config: $CONFIG_PATH"
+  CONFIG_MIGRATED=true
+  STAGED=
+fi
+
+if [ "$CONFIG_MIGRATED" = true ] && \
+   [ "${AZDAJA_INSTALL_TEST_MODE:-}" = local ] && \
+   [ "${AZDAJA_INSTALL_TEST_FAIL_AFTER_CONFIG_MIGRATION:-}" = 1 ]; then
+  fail 'injected failure after config migration'
 fi
 
 # A direct relative symlink creation is atomic. If a foreign az exists anywhere
@@ -1171,21 +1240,34 @@ else
 fi
 
 printf '%s\n' 'Writing command... ok'
+
+# The Rust integration commit is the final fallible mutation. It is internally
+# transactional across every selected harness. If it fails, the shell trap
+# restores command, config, alias, and document paths. Once it succeeds, both
+# sides are committed and every remaining cleanup is best-effort.
+CURRENT_STAGE='Writing tool integrations'
+printf '%s\n' 'Writing tool integrations...'
+"$TMP/azdaja" install "$HARNESS" >/dev/null
+TRANSACTION_ACTIVE=false
+printf '%s\n' 'Writing tool integrations... ok'
 CURRENT_STAGE='Staging files'
 
 # Every preflighted standalone surface is committed. Subsequent cleanup is
 # best-effort and cannot turn the completed install into a reported failure.
-complete_stage 'Staging files'
-TRANSACTION_ACTIVE=false
 if [ "$DEST_BACKUP_CREATED" = true ]; then
   rm -f "$DEST_BACKUP" || :
   DEST_BACKUP_CREATED=false
+fi
+if [ "$CONFIG_BACKUP_CREATED" = true ] && [ -n "$CONFIG_BACKUP" ]; then
+  rm -f "$CONFIG_BACKUP" || :
+  CONFIG_BACKUP_CREATED=false
 fi
 if [ "$DOC_MIGRATED" = true ] && [ -n "$DOC_PREVIOUS" ]; then
   rm -f "$DOC_PREVIOUS/.azdaja-managed"     "$DOC_PREVIOUS/THIRD-PARTY-NOTICES.md" "$DOC_PREVIOUS/LICENSE" || :
   rmdir "$DOC_PREVIOUS" 2>/dev/null || :
   DOC_PREVIOUS=
 fi
+complete_stage 'Staging files'
 
 ON_PATH=false
 PATH_REST=${PATH:-}

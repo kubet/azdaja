@@ -236,6 +236,107 @@ pub fn render(snapshot: &DashboardSnapshot, color: bool, terminal_columns: usize
     render_at(snapshot, color, terminal_columns, now())
 }
 
+pub fn render_list(snapshot: &DashboardSnapshot, color: bool, terminal_columns: usize) -> String {
+    render_list_at(snapshot, color, terminal_columns, now())
+}
+
+fn render_list_at(
+    snapshot: &DashboardSnapshot,
+    color: bool,
+    terminal_columns: usize,
+    timestamp: u64,
+) -> String {
+    let width = terminal_columns.max(20);
+    let resident = if snapshot.sessions.is_empty() {
+        "empty".to_owned()
+    } else {
+        format!("{} resident", human_bytes(total_state_bytes(snapshot)))
+    };
+    let title = if width < 54 {
+        "azdaja nest"
+    } else {
+        "azdaja memory nest"
+    };
+    let header = truncate(
+        &format!(
+            "{title} · {}/{} slots · {resident}",
+            snapshot.sessions.len(),
+            snapshot.max_sessions
+        ),
+        width,
+    );
+    let mut output = format!("{}\n\n", paint(color, BOLD, &header));
+
+    if snapshot.sessions.is_empty() {
+        output.push_str("no resident sessions\n\n");
+        if snapshot.observability_degraded {
+            output.push_str(&format!(
+                "{}\n\n",
+                paint(
+                    color,
+                    RED,
+                    &truncate("note  local metrics need attention", width)
+                )
+            ));
+        }
+        output.push_str(&format!(
+            "{}\n",
+            paint(color, CYAN, &truncate("next  start · solo · help", width))
+        ));
+        return output;
+    }
+
+    for session in &snapshot.sessions {
+        let marker = if session.busy { "●" } else { "○" };
+        let state = if session.busy { "running" } else { "idle" };
+        let age = human_duration(timestamp.saturating_sub(session.updated));
+        let model = clean(
+            session
+                .sub_model
+                .as_deref()
+                .unwrap_or(&snapshot.default_model),
+        );
+        let id = clean(&session.id);
+        let style = if session.busy { GREEN } else { "" };
+        if width < 64 {
+            let identity = truncate(&format!("{marker} {id} {state} {age}"), width);
+            let details = truncate(
+                &format!("  {} · {model}", human_bytes(session.state_bytes)),
+                width,
+            );
+            output.push_str(&format!("{}\n{details}\n", paint(color, style, &identity)));
+        } else {
+            let line = truncate(
+                &format!(
+                    "{marker} {id:<16}  {state:<7} {age:>4}  {:>9}  {model}",
+                    human_bytes(session.state_bytes)
+                ),
+                width,
+            );
+            output.push_str(&format!("{}\n", paint(color, style, &line)));
+        }
+    }
+    if snapshot.observability_degraded {
+        output.push_str(&format!(
+            "\n{}\n",
+            paint(
+                color,
+                RED,
+                &truncate("note  local metrics need attention", width)
+            )
+        ));
+    }
+    output.push_str(&format!(
+        "\n{}\n",
+        paint(
+            color,
+            CYAN,
+            &truncate("commands  final <id> · kill <id> · help", width)
+        )
+    ));
+    output
+}
+
 fn render_at(
     snapshot: &DashboardSnapshot,
     color: bool,
@@ -404,5 +505,40 @@ mod tests {
         assert!(rendered.contains("bad[2Jconfig"));
         assert!(!rendered.contains("\x1b"));
         assert!(rendered.contains("needs attention"));
+    }
+
+    #[test]
+    fn list_view_is_an_actionable_details_on_demand_layer() {
+        let rendered = render_list_at(&snapshot(), false, 78, 1000);
+        assert!(rendered.starts_with("azdaja memory nest · 2/4 slots · 1.5 MiB resident\n"));
+        assert!(rendered.contains("● 0123456789abcdef"));
+        assert!(rendered.contains("running"));
+        assert!(rendered.contains("1.0 MiB"));
+        assert!(rendered.contains("gpt-5.6-luna"));
+        assert!(rendered.contains("○ fedcba9876543210"));
+        assert!(rendered.contains("512.0 KiB"));
+        assert!(rendered.contains("small-model"));
+        assert!(rendered.contains("commands  final <id> · kill <id> · help"));
+        assert!(!rendered.contains("\x1b["));
+    }
+
+    #[test]
+    fn list_view_has_useful_empty_and_narrow_states() {
+        let mut data = snapshot();
+        data.sessions.truncate(1);
+        let narrow = render_list_at(&data, false, 45, 1000);
+        assert!(narrow.contains("azdaja nest · 1/4 slots · 1.0 MiB resident"));
+        assert!(narrow.contains("● 0123456789abcdef running 10s"));
+        assert!(narrow.contains("1.0 MiB · gpt-5.6-luna"));
+        assert!(narrow.contains("commands  final <id>"));
+
+        data.sessions.clear();
+        data.observability_degraded = true;
+        let empty = render_list_at(&data, false, 72, 1000);
+        assert!(empty.contains("0/4 slots · empty"));
+        assert!(empty.contains("no resident sessions"));
+        assert!(empty.contains("local metrics need attention"));
+        assert!(empty.contains("next  start · solo · help"));
+        assert!(!empty.contains("kill <id>"));
     }
 }

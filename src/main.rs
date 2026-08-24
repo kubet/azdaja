@@ -385,8 +385,20 @@ fn run() -> Result<bool> {
         }
         "list" => {
             exact(&args, 1, "list")?;
-            for id in list(&Config::load()?)? {
-                println!("{id}")
+            let config = Config::load()?;
+            if io::stdout().is_terminal() {
+                let term = env::var("TERM").ok();
+                let no_color = env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty());
+                let color = banner::color_enabled(true, no_color, term.as_deref());
+                let snapshot = dashboard_snapshot(&config)?;
+                print!(
+                    "{}",
+                    dashboard::render_list(&snapshot, color, dashboard::terminal_width())
+                );
+            } else {
+                for id in list(&config)? {
+                    println!("{id}")
+                }
             }
         }
         "kill" => {
@@ -871,6 +883,9 @@ const LEGACY_MANAGED_CODEX_CONFIGS: &[&[u8]] = &[
     include_bytes!("../assets/legacy/codex-config-41f19430.toml"),
     include_bytes!("../assets/legacy/codex-config-ae85a189.toml"),
 ];
+const LEGACY_MANAGED_JCODE_CONFIGS: &[&[u8]] = &[include_bytes!(
+    "../assets/legacy/jcode-config-d890a0fa.toml"
+)];
 
 const DEFAULT_SKILL_DESCRIPTION: &str = "Mandatory for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja, asks if it is installed or available, or names the az virtual-memory tool. Invoke before reading or solving natively.";
 
@@ -1615,6 +1630,18 @@ fn lifecycle_test_before_commit_barrier() -> Result<()> {
     Ok(())
 }
 
+#[cfg(debug_assertions)]
+fn lifecycle_test_committed_cleanup_failpoint() -> Result<()> {
+    if env::var_os("AZDAJA_LIFECYCLE_TEST_FAIL_COMMITTED_CLEANUP").is_some() {
+        bail!("injected committed integration cleanup failure")
+    }
+    Ok(())
+}
+#[cfg(not(debug_assertions))]
+fn lifecycle_test_committed_cleanup_failpoint() -> Result<()> {
+    Ok(())
+}
+
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn install_rename_noreplace(from: &Path, to: &Path) -> Result<()> {
     use std::ffi::CString;
@@ -1685,6 +1712,10 @@ fn is_byte_exact_legacy_codex_config(bytes: &[u8]) -> bool {
     LEGACY_MANAGED_CODEX_CONFIGS.contains(&bytes)
 }
 
+fn is_byte_exact_legacy_jcode_config(bytes: &[u8]) -> bool {
+    LEGACY_MANAGED_JCODE_CONFIGS.contains(&bytes)
+}
+
 fn nearest_existing_install_ancestor(dst: &Path) -> Result<(PathBuf, fs::File)> {
     let mut current = dst
         .parent()
@@ -1742,6 +1773,12 @@ fn preflight_install(home: &Path, harness: &'static str) -> Result<InstallPlan> 
             cfg.sub_llm_cmd = cmd.into();
             cfg.default_model = model.into();
             cfg.max_calls_per_cell = MANAGED_COWORKER_CALL_LIMIT;
+            cfg = cfg.validate()?;
+            toml::to_string_pretty(&cfg)?.into_bytes()
+        } else if harness == "jcode" && is_byte_exact_legacy_jcode_config(bytes) {
+            cfg = toml::from_str::<Config>(DEFAULT_CONFIG)?;
+            cfg.sub_llm_cmd = cmd.into();
+            cfg.default_model = model.into();
             cfg = cfg.validate()?;
             toml::to_string_pretty(&cfg)?.into_bytes()
         } else {
@@ -2070,35 +2107,68 @@ fn commit_install_transaction(
         };
     }
 
-    // The selected set is now committed. Disarm new targets, then delete prior
-    // directories while the lifecycle lock is still held.
+    // The selected set is now committed. Disarm new targets, then best-effort
+    // delete prior directories while the lifecycle lock is still held. Cleanup
+    // cannot make the committed install report failure: the standalone shell
+    // treats a nonzero exit as a signal to roll back its own surfaces, while the
+    // integration replacement can no longer be rolled back after its prior
+    // directory has begun deletion.
     for install in staged.iter_mut() {
         install.stage.disarm();
         install.stage_moved = false;
     }
     for install in staged.iter_mut() {
-        if install.old_moved {
-            let previous = install
-                .previous
-                .as_ref()
-                .expect("a moved prior installation has a quarantine path");
-            let existing_directory = install
-                .plan
-                .existing_directory
-                .as_ref()
-                .expect("a moved prior installation has an open directory");
-            make_prior_install_removable(existing_directory, previous)?;
-            fs::remove_dir_all(previous)?;
-            install.old_moved = false;
+        if !install.old_moved && install.quarantine.is_none() {
+            continue;
         }
-        if let Some(quarantine) = &mut install.quarantine {
-            quarantine.remove_now()?;
+
+        let cleanup_path = install
+            .quarantine
+            .as_ref()
+            .map(|quarantine| quarantine.path.clone())
+            .unwrap_or_else(|| install.plan.dst.clone());
+        let cleanup = (|| -> Result<()> {
+            lifecycle_test_committed_cleanup_failpoint()?;
+            if install.old_moved {
+                let previous = install
+                    .previous
+                    .as_ref()
+                    .expect("a moved prior installation has a quarantine path");
+                let existing_directory = install
+                    .plan
+                    .existing_directory
+                    .as_ref()
+                    .expect("a moved prior installation has an open directory");
+                make_prior_install_removable(existing_directory, previous)?;
+                fs::remove_dir_all(previous)?;
+                install.old_moved = false;
+            }
+            if let Some(quarantine) = &mut install.quarantine {
+                quarantine.remove_now()?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = cleanup {
+            if let Some(quarantine) = &mut install.quarantine {
+                quarantine.disarm();
+            }
+            eprintln!(
+                "warning: installed integration is active; prior cleanup remains at {}: {error:#}",
+                cleanup_path.display()
+            );
         }
     }
     Ok(())
 }
 
 fn install_cmd(args: &[String]) -> Result<()> {
+    #[derive(Clone, Copy)]
+    enum InstallMode {
+        Commit,
+        Preflight,
+        PrintConfig,
+    }
+
     if args
         .get(1)
         .is_some_and(|s| matches!(s.as_str(), "-h" | "--help"))
@@ -2114,17 +2184,22 @@ fn install_cmd(args: &[String]) -> Result<()> {
         );
         return Ok(());
     }
-    let (which, preflight_only) = match args {
-        [_] => (None, false),
-        [_, flag] if flag == "--preflight-only" => (None, true),
-        [_, target] if !target.starts_with('-') => (Some(target.as_str()), false),
+    let (which, mode) = match args {
+        [_] => (None, InstallMode::Commit),
+        [_, flag] if flag == "--preflight-only" => (None, InstallMode::Preflight),
+        [_, target] if !target.starts_with('-') => (Some(target.as_str()), InstallMode::Commit),
         [_, target, flag] if !target.starts_with('-') && flag == "--preflight-only" => {
-            (Some(target.as_str()), true)
+            (Some(target.as_str()), InstallMode::Preflight)
+        }
+        [_, target, flag] if !target.starts_with('-') && flag == "--print-config" => {
+            (Some(target.as_str()), InstallMode::PrintConfig)
         }
         // Compatibility for older scripts. New help and docs use positional targets.
-        [_, legacy, target] if legacy == "--harness" => (Some(target.as_str()), false),
+        [_, legacy, target] if legacy == "--harness" => {
+            (Some(target.as_str()), InstallMode::Commit)
+        }
         [_, legacy, target, flag] if legacy == "--harness" && flag == "--preflight-only" => {
-            (Some(target.as_str()), true)
+            (Some(target.as_str()), InstallMode::Preflight)
         }
         _ => return Err(usage_error("install")),
     };
@@ -2143,8 +2218,16 @@ fn install_cmd(args: &[String]) -> Result<()> {
     } else {
         None
     };
-    if preflight_only {
-        return Ok(());
+    match mode {
+        InstallMode::Preflight => return Ok(()),
+        InstallMode::PrintConfig => {
+            let [plan] = initial_plans.as_slice() else {
+                bail!("--print-config requires exactly one install target")
+            };
+            std::io::stdout().write_all(&plan.staged_config)?;
+            return Ok(());
+        }
+        InstallMode::Commit => {}
     }
 
     drop(initial_plans);
@@ -6816,6 +6899,32 @@ mod tests {
             .unwrap()
             .into_bytes();
         assert!(!is_byte_exact_legacy_codex_config(&current));
+    }
+
+    #[test]
+    fn only_byte_exact_legacy_jcode_configs_are_auto_migrated() {
+        for historical in LEGACY_MANAGED_JCODE_CONFIGS {
+            let parsed: Config = toml::from_str(std::str::from_utf8(historical).unwrap()).unwrap();
+            assert_eq!(parsed.default_model, "claude-haiku-4-5");
+            assert!(parsed.sub_llm_cmd.starts_with("jcode run --no-update"));
+            assert!(is_byte_exact_legacy_jcode_config(historical));
+
+            let mut customized = historical.to_vec();
+            customized.extend_from_slice(b"# user customization\n");
+            assert!(!is_byte_exact_legacy_jcode_config(&customized));
+        }
+        let mut current: Config = toml::from_str(DEFAULT_CONFIG).unwrap();
+        current.sub_llm_cmd = adapter("jcode").0.into();
+        current.default_model = adapter("jcode").1.into();
+        let current = toml::to_string_pretty(&current.validate().unwrap())
+            .unwrap()
+            .into_bytes();
+        assert!(!is_byte_exact_legacy_jcode_config(&current));
+        assert!(
+            String::from_utf8(current)
+                .unwrap()
+                .contains("default_model = \"gpt-5.6-luna\"")
+        );
     }
 
     #[cfg(unix)]

@@ -936,15 +936,18 @@ fn valid_sid(s: &str) -> bool {
         && s.bytes()
             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
-fn session_dir(sid: &str) -> Result<(PathBuf, File)> {
+fn session_dir_at(base: &Path, sid: &str) -> Result<(PathBuf, File)> {
     if !valid_sid(sid) {
         bail!("invalid session id");
     }
-    let path = state_home()?.join(sid);
+    let path = base.join(sid);
     let directory =
         open_private_directory(&path).with_context(|| format!("unsafe session path: {sid}"))?;
     validate_private_directory(&directory, &path)?;
     Ok((path, directory))
+}
+fn session_dir(sid: &str) -> Result<(PathBuf, File)> {
+    session_dir_at(&state_home()?, sid)
 }
 fn open_lock_file(path: &Path) -> Result<File> {
     if let Some(parent) = path.parent() {
@@ -1101,43 +1104,54 @@ fn session_is_busy(base: &Path, sid: &str) -> Result<bool> {
     }
 }
 
-pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
-    let ids = list(cfg)?;
-    let base = state_home()?;
+fn dashboard_sessions(
+    base: &Path,
+    ids: Vec<String>,
+    observability_degraded: &mut bool,
+) -> Result<Vec<SessionStatus>> {
     let mut sessions = Vec::with_capacity(ids.len());
-    let mut observability_degraded = false;
     for id in ids {
-        let (dir, directory) = session_dir(&id)?;
-        validate_private_directory(&directory, &dir)?;
-        let meta = read_meta(&dir)?;
-        let state_path = dir.join("state.monty");
-        let state = open_private_file(&state_path, false)?;
-        let metadata = validate_private_file(&state, &state_path)?;
-        let observability = match observability::load_session_summary(&dir) {
-            Ok(summary) => summary,
-            Err(_) => {
-                observability_degraded = true;
-                None
-            }
-        };
-        let updated = metadata
-            .modified()
-            .unwrap_or(UNIX_EPOCH)
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        sessions.push(SessionStatus {
-            id: id.clone(),
-            created: meta.created,
-            updated,
-            sub_model: meta.sub_model,
-            busy: session_is_busy(&base, &id)?,
-            state_bytes: metadata.len(),
-            source: observability
-                .as_ref()
-                .and_then(|summary| summary.current_source.clone()),
-            loaded_sources: observability.map_or(0, |summary| summary.loaded_sources),
-        });
+        let status = (|| -> Result<SessionStatus> {
+            let (dir, directory) = session_dir_at(base, &id)?;
+            validate_private_directory(&directory, &dir)?;
+            let meta = read_meta(&dir)?;
+            let state_path = dir.join("state.monty");
+            let state = open_private_file(&state_path, false)?;
+            let metadata = validate_private_file(&state, &state_path)?;
+            let observability = match observability::load_session_summary(&dir) {
+                Ok(summary) => summary,
+                Err(_) => {
+                    *observability_degraded = true;
+                    None
+                }
+            };
+            let updated = metadata
+                .modified()
+                .unwrap_or(UNIX_EPOCH)
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            Ok(SessionStatus {
+                id: id.clone(),
+                created: meta.created,
+                updated,
+                sub_model: meta.sub_model,
+                busy: session_is_busy(base, &id)?,
+                state_bytes: metadata.len(),
+                source: observability
+                    .as_ref()
+                    .and_then(|summary| summary.current_source.clone()),
+                loaded_sources: observability.map_or(0, |summary| summary.loaded_sources),
+            })
+        })();
+        match status {
+            Ok(status) => sessions.push(status),
+            Err(error) => match fs::symlink_metadata(base.join(&id)) {
+                Err(missing) if missing.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(metadata) => return Err(metadata.into()),
+                Ok(_) => return Err(error),
+            },
+        }
     }
     sessions.sort_by(|left, right| {
         right
@@ -1146,6 +1160,14 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
             .then_with(|| right.updated.cmp(&left.updated))
             .then_with(|| left.id.cmp(&right.id))
     });
+    Ok(sessions)
+}
+
+pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
+    let ids = list(cfg)?;
+    let base = state_home()?;
+    let mut observability_degraded = false;
+    let sessions = dashboard_sessions(&base, ids, &mut observability_degraded)?;
     let recent_observability = match observability::load_recent_summary() {
         Ok(summary) => summary,
         Err(_) => {
@@ -5592,6 +5614,165 @@ fn bridge_paths() -> Result<BridgePaths> {
 fn socket_alive(path: &Path) -> bool {
     UnixStream::connect(path).is_ok()
 }
+
+#[cfg(unix)]
+fn jcode_daemon_socket(paths: &BridgePaths) -> PathBuf {
+    paths.run.join("j.sock")
+}
+
+#[cfg(unix)]
+fn jcode_bridge_alive(paths: &BridgePaths) -> bool {
+    socket_alive(&paths.socket) && socket_alive(&jcode_daemon_socket(paths))
+}
+
+#[cfg(unix)]
+fn private_bridge_pid(paths: &BridgePaths) -> Result<Option<libc::pid_t>> {
+    match fs::symlink_metadata(&paths.pidfile) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+        Ok(_) => {}
+    }
+    let mut file = open_regular_nofollow(&paths.pidfile, false)?;
+    validate_private_file_identity(&file, &paths.pidfile)?;
+    let mut text = String::new();
+    file.read_to_string(&mut text)?;
+    let pid = text
+        .trim()
+        .parse::<libc::pid_t>()
+        .context("invalid private Jcode bridge pidfile")?;
+    if pid <= 1 {
+        bail!("invalid private Jcode bridge pid")
+    }
+    Ok(Some(pid))
+}
+
+#[cfg(unix)]
+fn bridge_process_group_alive(pid: libc::pid_t) -> Result<bool> {
+    let mut status = 0;
+    let waited = unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) };
+    if waited < 0 {
+        let error = std::io::Error::last_os_error();
+        if !matches!(error.raw_os_error(), Some(libc::ECHILD) | Some(libc::ESRCH)) {
+            return Err(error.into());
+        }
+    }
+    if unsafe { libc::kill(-pid, 0) } == 0 {
+        return Ok(true);
+    }
+    let error = std::io::Error::last_os_error();
+    if error.raw_os_error() == Some(libc::ESRCH) {
+        Ok(false)
+    } else {
+        Err(error.into())
+    }
+}
+
+#[cfg(unix)]
+fn bound_bridge_process_group_alive(pid: libc::pid_t) -> Result<bool> {
+    if !bridge_process_group_alive(pid)? {
+        return Ok(false);
+    }
+    let process_group = unsafe { libc::getpgid(pid) };
+    if process_group < 0 {
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() == Some(libc::ESRCH) {
+            bail!("refusing to stop a private Jcode API bridge without a live bound group leader")
+        }
+        return Err(error.into());
+    }
+    if process_group != pid {
+        bail!("refusing to stop an unbound private Jcode API bridge process")
+    }
+    Ok(true)
+}
+
+#[cfg(unix)]
+fn wait_for_bridge_process_group_exit(pid: libc::pid_t, timeout: Duration) -> Result<bool> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if !bridge_process_group_alive(pid)? {
+            return Ok(true);
+        }
+        if Instant::now() >= deadline {
+            return Ok(false);
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+}
+
+#[cfg(unix)]
+fn signal_bridge_process_group(pid: libc::pid_t, signal: libc::c_int) -> Result<()> {
+    if unsafe { libc::kill(-pid, signal) } == 0 {
+        return Ok(());
+    }
+    let error = std::io::Error::last_os_error();
+    if error.raw_os_error() == Some(libc::ESRCH) {
+        Ok(())
+    } else {
+        Err(error.into())
+    }
+}
+
+#[cfg(unix)]
+fn retire_stale_jcode_bridge(paths: &BridgePaths) -> Result<()> {
+    let mut public_alive = socket_alive(&paths.socket);
+    let mut daemon_alive = socket_alive(&jcode_daemon_socket(paths));
+    if public_alive && daemon_alive {
+        return Ok(());
+    }
+    if !public_alive && !daemon_alive {
+        if let Some(pid) = private_bridge_pid(paths)?
+            && bridge_process_group_alive(pid)?
+        {
+            bail!(
+                "refusing to signal a live process group from a stale private Jcode bridge pidfile without a live private socket"
+            )
+        }
+        return Ok(());
+    }
+    let Some(pid) = private_bridge_pid(paths)? else {
+        bail!("stale private Jcode API bridge has no bound pidfile")
+    };
+    let mut process_group_alive = bound_bridge_process_group_alive(pid)?;
+    if !process_group_alive {
+        if !public_alive && !daemon_alive {
+            return Ok(());
+        }
+        bail!("stale private Jcode API bridge has no bound process group")
+    }
+    let grace_deadline = Instant::now() + Duration::from_millis(250);
+    while Instant::now() < grace_deadline {
+        thread::sleep(Duration::from_millis(25));
+        public_alive = socket_alive(&paths.socket);
+        daemon_alive = socket_alive(&jcode_daemon_socket(paths));
+        if public_alive && daemon_alive {
+            return Ok(());
+        }
+        if !public_alive && !daemon_alive {
+            if bridge_process_group_alive(pid)? {
+                bail!(
+                    "refusing to signal a live process group from a stale private Jcode bridge pidfile without a live private socket"
+                )
+            }
+            return Ok(());
+        }
+        process_group_alive = bound_bridge_process_group_alive(pid)?;
+        if !process_group_alive {
+            if !public_alive && !daemon_alive {
+                return Ok(());
+            }
+            bail!("stale private Jcode API bridge has no bound process group")
+        }
+    }
+    signal_bridge_process_group(pid, libc::SIGTERM)?;
+    if !wait_for_bridge_process_group_exit(pid, Duration::from_secs(2))? {
+        signal_bridge_process_group(pid, libc::SIGKILL)?;
+        if !wait_for_bridge_process_group_exit(pid, Duration::from_secs(2))? {
+            bail!("stale private Jcode API bridge did not stop")
+        }
+    }
+    Ok(())
+}
 #[cfg(unix)]
 fn jcode_auth_path(user_home: &Path, explicit_home: Option<PathBuf>) -> Result<PathBuf> {
     let source_home = strict_absolute_override_value("JCODE_HOME", explicit_home)?
@@ -5687,18 +5868,32 @@ fn ensure_jcode_bridge(cfg: &Config) -> Result<PathBuf> {
     let auth = jcode_auth_path(&user_home, env::var_os("JCODE_HOME").map(PathBuf::from))?;
     let canonical_auth = validate_jcode_auth(&auth)?;
     let paths = bridge_paths()?;
-    if socket_alive(&paths.socket) {
+    if jcode_bridge_alive(&paths) {
         if jcode_bridge_profile_matches(&paths, &canonical_auth)? {
             return Ok(paths.socket);
         }
         bail!("live private Jcode API bridge belongs to a different credential profile")
     }
     let _guard = lock_path(&state_home()?.join("jcode-api.lock"))?;
-    if socket_alive(&paths.socket) {
+    if jcode_bridge_alive(&paths) {
         if jcode_bridge_profile_matches(&paths, &canonical_auth)? {
             return Ok(paths.socket);
         }
         bail!("live private Jcode API bridge belongs to a different credential profile")
+    }
+    let stale_public_socket = socket_alive(&paths.socket);
+    let stale_daemon_socket = socket_alive(&jcode_daemon_socket(&paths));
+    if stale_public_socket || stale_daemon_socket {
+        if !jcode_bridge_profile_matches(&paths, &canonical_auth)? {
+            bail!("live private Jcode API bridge belongs to a different credential profile")
+        }
+        retire_stale_jcode_bridge(&paths)?;
+    } else if let Some(pid) = private_bridge_pid(&paths)?
+        && bridge_process_group_alive(pid)?
+    {
+        bail!(
+            "refusing to overwrite a stale private Jcode bridge pidfile that names a live process group without a live private socket"
+        )
     }
     match fs::remove_file(&paths.socket) {
         Ok(()) => {}
@@ -8527,6 +8722,177 @@ JSONL
             fs::canonicalize(bridge_home.join("openai-auth.json")).unwrap(),
             canonical_b
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn jcode_bridge_health_requires_both_public_and_daemon_sockets() {
+        use std::os::unix::net::UnixListener;
+
+        let root = temp_test_dir("jcode-bridge-health");
+        let run = root.join("run");
+        let home = root.join("home");
+        fs::create_dir_all(&run).unwrap();
+        fs::create_dir_all(&home).unwrap();
+        let paths = BridgePaths {
+            socket: root.join("api.sock"),
+            pidfile: root.join("bridge.pid"),
+            home: home.clone(),
+            run: run.clone(),
+            marker: root.join("runtime-dir"),
+            credential_profile: home.join("credential-target"),
+        };
+
+        let public = UnixListener::bind(&paths.socket).unwrap();
+        assert!(!jcode_bridge_alive(&paths));
+        let daemon = UnixListener::bind(jcode_daemon_socket(&paths)).unwrap();
+        assert!(jcode_bridge_alive(&paths));
+        drop(daemon);
+        assert!(!jcode_bridge_alive(&paths));
+
+        drop(public);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn dashboard_sessions_skip_vanished_entries_but_reject_present_corruption() {
+        let root = temp_test_dir("dashboard-vanished-session");
+        fs::create_dir_all(&root).unwrap();
+        let id = "0123456789abcdef".to_owned();
+        let mut degraded = false;
+
+        let sessions = dashboard_sessions(&root, vec![id.clone()], &mut degraded).unwrap();
+        assert!(sessions.is_empty());
+        assert!(!degraded);
+
+        let corrupt = root.join(&id);
+        fs::create_dir(&corrupt).unwrap();
+        #[cfg(unix)]
+        chmod(&corrupt, 0o700).unwrap();
+        assert!(dashboard_sessions(&root, vec![id], &mut degraded).is_err());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stale_private_jcode_bridge_process_group_and_descendants_are_retired() {
+        use std::os::unix::{net::UnixListener, process::CommandExt};
+
+        let root = temp_test_dir("jcode-bridge-retirement");
+        let run = root.join("run");
+        let home = root.join("home");
+        fs::create_dir_all(&run).unwrap();
+        fs::create_dir_all(&home).unwrap();
+        let paths = BridgePaths {
+            socket: root.join("api.sock"),
+            pidfile: root.join("bridge.pid"),
+            home: home.clone(),
+            run,
+            marker: root.join("runtime-dir"),
+            credential_profile: home.join("credential-target"),
+        };
+        let public = UnixListener::bind(&paths.socket).unwrap();
+        let mut command = Command::new("sh");
+        command
+            .args([
+                "-c",
+                "trap 'exit 0' TERM; (trap '' TERM; exec sleep 30) & wait",
+            ])
+            .process_group(0);
+        let mut child = command.spawn().unwrap();
+        fs::write(&paths.pidfile, child.id().to_string()).unwrap();
+
+        retire_stale_jcode_bridge(&paths).unwrap();
+        assert!(!bridge_process_group_alive(child.id() as libc::pid_t).unwrap());
+        let _ = child.wait();
+
+        drop(public);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dead_public_socket_stale_private_jcode_bridge_group_is_retired() {
+        use std::os::unix::{net::UnixListener, process::CommandExt};
+
+        let root = temp_test_dir("jb-dp");
+        let run = root.join("run");
+        let home = root.join("home");
+        fs::create_dir_all(&run).unwrap();
+        fs::create_dir_all(&home).unwrap();
+        let paths = BridgePaths {
+            socket: root.join("api.sock"),
+            pidfile: root.join("bridge.pid"),
+            home: home.clone(),
+            run,
+            marker: root.join("runtime-dir"),
+            credential_profile: home.join("credential-target"),
+        };
+        let daemon = UnixListener::bind(jcode_daemon_socket(&paths)).unwrap();
+        assert!(!socket_alive(&paths.socket));
+        assert!(socket_alive(&jcode_daemon_socket(&paths)));
+
+        let mut command = Command::new("sh");
+        command
+            .args([
+                "-c",
+                "trap 'exit 0' TERM; (trap '' TERM; exec sleep 30) & wait",
+            ])
+            .process_group(0);
+        let mut child = command.spawn().unwrap();
+        fs::write(&paths.pidfile, child.id().to_string()).unwrap();
+
+        retire_stale_jcode_bridge(&paths).unwrap();
+        assert!(!bridge_process_group_alive(child.id() as libc::pid_t).unwrap());
+        let _ = child.wait();
+
+        drop(daemon);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn socketless_stale_numeric_bridge_pidfile_never_signals_a_live_process_group() {
+        use std::os::unix::process::CommandExt;
+
+        let root = temp_test_dir("jb-sl");
+        let home = root.join("home");
+        fs::create_dir_all(&home).unwrap();
+        let paths = BridgePaths {
+            socket: root.join("api.sock"),
+            pidfile: root.join("bridge.pid"),
+            home: home.clone(),
+            run: root.join("run"),
+            marker: root.join("runtime-dir"),
+            credential_profile: home.join("credential-target"),
+        };
+
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", "trap '' HUP TERM; exec sleep 30"])
+            .process_group(0);
+        let mut unrelated = command.spawn().unwrap();
+        let pid = unrelated.id() as libc::pid_t;
+        fs::write(&paths.pidfile, pid.to_string()).unwrap();
+        assert!(bridge_process_group_alive(pid).unwrap());
+        assert!(!socket_alive(&paths.socket));
+        assert!(!socket_alive(&jcode_daemon_socket(&paths)));
+
+        let error = retire_stale_jcode_bridge(&paths).unwrap_err();
+        assert!(
+            format!("{error:#}").contains("without a live private socket"),
+            "{error:#}"
+        );
+        assert!(unrelated.try_wait().unwrap().is_none());
+        assert!(bridge_process_group_alive(pid).unwrap());
+
+        signal_bridge_process_group(pid, libc::SIGKILL).unwrap();
+        assert!(wait_for_bridge_process_group_exit(pid, Duration::from_secs(2)).unwrap());
+        let _ = unrelated.wait();
+        assert!(!bridge_process_group_alive(pid).unwrap());
+
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -1057,6 +1057,38 @@ fn all_harness_install_and_uninstall_roll_back_every_injected_target_failure() {
     }
 }
 
+#[test]
+fn committed_install_cleanup_failure_keeps_the_successful_replacement_active() {
+    let scratch = Scratch::new("committed-cleanup");
+    let binary = Path::new(env!("CARGO_BIN_EXE_azdaja"));
+    let target = scratch.0.join(".jcode/skills/azdaja");
+    assert_success(&run(binary, &scratch.0, &["install", "jcode"]));
+    let prior_inode = fs::metadata(&target).unwrap().ino();
+
+    let output = run_with_lifecycle_env(
+        binary,
+        &scratch.0,
+        &["install", "jcode"],
+        &[("AZDAJA_LIFECYCLE_TEST_FAIL_COMMITTED_CLEANUP", "1")],
+    );
+    let (stdout, stderr) = text(&output);
+    assert!(output.status.success(), "stdout={stdout} stderr={stderr}");
+    assert!(stdout.contains("Written: jcode ->"), "{stdout}");
+    assert!(
+        stderr.contains("installed integration is active; prior cleanup remains"),
+        "{stderr}"
+    );
+    assert_ne!(fs::metadata(&target).unwrap().ino(), prior_inode);
+
+    let artifacts = lifecycle_artifacts(&scratch.0);
+    assert_eq!(artifacts.len(), 1, "{artifacts:?}");
+    assert_eq!(
+        fs::metadata(artifacts[0].join("previous")).unwrap().ino(),
+        prior_inode
+    );
+    assert!(assert_success(&run(binary, &scratch.0, &["doctor", "jcode"])).contains("PASS jcode"));
+}
+
 fn wait_for_barrier(path: &Path) {
     let deadline = Instant::now() + Duration::from_secs(60);
     while !path.exists() {
