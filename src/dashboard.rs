@@ -134,62 +134,12 @@ fn active_sessions(snapshot: &DashboardSnapshot) -> usize {
         .count()
 }
 
-fn total_state_bytes(snapshot: &DashboardSnapshot) -> u64 {
-    snapshot
-        .sessions
-        .iter()
-        .map(|session| session.state_bytes)
-        .sum()
-}
-
 fn status_line(snapshot: &DashboardSnapshot) -> (&'static str, &'static str) {
     if snapshot.observability_degraded {
         ("● awake · local metrics need attention", RED)
     } else {
         ("● awake · source stays local", GREEN)
     }
-}
-
-fn nest_line(snapshot: &DashboardSnapshot) -> String {
-    let constellation = memory_constellation(snapshot);
-    let trace_count = constellation.as_ref().map_or(0, |value| value.trace_count);
-    if snapshot.sessions.is_empty() {
-        return if trace_count == 0 {
-            format!("empty · cold · 0/{} slots", snapshot.max_sessions)
-        } else {
-            let history = history_count_label(constellation.as_ref().expect("checked history"));
-            format!(
-                "0 resident · cold · 0/{} slots · {} · {} observed",
-                snapshot.max_sessions,
-                history,
-                human_bytes(
-                    constellation
-                        .as_ref()
-                        .map_or(0, |value| value.total_source_bytes)
-                )
-            )
-        };
-    }
-    let pressure = if snapshot.sessions.len() >= snapshot.max_sessions {
-        "full"
-    } else if active_sessions(snapshot) > 0 {
-        "warm"
-    } else {
-        "resting"
-    };
-    let mut line = format!(
-        "{} resident state · {pressure} · {}/{} slots",
-        human_bytes(total_state_bytes(snapshot)),
-        snapshot.sessions.len(),
-        snapshot.max_sessions
-    );
-    if trace_count > 0 {
-        line.push_str(&format!(
-            " · {}",
-            history_count_label(constellation.as_ref().expect("checked history"))
-        ));
-    }
-    line
 }
 
 fn memory_constellation(snapshot: &DashboardSnapshot) -> Option<MemoryConstellation> {
@@ -212,77 +162,100 @@ fn memory_constellation(snapshot: &DashboardSnapshot) -> Option<MemoryConstellat
     summary.compact_memory_constellation()
 }
 
-fn memory_line(snapshot: &DashboardSnapshot) -> String {
-    match memory_constellation(snapshot) {
-        Some(constellation) => format!(
-            "H→ {} · {}",
-            constellation.render_strip(18),
-            history_count_label(&constellation)
-        ),
-        None => "H→ ·················· · no traces yet".to_owned(),
-    }
-}
-
-fn trace_count_label(count: usize) -> String {
-    if count == 1 {
-        "1 trace".to_owned()
-    } else {
-        format!("{count} traces")
-    }
-}
-
-fn memory_count_label(count: usize) -> String {
-    if count == 1 {
-        "1 memory".to_owned()
-    } else {
-        format!("{count} memories")
-    }
-}
-
-fn history_count_label(constellation: &MemoryConstellation) -> String {
-    if constellation.completed_count == 0 {
-        return trace_count_label(constellation.trace_count);
-    }
-    let loads = constellation
-        .trace_count
-        .saturating_sub(constellation.completed_count);
-    if loads == 0 {
-        memory_count_label(constellation.completed_count)
-    } else {
-        format!(
-            "{} · {}",
-            memory_count_label(constellation.completed_count),
-            trace_count_label(loads)
-        )
-    }
-}
-
 fn percent(millipercent: u16) -> u32 {
     (u32::from(millipercent.min(1000)) * 100 + 500) / 1000
 }
 
-fn texture_line(snapshot: &DashboardSnapshot) -> String {
+fn new_work_line(snapshot: &DashboardSnapshot) -> String {
+    let model = clean(snapshot.default_model.trim());
+    let model = if model.is_empty() {
+        "model unknown".to_owned()
+    } else {
+        model
+    };
+    let provider = clean(snapshot.provider.trim());
+    let provider = if provider.is_empty() {
+        "provider unknown".to_owned()
+    } else {
+        provider
+    };
+    let mut line = format!("{model} via {provider}");
+    let reasoning = clean(snapshot.reasoning.trim());
+    match reasoning.to_ascii_lowercase().as_str() {
+        "" | "unknown" => {}
+        "none" | "off" => line.push_str(" · thinking off"),
+        _ => line.push_str(&format!(" · {reasoning} thinking")),
+    }
+    line
+}
+
+fn live_line(snapshot: &DashboardSnapshot) -> String {
+    let used = snapshot.sessions.len();
+    if used == 0 {
+        let free = snapshot.max_sessions;
+        return format!(
+            "none · {free} {} free",
+            if free == 1 { "slot" } else { "slots" }
+        );
+    }
+    let running = active_sessions(snapshot);
+    let idle = used.saturating_sub(running);
+    format!(
+        "{running} running · {idle} idle · {used}/{} slots used",
+        snapshot.max_sessions
+    )
+}
+
+fn summary_count(count: usize, state: &str) -> String {
+    format!("{count} {state}")
+}
+
+fn memory_line(snapshot: &DashboardSnapshot) -> String {
+    match memory_constellation(snapshot) {
+        Some(constellation) => {
+            let loaded = constellation
+                .trace_count
+                .saturating_sub(constellation.completed_count);
+            let mut counts = Vec::new();
+            if constellation.completed_count > 0 {
+                counts.push(summary_count(constellation.completed_count, "finished"));
+            }
+            if loaded > 0 {
+                counts.push(summary_count(loaded, "loaded"));
+            }
+            format!(
+                "{} · {} measured · numbers only",
+                counts.join(" · "),
+                human_bytes(constellation.total_source_bytes)
+            )
+        }
+        None => "none yet · summaries keep numbers, not source text".to_owned(),
+    }
+}
+
+fn variety_percent_from_entropy(byte_entropy_millibits: u16) -> u32 {
+    (u32::from(byte_entropy_millibits.min(8000)) * 100 + 4000) / 8000
+}
+
+fn pattern_line(snapshot: &DashboardSnapshot, strip_width: usize) -> String {
     match memory_constellation(snapshot) {
         Some(constellation) => format!(
-            "H₀ {:.1}/8 · redundancy {}% · lines {}% nonempty",
-            constellation.weighted_byte_entropy_bits(),
-            percent(constellation.zero_order_redundancy_millipercent()),
-            percent(constellation.nonempty_line_millipercent)
+            "repeated ← {} → varied · avg {}%",
+            constellation.render_strip(strip_width),
+            100 - percent(constellation.zero_order_redundancy_millipercent())
         ),
-        None => "unmeasured · load one source".to_owned(),
+        None => "appears after the first source".to_owned(),
     }
 }
 
 fn run_kind_label(kind: RunKind) -> &'static str {
     match kind {
-        RunKind::SessionLoad => "session load",
-        RunKind::SoloLoad => "solo load",
-        RunKind::SessionFinal => "session memory",
-        RunKind::SoloFinal => "solo memory",
+        RunKind::SessionLoad | RunKind::SoloLoad => "loaded",
+        RunKind::SessionFinal | RunKind::SoloFinal => "finished",
     }
 }
 
-fn recent_trace_line(snapshot: &DashboardSnapshot, timestamp: u64) -> Option<String> {
+fn recent_summary_line(snapshot: &DashboardSnapshot, timestamp: u64) -> Option<String> {
     let run = snapshot.recent_observability.runs.first()?;
     let kind = run_kind_label(run.kind);
     Some(format!(
@@ -293,56 +266,19 @@ fn recent_trace_line(snapshot: &DashboardSnapshot, timestamp: u64) -> Option<Str
     ))
 }
 
-fn session_line(session: &SessionStatus, default_model: &str, timestamp: u64) -> String {
+fn session_line(session: &SessionStatus, timestamp: u64) -> String {
     let marker = if session.busy { "●" } else { "○" };
     let state = if session.busy { "running" } else { "idle" };
-    let model = session.sub_model.as_deref().unwrap_or(default_model);
+    let model = session.sub_model.as_deref().map_or_else(
+        || "default model unknown".to_owned(),
+        |model| format!("default {}", clean(model)),
+    );
     format!(
         "{marker} {} {state} {} · {}",
         clean(&session.id[..session.id.len().min(8)]),
         human_duration(timestamp.saturating_sub(session.updated)),
-        clean(model)
+        model
     )
-}
-
-fn compact_texture_line(snapshot: &DashboardSnapshot) -> String {
-    match memory_constellation(snapshot) {
-        Some(constellation) => format!(
-            "H₀ {:.1}/8 · R₀ {}% · lines {}%",
-            constellation.weighted_byte_entropy_bits(),
-            percent(constellation.zero_order_redundancy_millipercent()),
-            percent(constellation.nonempty_line_millipercent)
-        ),
-        None => "unmeasured · load one source".to_owned(),
-    }
-}
-
-fn compact_nest_line(snapshot: &DashboardSnapshot) -> String {
-    let constellation = memory_constellation(snapshot);
-    let traces = constellation.as_ref().map_or(0, |value| value.trace_count);
-    if snapshot.sessions.is_empty() {
-        return match constellation {
-            Some(value) => format!(
-                "0 resident · {} · {} observed",
-                history_count_label(&value),
-                human_bytes(value.total_source_bytes)
-            ),
-            None => format!("empty · 0/{} slots", snapshot.max_sessions),
-        };
-    }
-    let mut line = format!(
-        "{} resident · {}/{} slots",
-        human_bytes(total_state_bytes(snapshot)),
-        snapshot.sessions.len(),
-        snapshot.max_sessions
-    );
-    if traces > 0 {
-        line.push_str(&format!(
-            " · {}",
-            history_count_label(constellation.as_ref().expect("checked history"))
-        ));
-    }
-    line
 }
 
 fn render_compact(
@@ -355,60 +291,56 @@ fn render_compact(
     let (status, status_style) = status_line(snapshot);
     let mut output = String::new();
     output.push_str(&format!(
-        "{} {}\n",
-        paint(color, BOLD, "azdaja"),
-        paint(color, status_style, status)
-    ));
-    output.push_str(&format!(
         "{}\n",
-        truncate(
-            &format!(
-                "route {} · {} · {}",
-                clean(&snapshot.default_model),
-                clean(&snapshot.provider),
-                clean(&snapshot.reasoning)
-            ),
-            width
+        paint(
+            color,
+            BOLD,
+            &truncate("azdaja · memory constellation", width)
         )
     ));
     output.push_str(&format!(
         "{}\n",
-        truncate(&format!("nest  {}", compact_nest_line(snapshot)), width)
-    ));
-    let compact_memory = match memory_constellation(snapshot) {
-        Some(constellation) => format!(
-            "memory H→ {} · {}",
-            constellation.render_strip(12),
-            history_count_label(&constellation)
-        ),
-        None => "memory H→ ············ · no traces".to_owned(),
-    };
-    output.push_str(&format!("{}\n", truncate(&compact_memory, width)));
-    output.push_str(&format!(
-        "{}\n",
-        truncate(
-            &format!("texture {}", compact_texture_line(snapshot)),
-            width
+        paint(
+            color,
+            status_style,
+            &truncate(&format!("status    {status}"), width)
         )
     ));
-    if let Some(session) = snapshot.sessions.first() {
+    output.push_str(&format!(
+        "{}\n",
+        truncate(&format!("new work  {}", new_work_line(snapshot)), width)
+    ));
+    output.push_str(&format!(
+        "{}\n",
+        truncate(&format!("live      {}", live_line(snapshot)), width)
+    ));
+    output.push_str(&format!(
+        "{}\n",
+        truncate(&format!("memory    {}", memory_line(snapshot)), width)
+    ));
+    output.push_str(&format!(
+        "{}\n",
+        truncate(&format!("pattern   {}", pattern_line(snapshot, 8)), width)
+    ));
+    if let Some(summary) = recent_summary_line(snapshot, timestamp) {
+        output.push_str(&format!(
+            "{}\n",
+            truncate(&format!("recent    {summary}"), width)
+        ));
+    } else {
+        output.push_str(&format!(
+            "{}\n",
+            truncate("recent    no source summary yet", width)
+        ));
+    }
+    for session in snapshot.sessions.iter().take(3) {
         output.push_str(&format!(
             "{}\n",
             truncate(
-                &format!(
-                    "recent {}",
-                    session_line(session, &snapshot.default_model, timestamp)
-                ),
+                &format!("session   {}", session_line(session, timestamp)),
                 width
             )
         ));
-    } else if let Some(trace) = recent_trace_line(snapshot, timestamp) {
-        output.push_str(&format!(
-            "{}\n",
-            truncate(&format!("recent {trace}"), width)
-        ));
-    } else {
-        output.push_str("recent no memory trace yet\n");
     }
     output.push_str(&format!(
         "{}\n",
@@ -432,54 +364,35 @@ fn render_list_at(
     timestamp: u64,
 ) -> String {
     let width = terminal_columns.max(20);
-    let constellation = memory_constellation(snapshot);
-    let resident = if snapshot.sessions.is_empty() {
-        "empty".to_owned()
-    } else {
-        format!("{} resident", human_bytes(total_state_bytes(snapshot)))
-    };
-    let title = if width < 54 {
-        "azdaja nest"
-    } else {
-        "azdaja memory nest"
-    };
-    let history = constellation.as_ref().map_or_else(String::new, |value| {
-        format!(
-            " · {} · {} observed",
-            history_count_label(value),
-            human_bytes(value.total_source_bytes)
-        )
-    });
-    let header = truncate(
-        &format!(
-            "{title} · {}/{} slots · {resident}{history}",
-            snapshot.sessions.len(),
-            snapshot.max_sessions
+    let mut output = format!(
+        "{}\n{}\n{}\n\n",
+        paint(
+            color,
+            BOLD,
+            &truncate("azdaja · memory constellation", width)
         ),
-        width,
+        truncate(&format!("new work      {}", new_work_line(snapshot)), width),
+        truncate(&format!("live sessions  {}", live_line(snapshot)), width)
     );
-    let mut output = format!("{}\n\n", paint(color, BOLD, &header));
 
+    output.push_str("live sessions\n");
     if snapshot.sessions.is_empty() {
-        output.push_str("resident  none\n");
+        output.push_str("none\n");
     } else {
-        output.push_str("resident\n");
         for session in &snapshot.sessions {
             let marker = if session.busy { "●" } else { "○" };
             let state = if session.busy { "running" } else { "idle" };
             let age = human_duration(timestamp.saturating_sub(session.updated));
-            let model = clean(
-                session
-                    .sub_model
-                    .as_deref()
-                    .unwrap_or(&snapshot.default_model),
+            let model = session.sub_model.as_deref().map_or_else(
+                || "default model unknown".to_owned(),
+                |model| format!("default {}", clean(model)),
             );
             let id = clean(&session.id);
             let style = if session.busy { GREEN } else { "" };
             if width < 64 {
                 let identity = truncate(&format!("{marker} {id} {state} {age}"), width);
                 let details = truncate(
-                    &format!("  {} · {model}", human_bytes(session.state_bytes)),
+                    &format!("  {} state · {model}", human_bytes(session.state_bytes)),
                     width,
                 );
                 output.push_str(&format!("{}\n{details}\n", paint(color, style, &identity)));
@@ -496,26 +409,25 @@ fn render_list_at(
         }
     }
 
+    output.push_str("\nsource summaries · local numbers only\n");
     if snapshot.recent_observability.runs.is_empty() {
-        output.push_str("\nmemory  none yet\n");
+        output.push_str("none yet\n");
     } else {
-        output.push_str("\nmemory  exact-local aggregates\n");
         for (index, run) in snapshot.recent_observability.runs.iter().enumerate() {
             let marker = if index == 0 { "●" } else { "○" };
             let age = human_duration(timestamp.saturating_sub(run.observed_unix));
             let kind = run_kind_label(run.kind);
+            let variety = variety_percent_from_entropy(run.source.byte_entropy_millibits);
             let line = if width < 64 {
                 format!(
-                    "{marker} {kind} {age} · {} · H₀ {:.1}/8",
+                    "{marker} {kind} {age} · {} · variety {variety}%",
                     human_bytes(run.source.source_bytes),
-                    run.source.byte_entropy_bits()
                 )
             } else {
                 format!(
-                    "{marker} {kind:<14} {age:>4}  {:>9}  {:>6} lines  H₀ {:.1}/8",
+                    "{marker} {kind:<8} {age:>4}  {:>9}  {:>6} lines  variety {variety}%",
                     human_bytes(run.source.source_bytes),
                     run.source.physical_lines,
-                    run.source.byte_entropy_bits()
                 )
             };
             output.push_str(&format!("{}\n", truncate(&line, width)));
@@ -564,46 +476,37 @@ fn render_at(
     output.push_str(&row(total, "status", status, status_style, color));
     output.push_str(&row(
         total,
-        "route",
-        &format!(
-            "{} · {} · {}",
-            snapshot.default_model, snapshot.provider, snapshot.reasoning
-        ),
+        "new work",
+        &new_work_line(snapshot),
         CYAN,
         color,
     ));
-    output.push_str(&row(total, "nest", &nest_line(snapshot), "", color));
+    output.push_str(&row(total, "live", &live_line(snapshot), "", color));
     output.push_str(&row(total, "memory", &memory_line(snapshot), "", color));
-    output.push_str(&row(total, "texture", &texture_line(snapshot), DIM, color));
-    if snapshot.sessions.is_empty() {
+    output.push_str(&row(
+        total,
+        "pattern",
+        &pattern_line(snapshot, 18),
+        DIM,
+        color,
+    ));
+    output.push_str(&row(
+        total,
+        "recent",
+        recent_summary_line(snapshot, timestamp)
+            .as_deref()
+            .unwrap_or("no source summary yet"),
+        DIM,
+        color,
+    ));
+    for session in snapshot.sessions.iter().take(3) {
         output.push_str(&row(
             total,
-            "recent",
-            recent_trace_line(snapshot, timestamp)
-                .as_deref()
-                .unwrap_or("no memory trace yet"),
-            DIM,
+            "",
+            &session_line(session, timestamp),
+            if session.busy { GREEN } else { "" },
             color,
         ));
-    } else {
-        for (index, session) in snapshot.sessions.iter().take(2).enumerate() {
-            output.push_str(&row(
-                total,
-                if index == 0 { "recent" } else { "" },
-                &session_line(session, &snapshot.default_model, timestamp),
-                if session.busy { GREEN } else { "" },
-                color,
-            ));
-        }
-        if snapshot.sessions.len() > 2 {
-            output.push_str(&row(
-                total,
-                "",
-                &format!("+{} tucked away", snapshot.sessions.len() - 2),
-                DIM,
-                color,
-            ));
-        }
     }
     output.push_str(&bottom_border(total));
     output.push_str(&format!(
@@ -656,7 +559,7 @@ mod tests {
         recent_observability.updated_unix = 990;
         recent_observability.runs = vec![
             RecentRunAggregate {
-                kind: RunKind::SoloLoad,
+                kind: RunKind::SoloFinal,
                 observed_unix: 980,
                 source: SourceLocalAggregate {
                     evidence_tier: EvidenceTier::ExactLocal,
@@ -682,8 +585,8 @@ mod tests {
         ];
         DashboardSnapshot {
             default_model: "gpt-5.6-sol".into(),
-            provider: "openai".into(),
-            reasoning: "medium".into(),
+            provider: "Jcode/OpenAI".into(),
+            reasoning: "low".into(),
             max_sessions: 4,
             idle_timeout: 1800,
             state_root: PathBuf::from("/private/state"),
@@ -716,34 +619,85 @@ mod tests {
         }
     }
 
-    #[test]
-    fn dashboard_card_shows_a_minimal_truthful_memory_constellation() {
-        let rendered = render_at(&snapshot(), false, 72, 1000);
-        assert!(rendered.starts_with("╭─ azdaja · memory constellation"));
-        assert!(rendered.contains("● awake · source stays local"));
-        assert!(rendered.contains("gpt-5.6-sol · openai · medium"));
-        assert!(rendered.contains("1.5 MiB resident state · warm · 2/4 slots · 2 traces"));
-        assert!(rendered.contains("H→"));
-        assert!(rendered.contains('●'));
-        assert!(rendered.contains('○'));
-        assert!(rendered.contains("H₀"));
-        assert!(rendered.contains("redundancy"));
-        assert!(rendered.contains("lines"));
-        assert!(rendered.contains("01234567 running"));
-        assert!(rendered.contains("fedcba98 idle"));
-        assert!(rendered.contains("next"));
-        assert!(!rendered.contains("\x1b["));
+    fn assert_plain_language(rendered: &str) {
+        let rendered_lower = rendered.to_ascii_lowercase();
+        for forbidden in [
+            "route", "nest", "resident", "cold", "warm", "trace", "observed",
+        ] {
+            assert!(
+                !rendered_lower.contains(forbidden),
+                "unexpected legacy term {forbidden:?} in:\n{rendered}"
+            );
+        }
+        assert!(!rendered.contains("H₀"), "unexpected H₀ in:\n{rendered}");
     }
 
     #[test]
-    fn dashboard_sanitizes_control_sequences_and_has_a_static_narrow_fallback() {
+    fn wide_dashboard_shows_active_mixed_model_work_plainly() {
+        let rendered = render_at(&snapshot(), false, 72, 1000);
+        assert!(rendered.starts_with("╭─ azdaja · memory constellation"));
+        assert!(rendered.contains("● awake · source stays local"));
+        assert!(rendered.contains("new work gpt-5.6-sol via Jcode/OpenAI · low thinking"));
+        assert!(rendered.contains("1 running · 1 idle · 2/4 slots used"));
+        assert!(rendered.contains("1 finished · 1 loaded"));
+        assert!(rendered.contains("2.3 MiB measured · numbers only"));
+        assert!(rendered.contains("repeated ←"));
+        assert!(rendered.contains("→ varied · avg 60%"));
+        assert!(rendered.contains("recent   finished · 2.3 MiB · 9421 lines · 20s ago"));
+        assert!(rendered.contains("01234567 running 10s · default model unknown"));
+        assert!(rendered.contains("fedcba98 idle 2m · default small-model"));
+        assert!(rendered.contains("next"));
+        assert!(!rendered.contains("\x1b["));
+        assert_plain_language(&rendered);
+    }
+
+    #[test]
+    fn history_only_dashboard_keeps_summary_privacy_scoped() {
+        let mut data = snapshot();
+        data.sessions.clear();
+        let rendered = render_at(&data, false, 72, 1000);
+        assert!(rendered.contains("live     none · 4 slots free"));
+        assert!(rendered.contains("1 finished · 1 loaded"));
+        assert!(rendered.contains("numbers only"));
+        assert!(rendered.contains("recent   finished · 2.3 MiB · 9421 lines · 20s ago"));
+        assert!(!rendered.contains("model unknown"));
+        assert_plain_language(&rendered);
+    }
+
+    #[test]
+    fn truly_empty_dashboard_explains_what_appears_next() {
+        let mut data = snapshot();
+        data.sessions.clear();
+        data.recent_observability.runs.clear();
+        data.reasoning = "unknown".into();
+        data.provider = "Claude CLI".into();
+        let rendered = render_at(&data, false, 72, 1000);
+        assert!(rendered.contains("new work gpt-5.6-sol via Claude CLI"));
+        assert!(!rendered.contains("thinking"));
+        assert!(rendered.contains("live     none · 4 slots free"));
+        assert!(rendered.contains("none yet · summaries keep numbers, not source text"));
+        assert!(rendered.contains("pattern  appears after the first source"));
+        assert!(rendered.contains("recent   no source summary yet"));
+        assert_plain_language(&rendered);
+    }
+
+    #[test]
+    fn narrow_dashboard_is_sanitized_and_keeps_the_same_meaning() {
         let mut data = snapshot();
         data.default_model = "bad\x1b[31m\nmodel".into();
-        let rendered = render_at(&data, true, 40, 1000);
+        let rendered = render_at(&data, true, 45, 1000);
+        assert!(rendered.contains("azdaja · memory constellation"));
+        assert!(rendered.contains("new work  bad[31mmodel via Jcode/OpenAI"));
         assert!(rendered.contains("bad[31mmodel"));
         assert!(!rendered.contains("bad\x1b[31m"));
+        assert!(rendered.contains("live      1 running · 1 idle"));
+        assert!(rendered.contains("memory    1 finished · 1 loaded"));
+        assert!(rendered.contains("pattern   repeated ←"));
+        assert!(rendered.contains("recent    finished"));
+        assert!(rendered.contains("session   ● 01234567 running"));
         assert!(rendered.contains("next  map · solo · list · doctor · help"));
         assert!(!rendered.contains("q quit"));
+        assert_plain_language(&rendered);
     }
 
     #[test]
@@ -752,7 +706,8 @@ mod tests {
         data.observability_degraded = true;
         let rendered = render_at(&data, false, 72, 1000);
         assert!(rendered.contains("local metrics need attention"));
-        assert!(rendered.contains("1.5 MiB resident state"));
+        assert!(rendered.contains("1 running · 1 idle · 2/4 slots used"));
+        assert_plain_language(&rendered);
     }
 
     #[test]
@@ -764,23 +719,27 @@ mod tests {
     }
 
     #[test]
-    fn list_view_is_an_actionable_details_on_demand_layer() {
+    fn list_view_names_live_sessions_and_local_number_summaries() {
         let rendered = render_list_at(&snapshot(), false, 78, 1000);
-        assert!(rendered.starts_with("azdaja memory nest · 2/4 slots · 1.5 MiB resident"));
-        assert!(rendered.contains("resident\n"));
+        assert!(rendered.starts_with("azdaja · memory constellation"));
+        assert!(rendered.contains("new work      gpt-5.6-sol via Jcode/OpenAI · low thinking"));
+        assert!(rendered.contains("live sessions  1 running · 1 idle · 2/4 slots used"));
+        assert!(rendered.contains("\nlive sessions\n"));
         assert!(rendered.contains("● 0123456789abcdef"));
         assert!(rendered.contains("running"));
         assert!(rendered.contains("1.0 MiB"));
-        assert!(rendered.contains("gpt-5.6-sol"));
+        assert!(rendered.contains("default model unknown"));
         assert!(rendered.contains("○ fedcba9876543210"));
         assert!(rendered.contains("512.0 KiB"));
-        assert!(rendered.contains("small-model"));
-        assert!(rendered.contains("memory  exact-local aggregates"));
-        assert!(rendered.contains("● solo load"));
-        assert!(rendered.contains("○ session load"));
-        assert!(rendered.contains("H₀ 4.8/8"));
+        assert!(rendered.contains("default small-model"));
+        assert!(rendered.contains("source summaries · local numbers only"));
+        assert!(rendered.contains("● finished"));
+        assert!(rendered.contains("○ loaded"));
+        assert!(rendered.contains("variety 60%"));
+        assert!(rendered.contains("variety 38%"));
         assert!(rendered.contains("commands  final <id> · kill <id> · map · help"));
         assert!(!rendered.contains("\x1b["));
+        assert_plain_language(&rendered);
     }
 
     #[test]
@@ -788,24 +747,28 @@ mod tests {
         let mut data = snapshot();
         data.sessions.truncate(1);
         let narrow = render_list_at(&data, false, 45, 1000);
-        assert!(narrow.starts_with("azdaja nest · 1/4 slots · 1.0 MiB resident"));
+        assert!(narrow.starts_with("azdaja · memory constellation"));
+        assert!(narrow.contains("new work      gpt-5.6-sol via Jcode/OpenAI"));
+        assert!(narrow.contains("live sessions  1 running · 0 idle"));
         assert!(narrow.contains("● 0123456789abcdef running 10s"));
-        assert!(narrow.contains("1.0 MiB · gpt-5.6-sol"));
-        assert!(narrow.contains("memory  exact-local aggregates"));
-        assert!(narrow.contains("● solo load 20s · 2.3 MiB · H₀ 4.8/8"));
+        assert!(narrow.contains("1.0 MiB state · default model unknown"));
+        assert!(narrow.contains("source summaries · local numbers only"));
+        assert!(narrow.contains("● finished 20s · 2.3 MiB · variety 60%"));
         assert!(narrow.contains("commands  final <id>"));
+        assert_plain_language(&narrow);
 
         data.sessions.clear();
         data.observability_degraded = true;
         let empty = render_list_at(&data, false, 72, 1000);
-        assert!(empty.contains("0/4 slots · empty"));
-        assert!(empty.contains("resident  none"));
-        assert!(empty.contains("memory  exact-local aggregates"));
-        assert!(empty.contains("● solo load"));
-        assert!(empty.contains("○ session load"));
-        assert!(empty.contains("H₀ 4.8/8"));
+        assert!(empty.contains("live sessions  none · 4 slots free"));
+        assert!(empty.contains("live sessions\nnone"));
+        assert!(empty.contains("source summaries · local numbers only"));
+        assert!(empty.contains("● finished"));
+        assert!(empty.contains("○ loaded"));
+        assert!(empty.contains("variety 60%"));
         assert!(empty.contains("local metrics need attention"));
         assert!(empty.contains("next  map · start · solo · help"));
         assert!(!empty.contains("kill <id>"));
+        assert_plain_language(&empty);
     }
 }
