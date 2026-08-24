@@ -52,6 +52,8 @@ jobs:
               "src/dashboard.rs",
               "src/lib.rs",
               "src/main.rs",
+              "src/observability.rs",
+              "src/tui.rs",
           ]
           assert actual == expected, {"actual": actual, "expected": expected}
           forbidden = (
