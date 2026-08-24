@@ -17,11 +17,12 @@ What makes it different:
 - **Context virtualization:** the root works through variables and computed excerpts instead of receiving the complete source in every request.
 - **Deterministic reduction:** Python handles exact operations before the model handles ambiguous language.
 - **Bare recursion:** subcalls are model calls rather than new agent environments.
+- **Measured memory:** the local console distinguishes resident source, session state, measured model-boundary evidence, and unknown coverage instead of inventing a generic context score.
 - **Tool adapters:** one managed integration supports Jcode, Claude, Codex, Gemini, and OpenCode. Every profile is rendered from the same default skill contract with tool-specific activation, execution, and reload guidance.
 
 ## Install
 
-The curl installer adds the standalone command, detects supported tools, and prompts you to choose integrations. Pass `--all` for an unattended install of every integration. It never calls a model provider. It supports Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer.
+The curl installer adds the standalone command, detects supported tool executables, and prompts you to choose integrations. It distinguishes a tool being found from an Azdaja integration being active, shows exact destinations before mutation, and prints named download, verification, staging, and write phases. Pass `--all` for an unattended install of every integration. It never calls a model provider. It supports Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer.
 
 ```bash
 curl -fsSL https://azdaja.dev/install | sh
@@ -51,7 +52,7 @@ az uninstall all
 
 ## Use
 
-Run `azdaja` with no arguments in a terminal for a provider-free local dashboard showing the configured route, session capacity, active work, state size, recent sessions, and command shortcuts.
+Run `azdaja` with no arguments in a terminal for the provider-free virtual-memory console. It refreshes validated owner-only state, shows the configured route, resident aggregate source size, session state, a positional memory map, and recent work, and labels unmeasured boundary or coverage data instead of displaying a fake zero. Details include exact-local source texture such as byte entropy without storing source text, paths, prompts, responses, or hashes. Press `q`, Esc, or Ctrl-C to leave; narrow terminals fall back to plain lines.
 
 Ask one question about one input:
 

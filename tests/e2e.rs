@@ -918,6 +918,40 @@ fn lifecycle_is_persistent_and_load_is_metadata_only() {
 }
 
 #[test]
+fn corrupt_observability_sidecars_do_not_block_authoritative_loads() {
+    let t = temp("observability-degrades");
+    let cfg = config(&t, "cat", 512, 1, 2, 4);
+    let first = t.join("first.txt");
+    let second = t.join("second.txt");
+    fs::write(&first, "first source\n").unwrap();
+    fs::write(&second, "second authoritative source\n").unwrap();
+    let id = sid(&t, &cfg);
+
+    ok(run(
+        &t,
+        &cfg,
+        &["load", &id, first.to_str().unwrap(), "ctx"],
+        "",
+    ));
+    fs::write(t.join("state").join(&id).join("observability.json"), "{").unwrap();
+    fs::write(t.join("state/observability/recent.json"), "{").unwrap();
+
+    let loaded = ok(run(
+        &t,
+        &cfg,
+        &["load", &id, second.to_str().unwrap(), "ctx"],
+        "",
+    ));
+    assert!(loaded.contains("loaded 'ctx' : str"));
+    assert_eq!(
+        ok(run(&t, &cfg, &["exec", &id], "len(ctx)\n")).trim(),
+        "second authoritative source\n".len().to_string()
+    );
+
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
 fn output_cap_is_unicode_exact_and_errors_preserve_state() {
     let t = temp("cap");
     let cfg = config(&t, "cat", 256, 1, 2, 4);

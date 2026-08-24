@@ -422,11 +422,17 @@ fn custom_jcode_home_is_authoritative_and_next_command_is_shell_quoted() {
     let custom = scratch.0.join("custom Jcode ☃ ' registry");
     fs::create_dir_all(&custom).unwrap();
 
-    // No explicit selector: detection must honor JCODE_HOME rather than HOME/.jcode.
-    let output = run_with_jcode_home(binary, &scratch.0, &custom, &["install"]);
+    // An explicit Jcode install must honor JCODE_HOME rather than HOME/.jcode.
+    let output = run_with_jcode_home(binary, &scratch.0, &custom, &["install", "jcode"]);
     let stdout = assert_success(&output);
     assert_eq!(stdout.lines().count(), 3, "{stdout}");
-    assert!(stdout.lines().next().unwrap().contains("jcode (directory)"));
+    assert!(
+        stdout
+            .lines()
+            .next()
+            .unwrap()
+            .contains("jcode (selected explicitly)")
+    );
     let target = custom.join("skills/azdaja");
     assert!(target.join("azdaja").is_file());
     assert!(!scratch.0.join(".jcode/skills/azdaja").exists());

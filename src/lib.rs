@@ -450,6 +450,9 @@ pub struct DashboardSnapshot {
     pub state_root: PathBuf,
     pub sessions: Vec<SessionStatus>,
     pub recent_observability: observability::RecentAggregateSummary,
+    /// Aggregate-only telemetry is optional. Core session state remains usable
+    /// when an observability sidecar is missing, corrupt, or unsafe to read.
+    pub observability_degraded: bool,
 }
 fn now() -> u64 {
     SystemTime::now()
@@ -1102,6 +1105,7 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
     let ids = list(cfg)?;
     let base = state_home()?;
     let mut sessions = Vec::with_capacity(ids.len());
+    let mut observability_degraded = false;
     for id in ids {
         let (dir, directory) = session_dir(&id)?;
         validate_private_directory(&directory, &dir)?;
@@ -1109,7 +1113,13 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
         let state_path = dir.join("state.monty");
         let state = open_private_file(&state_path, false)?;
         let metadata = validate_private_file(&state, &state_path)?;
-        let observability = observability::load_session_summary(&dir)?;
+        let observability = match observability::load_session_summary(&dir) {
+            Ok(summary) => summary,
+            Err(_) => {
+                observability_degraded = true;
+                None
+            }
+        };
         let updated = metadata
             .modified()
             .unwrap_or(UNIX_EPOCH)
@@ -1136,6 +1146,13 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
             .then_with(|| right.updated.cmp(&left.updated))
             .then_with(|| left.id.cmp(&right.id))
     });
+    let recent_observability = match observability::load_recent_summary() {
+        Ok(summary) => summary,
+        Err(_) => {
+            observability_degraded = true;
+            observability::RecentAggregateSummary::empty()
+        }
+    };
     Ok(DashboardSnapshot {
         default_model: cfg.default_model.clone(),
         provider: cfg.jcode_provider.clone(),
@@ -1144,7 +1161,8 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
         idle_timeout: cfg.idle_timeout,
         state_root: base,
         sessions,
-        recent_observability: observability::load_recent_summary()?,
+        recent_observability,
+        observability_degraded,
     })
 }
 
@@ -2409,7 +2427,10 @@ pub fn load(sid: &str, path: &Path, var: &str, cfg: &Config) -> Result<String> {
         PrintWriter::Disabled,
     )?;
     save_repl(&dir, &repl)?;
-    observability::record_session_source_load(&dir, &source)?;
+    // Observability is a best-effort sidecar. The authoritative Monty state was
+    // already committed, so a corrupt or unwritable aggregate record must not
+    // turn a successful source load into a reported failure.
+    let _ = observability::record_session_source_load(&dir, &source);
     Ok(format!(
         "loaded '{var}' : str, {chars} chars, {lines} lines"
     ))

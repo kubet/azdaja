@@ -1,6 +1,10 @@
 # CLI reference
 
-Use `azdaja` in every command below when the short `az` alias is unavailable. A bare interactive `azdaja` renders a provider-free local dashboard from validated configuration and owner-only session state; piped/non-terminal invocation keeps the stable five-line help output.
+Use `azdaja` in every command below when the short `az` alias is unavailable. A bare interactive `azdaja` opens the provider-free virtual-memory console from validated configuration, owner-only session state, and aggregate-only observability records; piped/non-terminal invocation keeps the stable five-line help output.
+
+The console refreshes local state at a low fixed rate. Its overview shows route, resident aggregate source size when measured, session state, a positional source map, and recent work. It says `unmeasured` when exact model-boundary exposure or coverage provenance is unavailable. The details view may show exact-local byte entropy as distributional source texture, never as confidence or semantic quality. Persisted observability excludes source text, paths, hashes, prompts, and responses.
+
+Keys: arrows or `j/k` select, Enter inspects, `d` toggles measured details, `i` opens integration guidance, `r` refreshes, and `q`, Esc, or Ctrl-C exits. Raw mode, cursor visibility, and the prior screen are restored on normal exit and panic. Narrow terminals use a static line-oriented fallback.
 
 ## Commands
 

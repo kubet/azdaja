@@ -247,7 +247,7 @@ fn doctor_config_failures_name_adjacent_and_xdg_paths_before_provider_work() {
 }
 
 #[test]
-fn install_is_three_human_lines_and_detects_directories_and_clis() {
+fn install_is_three_human_lines_and_detects_only_tool_executables() {
     let scratch = Scratch::new("install");
     fs::create_dir_all(scratch.0.join(".claude")).unwrap();
     let tools = scratch.0.join("tools");
@@ -268,14 +268,14 @@ fn install_is_three_human_lines_and_detects_directories_and_clis() {
     let lines: Vec<_> = stdout.lines().collect();
     assert_eq!(lines.len(), 3, "{stdout}");
     assert!(lines[0].starts_with("Detected: "));
-    assert!(lines[0].contains("claude (directory)"));
+    assert!(!lines[0].contains("claude"));
     assert!(lines[0].contains("gemini (CLI)"));
     assert!(lines[1].starts_with("Written: "));
-    assert!(lines[1].contains(".claude/skills/azdaja"));
+    assert!(!lines[1].contains(".claude/skills/azdaja"));
     assert!(lines[1].contains(".gemini/skills/azdaja"));
     assert!(lines[2].starts_with("Next: run "));
-    assert!(lines[2].contains("/.claude/skills/azdaja/azdaja' doctor; then "));
-    assert!(lines[2].contains("reload/restart the selected tools (claude, gemini)"));
+    assert!(lines[2].contains("/.gemini/skills/azdaja/azdaja' doctor; then "));
+    assert!(lines[2].contains("restart Gemini to reload its skills"));
     assert!(
         !stdout
             .split_whitespace()
@@ -286,6 +286,15 @@ fn install_is_three_human_lines_and_detects_directories_and_clis() {
 #[test]
 fn no_supported_tool_refuses_cleanly_before_writing_anything() {
     let scratch = Scratch::new("no-supported-tool");
+    for directory in [
+        ".jcode",
+        ".claude",
+        ".agents/skills",
+        ".gemini",
+        ".config/opencode",
+    ] {
+        fs::create_dir_all(scratch.0.join(directory)).unwrap();
+    }
     let output = command(&scratch.0)
         .env("PATH", "/usr/bin:/bin")
         .arg("install")
@@ -294,9 +303,21 @@ fn no_supported_tool_refuses_cleanly_before_writing_anything() {
     assert_eq!(output.status.code(), Some(2));
     let (stdout, stderr) = utf8(&output);
     assert!(stdout.is_empty());
-    assert!(stderr.contains("no supported tool found"));
+    assert!(stderr.contains("no supported tool executable found"));
     assert!(!stderr.contains("stack backtrace"));
-    assert!(fs::read_dir(&scratch.0).unwrap().next().is_none());
+    for target in [
+        ".jcode/skills/azdaja",
+        ".claude/skills/azdaja",
+        ".agents/skills/azdaja",
+        ".gemini/skills/azdaja",
+        ".config/opencode/skills/azdaja",
+    ] {
+        assert!(!scratch.0.join(target).exists());
+    }
+
+    for directory in [".jcode", ".claude", ".agents", ".gemini", ".config"] {
+        fs::remove_dir_all(scratch.0.join(directory)).unwrap();
+    }
 
     let output = command(&scratch.0)
         .env("PATH", "/usr/bin:/bin")
@@ -309,5 +330,13 @@ fn no_supported_tool_refuses_cleanly_before_writing_anything() {
     assert!(stderr.contains("no managed tool integration detected"));
     assert!(stderr.contains("az uninstall jcode"));
     assert!(!stderr.contains("az install"));
-    assert!(fs::read_dir(&scratch.0).unwrap().next().is_none());
+    for target in [
+        ".jcode/skills/azdaja",
+        ".claude/skills/azdaja",
+        ".agents/skills/azdaja",
+        ".gemini/skills/azdaja",
+        ".config/opencode/skills/azdaja",
+    ] {
+        assert!(!scratch.0.join(target).exists());
+    }
 }

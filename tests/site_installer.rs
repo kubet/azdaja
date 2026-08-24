@@ -626,9 +626,9 @@ fn installers_are_identical_and_bind_fresh_v014_assets_and_sums() {
     assert!(!text.contains("\"$BIN_DIR/config.toml\""));
     assert!(text.contains("printf 'Next: az doctor"));
     assert!(text.contains("printf 'Next: azdaja doctor"));
-    assert!(text.contains(
-        "↑/↓ or j/k move  Space toggle  a detected  n none  Enter install  q cancel"
-    ));
+    assert!(
+        text.contains("↑/↓ or j/k move  Space toggle  a detected  n none  Enter install  q cancel")
+    );
     assert!(text.contains("menu_selected_$menu_cursor"));
     assert!(text.contains("for name in jcode claude codex gemini opencode"));
     assert!(text.contains("Provider-free install. No model provider will be called."));
@@ -680,6 +680,28 @@ fn interactive_selection_installs_only_the_chosen_detected_subset() {
     );
     let stdout = assert_success(&output);
     assert_installer_preamble(&stdout);
+    for phase in [
+        "Plan:\n",
+        "Downloading azdaja v0.1.4...\n",
+        "Downloading azdaja v0.1.4... ok\n",
+        "Verifying SHA-256...\n",
+        "Verifying SHA-256... ok\n",
+        "Checking destinations...\n",
+        "Checking destinations... ok\n",
+        "Staging files...\n",
+        "Writing documents...\n",
+        "Writing documents... ok\n",
+        "Writing tool integrations...\n",
+        "Writing tool integrations... ok\n",
+        "Writing command...\n",
+        "Writing command... ok\n",
+        "Staging files... ok\n",
+    ] {
+        assert!(
+            stdout.contains(phase),
+            "missing phase {phase:?} in {stdout}"
+        );
+    }
     assert_eq!(
         installer_line(&stdout, "Installed:"),
         "Installed: azdaja v0.1.4"
@@ -743,7 +765,10 @@ fn interactive_selection_installs_only_the_chosen_detected_subset() {
         &[("AZDAJA_INSTALL_SELECTION", OsStr::new("4"))],
     );
     let stdout = assert_success(&absent);
-    assert_eq!(installer_line(&stdout, "Integrations:"), "Integrations: gemini");
+    assert_eq!(
+        installer_line(&stdout, "Integrations:"),
+        "Integrations: gemini"
+    );
     assert!(!target(&absent_home, "jcode").exists());
     assert!(target(&absent_home, "gemini").join("azdaja").is_file());
 }

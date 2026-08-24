@@ -1,4 +1,4 @@
-use azdaja::{DashboardSnapshot, SessionStatus, VERSION, observability::SourceLocalAggregate};
+use azdaja::{DashboardSnapshot, SessionStatus};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const RED: &str = "\x1b[31m";
@@ -69,12 +69,12 @@ fn paint(enabled: bool, style: &str, value: &str) -> String {
     }
 }
 
-fn top_border(total: usize, color: bool) -> String {
-    let title = format!(" AZDAJA v{VERSION} ");
+fn top_border(total: usize, title: &str, color: bool) -> String {
+    let title = format!(" {title} ");
     let fill = total.saturating_sub(title.chars().count() + 3);
     format!(
         "╭─{}{}╮\n",
-        paint(color, BOLD, &paint(color, RED, &title)),
+        paint(color, BOLD, &paint(color, CYAN, &title)),
         "─".repeat(fill)
     )
 }
@@ -83,37 +83,20 @@ fn bottom_border(total: usize) -> String {
     format!("╰{}╯\n", "─".repeat(total.saturating_sub(2)))
 }
 
-fn separator(total: usize, label: &str, color: bool) -> String {
-    let label = format!(" {label} ");
-    let fill = total.saturating_sub(label.chars().count() + 3);
-    format!("├─{}{}┤\n", paint(color, DIM, &label), "─".repeat(fill))
-}
-
 fn row(total: usize, label: &str, value: &str, value_style: &str, color: bool) -> String {
     let capacity = total.saturating_sub(4);
-    let label_width = 11.min(capacity);
+    let label_width = 9.min(capacity);
     let value_width = capacity.saturating_sub(label_width);
     let label = truncate(&clean(label), label_width);
     let value = truncate(&clean(value), value_width);
     let plain_width = label_width + value.chars().count();
     let padding = capacity.saturating_sub(plain_width);
     format!(
-        "│ {}{}{}{} │\n",
+        "│ {}{}{} │\n",
         paint(color, DIM, &format!("{label:<label_width$}")),
         paint(color, value_style, &value),
         " ".repeat(padding),
-        ""
     )
-}
-
-fn session_bar(used: usize, maximum: usize) -> String {
-    let width = 12usize;
-    let filled = if maximum == 0 {
-        0
-    } else {
-        used.saturating_mul(width).div_ceil(maximum).min(width)
-    };
-    format!("{}{}", "■".repeat(filled), "·".repeat(width - filled))
 }
 
 fn human_bytes(bytes: u64) -> String {
@@ -140,82 +123,112 @@ fn human_duration(seconds: u64) -> String {
     }
 }
 
-fn current_source(snapshot: &DashboardSnapshot) -> Option<&SourceLocalAggregate> {
+fn active_sessions(snapshot: &DashboardSnapshot) -> usize {
     snapshot
         .sessions
         .iter()
-        .find_map(|session| session.source.as_ref())
-        .or_else(|| {
-            snapshot
-                .recent_observability
-                .runs
-                .first()
-                .map(|run| &run.source)
-        })
+        .filter(|session| session.busy)
+        .count()
 }
 
-fn source_line(source: &SourceLocalAggregate) -> String {
+fn total_state_bytes(snapshot: &DashboardSnapshot) -> u64 {
+    snapshot
+        .sessions
+        .iter()
+        .map(|session| session.state_bytes)
+        .sum()
+}
+
+fn status_line(snapshot: &DashboardSnapshot) -> (&'static str, &'static str) {
+    if snapshot.observability_degraded {
+        ("● awake · local metrics need attention", RED)
+    } else {
+        ("● awake · source stays local", GREEN)
+    }
+}
+
+fn nest_line(snapshot: &DashboardSnapshot) -> String {
+    if snapshot.sessions.is_empty() {
+        return format!("empty · cold · 0/{} slots", snapshot.max_sessions);
+    }
+    let pressure = if snapshot.sessions.len() >= snapshot.max_sessions {
+        "full"
+    } else if active_sessions(snapshot) > 0 {
+        "warm"
+    } else {
+        "resting"
+    };
     format!(
-        "{} · {} chars · {} lines · {} nonempty",
-        human_bytes(source.source_bytes),
-        source.utf8_chars,
-        source.physical_lines,
-        source.nonempty_lines
+        "{} resident state · {pressure} · {}/{} slots",
+        human_bytes(total_state_bytes(snapshot)),
+        snapshot.sessions.len(),
+        snapshot.max_sessions
     )
+}
+
+fn memory_map(snapshot: &DashboardSnapshot) -> String {
+    let capacity = snapshot.max_sessions.max(1);
+    let shown = capacity.min(8);
+    let mut slots = String::new();
+    for index in 0..shown {
+        slots.push(match snapshot.sessions.get(index) {
+            Some(session) if session.busy => '●',
+            Some(_) => '○',
+            None => '·',
+        });
+    }
+    if capacity > shown {
+        slots.push_str(&format!("+{}", capacity - shown));
+    }
+    let mut mass = String::with_capacity(20);
+    for unit in 0..20usize {
+        let slot = unit.saturating_mul(capacity) / 20;
+        mass.push(match snapshot.sessions.get(slot) {
+            Some(session) if session.busy => '█',
+            Some(_) => '▒',
+            None => '░',
+        });
+    }
+    format!("{slots}  {mass}")
 }
 
 fn session_line(session: &SessionStatus, default_model: &str, timestamp: u64) -> String {
     let marker = if session.busy { "●" } else { "○" };
     let state = if session.busy { "running" } else { "idle" };
-    let age = timestamp.saturating_sub(session.updated);
     let model = session.sub_model.as_deref().unwrap_or(default_model);
     format!(
-        "{marker} {}  {state:<7}  {:>4}  {}",
-        &session.id[..session.id.len().min(8)],
-        human_duration(age),
+        "{marker} {} {state} {} · {}",
+        clean(&session.id[..session.id.len().min(8)]),
+        human_duration(timestamp.saturating_sub(session.updated)),
         clean(model)
     )
 }
 
 fn render_compact(snapshot: &DashboardSnapshot, color: bool, timestamp: u64) -> String {
-    let active = snapshot
-        .sessions
-        .iter()
-        .filter(|session| session.busy)
-        .count();
-    let bytes = snapshot
-        .sessions
-        .iter()
-        .map(|session| session.state_bytes)
-        .sum();
+    let (status, status_style) = status_line(snapshot);
     let mut output = String::new();
     output.push_str(&format!(
         "{} {}\n",
-        paint(color, BOLD, &format!("AZDAJA v{VERSION}")),
-        paint(color, GREEN, "● ready")
+        paint(color, BOLD, "azdaja"),
+        paint(color, status_style, status)
     ));
     output.push_str(&format!(
-        "{} · {} · {} reasoning\n",
+        "route {} · {} · {}\n",
         clean(&snapshot.default_model),
         clean(&snapshot.provider),
         clean(&snapshot.reasoning)
     ));
-    output.push_str(&format!(
-        "sessions {}/{} · {active} active · {} state\n",
-        snapshot.sessions.len(),
-        snapshot.max_sessions,
-        human_bytes(bytes)
-    ));
-    if let Some(source) = current_source(snapshot) {
-        output.push_str(&format!("resident {}\n", source_line(source)));
-    }
+    output.push_str(&format!("nest  {}\n", nest_line(snapshot)));
+    output.push_str(&format!("map   {}\n", memory_map(snapshot)));
     if let Some(session) = snapshot.sessions.first() {
         output.push_str(&format!(
             "recent {}\n",
             session_line(session, &snapshot.default_model, timestamp)
         ));
+    } else {
+        output.push_str("recent no resident session\n");
     }
-    output.push_str("commands  solo · list · doctor · help\n");
+    output.push_str("next  solo · list · doctor · help\n");
     output
 }
 
@@ -233,87 +246,52 @@ fn render_at(
         return render_compact(snapshot, color, timestamp);
     }
     let total = terminal_columns.clamp(58, 78);
-    let active = snapshot
-        .sessions
-        .iter()
-        .filter(|session| session.busy)
-        .count();
-    let state_bytes: u64 = snapshot
-        .sessions
-        .iter()
-        .map(|session| session.state_bytes)
-        .sum();
-    let mut output = top_border(total, color);
+    let (status, status_style) = status_line(snapshot);
+    let mut output = top_border(total, "azdaja · little memory", color);
+    output.push_str(&row(total, "status", status, status_style, color));
     output.push_str(&row(
         total,
-        "Status",
-        "● ready · local provider-free view",
-        GREEN,
-        color,
-    ));
-    output.push_str(&row(total, "Model", &snapshot.default_model, CYAN, color));
-    output.push_str(&row(
-        total,
-        "Route",
-        &format!("{} · {} reasoning", snapshot.provider, snapshot.reasoning),
-        "",
-        color,
-    ));
-    output.push_str(&row(
-        total,
-        "Sessions",
+        "route",
         &format!(
-            "{}/{} {} · {active} active",
-            snapshot.sessions.len(),
-            snapshot.max_sessions,
-            session_bar(snapshot.sessions.len(), snapshot.max_sessions)
+            "{} · {} · {}",
+            snapshot.default_model, snapshot.provider, snapshot.reasoning
         ),
-        if active > 0 { GREEN } else { "" },
+        CYAN,
         color,
     ));
-    output.push_str(&row(
-        total,
-        "Session",
-        &format!(
-            "{} · {} idle expiry",
-            human_bytes(state_bytes),
-            human_duration(snapshot.idle_timeout)
-        ),
-        "",
-        color,
-    ));
-    if let Some(source) = current_source(snapshot) {
-        output.push_str(&row(total, "Resident", &source_line(source), CYAN, color));
-    }
-    output.push_str(&separator(total, "recent sessions", color));
+    output.push_str(&row(total, "nest", &nest_line(snapshot), "", color));
+    output.push_str(&row(total, "map", &memory_map(snapshot), "", color));
     if snapshot.sessions.is_empty() {
-        output.push_str(&row(
-            total,
-            "Recent",
-            "No sessions yet · az start creates one",
-            DIM,
-            color,
-        ));
+        output.push_str(&row(total, "recent", "no resident session", DIM, color));
     } else {
-        for (index, session) in snapshot.sessions.iter().take(3).enumerate() {
+        for (index, session) in snapshot.sessions.iter().take(2).enumerate() {
             output.push_str(&row(
                 total,
-                if index == 0 { "Recent" } else { "" },
+                if index == 0 { "recent" } else { "" },
                 &session_line(session, &snapshot.default_model, timestamp),
                 if session.busy { GREEN } else { "" },
+                color,
+            ));
+        }
+        if snapshot.sessions.len() > 2 {
+            output.push_str(&row(
+                total,
+                "",
+                &format!("+{} tucked away", snapshot.sessions.len() - 2),
+                DIM,
                 color,
             ));
         }
     }
     output.push_str(&bottom_border(total));
     output.push_str(&format!(
-        "  {}  {}\n",
-        paint(color, DIM, "Commands"),
-        paint(color, CYAN, "solo · list · doctor · help")
-    ));
-    output.push_str(&format!(
-        "  {}\n",
-        paint(color, DIM, "az solo \"question\" -f ./document.txt")
+        "{}  {}\n",
+        paint(color, DIM, "next"),
+        paint(
+            color,
+            CYAN,
+            "solo \"question\" -f ./document.txt · list · doctor · help"
+        )
     ));
     output
 }
@@ -322,17 +300,23 @@ pub fn render_error(message: &str, color: bool, terminal_columns: usize) -> Stri
     let message = clean(message);
     if terminal_columns < 54 {
         return format!(
-            "{} {}\n{}\ncommands  doctor · install · help\n",
-            paint(color, BOLD, &format!("AZDAJA v{VERSION}")),
+            "{} {}\n{}\nnext  doctor · install · help\n",
+            paint(color, BOLD, "azdaja"),
             paint(color, RED, "● needs attention"),
             truncate(&message, terminal_columns.max(20))
         );
     }
     let total = terminal_columns.clamp(58, 78);
-    let mut output = top_border(total, color);
-    output.push_str(&row(total, "Status", "● needs attention", RED, color));
-    output.push_str(&row(total, "Issue", &message, "", color));
-    output.push_str(&row(total, "Fix", "az doctor · az help", CYAN, color));
+    let mut output = top_border(total, "azdaja · needs attention", color);
+    output.push_str(&row(total, "status", "● needs attention", RED, color));
+    output.push_str(&row(total, "issue", &message, "", color));
+    output.push_str(&row(
+        total,
+        "fix",
+        "az doctor · az install · az help",
+        CYAN,
+        color,
+    ));
     output.push_str(&bottom_border(total));
     output
 }
@@ -373,32 +357,45 @@ mod tests {
                 },
             ],
             recent_observability: azdaja::observability::RecentAggregateSummary::empty(),
+            observability_degraded: false,
         }
     }
 
     #[test]
-    fn dashboard_card_reports_real_snapshot_fields_without_color() {
+    fn dashboard_card_matches_the_minimal_memory_nest() {
         let rendered = render_at(&snapshot(), false, 72, 1000);
-        assert!(rendered.starts_with("╭─ AZDAJA v"));
-        assert!(rendered.contains("● ready · local provider-free view"));
-        assert!(rendered.contains("gpt-5.6-luna"));
-        assert!(rendered.contains("openai · medium reasoning"));
-        assert!(rendered.contains("2/4"));
-        assert!(rendered.contains("1 active"));
-        assert!(rendered.contains("01234567  running"));
-        assert!(rendered.contains("fedcba98  idle"));
-        assert!(rendered.contains("1.5 MiB"));
+        assert!(rendered.starts_with("╭─ azdaja · little memory"));
+        assert!(rendered.contains("● awake · source stays local"));
+        assert!(rendered.contains("gpt-5.6-luna · openai · medium"));
+        assert!(rendered.contains("1.5 MiB resident state · warm · 2/4 slots"));
+        assert!(rendered.contains("●○··"));
+        assert!(rendered.contains("█████"));
+        assert!(rendered.contains("▒▒▒▒▒"));
+        assert!(rendered.contains("░░░░░"));
+        assert!(rendered.contains("01234567 running"));
+        assert!(rendered.contains("fedcba98 idle"));
+        assert!(rendered.contains("next"));
         assert!(!rendered.contains("\x1b["));
     }
 
     #[test]
-    fn dashboard_sanitizes_control_sequences_and_has_a_narrow_fallback() {
+    fn dashboard_sanitizes_control_sequences_and_has_a_static_narrow_fallback() {
         let mut data = snapshot();
         data.default_model = "bad\x1b[31m\nmodel".into();
         let rendered = render_at(&data, true, 40, 1000);
         assert!(rendered.contains("bad[31mmodel"));
         assert!(!rendered.contains("bad\x1b[31m"));
-        assert!(rendered.contains("commands  solo · list · doctor · help"));
+        assert!(rendered.contains("next  solo · list · doctor · help"));
+        assert!(!rendered.contains("q quit"));
+    }
+
+    #[test]
+    fn dashboard_discloses_degraded_optional_metrics() {
+        let mut data = snapshot();
+        data.observability_degraded = true;
+        let rendered = render_at(&data, false, 72, 1000);
+        assert!(rendered.contains("local metrics need attention"));
+        assert!(rendered.contains("1.5 MiB resident state"));
     }
 
     #[test]

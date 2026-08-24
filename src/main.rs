@@ -293,12 +293,21 @@ fn run() -> Result<bool> {
     if args.is_empty() {
         if io::stdout().is_terminal() {
             let term = env::var("TERM").ok();
-            let color =
-                banner::color_enabled(true, env::var_os("NO_COLOR").is_some(), term.as_deref());
-            tui::run(
-                || Config::load().and_then(|config| dashboard_snapshot(&config)),
-                color,
-            )?;
+            let no_color = env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty());
+            let color = banner::color_enabled(true, no_color, term.as_deref());
+            if io::stdin().is_terminal() {
+                tui::run(
+                    || Config::load().and_then(|config| dashboard_snapshot(&config)),
+                    console_integrations,
+                    color,
+                )?;
+            } else {
+                let snapshot = Config::load().and_then(|config| dashboard_snapshot(&config))?;
+                print!(
+                    "{}",
+                    dashboard::render(&snapshot, color, dashboard::terminal_width())
+                );
+            }
         } else {
             help(false);
         }
@@ -515,6 +524,13 @@ fn command_exists(name: &str) -> bool {
         })
     })
 }
+
+fn harness_executable_exists(harness: &str) -> bool {
+    match harness {
+        "jcode" => command_exists("jcode") || command_exists("jcode-api"),
+        other => command_exists(other),
+    }
+}
 fn strict_absolute_override(name: &str) -> Result<Option<PathBuf>> {
     let Some(value) = env::var_os(name) else {
         return Ok(None);
@@ -549,10 +565,7 @@ fn detection_reasons(home: &Path, harness: &str) -> Result<Vec<&'static str>> {
         "gemini" => home.join(".gemini").is_dir(),
         _ => xdg_config_root(home).join("opencode").is_dir(),
     };
-    let cli_found = match harness {
-        "jcode" => command_exists("jcode") || command_exists("jcode-api"),
-        other => command_exists(other),
-    };
+    let cli_found = harness_executable_exists(harness);
     let mut reasons = Vec::new();
     if config_found {
         reasons.push("directory");
@@ -596,7 +609,21 @@ fn harnesses(which: Option<&str>) -> Result<(Vec<&'static str>, String)> {
 
 fn install_harnesses(which: Option<&str>) -> Result<(Vec<&'static str>, String)> {
     let Some(which) = which else {
-        return harnesses(None);
+        let detected: Vec<_> = ALL_HARNESSES
+            .into_iter()
+            .filter(|harness| harness_executable_exists(harness))
+            .collect();
+        if detected.is_empty() {
+            bail!(
+                "no supported tool executable found; install Jcode, Claude, Codex, Gemini, or OpenCode, or name one: az install jcode"
+            )
+        }
+        let report = detected
+            .iter()
+            .map(|harness| format!("{harness} (CLI)"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Ok((detected, report));
     };
     if !which.contains(',') {
         return harnesses(Some(which));
@@ -942,7 +969,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
     match harness {
         "jcode" => Some((
             "Jcode",
-            "In Jcode, select the `azdaja` skill before broad manual reads. If this skill was installed after the session started, reload all skills from `/skills` or restart Jcode, then select `azdaja`.",
+            "In Jcode, invoke the `azdaja` skill immediately whenever the user names Azdaja, asks about its availability or operation, asks how to use it, names the az virtual-memory tool, or requests complete semantic work over inputs too large for one safe context. Azdaja is the installed and available local virtual-memory tool. Do this before repository inspection or broad manual reads. If this skill was installed after the session started, reload all skills from `/skills` or restart Jcode, then invoke `azdaja`.",
         )),
         "claude" => Some((
             "Claude Code",
@@ -969,7 +996,7 @@ fn harness_skill_description(harness: &str, display: &str) -> String {
         "claude" => "Mandatory only for exhaustive semantic judgment or classification over one input when it exceeds 1 MiB, exceeds 200 records, or requires judging every record. Do not invoke Azdaja for repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB when no record threshold applies, or deterministic count, tail, and checksum work. Azdaja remains the installed and available local az virtual-memory tool when explicitly requested.".to_owned(),
         "codex" | "opencode" => "Use Azdaja, the installed and available local az virtual-memory tool, only for exhaustive semantic judgment or classification over one input when it exceeds 1 MiB, exceeds 200 records, or requires judging every record. Also use it when explicitly asked to use Azdaja or confirm availability. Non-triggers: repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB without the record threshold, deterministic count/tail/checksum work, and a mere mention of Azdaja.".to_owned(),
         _ => format!(
-            "Use Azdaja, the installed and available local az virtual-memory tool, for inputs too large to read safely such as large logs, archives, repositories, transcripts, dumps, or diffs, whenever the user asks how to use it, and proactively before broad manual reading in {display}."
+            "MUST invoke Azdaja, the installed and available local az virtual-memory tool, whenever the user names Azdaja, asks whether it is available, asks how to use it or how it works, or requests complete semantic work over inputs too large for one safe context. Invoke it before native inspection or broad manual reading in {display}."
         ),
     }
 }
@@ -3213,24 +3240,7 @@ fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
     let mut passed = true;
     for &harness in selected {
         let dst = target(&home, harness)?;
-        match (if harness == "codex" {
-            codex_home(&home).map(|_| ())
-        } else {
-            Ok(())
-        })
-        .and_then(|()| validate_skill_custody(&dst))
-        .and_then(|()| validate_harness_skill_profile(&dst, harness))
-        .and_then(|()| {
-            if harness == "claude" {
-                validate_claude_rule_install(&home)
-            } else if harness == "codex" {
-                validate_codex_shadow_profiles(&home)
-            } else if harness == "opencode" {
-                validate_opencode_shadow_profiles(&home)
-            } else {
-                Ok(())
-            }
-        }) {
+        match validate_installed_harness(&home, harness, &dst) {
             Ok(()) => println!(
                 "PASS {harness}: managed Azdaja skill is installed on disk at {}",
                 dst.display()
@@ -3266,6 +3276,44 @@ fn doctor_harnesses(selected: &[&str]) -> Result<bool> {
         }
     }
     Ok(passed)
+}
+
+fn validate_installed_harness(home: &Path, harness: &str, dst: &Path) -> Result<()> {
+    (if harness == "codex" {
+        codex_home(home).map(|_| ())
+    } else {
+        Ok(())
+    })
+    .and_then(|()| validate_skill_custody(dst))
+    .and_then(|()| validate_harness_skill_profile(dst, harness))
+    .and_then(|()| match harness {
+        "claude" => validate_claude_rule_install(home),
+        "codex" => validate_codex_shadow_profiles(home),
+        "opencode" => validate_opencode_shadow_profiles(home),
+        _ => Ok(()),
+    })
+}
+
+fn console_integrations() -> Result<Vec<tui::IntegrationStatus>> {
+    let home = home()?;
+    ALL_HARNESSES
+        .into_iter()
+        .map(|harness| {
+            let dst = target(&home, harness)?;
+            let health = if !path_entry_exists(&dst)? {
+                tui::IntegrationHealth::Absent
+            } else if validate_installed_harness(&home, harness, &dst).is_ok() {
+                tui::IntegrationHealth::Ready
+            } else {
+                tui::IntegrationHealth::NeedsAttention
+            };
+            Ok(tui::IntegrationStatus {
+                name: harness,
+                host_found: harness_executable_exists(harness),
+                health,
+            })
+        })
+        .collect()
 }
 
 struct HarnessRemoval {
@@ -5747,7 +5795,10 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
     };
     let mut session = SoloSession::new(cfg, sub_model)?;
     let metadata = session.load(&file, "ctx", cfg)?;
-    azdaja::observability::record_solo_source_load(session.source_aggregate()?)?;
+    // Aggregate observability must never prevent the actual virtual-memory job.
+    if let Ok(source) = session.source_aggregate() {
+        let _ = azdaja::observability::record_solo_source_load(source);
+    }
 
     // Fixed, provider-free structural evidence. The complete context remains only in Monty.
     let inspection = session.structural_sample()?.to_owned();
@@ -6380,10 +6431,10 @@ mod tests {
                     assert!(rendered.contains("sole assistant response"));
                 }
             } else {
-                assert!(rendered.contains("proactively before broad manual reading"));
-                assert!(rendered.contains("installed and available"));
+                assert!(rendered.contains("installed and available local az virtual-memory tool"));
+                assert!(rendered.contains("before native inspection or broad manual reading"));
             }
-            assert!(rendered.contains("az virtual-memory tool"));
+            assert!(rendered.contains("virtual-memory tool"));
             assert!(rendered.contains(&shell_quote(binary)));
             assert!(!rendered.contains("{{VERSION}}"));
             assert!(!rendered.contains("{{BIN}}"));
@@ -6816,7 +6867,7 @@ mod tests {
             ),
             (
                 "jcode",
-                "f09071caa3e63dc0adae41bb37f9d49bd5d1dd4816834a545d2e8145d441998a",
+                "b564e3636e2c7b99afd2c0e3937ed3da937101065460ab107602b8808b337f85",
             ),
             (
                 "codex",
@@ -6824,7 +6875,7 @@ mod tests {
             ),
             (
                 "gemini",
-                "4015afe2053de4db2aaa8f94d9cacbab3f2c39eb938645014740c04d1d4bb9d2",
+                "5288f5fe9f9dcb7a990c436a2613bea559429652e90e12646ce4d595def38713",
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);
