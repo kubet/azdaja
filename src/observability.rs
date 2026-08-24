@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use std::{io::Read, path::Path, time::UNIX_EPOCH};
+use std::{fs, io::Read, path::Path, time::UNIX_EPOCH};
 
 const SCHEMA_VERSION: u32 = 1;
 const RECENT_LIMIT: usize = 24;
@@ -254,7 +254,7 @@ fn append_recent_at(root: &Path, kind: RunKind, source: &SourceLocalAggregate) -
 
 fn load_recent_summary_at(root: &Path) -> Result<RecentAggregateSummary> {
     let path = recent_path(root);
-    if !path.exists() {
+    if !summary_path_exists(&path)? {
         return Ok(RecentAggregateSummary::empty());
     }
     let bytes = read_private_summary_file(&path)
@@ -286,9 +286,25 @@ fn read_private_summary_file(path: &Path) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+fn summary_path_exists(path: &Path) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if !metadata.file_type().is_file() {
+                bail!(
+                    "observability summary is not a regular file: {}",
+                    path.display()
+                )
+            }
+            Ok(true)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
 fn load_session_summary_at(session_dir: &Path) -> Result<Option<SessionAggregateSummary>> {
     let path = session_path(session_dir);
-    if !path.exists() {
+    if !summary_path_exists(&path)? {
         return Ok(None);
     }
     let bytes = read_private_summary_file(&path).with_context(|| {
