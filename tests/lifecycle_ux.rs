@@ -1,9 +1,13 @@
 #![cfg(unix)]
 
 use std::{
+    ffi::CString,
     fs,
     io::Write,
-    os::unix::fs::{MetadataExt, PermissionsExt, symlink},
+    os::unix::{
+        ffi::OsStrExt,
+        fs::{MetadataExt, PermissionsExt, symlink},
+    },
     path::{Path, PathBuf},
     process::{Command, Output, Stdio},
     sync::{Arc, Barrier},
@@ -96,6 +100,33 @@ fn install_all(home: &Path) -> String {
         &["install", "all"],
     );
     assert_success(&output).to_owned()
+}
+
+fn non_primary_supplementary_group() -> Option<u32> {
+    let count = unsafe { libc::getgroups(0, std::ptr::null_mut()) };
+    if count <= 0 {
+        return None;
+    }
+    let mut groups = vec![0 as libc::gid_t; count as usize];
+    let count = unsafe { libc::getgroups(count, groups.as_mut_ptr()) };
+    if count < 0 {
+        return None;
+    }
+    groups
+        .into_iter()
+        .take(count as usize)
+        .map(|gid| gid as u32)
+        .find(|gid| *gid != unsafe { libc::getgid() as u32 })
+}
+
+fn set_file_group(path: &Path, gid: u32) -> std::io::Result<()> {
+    let path = CString::new(path.as_os_str().as_bytes())?;
+    let result = unsafe { libc::chown(path.as_ptr(), libc::getuid(), gid as libc::gid_t) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
 }
 
 #[test]
@@ -211,9 +242,12 @@ PY
     assert_eq!(
         stdout
             .lines()
-            .filter(|line| line.starts_with("PASS ") && line.contains("installed on disk"))
+            .filter(|line| line.starts_with("PASS "))
             .count(),
         5
+    );
+    assert!(
+        stdout.contains("PASS jcode: managed skill is installed and memory handoff is configured")
     );
     assert!(stdout.contains("already-open Jcode session"));
     assert!(stdout.contains("skill_manage reload_all"));
@@ -457,7 +491,7 @@ fn custom_jcode_home_is_authoritative_and_next_command_is_shell_quoted() {
     assert!(syntax.status.success(), "command={command}");
 
     let doctor = run_with_jcode_home(binary, &scratch.0, &custom, &["doctor", "jcode"]);
-    assert!(assert_success(&doctor).contains("installed on disk"));
+    assert!(assert_success(&doctor).contains("memory handoff is configured"));
     let uninstall = run_with_jcode_home(binary, &scratch.0, &custom, &["uninstall", "jcode"]);
     let stdout = assert_success(&uninstall);
     assert_eq!(stdout.lines().count(), 3, "{stdout}");
@@ -961,6 +995,15 @@ fn lifecycle_artifacts(home: &Path) -> Vec<PathBuf> {
             }
         }
     }
+    if let Ok(entries) = fs::read_dir(home.join(".jcode")) {
+        for entry in entries {
+            let path = entry.unwrap().path();
+            let name = path.file_name().unwrap().to_string_lossy();
+            if name.starts_with(".azdaja-jcode-hooks-") {
+                artifacts.push(path);
+            }
+        }
+    }
     artifacts
 }
 
@@ -1034,10 +1077,26 @@ fn all_harness_install_and_uninstall_roll_back_every_injected_target_failure() {
         original.replace(model_line, "default_model = \"custom-rollback-model\""),
     )
     .unwrap();
-    let expected = selected_snapshots(&scratch.0);
+    let jcode_config = scratch.0.join(".jcode/config.toml");
 
     for command_name in ["install", "uninstall"] {
-        for fail_at in 1..=5 {
+        if command_name == "install" {
+            let mut config = fs::read_to_string(&jcode_config).unwrap();
+            let start = config.find("# >>> azdaja managed Jcode hooks >>>").unwrap();
+            let end_marker = "# <<< azdaja managed Jcode hooks <<<";
+            let end_start = config[start..].find(end_marker).unwrap() + start;
+            let end = config[end_start..]
+                .find('\n')
+                .map_or(config.len(), |offset| end_start + offset + 1);
+            config.replace_range(start..end, "");
+            fs::write(&jcode_config, config).unwrap();
+        } else {
+            assert_success(&run(binary, &scratch.0, &["install", "jcode"]));
+        }
+        let expected = selected_snapshots(&scratch.0);
+        let expected_jcode_config = surface_snapshot(&jcode_config);
+        let last_failpoint = if command_name == "install" { 6 } else { 5 };
+        for fail_at in 1..=last_failpoint {
             let fail_at = fail_at.to_string();
             let output = run_with_lifecycle_env(
                 binary,
@@ -1052,7 +1111,12 @@ fn all_harness_install_and_uninstall_roll_back_every_injected_target_failure() {
                 text(&output).1
             );
             assert_eq!(selected_snapshots(&scratch.0), expected);
-            assert!(lifecycle_artifacts(&scratch.0).is_empty());
+            assert_eq!(surface_snapshot(&jcode_config), expected_jcode_config);
+            let artifacts = lifecycle_artifacts(&scratch.0);
+            assert!(
+                artifacts.is_empty(),
+                "{command_name} step {fail_at}: {artifacts:?}"
+            );
         }
     }
 }
@@ -1087,6 +1151,363 @@ fn committed_install_cleanup_failure_keeps_the_successful_replacement_active() {
         prior_inode
     );
     assert!(assert_success(&run(binary, &scratch.0, &["doctor", "jcode"])).contains("PASS jcode"));
+}
+
+#[test]
+fn committed_uninstall_cleanup_failures_keep_every_removal_active_and_quarantined() {
+    let scratch = Scratch::new("committed-uninstall-cleanup");
+    let binary = standalone(&scratch.0, "standalone bin");
+    install_all_with(&binary, &scratch.0);
+
+    let output = run_with_lifecycle_env(
+        &binary,
+        &scratch.0,
+        &["uninstall", "--all"],
+        &[(
+            "AZDAJA_LIFECYCLE_TEST_FAIL_COMMITTED_UNINSTALL_CLEANUP",
+            "1",
+        )],
+    );
+    let (stdout, stderr) = text(&output);
+    assert!(output.status.success(), "stdout={stdout} stderr={stderr}");
+    for surface in [
+        "tool integrations were removed",
+        "Claude activation rule was removed",
+        "standalone and documents were removed",
+        "Jcode memory handoff was removed",
+    ] {
+        assert!(stderr.contains(surface), "missing {surface:?}: {stderr}");
+    }
+    assert!(targets(&scratch.0).iter().all(|path| !path.exists()));
+    assert!(!binary.exists());
+    assert!(!scratch.0.join(".local/share/azdaja").exists());
+    assert!(!scratch.0.join(".jcode/config.toml").exists());
+
+    fn collect_quarantines(path: &Path, found: &mut Vec<PathBuf>) {
+        let Ok(entries) = fs::read_dir(path) else {
+            return;
+        };
+        for entry in entries {
+            let path = entry.unwrap().path();
+            let name = path.file_name().unwrap().to_string_lossy();
+            if name.starts_with(".azdaja-backup-")
+                || name.starts_with(".azdaja-jcode-hooks-")
+                || name.starts_with(".azdaja-docs-uninstall-")
+                || name.starts_with(".azdaja-uninstall-")
+            {
+                found.push(path.clone());
+            }
+            if fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_dir()) {
+                collect_quarantines(&path, found);
+            }
+        }
+    }
+
+    let mut quarantines = Vec::new();
+    collect_quarantines(&scratch.0, &mut quarantines);
+    assert!(
+        quarantines.len() >= 10,
+        "committed cleanup did not preserve every recoverable surface: {quarantines:?}"
+    );
+    assert!(quarantines.iter().any(|path| {
+        path.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with(".azdaja-jcode-hooks-")
+    }));
+}
+
+#[test]
+fn jcode_config_replacement_after_final_validation_is_preserved_and_aborts_commit() {
+    let scratch = Scratch::new("jcode-config-final-race");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_azdaja"));
+    assert_success(&run(&binary, &scratch.0, &["install", "jcode"]));
+    let integration = scratch.0.join(".jcode/skills/azdaja");
+    let config = scratch.0.join(".jcode/config.toml");
+    let original = fs::read(&config).unwrap();
+
+    let barrier = scratch.0.join("jcode-config-final");
+    let barrier_value = barrier.to_string_lossy().into_owned();
+    let ready = PathBuf::from(format!("{barrier_value}.ready"));
+    let go = PathBuf::from(format!("{barrier_value}.go"));
+    let home = scratch.0.clone();
+    let uninstall_binary = binary.clone();
+    let uninstall = thread::spawn(move || {
+        run_with_lifecycle_env(
+            &uninstall_binary,
+            &home,
+            &["uninstall", "jcode"],
+            &[(
+                "AZDAJA_LIFECYCLE_TEST_JCODE_CONFIG_COMMIT_BARRIER",
+                &barrier_value,
+            )],
+        )
+    });
+
+    wait_for_barrier(&ready);
+    let owner_moved = scratch.0.join(".jcode/config.owner-moved.toml");
+    fs::rename(&config, &owner_moved).unwrap();
+    let replacement = scratch.0.join(".jcode/config.foreign.toml");
+    let foreign = b"[hooks]\npre_tool = \"foreign-policy\"\n";
+    fs::write(&replacement, foreign).unwrap();
+    fs::rename(&replacement, &config).unwrap();
+    fs::write(&go, b"go").unwrap();
+
+    let output = uninstall.join().unwrap();
+    let (stdout, stderr) = text(&output);
+    assert!(!output.status.success(), "stdout={stdout} stderr={stderr}");
+    assert!(
+        stderr.contains("changed during lifecycle preflight"),
+        "{stderr}"
+    );
+    assert_eq!(fs::read(&config).unwrap(), foreign);
+    assert_eq!(fs::read(&owner_moved).unwrap(), original);
+    assert!(integration.is_dir());
+    assert!(lifecycle_artifacts(&scratch.0).is_empty());
+}
+
+#[test]
+fn jcode_parent_replacement_at_final_barrier_never_reports_success_or_touches_foreign_tree() {
+    let scratch = Scratch::new("jcode-parent-final-race");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_azdaja"));
+    assert_success(&run(&binary, &scratch.0, &["install", "jcode"]));
+    let jcode = scratch.0.join(".jcode");
+
+    let barrier = scratch.0.join("jcode-parent-final");
+    let barrier_value = barrier.to_string_lossy().into_owned();
+    let ready = PathBuf::from(format!("{barrier_value}.ready"));
+    let go = PathBuf::from(format!("{barrier_value}.go"));
+    let home = scratch.0.clone();
+    let uninstall_binary = binary.clone();
+    let uninstall = thread::spawn(move || {
+        run_with_lifecycle_env(
+            &uninstall_binary,
+            &home,
+            &["uninstall", "jcode"],
+            &[(
+                "AZDAJA_LIFECYCLE_TEST_JCODE_CONFIG_COMMIT_BARRIER",
+                &barrier_value,
+            )],
+        )
+    });
+
+    wait_for_barrier(&ready);
+    let owner_tree = scratch.0.join(".jcode.owner-moved");
+    fs::rename(&jcode, &owner_tree).unwrap();
+    fs::create_dir(&jcode).unwrap();
+    let foreign = b"foreign replacement tree\n";
+    fs::write(jcode.join("sentinel"), foreign).unwrap();
+    fs::write(&go, b"go").unwrap();
+
+    let output = uninstall.join().unwrap();
+    let (stdout, stderr) = text(&output);
+    assert!(!output.status.success(), "stdout={stdout} stderr={stderr}");
+    assert!(stderr.contains("directory binding changed"), "{stderr}");
+    assert_eq!(fs::read(jcode.join("sentinel")).unwrap(), foreign);
+    assert!(!jcode.join("skills/azdaja").exists());
+    assert!(
+        owner_tree.exists(),
+        "detached owner tree must remain recoverable"
+    );
+}
+
+#[test]
+fn unchanged_enabled_jcode_config_is_revalidated_before_reinstall_commit() {
+    let scratch = Scratch::new("jcode-unchanged-install-race");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_azdaja"));
+    assert_success(&run(&binary, &scratch.0, &["install", "jcode"]));
+    let config = scratch.0.join(".jcode/config.toml");
+
+    let barrier = scratch.0.join("jcode-unchanged-install");
+    let barrier_value = barrier.to_string_lossy().into_owned();
+    let ready = PathBuf::from(format!("{barrier_value}.ready"));
+    let go = PathBuf::from(format!("{barrier_value}.go"));
+    let home = scratch.0.clone();
+    let install_binary = binary.clone();
+    let install = thread::spawn(move || {
+        run_with_lifecycle_env(
+            &install_binary,
+            &home,
+            &["install", "jcode"],
+            &[(
+                "AZDAJA_LIFECYCLE_TEST_JCODE_CONFIG_COMMIT_BARRIER",
+                &barrier_value,
+            )],
+        )
+    });
+
+    wait_for_barrier(&ready);
+    let foreign = b"[hooks]\npre_tool = \"foreign-policy\"\n";
+    fs::write(&config, foreign).unwrap();
+    fs::write(&go, b"go").unwrap();
+    let output = install.join().unwrap();
+    let (stdout, stderr) = text(&output);
+    assert!(!output.status.success(), "stdout={stdout} stderr={stderr}");
+    assert!(
+        stderr.contains("changed during lifecycle preflight"),
+        "{stderr}"
+    );
+    assert_eq!(fs::read(&config).unwrap(), foreign);
+    assert!(scratch.0.join(".jcode/skills/azdaja").is_dir());
+}
+
+#[test]
+fn unchanged_absent_jcode_config_is_revalidated_before_uninstall_commit() {
+    let scratch = Scratch::new("jcode-unchanged-uninstall-race");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_azdaja"));
+    assert_success(&run(&binary, &scratch.0, &["install", "jcode"]));
+    let config = scratch.0.join(".jcode/config.toml");
+    fs::remove_file(&config).unwrap();
+
+    let barrier = scratch.0.join("jcode-unchanged-uninstall");
+    let barrier_value = barrier.to_string_lossy().into_owned();
+    let ready = PathBuf::from(format!("{barrier_value}.ready"));
+    let go = PathBuf::from(format!("{barrier_value}.go"));
+    let home = scratch.0.clone();
+    let uninstall_binary = binary.clone();
+    let uninstall = thread::spawn(move || {
+        run_with_lifecycle_env(
+            &uninstall_binary,
+            &home,
+            &["uninstall", "jcode"],
+            &[(
+                "AZDAJA_LIFECYCLE_TEST_JCODE_CONFIG_COMMIT_BARRIER",
+                &barrier_value,
+            )],
+        )
+    });
+
+    wait_for_barrier(&ready);
+    let late = b"[hooks]\npre_tool = \"late-foreign-policy\"\n";
+    fs::write(&config, late).unwrap();
+    fs::write(&go, b"go").unwrap();
+    let output = uninstall.join().unwrap();
+    let (stdout, stderr) = text(&output);
+    assert!(!output.status.success(), "stdout={stdout} stderr={stderr}");
+    assert!(
+        stderr.contains("appeared during lifecycle preflight"),
+        "{stderr}"
+    );
+    assert_eq!(fs::read(&config).unwrap(), late);
+    assert!(scratch.0.join(".jcode/skills/azdaja").is_dir());
+}
+
+#[test]
+fn unchanged_absent_jcode_parent_replacement_aborts_without_touching_foreign_tree() {
+    let scratch = Scratch::new("jcode-unchanged-parent-uninstall-race");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_azdaja"));
+    assert_success(&run(&binary, &scratch.0, &["install", "jcode"]));
+    let jcode = scratch.0.join(".jcode");
+    fs::remove_file(jcode.join("config.toml")).unwrap();
+
+    let barrier = scratch.0.join("jcode-unchanged-parent-uninstall");
+    let barrier_value = barrier.to_string_lossy().into_owned();
+    let ready = PathBuf::from(format!("{barrier_value}.ready"));
+    let go = PathBuf::from(format!("{barrier_value}.go"));
+    let home = scratch.0.clone();
+    let uninstall_binary = binary.clone();
+    let uninstall = thread::spawn(move || {
+        run_with_lifecycle_env(
+            &uninstall_binary,
+            &home,
+            &["uninstall", "jcode"],
+            &[(
+                "AZDAJA_LIFECYCLE_TEST_JCODE_CONFIG_COMMIT_BARRIER",
+                &barrier_value,
+            )],
+        )
+    });
+
+    wait_for_barrier(&ready);
+    let owner_tree = scratch.0.join(".jcode.owner-moved");
+    fs::rename(&jcode, &owner_tree).unwrap();
+    fs::create_dir(&jcode).unwrap();
+    let foreign = b"foreign replacement tree\n";
+    fs::write(jcode.join("sentinel"), foreign).unwrap();
+    fs::write(&go, b"go").unwrap();
+
+    let output = uninstall.join().unwrap();
+    let (stdout, stderr) = text(&output);
+    assert!(!output.status.success(), "stdout={stdout} stderr={stderr}");
+    assert!(stderr.contains("directory binding changed"), "{stderr}");
+    assert_eq!(fs::read(jcode.join("sentinel")).unwrap(), foreign);
+    assert!(!jcode.join("skills/azdaja").exists());
+    assert!(owner_tree.join("skills/azdaja").is_dir());
+}
+
+#[test]
+fn replacing_existing_jcode_config_preserves_unix_uid_gid_and_mode() {
+    let Some(group) = non_primary_supplementary_group() else {
+        return;
+    };
+    let scratch = Scratch::new("jcode-config-owner-metadata");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_azdaja"));
+    let jcode = scratch.0.join(".jcode");
+    fs::create_dir(&jcode).unwrap();
+    let config = jcode.join("config.toml");
+    fs::write(&config, b"[hooks]\npre_tool_timeout_ms = 5000\n").unwrap();
+    if let Err(error) = set_file_group(&config, group) {
+        eprintln!("skipping supplementary-group metadata regression: {error}");
+        return;
+    }
+    fs::set_permissions(&config, fs::Permissions::from_mode(0o640)).unwrap();
+    let original = fs::metadata(&config).unwrap();
+    assert_eq!(original.gid(), group);
+    let original_mode = original.permissions().mode() & 0o7777;
+
+    assert_success(&run(&binary, &scratch.0, &["install", "jcode"]));
+
+    let replaced = fs::metadata(&config).unwrap();
+    assert_eq!(replaced.uid(), original.uid());
+    assert_eq!(replaced.gid(), original.gid());
+    assert_eq!(replaced.permissions().mode() & 0o7777, original_mode);
+}
+
+#[test]
+fn jcode_config_permission_change_at_final_barrier_is_preserved_and_aborts_commit() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let scratch = Scratch::new("jcode-config-mode-race");
+    let binary = PathBuf::from(env!("CARGO_BIN_EXE_azdaja"));
+    let jcode = scratch.0.join(".jcode");
+    fs::create_dir(&jcode).unwrap();
+    let config = jcode.join("config.toml");
+    fs::write(&config, b"[hooks]\npre_tool_timeout_ms = 5000\n").unwrap();
+    fs::set_permissions(&config, fs::Permissions::from_mode(0o644)).unwrap();
+
+    let barrier = scratch.0.join("jcode-config-mode-final");
+    let barrier_value = barrier.to_string_lossy().into_owned();
+    let ready = PathBuf::from(format!("{barrier_value}.ready"));
+    let go = PathBuf::from(format!("{barrier_value}.go"));
+    let home = scratch.0.clone();
+    let install_binary = binary.clone();
+    let install = thread::spawn(move || {
+        run_with_lifecycle_env(
+            &install_binary,
+            &home,
+            &["install", "jcode"],
+            &[(
+                "AZDAJA_LIFECYCLE_TEST_JCODE_CONFIG_COMMIT_BARRIER",
+                &barrier_value,
+            )],
+        )
+    });
+
+    wait_for_barrier(&ready);
+    fs::set_permissions(&config, fs::Permissions::from_mode(0o600)).unwrap();
+    fs::write(&go, b"go").unwrap();
+    let output = install.join().unwrap();
+    let (stdout, stderr) = text(&output);
+    assert!(!output.status.success(), "stdout={stdout} stderr={stderr}");
+    assert!(
+        stderr.contains("changed during lifecycle preflight"),
+        "{stderr}"
+    );
+    assert_eq!(
+        fs::metadata(&config).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert!(!scratch.0.join(".jcode/skills/azdaja").exists());
 }
 
 fn wait_for_barrier(path: &Path) {
