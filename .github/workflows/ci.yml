@@ -161,7 +161,8 @@ jobs:
           base="http://127.0.0.1:$(cat "$port_file")"
 
           HOME="$home" PATH="$guard:$PATH" \
-            AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_BASE_URL="$base" \
+            AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_GLIBC_VERSION=2.35 \
+            AZDAJA_INSTALL_BASE_URL="$base" \
             sh site/install claude --bin-dir "$bin"
           installed="$home/.claude/skills/azdaja/azdaja"
           cmp "$candidate" "$installed"
@@ -195,7 +196,8 @@ jobs:
           printf '\n# candidate-receipt-custom\n' >> \
             "$home/.claude/skills/azdaja/config.toml"
           HOME="$home" PATH="$guard:$PATH" \
-            AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_BASE_URL="$base" \
+            AZDAJA_INSTALL_TEST_MODE=local AZDAJA_INSTALL_GLIBC_VERSION=2.35 \
+            AZDAJA_INSTALL_BASE_URL="$base" \
             sh site/install claude --bin-dir "$bin"
           grep -F '# candidate-receipt-custom' \
             "$home/.claude/skills/azdaja/config.toml"
