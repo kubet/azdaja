@@ -1400,6 +1400,72 @@ fn open_install_directory(path: &Path) -> Result<fs::File> {
     Ok(file)
 }
 
+#[cfg(unix)]
+fn open_install_directory_bound(
+    parent: &fs::File,
+    name: &str,
+    display_path: &Path,
+) -> Result<fs::File> {
+    use std::ffi::CString;
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::fs::MetadataExt;
+
+    let name = CString::new(name)?;
+    let descriptor = unsafe {
+        libc::openat(
+            parent.as_raw_fd(),
+            name.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if descriptor < 0 {
+        return Err(io::Error::last_os_error().into());
+    }
+    let file = unsafe { fs::File::from_raw_fd(descriptor) };
+    let metadata = file.metadata()?;
+    if !metadata.file_type().is_dir() || metadata.uid() != unsafe { libc::geteuid() } {
+        bail!(
+            "managed directory is not private to its owner: {}",
+            display_path.display()
+        )
+    }
+    Ok(file)
+}
+
+#[cfg(windows)]
+fn open_install_directory_bound(_: &fs::File, _: &str, display_path: &Path) -> Result<fs::File> {
+    open_install_directory(display_path)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn open_install_directory_bound(_: &fs::File, _: &str, display_path: &Path) -> Result<fs::File> {
+    bail!(
+        "descriptor-bound managed directory access is unavailable: {}",
+        display_path.display()
+    )
+}
+
+fn validate_bound_install_directory(
+    parent: &fs::File,
+    name: &str,
+    display_path: &Path,
+    expected: &fs::File,
+) -> Result<()> {
+    let current = open_install_directory_bound(parent, name, display_path)?;
+    let expected_metadata = expected.metadata()?;
+    let current_metadata = current.metadata()?;
+    if !install_metadata_matches(&expected_metadata, &current_metadata)
+        || install_security_metadata(&expected_metadata)
+            != install_security_metadata(&current_metadata)
+    {
+        bail!(
+            "managed directory binding changed: {}",
+            display_path.display()
+        )
+    }
+    Ok(())
+}
+
 struct LifecycleLock {
     _file: fs::File,
 }
@@ -2010,6 +2076,26 @@ fn remove_file_bound(directory: &fs::File, name: &str, _: &Path) -> Result<()> {
 #[cfg(windows)]
 fn remove_file_bound(_: &fs::File, _: &str, path: &Path) -> Result<()> {
     fs::remove_file(path)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn remove_empty_directory_bound(parent: &fs::File, name: &str, _: &Path) -> Result<()> {
+    use std::ffi::CString;
+    use std::os::fd::AsRawFd;
+
+    let name = CString::new(name)?;
+    let result = unsafe { libc::unlinkat(parent.as_raw_fd(), name.as_ptr(), libc::AT_REMOVEDIR) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error().into())
+    }
+}
+
+#[cfg(windows)]
+fn remove_empty_directory_bound(_: &fs::File, _: &str, path: &Path) -> Result<()> {
+    fs::remove_dir(path)?;
     Ok(())
 }
 struct InstallPlan {
@@ -4284,7 +4370,19 @@ fn console_integrations() -> Result<Vec<tui::IntegrationStatus>> {
 struct HarnessRemoval {
     harness: &'static str,
     path: PathBuf,
+    parent: Option<fs::File>,
     directory: Option<fs::File>,
+}
+
+fn managed_install_leaf(path: &Path) -> Result<&str> {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            anyhow!(
+                "managed target has no portable leaf name: {}",
+                path.display()
+            )
+        })
 }
 
 struct ClaudeRuleRemoval {
@@ -4393,18 +4491,24 @@ fn preflight_harness_removals(
     let mut removals = Vec::new();
     for &harness in selected {
         let path = target(home, harness)?;
-        let directory = if path_entry_exists(&path)? {
+        let (parent, directory) = if path_entry_exists(&path)? {
+            let parent_path = path
+                .parent()
+                .ok_or_else(|| anyhow!("managed target has no parent"))?;
+            let parent = open_install_directory(parent_path)?;
             let directory = open_install_directory(&path)?;
             // Configuration is the one managed file users are explicitly allowed to customize.
             validate_install(&path, true)?;
+            validate_install_directory_binding(&parent, parent_path)?;
             validate_install_directory_binding(&directory, &path)?;
-            Some(directory)
+            (Some(parent), Some(directory))
         } else {
-            None
+            (None, None)
         };
         removals.push(HarnessRemoval {
             harness,
             path,
+            parent,
             directory,
         });
     }
@@ -4844,25 +4948,49 @@ fn rollback_harness_removals(removals: &mut [QuarantinedRemoval]) -> Result<()> 
     for removal in removals.iter_mut().rev() {
         if removal.moved {
             let result = (|| -> Result<()> {
-                if path_entry_exists(&removal.removal.path)? {
-                    bail!("another entry occupies the target path")
-                }
                 let previous = removal
                     .previous
                     .as_ref()
                     .expect("a moved removal has a quarantine path");
+                let quarantine = removal
+                    .quarantine
+                    .as_mut()
+                    .expect("a moved removal has a quarantine");
+                let parent = removal
+                    .removal
+                    .parent
+                    .as_ref()
+                    .expect("a moved removal has an open parent");
                 let directory = removal
                     .removal
                     .directory
                     .as_ref()
                     .expect("a moved removal has an open directory");
-                validate_install_directory_binding(directory, previous)?;
-                install_rename_noreplace(previous, &removal.removal.path)?;
-                validate_install_directory_binding(directory, &removal.removal.path)?;
+                let target_name = managed_install_leaf(&removal.removal.path)?;
+                validate_bound_install_directory(
+                    &quarantine.file,
+                    "previous",
+                    previous,
+                    directory,
+                )?;
+                install_rename_noreplace_bound(
+                    &quarantine.file,
+                    "previous",
+                    previous,
+                    parent,
+                    target_name,
+                    &removal.removal.path,
+                )?;
+                validate_bound_install_directory(
+                    parent,
+                    target_name,
+                    &removal.removal.path,
+                    directory,
+                )?;
                 removal.moved = false;
-                if let Some(quarantine) = &mut removal.quarantine {
-                    quarantine.remove_now()?;
-                }
+                let quarantine_name = managed_install_leaf(&quarantine.path)?;
+                remove_empty_directory_bound(parent, quarantine_name, &quarantine.path)?;
+                quarantine.disarm();
                 Ok(())
             })();
             if let Err(error) = result {
@@ -4916,8 +5044,20 @@ fn quarantine_harness_removals(removals: Vec<HarnessRemoval>) -> Result<Vec<Quar
     lifecycle_test_before_commit_barrier()?;
     for removal in &removals {
         if let Some(directory) = &removal.removal.directory {
+            let parent_path = removal
+                .removal
+                .path
+                .parent()
+                .expect("managed target has a parent");
+            let parent = removal
+                .removal
+                .parent
+                .as_ref()
+                .expect("an existing removal has an open parent");
+            validate_install_directory_binding(parent, parent_path)?;
             validate_install_directory_binding(directory, &removal.removal.path)?;
             validate_install(&removal.removal.path, true)?;
+            validate_install_directory_binding(parent, parent_path)?;
             validate_install_directory_binding(directory, &removal.removal.path)?;
         } else if path_entry_exists(&removal.removal.path)? {
             bail!(
@@ -4933,13 +5073,30 @@ fn quarantine_harness_removals(removals: Vec<HarnessRemoval>) -> Result<Vec<Quar
             let Some(directory) = &removal.removal.directory else {
                 continue;
             };
+            let parent = removal
+                .removal
+                .parent
+                .as_ref()
+                .expect("an existing removal has an open parent");
+            let target_name = managed_install_leaf(&removal.removal.path)?;
             let previous = removal
                 .previous
                 .as_ref()
                 .expect("an existing removal has a quarantine path");
-            install_rename_noreplace(&removal.removal.path, previous)?;
+            let quarantine = removal
+                .quarantine
+                .as_ref()
+                .expect("an existing removal has a quarantine");
+            install_rename_noreplace_bound(
+                parent,
+                target_name,
+                &removal.removal.path,
+                &quarantine.file,
+                "previous",
+                previous,
+            )?;
             removal.moved = true;
-            validate_install_directory_binding(directory, previous)?;
+            validate_bound_install_directory(&quarantine.file, "previous", previous, directory)?;
             validate_install(previous, true)?;
             failpoint.step("after uninstall quarantine rename")?;
         }
@@ -4954,7 +5111,16 @@ fn quarantine_harness_removals(removals: Vec<HarnessRemoval>) -> Result<Vec<Quar
                     .directory
                     .as_ref()
                     .expect("a moved removal has an open directory");
-                validate_install_directory_binding(directory, previous)?;
+                let quarantine = removal
+                    .quarantine
+                    .as_ref()
+                    .expect("a moved removal has a quarantine");
+                validate_bound_install_directory(
+                    &quarantine.file,
+                    "previous",
+                    previous,
+                    directory,
+                )?;
                 validate_install(previous, true)?;
             }
         }
