@@ -4474,7 +4474,11 @@ exit 9
     assert!(skill.contains("Use native `sha256(text)`"));
     assert!(skill.contains("End with `FINAL(answer_dict)` exactly once"));
     assert!(!skill.contains("workers=16"));
-    assert!(skill.len() < 8_000);
+    assert!(
+        skill.len() < 8_000,
+        "Claude skill grew to {} bytes",
+        skill.len()
+    );
     let edited_config = fs::read_to_string(&cfg).unwrap().replace(
         "sub_llm_cmd = \"cat\"",
         &format!("sub_llm_cmd = {:?}", mock.to_str().unwrap()),
@@ -4567,6 +4571,317 @@ exit 9
         .unwrap();
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     assert!(!dst.exists());
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn jcode_install_manages_memory_handoff_and_preserves_foreign_hooks() {
+    let t = temp("jcode-memory-handoff-install");
+    let jcode_home = t.join("custom-jcode");
+    fs::create_dir_all(&jcode_home).unwrap();
+    let config_path = jcode_home.join("config.toml");
+    let original = b"# user config\n[hooks]\npre_tool_timeout_ms = 5000\n\n[other]\nkeep = true\n";
+    fs::write(&config_path, original).unwrap();
+    let cfg = config(&t, "cat", 512, 1, 3, 4);
+    let integration = jcode_home.join("skills/azdaja");
+
+    let lifecycle = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_azdaja"))
+            .args(args)
+            .env("HOME", &t)
+            .env("JCODE_HOME", &jcode_home)
+            .env("AZDAJA_HOME", t.join("state"))
+            .env("AZDAJA_CONFIG", &cfg)
+            .env_remove("RLM_DEPTH")
+            .output()
+            .unwrap()
+    };
+
+    let installed = lifecycle(&["install", "jcode"]);
+    assert!(
+        installed.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&installed.stdout),
+        String::from_utf8_lossy(&installed.stderr)
+    );
+    assert!(integration.join("azdaja").is_file());
+    let managed = fs::read(&config_path).unwrap();
+    let managed_text = String::from_utf8(managed.clone()).unwrap();
+    assert!(managed_text.starts_with("# user config\n[hooks]\npre_tool_timeout_ms = 5000\n"));
+    assert!(managed_text.ends_with("[other]\nkeep = true\n"));
+    assert!(managed_text.contains("# >>> azdaja managed Jcode hooks"));
+    for key in ["pre_tool", "turn_end", "session_end"] {
+        assert!(managed_text.contains(&format!("{key} = ")));
+    }
+    assert!(
+        managed_text.contains(
+            integration
+                .join("azdaja")
+                .to_str()
+                .expect("UTF-8 test path")
+        )
+    );
+    assert!(managed_text.contains("jcode-hook"));
+
+    let doctor = lifecycle(&["doctor", "jcode"]);
+    assert!(
+        doctor.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&doctor.stdout),
+        String::from_utf8_lossy(&doctor.stderr)
+    );
+    assert!(String::from_utf8_lossy(&doctor.stdout).contains("memory handoff are installed"));
+
+    let reinstalled = lifecycle(&["install", "jcode"]);
+    assert!(
+        reinstalled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reinstalled.stderr)
+    );
+    assert_eq!(fs::read(&config_path).unwrap(), managed);
+
+    let removed = lifecycle(&["uninstall", "jcode"]);
+    assert!(
+        removed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&removed.stderr)
+    );
+    assert!(!integration.exists());
+    assert_eq!(fs::read(&config_path).unwrap(), original);
+
+    let installed = lifecycle(&["install", "jcode"]);
+    assert!(installed.status.success());
+    let foreign = b"[hooks]\npre_tool = \"foreign-hook\"\nturn_end = \"foreign-turn\"\n";
+    fs::write(&config_path, foreign).unwrap();
+    let removed = lifecycle(&["uninstall", "jcode"]);
+    assert!(
+        removed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&removed.stderr)
+    );
+    assert!(!integration.exists());
+    assert_eq!(fs::read(&config_path).unwrap(), foreign);
+
+    let refused = lifecycle(&["install", "jcode"]);
+    assert!(!refused.status.success());
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("foreign hooks.pre_tool"));
+    assert!(!integration.exists());
+    assert_eq!(fs::read(&config_path).unwrap(), foreign);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+fn jcode_install_refuses_linked_hook_configs_without_mutating_victims() {
+    use std::os::unix::fs::{MetadataExt, symlink};
+
+    for kind in ["symlink", "hardlink"] {
+        let t = temp(&format!("jcode-memory-handoff-{kind}-config"));
+        let jcode_home = t.join("custom-jcode");
+        fs::create_dir_all(&jcode_home).unwrap();
+        let victim = t.join("victim.toml");
+        let victim_bytes = b"[hooks]\npre_tool_timeout_ms = 7000\n";
+        fs::write(&victim, victim_bytes).unwrap();
+        let config_path = jcode_home.join("config.toml");
+        if kind == "symlink" {
+            symlink(&victim, &config_path).unwrap();
+        } else {
+            fs::hard_link(&victim, &config_path).unwrap();
+        }
+        let cfg = config(&t, "cat", 512, 1, 3, 4);
+        let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+            .args(["install", "jcode"])
+            .env("HOME", &t)
+            .env("JCODE_HOME", &jcode_home)
+            .env("AZDAJA_HOME", t.join("state"))
+            .env("AZDAJA_CONFIG", &cfg)
+            .env_remove("RLM_DEPTH")
+            .output()
+            .unwrap();
+        assert!(
+            !output.status.success(),
+            "{kind} config unexpectedly installed"
+        );
+        assert_eq!(fs::read(&victim).unwrap(), victim_bytes);
+        assert!(!jcode_home.join("skills/azdaja").exists());
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(
+            stderr.contains("unsafe Jcode config path")
+                || stderr.contains("Jcode config is not private to its owner"),
+            "{kind}: {stderr}"
+        );
+        if kind == "symlink" {
+            assert_eq!(fs::read_link(&config_path).unwrap(), victim);
+        } else {
+            let victim_metadata = fs::metadata(&victim).unwrap();
+            let config_metadata = fs::metadata(&config_path).unwrap();
+            assert_eq!(victim_metadata.dev(), config_metadata.dev());
+            assert_eq!(victim_metadata.ino(), config_metadata.ino());
+            assert_eq!(victim_metadata.nlink(), 2);
+        }
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
+fn jcode_memory_handoff_returns_answer_without_unlocking_broad_reads() {
+    let t = temp("jcode-memory-handoff-flow");
+    let repo = t.join("repo");
+    fs::create_dir_all(repo.join("src")).unwrap();
+    fs::write(repo.join("src/lib.rs"), "pub fn answer() -> u32 { 42 }\n").unwrap();
+    fs::write(repo.join("README.md"), "# handoff fixture\n").unwrap();
+    let provider = t.join("provider.py");
+    fs::write(
+        &provider,
+        r#"import os, sys
+assert "AZDAJA_JCODE_CHALLENGE" not in os.environ
+sys.stdin.read()
+print('```python\nFINAL("repo-memory-ok")\n```')
+"#,
+    )
+    .unwrap();
+    let cfg = config(
+        &t,
+        &format!("python3 {}", provider.display()),
+        4096,
+        1,
+        10,
+        4,
+    );
+    let state = t.join("state");
+
+    let hook = |event: &str, tool: Option<&str>, input: &str| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+        command
+            .arg("jcode-hook")
+            .current_dir(&repo)
+            .env("HOME", &t)
+            .env("AZDAJA_HOME", &state)
+            .env("JCODE_HOOK_EVENT", event)
+            .env("JCODE_HOOK_SESSION_ID", "session-handoff")
+            .env("JCODE_HOOK_CWD", &repo)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        if let Some(tool) = tool {
+            command.env("JCODE_HOOK_TOOL_NAME", tool);
+        }
+        let mut child = command.spawn().unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(input.as_bytes())
+            .unwrap();
+        child.wait_with_output().unwrap()
+    };
+    let broad_input = r#"{"file_path":"src/lib.rs","start_line":1,"limit":5000}"#;
+    let blocked = hook("pre_tool", Some("read"), broad_input);
+    assert_eq!(blocked.status.code(), Some(2));
+    assert!(blocked.stdout.is_empty());
+    let blocked_text = String::from_utf8(blocked.stderr).unwrap();
+    assert!(blocked_text.contains("Azdaja should carry this broad read."));
+    assert!(
+        blocked_text
+            .contains("Run the exact challenged command once and continue from its answer:")
+    );
+    assert!(blocked_text.contains("Do not retry the blocked broad read."));
+    assert!(blocked_text.contains("Narrow reads, Git, builds, and tests are still available."));
+    let challenge = blocked_text
+        .split_whitespace()
+        .find_map(|word| word.strip_prefix("AZDAJA_JCODE_CHALLENGE="))
+        .expect("challenge assignment")
+        .to_owned();
+    assert_eq!(challenge.len(), 32);
+
+    let completed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args([
+            "solo",
+            "summarize the repository implementation",
+            "--repo",
+            repo.to_str().unwrap(),
+        ])
+        .current_dir(&repo)
+        .env("HOME", &t)
+        .env("AZDAJA_HOME", &state)
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_CHALLENGE", &challenge)
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert!(
+        completed.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&completed.stdout),
+        String::from_utf8_lossy(&completed.stderr)
+    );
+    assert_eq!(completed.stdout, b"repo-memory-ok\n");
+
+    let blocked_before_turn_end = hook("pre_tool", Some("read"), broad_input);
+    assert_eq!(blocked_before_turn_end.status.code(), Some(2));
+    let blocked_before_turn_end_text = String::from_utf8(blocked_before_turn_end.stderr).unwrap();
+    let outstanding_challenge = blocked_before_turn_end_text
+        .split_whitespace()
+        .find_map(|word| word.strip_prefix("AZDAJA_JCODE_CHALLENGE="))
+        .expect("outstanding challenge assignment")
+        .to_owned();
+
+    let turn_end = hook("turn_end", None, "{}");
+    assert_eq!(turn_end.status.code(), Some(0));
+    let blocked_again = hook("pre_tool", Some("read"), broad_input);
+    assert_eq!(blocked_again.status.code(), Some(2));
+    let blocked_again_text = String::from_utf8(blocked_again.stderr).unwrap();
+    let second_challenge = blocked_again_text
+        .split_whitespace()
+        .find_map(|word| word.strip_prefix("AZDAJA_JCODE_CHALLENGE="))
+        .expect("second challenge assignment");
+    assert_ne!(second_challenge, outstanding_challenge);
+
+    let tiny = repo.join("tiny.txt");
+    fs::write(&tiny, "tiny\n").unwrap();
+    let file_only = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args(["solo", "read the tiny file", "-f", tiny.to_str().unwrap()])
+        .current_dir(&repo)
+        .env("HOME", &t)
+        .env("AZDAJA_HOME", &state)
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_CHALLENGE", second_challenge)
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert_eq!(file_only.status.code(), Some(2));
+    assert!(file_only.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&file_only.stderr).contains("file-scoped Azdaja work"));
+    assert_eq!(
+        hook("pre_tool", Some("read"), broad_input).status.code(),
+        Some(2)
+    );
+
+    let narrow = hook(
+        "pre_tool",
+        Some("read"),
+        r#"{"file_path":"src/lib.rs","start_line":1,"limit":64}"#,
+    );
+    assert_eq!(narrow.status.code(), Some(0));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn jcode_memory_handoff_contract_errors_fail_open() {
+    let t = temp("jcode-memory-handoff-fail-open");
+    let output = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .arg("jcode-hook")
+        .env("HOME", &t)
+        .env("AZDAJA_HOME", t.join("state"))
+        .env_remove("JCODE_HOOK_EVENT")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("warning: Azdaja memory handoff is unavailable"));
+    assert!(!stderr.contains("Azdaja should carry this broad read"));
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -4770,6 +5085,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             .find_map(|line| line.strip_prefix("description: "))
             .expect("installed skill description");
         let size_trigger = match harness {
+            "jcode" => "broad repository or multi-file inspection",
             "claude" => "exhaustive semantic judgment or classification over one input",
             "codex" | "opencode" => "exhaustive semantic judgment or classification over one input",
             _ => "inputs too large",
@@ -4781,7 +5097,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             "installed",
             "available",
         ];
-        if !matches!(harness, "claude" | "codex" | "opencode") {
+        if !matches!(harness, "jcode" | "claude" | "codex" | "opencode") {
             triggers.push("how to use");
         }
         for trigger in triggers {
@@ -7037,7 +7353,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
         ("kill", "Usage: az kill <session-id>"),
         (
             "solo",
-            "Usage: az solo <question> -f <path> [--model <model>] [--sub-model <model>]",
+            "Usage: az solo <question> (-f <path> | --repo <directory>) [--model <model>] [--sub-model <model>]",
         ),
         (
             "doctor",

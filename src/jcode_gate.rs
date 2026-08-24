@@ -171,19 +171,12 @@ struct SessionState {
     workspace_hash: String,
     narrow_units: u64,
     active_challenge: Option<ActiveChallenge>,
-    receipt: Option<Receipt>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ActiveChallenge {
     challenge_hash: String,
     expires_at: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Receipt {
-    challenge_hash: String,
-    completed_at: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -206,7 +199,11 @@ enum RequiredScope {
 /// work. A caller must describe the input actually processed, not merely pass the hook workspace.
 pub enum CompletionScope<'a> {
     /// A successful `solo ... --repo <root>` bundle over this repository root.
-    RepositoryBundle { root: &'a Path },
+    RepositoryBundle {
+        root: &'a Path,
+        included_files: usize,
+        raw_source_bytes: usize,
+    },
     /// A successful file-scoped run such as `solo ... -f <path>`.
     Files { paths: &'a [PathBuf] },
     /// Loading or ingesting inputs without completed semantic work.
@@ -264,10 +261,6 @@ impl Storage {
                 .active_challenge
                 .as_ref()
                 .is_some_and(|active| !is_lower_hex(&active.challenge_hash, 64))
-            || state
-                .receipt
-                .as_ref()
-                .is_some_and(|receipt| !is_lower_hex(&receipt.challenge_hash, 64))
         {
             return Err(contract("Jcode gate session state binding is invalid"));
         }
@@ -370,12 +363,14 @@ pub fn handle_current_hook_in_crate_state(tool_input: &[u8]) -> GateResult<Decis
     handle_current_hook(&crate_state_root()?, tool_input)
 }
 
-/// Complete the challenge named by [`CHALLENGE_ENV`] after successful, nonempty Azdaja work.
+/// Consume the challenge named by [`CHALLENGE_ENV`] after successful, nonempty Azdaja work.
 ///
 /// Main must call this only after `solo` has produced its successful final output. Skill loading,
 /// source ingestion, failed work, and intermediate output must never call this function. Empty
 /// final output is rejected. The supplied scope must describe the inputs that the successful run
 /// actually processed. Repository challenges accept only a canonical-root-matching `--repo` bundle.
+/// Completion proves the memory pass and consumes the challenge, but never unlocks native broad
+/// reads; callers must continue from the successful Azdaja answer.
 pub fn complete_challenge(state_root: &Path, work: SuccessfulAzdajaWork<'_>) -> GateResult<bool> {
     if work.final_output.trim().is_empty() {
         return Err(contract(
@@ -448,7 +443,6 @@ fn handle_pre_tool(
     if state.workspace_hash != context.workspace_hash {
         discard_active_challenge(&storage, &mut state)?;
         state.workspace_hash.clone_from(&context.workspace_hash);
-        state.receipt = None;
         storage.save_session(&state)?;
     }
 
@@ -459,10 +453,6 @@ fn handle_pre_tool(
         state.active_challenge = None;
         storage.remove_challenge(&hash)?;
         storage.save_session(&state)?;
-    }
-
-    if state.receipt.is_some() {
-        return Ok(Decision::Allow);
     }
 
     match requirement {
@@ -532,7 +522,7 @@ fn block_with_challenge(
     };
 
     Ok(Decision::Block(format!(
-        "{CHALLENGE_ENV}={token} {} solo \"<user task>\" --repo {}",
+        "Azdaja should carry this broad read.\nRun the exact challenged command once and continue from its answer:\n  {CHALLENGE_ENV}={token} {} solo \"<user task>\" --repo {}\nDo not retry the blocked broad read. Narrow reads, Git, builds, and tests are still available.",
         shell_quote(binary),
         shell_quote(&context.canonical_cwd)
     )))
@@ -578,7 +568,19 @@ fn complete_at(
         return Err(contract("AZDAJA_JCODE_CHALLENGE has expired"));
     }
     let supplied_workspace_hash = match (&record.required_scope, &work.scope) {
-        (RequiredScope::RepositoryBundle, CompletionScope::RepositoryBundle { root }) => {
+        (
+            RequiredScope::RepositoryBundle,
+            CompletionScope::RepositoryBundle {
+                root,
+                included_files,
+                raw_source_bytes,
+            },
+        ) => {
+            if *included_files == 0 || *raw_source_bytes == 0 {
+                return Err(contract(
+                    "empty repository evidence cannot complete a Jcode challenge",
+                ));
+            }
             let canonical_root = fs::canonicalize(root)?;
             sha256_hex(path_bytes(&canonical_root).as_ref())
         }
@@ -609,10 +611,6 @@ fn complete_at(
         return Err(contract("AZDAJA_JCODE_CHALLENGE is revoked or not active"));
     }
     state.active_challenge = None;
-    state.receipt = Some(Receipt {
-        challenge_hash: challenge_hash.clone(),
-        completed_at: now,
-    });
     storage.save_session(&state)?;
     storage.remove_challenge(&challenge_hash)?;
     Ok(())
@@ -627,7 +625,6 @@ fn revoke_turn(state_root: &Path, context: &BoundContext) -> GateResult<()> {
         return Ok(());
     }
     discard_active_challenge(&storage, &mut state)?;
-    state.receipt = None;
     storage.save_session(&state)
 }
 
@@ -1360,9 +1357,7 @@ mod tests {
             panic!("expected block, got {decision:?}");
         };
         let prefix = format!("{CHALLENGE_ENV}=");
-        message
-            .strip_prefix(&prefix)
-            .unwrap()
+        message[message.find(&prefix).expect("challenge assignment") + prefix.len()..]
             .split_whitespace()
             .next()
             .unwrap()
@@ -1372,7 +1367,11 @@ mod tests {
     fn completed_repo<'a>(root: &'a Path, output: &'a str) -> SuccessfulAzdajaWork<'a> {
         SuccessfulAzdajaWork {
             final_output: output,
-            scope: CompletionScope::RepositoryBundle { root },
+            scope: CompletionScope::RepositoryBundle {
+                root,
+                included_files: 2,
+                raw_source_bytes: 64,
+            },
         }
     }
 
@@ -1388,7 +1387,7 @@ mod tests {
         let challenge = token(&decision);
         assert!(is_lower_hex(&challenge, 32));
         let expected = format!(
-            "{CHALLENGE_ENV}={challenge} /managed/azdaja solo \"<user task>\" --repo {}",
+            "Azdaja should carry this broad read.\nRun the exact challenged command once and continue from its answer:\n  {CHALLENGE_ENV}={challenge} /managed/azdaja solo \"<user task>\" --repo {}\nDo not retry the blocked broad read. Narrow reads, Git, builds, and tests are still available.",
             scratch.cwd.display()
         );
         assert_eq!(decision, Decision::Block(expected));
@@ -1495,29 +1494,26 @@ mod tests {
     }
 
     #[test]
-    fn receipt_does_not_activate_in_a_different_canonical_workspace() {
+    fn repository_challenge_rejects_a_different_canonical_workspace() {
         let scratch = Scratch::new();
         let state = scratch.state();
         let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
-        complete_at(
+        let error = complete_at(
             &state,
             &token(&blocked),
-            &completed_repo(&scratch.cwd, "answer"),
+            &completed_repo(&scratch.other, "answer"),
             NOW + 1,
         )
-        .unwrap();
-        assert_eq!(
-            call(&state, &scratch.cwd, "read", broad_read(), NOW + 2).unwrap(),
-            Decision::Allow
-        );
+        .unwrap_err();
+        assert!(error.to_string().contains("does not match --repo"));
         assert!(matches!(
-            call(&state, &scratch.other, "read", broad_read(), NOW + 2).unwrap(),
+            call(&state, &scratch.cwd, "read", broad_read(), NOW + 2).unwrap(),
             Decision::Block(_)
         ));
     }
 
     #[test]
-    fn expired_challenge_cannot_create_a_receipt() {
+    fn expired_challenge_cannot_complete() {
         let scratch = Scratch::new();
         let state = scratch.state();
         let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
@@ -1543,7 +1539,7 @@ mod tests {
     }
 
     #[test]
-    fn turn_end_revokes_the_one_turn_receipt() {
+    fn completion_never_enables_broad_work_before_or_after_delayed_turn_end() {
         let scratch = Scratch::new();
         let state = scratch.state();
         let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
@@ -1554,10 +1550,10 @@ mod tests {
             NOW + 1,
         )
         .unwrap();
-        assert_eq!(
-            call(&state, &scratch.cwd, "read", broad_read(), NOW + 2).unwrap(),
-            Decision::Allow
-        );
+        let blocked_before_turn_end =
+            call(&state, &scratch.cwd, "read", broad_read(), NOW + 2).unwrap();
+        assert!(matches!(blocked_before_turn_end, Decision::Block(_)));
+        let outstanding = token(&blocked_before_turn_end);
         assert_eq!(
             handle_at(
                 &state,
@@ -1573,28 +1569,38 @@ mod tests {
             call(&state, &scratch.cwd, "read", broad_read(), NOW + 4).unwrap(),
             Decision::Block(_)
         ));
+        let error = complete_at(
+            &state,
+            &outstanding,
+            &completed_repo(&scratch.cwd, "late answer"),
+            NOW + 5,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("unknown or already completed"));
     }
 
     #[test]
-    fn session_end_revokes_receipt_and_session_state() {
+    fn session_end_revokes_outstanding_challenge_and_session_state() {
         let scratch = Scratch::new();
         let state = scratch.state();
         let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
-        complete_at(
-            &state,
-            &token(&blocked),
-            &completed_repo(&scratch.cwd, "answer"),
-            NOW + 1,
-        )
-        .unwrap();
+        let challenge = token(&blocked);
         handle_at(
             &state,
             &invocation("session_end", &scratch.cwd, None),
             b"{}",
-            NOW + 2,
+            NOW + 1,
             Path::new("/managed/azdaja"),
         )
         .unwrap();
+        let error = complete_at(
+            &state,
+            &challenge,
+            &completed_repo(&scratch.cwd, "late answer"),
+            NOW + 2,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("unknown or already completed"));
         assert!(matches!(
             call(&state, &scratch.cwd, "read", broad_read(), NOW + 3).unwrap(),
             Decision::Block(_)
@@ -1618,24 +1624,6 @@ mod tests {
             call(&state, &scratch.cwd, "read", broad_read(), NOW + 2).unwrap(),
             Decision::Block(_)
         ));
-    }
-
-    #[test]
-    fn successful_nonempty_completion_allows_broad_work() {
-        let scratch = Scratch::new();
-        let state = scratch.state();
-        let blocked = call(&state, &scratch.cwd, "agentgrep", json!({}), NOW).unwrap();
-        complete_at(
-            &state,
-            &token(&blocked),
-            &completed_repo(&scratch.cwd, "final"),
-            NOW + 1,
-        )
-        .unwrap();
-        assert_eq!(
-            call(&state, &scratch.cwd, "agentgrep", json!({}), NOW + 2).unwrap(),
-            Decision::Allow
-        );
     }
 
     #[test]
@@ -1713,6 +1701,27 @@ mod tests {
             let metadata = fs::metadata(state.join(GATE_DIRECTORY)).unwrap();
             assert_eq!(metadata.permissions().mode() & 0o077, 0);
         }
+    }
+
+    #[test]
+    fn empty_repository_evidence_cannot_unlock_broad_work() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
+        let work = SuccessfulAzdajaWork {
+            final_output: "answer",
+            scope: CompletionScope::RepositoryBundle {
+                root: &scratch.cwd,
+                included_files: 0,
+                raw_source_bytes: 0,
+            },
+        };
+        let error = complete_at(&state, &token(&blocked), &work, NOW + 1).unwrap_err();
+        assert!(error.to_string().contains("empty repository evidence"));
+        assert!(matches!(
+            call(&state, &scratch.cwd, "read", broad_read(), NOW + 2).unwrap(),
+            Decision::Block(_)
+        ));
     }
 
     #[test]
