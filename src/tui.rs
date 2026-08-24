@@ -639,26 +639,16 @@ fn memory_line(snapshot: &DashboardSnapshot) -> String {
     let Some(constellation) = memory_constellation(snapshot) else {
         return "none yet · summaries keep numbers, not source text".to_owned();
     };
-    let loaded = constellation
-        .trace_count
-        .saturating_sub(constellation.completed_count);
-    let mut counts = Vec::new();
-    if constellation.completed_count > 0 {
-        counts.push(summary_count(constellation.completed_count, "finished"));
-    }
-    if loaded > 0 {
-        counts.push(summary_count(loaded, "loaded"));
-    }
     format!(
         "{} · {} measured · numbers only",
-        counts.join(" · "),
+        summary_count(constellation.trace_count),
         human_bytes(constellation.total_source_bytes)
     )
 }
 
-fn summary_count(count: usize, state: &str) -> String {
+fn summary_count(count: usize) -> String {
     format!(
-        "{count} {state} {}",
+        "{count} source {}",
         if count == 1 { "summary" } else { "summaries" }
     )
 }
@@ -1205,7 +1195,7 @@ mod tests {
         let mut data = snapshot();
         data.sessions.clear();
         let finished = rows_text(overview_rows(&data, 1000, 0));
-        assert!(finished.contains("1 finished summary · 62.5 KiB measured · numbers only"));
+        assert!(finished.contains("1 source summary · 62.5 KiB measured · numbers only"));
         assert!(finished.contains("recent finished · 62.5 KiB · 1000 lines · 20s ago"));
 
         data.recent_observability = RecentAggregateSummary {
@@ -1220,7 +1210,7 @@ mod tests {
             }],
         };
         let loaded = rows_text(overview_rows(&data, 1000, 0));
-        assert!(loaded.contains("1 loaded summary · 2.3 MiB measured · numbers only"));
+        assert!(loaded.contains("1 source summary · 2.3 MiB measured · numbers only"));
         assert!(loaded.contains("recent loaded · 2.3 MiB · 9421 lines · 0s ago"));
     }
 

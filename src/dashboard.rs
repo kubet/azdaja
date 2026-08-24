@@ -206,26 +206,19 @@ fn live_line(snapshot: &DashboardSnapshot) -> String {
     )
 }
 
-fn summary_count(count: usize, state: &str) -> String {
-    format!("{count} {state}")
+fn summary_count(count: usize) -> String {
+    format!(
+        "{count} source {}",
+        if count == 1 { "summary" } else { "summaries" }
+    )
 }
 
 fn memory_line(snapshot: &DashboardSnapshot) -> String {
     match memory_constellation(snapshot) {
         Some(constellation) => {
-            let loaded = constellation
-                .trace_count
-                .saturating_sub(constellation.completed_count);
-            let mut counts = Vec::new();
-            if constellation.completed_count > 0 {
-                counts.push(summary_count(constellation.completed_count, "finished"));
-            }
-            if loaded > 0 {
-                counts.push(summary_count(loaded, "loaded"));
-            }
             format!(
                 "{} · {} measured · numbers only",
-                counts.join(" · "),
+                summary_count(constellation.trace_count),
                 human_bytes(constellation.total_source_bytes)
             )
         }
@@ -639,7 +632,7 @@ mod tests {
         assert!(rendered.contains("● awake · source stays local"));
         assert!(rendered.contains("new work gpt-5.6-sol via Jcode/OpenAI · low thinking"));
         assert!(rendered.contains("1 running · 1 idle · 2/4 slots used"));
-        assert!(rendered.contains("1 finished · 1 loaded"));
+        assert!(rendered.contains("2 source summaries"));
         assert!(rendered.contains("2.3 MiB measured · numbers only"));
         assert!(rendered.contains("repeated ←"));
         assert!(rendered.contains("→ varied · avg 60%"));
@@ -657,7 +650,7 @@ mod tests {
         data.sessions.clear();
         let rendered = render_at(&data, false, 72, 1000);
         assert!(rendered.contains("live     none · 4 slots free"));
-        assert!(rendered.contains("1 finished · 1 loaded"));
+        assert!(rendered.contains("2 source summaries"));
         assert!(rendered.contains("numbers only"));
         assert!(rendered.contains("recent   finished · 2.3 MiB · 9421 lines · 20s ago"));
         assert!(!rendered.contains("model unknown"));
@@ -691,7 +684,7 @@ mod tests {
         assert!(rendered.contains("bad[31mmodel"));
         assert!(!rendered.contains("bad\x1b[31m"));
         assert!(rendered.contains("live      1 running · 1 idle"));
-        assert!(rendered.contains("memory    1 finished · 1 loaded"));
+        assert!(rendered.contains("memory    2 source summaries"));
         assert!(rendered.contains("pattern   repeated ←"));
         assert!(rendered.contains("recent    finished"));
         assert!(rendered.contains("session   ● 01234567 running"));
