@@ -39,7 +39,7 @@ fn reviewed_notice_license_and_font_ofl_bytes_are_preserved() {
 }
 
 #[test]
-fn cargo_package_list_is_the_exact_thirteen_file_allowlist() {
+fn cargo_package_list_matches_the_reviewed_file_allowlist() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = Command::new("cargo")
         .args(["package", "--list", "--allow-dirty"])
@@ -72,6 +72,8 @@ fn cargo_package_list_is_the_exact_thirteen_file_allowlist() {
             "src/dashboard.rs",
             "src/lib.rs",
             "src/main.rs",
+            "src/observability.rs",
+            "src/tui.rs",
         ]
     );
 }

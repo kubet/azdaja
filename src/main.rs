@@ -1,5 +1,6 @@
 mod banner;
 mod dashboard;
+mod tui;
 
 use anyhow::{Context, Result, anyhow, bail};
 use azdaja::{
@@ -294,14 +295,10 @@ fn run() -> Result<bool> {
             let term = env::var("TERM").ok();
             let color =
                 banner::color_enabled(true, env::var_os("NO_COLOR").is_some(), term.as_deref());
-            let width = dashboard::terminal_width();
-            match Config::load().and_then(|config| dashboard_snapshot(&config)) {
-                Ok(snapshot) => print!("{}", dashboard::render(&snapshot, color, width)),
-                Err(error) => print!(
-                    "{}",
-                    dashboard::render_error(&format!("{error:#}"), color, width)
-                ),
-            }
+            tui::run(
+                || Config::load().and_then(|config| dashboard_snapshot(&config)),
+                color,
+            )?;
         } else {
             help(false);
         }
