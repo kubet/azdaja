@@ -337,7 +337,7 @@ fn run_installer_with_jcode_home(run: InstallRun<'_>, jcode_home: Option<&Path>)
     if let Some(harness) = run.harness {
         command.arg(harness);
     } else {
-        command.env("AZDAJA_INSTALL_SELECTION", "all");
+        command.env("AZDAJA_INSTALL_SELECTION", "a");
     }
     if let Some(bin_dir) = run.bin_dir {
         command.arg("--bin-dir").arg(bin_dir);
@@ -380,7 +380,7 @@ fn run_installer_with_extra(run: InstallRun<'_>, extra: &[(&str, &OsStr)]) -> Ou
     if let Some(harness) = run.harness {
         command.arg(harness);
     } else {
-        command.env("AZDAJA_INSTALL_SELECTION", "all");
+        command.env("AZDAJA_INSTALL_SELECTION", "a");
     }
     if let Some(bin_dir) = run.bin_dir {
         command.arg("--bin-dir").arg(bin_dir);
@@ -626,9 +626,9 @@ fn installers_are_identical_and_bind_fresh_v014_assets_and_sums() {
     assert!(!text.contains("\"$BIN_DIR/config.toml\""));
     assert!(text.contains("printf 'Next: az doctor"));
     assert!(text.contains("printf 'Next: azdaja doctor"));
-    assert!(
-        text.contains("↑/↓ or j/k move  space toggle  a found  n none  enter continue  q cancel")
-    );
+    assert!(text.contains(
+        "↑/↓ or j/k move  Space toggle  a detected  n none  Enter install  q cancel"
+    ));
     assert!(text.contains("menu_selected_$menu_cursor"));
     assert!(text.contains("for name in jcode claude codex gemini opencode"));
     assert!(text.contains("Provider-free install. No model provider will be called."));
@@ -637,12 +637,18 @@ fn installers_are_identical_and_bind_fresh_v014_assets_and_sums() {
     assert!(text.contains("Downloading azdaja v$VERSION"));
     assert!(text.contains("Verifying SHA-256"));
     assert!(text.contains("Checking destinations"));
-    assert!(text.contains("Plan: install azdaja"));
+    assert!(text.contains("printf '\\nPlan:\\n'"));
+    assert!(text.contains("Write command:"));
+    assert!(text.contains("Write alias:"));
+    assert!(text.contains("Write integrations:"));
+    assert!(text.contains("Press Enter to install, or q to cancel."));
     assert!(text.contains("Writing tool integrations"));
     assert!(text.contains("found ·"));
-    assert!(text.contains("integration active"));
+    assert!(text.contains("integration present"));
     assert!(text.contains("not integrated"));
     assert!(text.contains("interactive selection needs a terminal"));
+    assert!(text.contains("Install cancelled. Nothing was changed."));
+    assert!(text.contains("Install which integrations? [1,2/all/names/a/q]"));
 }
 
 #[test]
@@ -718,6 +724,28 @@ fn interactive_selection_installs_only_the_chosen_detected_subset() {
     assert_installer_preamble(&String::from_utf8_lossy(&invalid.stdout));
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("invalid integration selection '9'"));
     assert_eq!(tree_identity(&invalid_home), before);
+
+    let absent_home = scratch.0.join("interactive-absent");
+    fs::create_dir_all(&absent_home).unwrap();
+    mark_detected(&absent_home, "jcode");
+    let absent_bin = absent_home.join("bin");
+    let absent = run_installer_with_extra(
+        InstallRun {
+            home: &absent_home,
+            base: &format!("{}/good", server.base),
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: None,
+            bin_dir: Some(&absent_bin),
+            path: "/usr/bin:/bin",
+        },
+        &[("AZDAJA_INSTALL_SELECTION", OsStr::new("4"))],
+    );
+    let stdout = assert_success(&absent);
+    assert_eq!(installer_line(&stdout, "Integrations:"), "Integrations: gemini");
+    assert!(!target(&absent_home, "jcode").exists());
+    assert!(target(&absent_home, "gemini").join("azdaja").is_file());
 }
 
 #[test]
@@ -778,11 +806,14 @@ fn stale_integration_directories_do_not_count_as_found_tools() {
         bin_dir: Some(&home.join("bin")),
         path: &alias_free_system_path(&scratch.0),
     });
-    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(output.status.code(), Some(2));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_installer_preamble(&stdout);
     assert!(stdout.contains("Checking tools... none found"), "{stdout}");
-    assert!(String::from_utf8_lossy(&output.stderr).contains("no supported tool found"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("Select at least one integration, or q to cancel.")
+    );
     assert_eq!(tree_identity(&home), before);
 }
 
@@ -1275,10 +1306,10 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             bin_dir: Some(&home.join("bin")),
             path: &system_path,
         });
-        assert_eq!(output.status.code(), Some(1));
+        assert_eq!(output.status.code(), Some(2));
         assert_installer_preamble(&String::from_utf8_lossy(&output.stdout));
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(stderr.contains("no supported tool found"));
+        assert!(stderr.contains("Select at least one integration, or q to cancel."));
         assert!(!stderr.contains("stack"));
         assert!(fs::read_dir(&home).unwrap().next().is_none());
         assert_eq!(fs::read_to_string(&server.log).unwrap_or_default(), before);

@@ -7,6 +7,7 @@ GLIBC_MIN=2.35
 RELEASE_BASE=https://azdaja.dev/releases/v$VERSION
 HARNESS=
 BIN_DIR=${AZDAJA_INSTALL_DIR:-}
+INTERACTIVE_INSTALL=false
 
 usage() {
   printf '%s\n' 'Usage: install.sh [--all | TARGET[,TARGET...]] [--bin-dir DIR]'
@@ -27,6 +28,11 @@ announce() {
 complete_stage() {
   printf '%s... ok\n' "$1"
   CURRENT_STAGE=
+}
+cancel_install() {
+  CURRENT_STAGE=
+  printf '%s\n' 'Install cancelled. Nothing was changed.'
+  exit 130
 }
 
 glibc_version_at_least() {
@@ -156,24 +162,11 @@ detect_tools() {
   return 0
 }
 
-manifest_has_file_hash() {
-  manifest_path=$1
-  manifest_name=$2
-  manifest_hash=$3
-  case "$(cat "$manifest_path" 2>/dev/null)" in
-    *"[\"$manifest_name\",\"$manifest_hash\"]"*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-managed_file_valid() {
+managed_file_present() {
   managed_root=$1
   managed_name=$2
-  managed_manifest=$managed_root/.azdaja-managed
   managed_path=$managed_root/$managed_name
-  [ -f "$managed_path" ] && [ ! -L "$managed_path" ] || return 1
-  managed_hash=$(sha256_file "$managed_path") || return 1
-  manifest_has_file_hash "$managed_manifest" "$managed_name" "$managed_hash"
+  [ -f "$managed_path" ] && [ ! -L "$managed_path" ]
 }
 
 integration_state() {
@@ -185,11 +178,11 @@ integration_state() {
   fi
   if [ -d "$integration_root" ] && [ ! -L "$integration_root" ] && \
      [ -f "$integration_root/.azdaja-managed" ] && [ ! -L "$integration_root/.azdaja-managed" ] && \
-     managed_file_valid "$integration_root" azdaja && \
-     managed_file_valid "$integration_root" SKILL.md && \
-     managed_file_valid "$integration_root" config.toml; then
+     managed_file_present "$integration_root" azdaja && \
+     managed_file_present "$integration_root" SKILL.md && \
+     managed_file_present "$integration_root" config.toml; then
     case "$(cat "$integration_root/SKILL.md" 2>/dev/null)" in
-      *"# Azdaja $VERSION"*) printf '%s' 'integration active'; return ;;
+      *"# Azdaja $VERSION"*) printf '%s' 'integration present'; return ;;
     esac
   fi
   printf '%s' 'needs repair'
@@ -239,42 +232,104 @@ explicit_targets() {
   DETECTION_REPORT=$(display_names "$INSTALL_NAMES")
 }
 
+selection_from_answer() {
+  selection_answer=$1
+  SELECTION_ERROR=
+  case "$selection_answer" in
+    q|Q) cancel_install ;;
+    '') return 2 ;;
+    a)
+      INSTALL_NAMES=$DETECTED
+      ;;
+    all)
+      INSTALL_NAMES='jcode claude codex gemini opencode'
+      ;;
+    n)
+      INSTALL_NAMES=
+      ;;
+    *)
+      INSTALL_NAMES=
+      for choice in $(printf '%s' "$selection_answer" | tr ',' ' '); do
+        selected=
+        index=1
+        for name in jcode claude codex gemini opencode; do
+          if [ "$choice" = "$index" ] || [ "$choice" = "$name" ]; then
+            selected=$name
+            break
+          fi
+          index=$((index + 1))
+        done
+        if [ -z "$selected" ]; then
+          SELECTION_ERROR="invalid integration selection '$choice'"
+          return 1
+        fi
+        case " $INSTALL_NAMES " in
+          *" $selected "*) ;;
+          *) INSTALL_NAMES="${INSTALL_NAMES}${INSTALL_NAMES:+ }$selected" ;;
+        esac
+      done
+      ;;
+  esac
+  [ -n "$INSTALL_NAMES" ] || return 2
+  return 0
+}
+
+plain_prompt_targets() {
+  while :; do
+    printf '\nFound integrations:\n' > /dev/tty
+    plain_index=1
+    for name in jcode claude codex gemini opencode; do
+      case " $DETECTED " in
+        *" $name "*) plain_found=found ;;
+        *) plain_found='not found' ;;
+      esac
+      plain_state=$(integration_state "$name")
+      if [ "$plain_state" = 'not integrated' ]; then
+        printf '  %s. %-10s %s\n' "$plain_index" "$name" "$plain_found" > /dev/tty
+      else
+        printf '  %s. %-10s %s · %s\n' "$plain_index" "$name" "$plain_found" "$plain_state" > /dev/tty
+      fi
+      plain_index=$((plain_index + 1))
+    done
+    printf '\nInstall which integrations? [1,2/all/names/a/q] ' > /dev/tty
+    if ! IFS= read -r answer < /dev/tty; then
+      cancel_install
+    fi
+    if selection_from_answer "$answer"; then
+      return
+    else
+      selection_status=$?
+    fi
+    if [ "$selection_status" -eq 1 ]; then
+      printf '%s\n' "$SELECTION_ERROR" > /dev/tty
+    else
+      printf '%s\n' 'Select at least one integration, or q to cancel.' > /dev/tty
+    fi
+  done
+}
+
 prompt_targets() {
-  [ -n "$DETECTED" ] || fail 'no supported tool found; install Jcode, Claude, Codex, Gemini, or OpenCode, or name one: install.sh jcode'
 
   if [ "${AZDAJA_INSTALL_TEST_MODE:-}" = local ] && [ "${AZDAJA_INSTALL_SELECTION+x}" = x ]; then
     answer=$AZDAJA_INSTALL_SELECTION
-    [ -n "$answer" ] || fail 'select at least one integration' 2
-    case "$answer" in
-      a|all)
-        INSTALL_NAMES=$DETECTED
-        ;;
-      *)
-        INSTALL_NAMES=
-        for choice in $(printf '%s' "$answer" | tr ',' ' '); do
-          selected=
-          index=1
-          for name in $DETECTED; do
-            if [ "$choice" = "$index" ] || [ "$choice" = "$name" ]; then
-              selected=$name
-              break
-            fi
-            index=$((index + 1))
-          done
-          [ -n "$selected" ] || fail "invalid integration selection '$choice'" 2
-          case " $INSTALL_NAMES " in
-            *" $selected "*) ;;
-            *) INSTALL_NAMES="${INSTALL_NAMES}${INSTALL_NAMES:+ }$selected" ;;
-          esac
-        done
-        ;;
-    esac
+    if selection_from_answer "$answer"; then
+      :
+    else
+      selection_status=$?
+      if [ "$selection_status" -eq 1 ]; then
+        fail "$SELECTION_ERROR" 2
+      fi
+      fail 'Select at least one integration, or q to cancel.' 2
+    fi
   else
     ( : < /dev/tty ) 2>/dev/null && ( : > /dev/tty ) 2>/dev/null || \
-      fail 'interactive selection needs a terminal; rerun with --all or name targets, for example: install.sh jcode,codex' 2
-    command -v stty >/dev/null 2>&1 || fail 'interactive selection requires stty; rerun with --all or name targets' 2
-    command -v dd >/dev/null 2>&1 || fail 'interactive selection requires dd; rerun with --all or name targets' 2
-    command -v od >/dev/null 2>&1 || fail 'interactive selection requires od; rerun with --all or name targets' 2
+      fail 'interactive selection needs a terminal; rerun: install.sh jcode,codex  (or install.sh --all)' 2
+    INTERACTIVE_INSTALL=true
+
+    if [ "${TERM:-}" = dumb ] || ! command -v stty >/dev/null 2>&1 || \
+       ! command -v dd >/dev/null 2>&1 || ! command -v od >/dev/null 2>&1; then
+      plain_prompt_targets
+    else
 
     menu_count=0
     for name in jcode claude codex gemini opencode; do
@@ -294,7 +349,8 @@ prompt_targets() {
     done
     menu_cursor=1
     menu_rendered=false
-    menu_lines=$((menu_count + 2))
+    menu_message=
+    menu_lines=$((menu_count + 3))
 
     render_menu() {
       if [ "$menu_rendered" = true ]; then
@@ -318,7 +374,8 @@ prompt_targets() {
         fi
         menu_index=$((menu_index + 1))
       done
-      printf '\r\033[K↑/↓ or j/k move  space toggle  a found  n none  enter continue  q cancel\n' > /dev/tty
+      printf '\r\033[K↑/↓ or j/k move  Space toggle  a detected  n none  Enter install  q cancel\n' > /dev/tty
+      printf '\r\033[K%s\n' "$menu_message" > /dev/tty
       menu_rendered=true
     }
 
@@ -330,7 +387,7 @@ prompt_targets() {
     restore_menu_terminal() {
       stty "$menu_stty" < /dev/tty >/dev/null 2>&1 || true
     }
-    trap 'restore_menu_terminal; printf "\n" > /dev/tty; exit 130' HUP INT TERM
+    trap 'restore_menu_terminal; printf "\n" > /dev/tty; cancel_install' HUP INT TERM
     stty -echo -icanon min 0 time 1 < /dev/tty || {
       restore_menu_terminal
       trap - HUP INT TERM
@@ -348,7 +405,7 @@ prompt_targets() {
           if [ -z "$menu_escape_1" ]; then
             restore_menu_terminal
             trap - HUP INT TERM
-            fail 'cancelled by user' 130
+            cancel_install
           fi
           menu_escape_2=$(read_menu_byte)
           if [ "$menu_escape_1" = 91 ]; then
@@ -365,7 +422,7 @@ prompt_targets() {
           else
             restore_menu_terminal
             trap - HUP INT TERM
-            fail 'cancelled by user' 130
+            cancel_install
           fi
           ;;
         106)
@@ -377,20 +434,17 @@ prompt_targets() {
           render_menu
           ;;
         32)
-          eval "menu_found=\$menu_found_$menu_cursor"
-          if [ "$menu_found" = true ]; then
-            eval "menu_selected=\$menu_selected_$menu_cursor"
-            if [ "$menu_selected" = true ]; then
-              eval "menu_selected_$menu_cursor=false"
-            else
-              eval "menu_selected_$menu_cursor=true"
-            fi
-            render_menu
+          menu_message=
+          eval "menu_selected=\$menu_selected_$menu_cursor"
+          if [ "$menu_selected" = true ]; then
+            eval "menu_selected_$menu_cursor=false"
           else
-            printf '\a' > /dev/tty
+            eval "menu_selected_$menu_cursor=true"
           fi
+          render_menu
           ;;
         97)
+          menu_message=
           menu_index=1
           while [ "$menu_index" -le "$menu_count" ]; do
             eval "menu_found=\$menu_found_$menu_index"
@@ -404,6 +458,7 @@ prompt_targets() {
           render_menu
           ;;
         110)
+          menu_message=
           menu_index=1
           while [ "$menu_index" -le "$menu_count" ]; do
             eval "menu_selected_$menu_index=false"
@@ -414,7 +469,7 @@ prompt_targets() {
         113)
           restore_menu_terminal
           trap - HUP INT TERM
-          fail 'cancelled by user' 130
+          cancel_install
           ;;
         10|13)
           INSTALL_NAMES=
@@ -428,15 +483,17 @@ prompt_targets() {
             menu_index=$((menu_index + 1))
           done
           if [ -n "$INSTALL_NAMES" ]; then break; fi
-          printf '\a' > /dev/tty
+          menu_message='Select at least one integration, or q to cancel.'
+          render_menu
           ;;
       esac
     done
     restore_menu_terminal
     trap - HUP INT TERM
+    fi
   fi
 
-  [ -n "$INSTALL_NAMES" ] || fail 'select at least one integration' 2
+  [ -n "$INSTALL_NAMES" ] || fail 'Select at least one integration, or q to cancel.' 2
   HARNESS=
   for name in $INSTALL_NAMES; do
     HARNESS="${HARNESS}${HARNESS:+,}$name"
@@ -557,6 +614,32 @@ if [ -z "$BIN_DIR" ]; then
 fi
 BIN_DIR=${BIN_DIR:-$HOME/.local/bin}
 
+DEST=$BIN_DIR/azdaja
+ALIAS=$BIN_DIR/az
+printf '\nPlan:\n'
+printf '  Download: %s/%s\n' "$BASE_URL" "$ASSET"
+printf '  Verify: %s/SHA256SUMS\n' "$BASE_URL"
+printf '  Write command: %s\n' "$DEST"
+printf '  Write alias: %s if the name is free\n' "$ALIAS"
+printf '  Write documents: %s\n' "$DOC_DIR"
+printf '  Write integrations:\n'
+for harness in $INSTALL_NAMES; do
+  printf '    %s -> %s\n' "$harness" "$(harness_target "$harness")"
+done
+if [ "$INTERACTIVE_INSTALL" = true ]; then
+  while :; do
+    printf '\nPress Enter to install, or q to cancel. ' > /dev/tty
+    if ! IFS= read -r plan_answer < /dev/tty; then
+      cancel_install
+    fi
+    case "$plan_answer" in
+      '') break ;;
+      q|Q) cancel_install ;;
+      *) printf '%s\n' 'Press Enter to install, or q to cancel.' > /dev/tty ;;
+    esac
+  done
+fi
+
 
 # Stage and verify entirely outside HOME. Failure before verification must not
 # create the binary directory, managed harness files, configuration, or alias.
@@ -573,8 +656,6 @@ CONFIG_CREATED=false
 OWNER_CREATED=false
 ALIAS_CREATED=false
 ALIAS_REMOVED=false
-DEST=
-ALIAS=
 CONFIG_PATH=
 CONFIG_OWNER=
 DOC_LICENSE=$DOC_DIR/LICENSE
@@ -733,8 +814,6 @@ case "$VERSION_OUTPUT" in
 esac
 complete_stage 'Verifying SHA-256'
 
-DEST=$BIN_DIR/azdaja
-ALIAS=$BIN_DIR/az
 CONFIG_PATH=$BIN_DIR/azdaja-config.toml
 CONFIG_OWNER=$BIN_DIR/azdaja-config.toml.managed
 OWNER_MAGIC=azdaja-installer-owned-config-v1
@@ -891,14 +970,6 @@ for harness in $INSTALL_NAMES; do
   [ -n "$PRIMARY_TARGET" ] || PRIMARY_TARGET=$TARGET
 done
 
-printf 'Plan: install azdaja v%s\n' "$VERSION"
-printf 'Command: %s\n' "$DEST"
-printf 'Alias: %s\n' "$ALIAS"
-printf 'Documents: %s\n' "$DOC_DIR"
-for harness in $INSTALL_NAMES; do
-  printf 'Integration: %s -> %s\n' "$harness" "$(harness_target "$harness")"
-done
-
 # The complete harness and document preflights are read-only. Start one shell
 # transaction; the Rust harness mutation remains independently transactional.
 # Rollback uses the original binary path entry itself (rename), never a recursive copy.
@@ -935,6 +1006,7 @@ if [ "$DOC_STATE" = legacy-v1 ]; then
 fi
 
 if [ "$DOC_STATE" = fresh ]; then
+  CURRENT_STAGE='Writing documents'
   printf '%s\n' 'Writing documents...'
   TO_CREATE=
   CURRENT_DIR=$DOC_DIR
@@ -982,12 +1054,19 @@ if [ "$DOC_STATE" = fresh ]; then
   DOC_STAGE_LICENSE=
   DOC_STAGE_NOTICES=
   DOC_STAGE_OWNER=
+  printf '%s\n' 'Writing documents... ok'
+  CURRENT_STAGE='Staging files'
+else
+  printf '%s\n' 'Writing documents... already current'
 fi
 
 # Commit the verified Rust harness transaction after document creation. If it
 # refuses or rolls back, the shell trap removes the fresh document set.
+CURRENT_STAGE='Writing tool integrations'
 printf '%s\n' 'Writing tool integrations...'
 "$TMP/azdaja" install "$HARNESS" >/dev/null
+printf '%s\n' 'Writing tool integrations... ok'
+CURRENT_STAGE='Writing command'
 printf '%s\n' 'Writing command...'
 
 (umask 077 && mkdir -p "$BIN_DIR") || fail "cannot create binary directory $BIN_DIR"
@@ -1065,6 +1144,9 @@ else
     ALIAS_CREATED=true
   fi
 fi
+
+printf '%s\n' 'Writing command... ok'
+CURRENT_STAGE='Staging files'
 
 # Every preflighted standalone surface is committed. Subsequent cleanup is
 # best-effort and cannot turn the completed install into a reported failure.
