@@ -792,7 +792,8 @@ fn claim_heartbeat_loop(
         }
         match refresh_claim_heartbeat(state_root, challenge_hash, claim_hash) {
             Ok(true) => {}
-            Ok(false) | Err(_) => break,
+            Ok(false) => break,
+            Err(_) => continue,
         }
     }
 }
@@ -1196,8 +1197,16 @@ fn classify_bash(input: &Value) -> Requirement {
     Requirement::Memory
 }
 
+fn has_shell_expansion(command: &str) -> bool {
+    command.contains("$(")
+        || command.contains("${")
+        || command.contains('`')
+        || command.contains("<(")
+        || command.contains(">(")
+}
+
 fn is_git_build_test_lint_or_format(command: &str) -> bool {
-    if command.contains("$('") || command.contains("$(") || command.contains('`') {
+    if has_shell_expansion(command) {
         return false;
     }
     let mut saw_command = false;
@@ -1247,7 +1256,7 @@ fn is_git_build_test_lint_or_format(command: &str) -> bool {
 }
 
 fn git_workflow_requires_memory(command: &str) -> bool {
-    let has_shell_expansion = command.contains("$(") || command.contains('`');
+    let has_shell_expansion = has_shell_expansion(command);
     for segment in command.split(['\n', ';']).flat_map(|part| part.split("&&")) {
         for alternative in segment.split("||") {
             let segment = alternative.trim();
@@ -2187,6 +2196,48 @@ mod tests {
     }
 
     #[test]
+    fn unrecognized_bash_commands_fail_closed() {
+        for command in [
+            "cp src/lib.rs -",
+            "dd if=src/lib.rs of=/dev/stdout",
+            "base64 src/lib.rs",
+            "sed -n '1p' src/lib.rs",
+            "awk '{print}' src/lib.rs",
+            "head -n 1 src/lib.rs",
+            "tail -n 1 src/lib.rs",
+            "printf '%s' \"${SOURCE}\"",
+            "cat <(git status --short)",
+            "cargo run",
+            "git status > status.txt",
+            "python3 -c 'print(1)'",
+        ] {
+            assert_eq!(
+                classify_bash(&json!({"command": command})),
+                Requirement::Memory,
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn safe_command_extraction_preserves_only_recognized_wrappers() {
+        for command in [
+            "env -i git status --short",
+            "command git status --short",
+            "exec -- git diff --stat",
+            "/usr/bin/env -i git diff --stat",
+        ] {
+            assert!(is_git_build_test_lint_or_format(command), "{command}");
+        }
+        for command in [
+            "xargs git status --short",
+            "env --unknown git status --short",
+        ] {
+            assert!(!is_git_build_test_lint_or_format(command), "{command}");
+        }
+    }
+
+    #[test]
     fn challenge_command_uses_the_running_executable() {
         assert_eq!(managed_binary_path().unwrap(), env::current_exe().unwrap());
     }
@@ -2318,6 +2369,24 @@ mod tests {
         .unwrap_err();
         assert!(duplicate.to_string().contains("already claimed"));
         drop(lease);
+    }
+
+    #[test]
+    fn completion_shuts_down_the_heartbeat_thread_promptly() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        let blocked = call(&state, &scratch.cwd, "read", broad_read(), NOW).unwrap();
+        let mut lease = claim_at(
+            &state,
+            &token(&blocked),
+            ChallengeInputScope::Repository(&scratch.cwd),
+            NOW + 1,
+        )
+        .unwrap();
+        assert!(lease.heartbeat.is_some());
+        complete_claimed_challenge(&mut lease, completed_repo(&scratch.cwd, "answer")).unwrap();
+        assert!(lease.completed);
+        assert!(lease.heartbeat.is_none());
     }
 
     #[test]
