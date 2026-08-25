@@ -69,6 +69,271 @@ extern "C" fn record_interrupt(signal: libc::c_int) {
     let _ = INTERRUPT_SIGNAL.compare_exchange(0, signal, Ordering::SeqCst, Ordering::SeqCst);
 }
 
+#[cfg(test)]
+mod recent_scope_status_tests {
+    use super::*;
+
+    fn root(name: &str) -> PathBuf {
+        let path = env::temp_dir().join(format!(
+            "azdaja-recent-scopes-{name}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&path).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        path
+    }
+
+    fn key(byte: u8) -> String {
+        format!("{byte:064x}")
+    }
+
+    fn memory_path(root: &Path, key: &str) -> PathBuf {
+        root.join("memory")
+            .join("scopes")
+            .join(format!("{key}.jsonl"))
+    }
+
+    fn observability_path(root: &Path, key: &str) -> PathBuf {
+        root.join("observability")
+            .join("scopes")
+            .join(format!("{key}.json"))
+    }
+
+    #[cfg(unix)]
+    fn set_mtime(path: &Path, seconds: i64) {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+        let path = CString::new(path.as_os_str().as_bytes()).unwrap();
+        let times = [
+            libc::timespec {
+                tv_sec: seconds as _,
+                tv_nsec: 0,
+            },
+            libc::timespec {
+                tv_sec: seconds as _,
+                tv_nsec: 0,
+            },
+        ];
+        assert_eq!(
+            unsafe { libc::utimensat(libc::AT_FDCWD, path.as_ptr(), times.as_ptr(), 0) },
+            0
+        );
+    }
+
+    fn add_memory(root: &Path, key: &str, text: &str) {
+        memory::append_at(
+            root,
+            Some(key),
+            memory::MemoryKind::Decision,
+            text.to_owned(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+    }
+
+    fn add_observability(root: &Path, key: &str, text: &str) {
+        let source = observability::SourceLocalAggregate::from_text(text);
+        observability::append_scoped_at(root, key, observability::RunKind::SoloFinal, &source)
+            .unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn recent_scopes_merge_exclude_current_order_ties_and_cap_three() {
+        let root = root("merge");
+        let scope = canonical_current_dir().unwrap();
+        let current = memory::current_scope_key(false).unwrap().unwrap();
+        add_memory(&root, &current, "current");
+        set_mtime(&memory_path(&root, &current), 500);
+
+        let first = key(0x11);
+        let second = key(0x22);
+        let third = key(0x33);
+        let fourth = key(0x44);
+        add_memory(&root, &first, "memory only, not selected");
+        add_observability(&root, &second, "observability only");
+        add_memory(&root, &third, "merged one");
+        add_memory(&root, &third, "merged two");
+        add_observability(&root, &third, "merged one");
+        add_observability(&root, &third, "merged two");
+        add_memory(&root, &fourth, "memory only");
+        set_mtime(&memory_path(&root, &first), 100);
+        set_mtime(&observability_path(&root, &second), 300);
+        set_mtime(&memory_path(&root, &third), 200);
+        set_mtime(&observability_path(&root, &third), 400);
+        set_mtime(&memory_path(&root, &fourth), 300);
+
+        let statuses = load_recent_scope_statuses(&root, &scope).unwrap();
+        assert_eq!(statuses.len(), 3);
+        assert_eq!(
+            statuses
+                .iter()
+                .map(|status| status.token.as_str())
+                .collect::<Vec<_>>(),
+            vec![third.as_str(), second.as_str(), fourth.as_str()]
+        );
+        assert_eq!(
+            (statuses[0].memory_records, statuses[0].source_summaries),
+            (2, 2)
+        );
+        assert_eq!(
+            (statuses[1].memory_records, statuses[1].source_summaries),
+            (0, 1)
+        );
+        assert_eq!(
+            (statuses[2].memory_records, statuses[2].source_summaries),
+            (1, 0)
+        );
+        assert!(
+            statuses
+                .iter()
+                .all(|status| valid_recent_scope_key(&status.token))
+        );
+        assert!(statuses.iter().all(|status| !status.token.contains('/')));
+        assert!(statuses.iter().all(|status| status.token != current));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn missing_scope_directories_are_empty_without_degradation() {
+        let root = root("missing");
+        let scope = canonical_current_dir().unwrap();
+        let mut degraded = false;
+        assert!(optional_recent_scope_statuses(&root, &scope, &mut degraded).is_empty());
+        assert!(!degraded);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn more_than_1024_entries_degrades_to_an_empty_enrichment() {
+        let root = root("entry-cap");
+        let directory = root.join("memory").join("scopes");
+        secure_dir(&directory).unwrap();
+        for index in 0..=MAX_RECENT_SCOPE_ENTRIES {
+            let path = directory.join(format!("{index:064x}.jsonl"));
+            drop(create_private_file(&path).unwrap());
+        }
+        let scope = canonical_current_dir().unwrap();
+        let mut degraded = false;
+        assert!(optional_recent_scope_statuses(&root, &scope, &mut degraded).is_empty());
+        assert!(degraded);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn unique_key_cap_is_enforced_before_inserting_another_candidate() {
+        let root = root("key-cap");
+        let directory = root.join("memory").join("scopes");
+        secure_dir(&directory).unwrap();
+        let extra = "f".repeat(64);
+        drop(create_private_file(&directory.join(format!("{extra}.jsonl"))).unwrap());
+        let mut candidates = BTreeMap::new();
+        for index in 0..MAX_RECENT_SCOPE_ENTRIES {
+            candidates.insert(format!("{index:064x}"), RecentScopeCandidate::default());
+        }
+        let error = scan_recent_scope_directory(
+            &directory,
+            ".jsonl",
+            RecentScopeLayer::Memory,
+            &BTreeSet::new(),
+            &mut candidates,
+            &mut 0,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("unique recent scopes"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn selected_corruption_degrades_atomically() {
+        let root = root("corrupt");
+        let directory = root.join("memory").join("scopes");
+        secure_dir(&directory).unwrap();
+        let path = directory.join(format!("{}.jsonl", key(0xaa)));
+        let mut file = create_private_file(&path).unwrap();
+        file.write_all(b"not json\n").unwrap();
+        drop(file);
+        let scope = canonical_current_dir().unwrap();
+        let mut degraded = false;
+        assert!(optional_recent_scope_statuses(&root, &scope, &mut degraded).is_empty());
+        assert!(degraded);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn selected_oversized_record_degrades_atomically() {
+        let root = root("oversized");
+        let directory = root.join("memory").join("scopes");
+        secure_dir(&directory).unwrap();
+        let path = directory.join(format!("{}.jsonl", key(0xab)));
+        let mut file = create_private_file(&path).unwrap();
+        file.write_all(&vec![b'x'; 600 * 1024]).unwrap();
+        drop(file);
+        let scope = canonical_current_dir().unwrap();
+        let mut degraded = false;
+        assert!(optional_recent_scope_statuses(&root, &scope, &mut degraded).is_empty());
+        assert!(degraded);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_scope_record_degrades_atomically() {
+        use std::os::unix::fs::symlink;
+        let root = root("symlink");
+        let directory = root.join("memory").join("scopes");
+        secure_dir(&directory).unwrap();
+        let target = root.join("target");
+        drop(create_private_file(&target).unwrap());
+        symlink(&target, directory.join(format!("{}.jsonl", key(0xbb)))).unwrap();
+        let scope = canonical_current_dir().unwrap();
+        let mut degraded = false;
+        assert!(optional_recent_scope_statuses(&root, &scope, &mut degraded).is_empty());
+        assert!(degraded);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_scope_directory_degrades_atomically() {
+        use std::os::unix::fs::symlink;
+        let root = root("symlink-directory");
+        let target = root.join("real-scopes");
+        secure_dir(&target).unwrap();
+        secure_dir(&root.join("memory")).unwrap();
+        symlink(&target, root.join("memory").join("scopes")).unwrap();
+        let scope = canonical_current_dir().unwrap();
+        let mut degraded = false;
+        assert!(optional_recent_scope_statuses(&root, &scope, &mut degraded).is_empty());
+        assert!(degraded);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn nonprivate_scope_directory_degrades_atomically() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = root("nonprivate-directory");
+        let directory = root.join("memory").join("scopes");
+        fs::create_dir_all(&directory).unwrap();
+        fs::set_permissions(&directory, fs::Permissions::from_mode(0o755)).unwrap();
+        let scope = canonical_current_dir().unwrap();
+        let mut degraded = false;
+        assert!(optional_recent_scope_statuses(&root, &scope, &mut degraded).is_empty());
+        assert!(degraded);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
 fn install_provider_interrupt_handler() -> Result<()> {
     #[cfg(unix)]
     {
@@ -1407,6 +1672,167 @@ fn scope_label(scope: Option<&Path>) -> String {
     }
 }
 
+const MAX_RECENT_SCOPE_ENTRIES: usize = 1024;
+const MAX_RECENT_SCOPES: usize = 3;
+
+#[derive(Default)]
+struct RecentScopeCandidate {
+    updated_unix: u64,
+    has_memory: bool,
+    has_observability: bool,
+}
+
+#[derive(Clone, Copy)]
+enum RecentScopeLayer {
+    Memory,
+    Observability,
+}
+
+fn valid_recent_scope_key(key: &str) -> bool {
+    key.len() == 64
+        && key
+            .as_bytes()
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
+}
+
+fn scan_recent_scope_directory(
+    directory: &Path,
+    suffix: &str,
+    layer: RecentScopeLayer,
+    excluded: &BTreeSet<String>,
+    candidates: &mut BTreeMap<String, RecentScopeCandidate>,
+    entries: &mut usize,
+) -> Result<()> {
+    match fs::symlink_metadata(directory) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+        Ok(metadata)
+            if metadata_is_link_or_reparse(&metadata) || !metadata.file_type().is_dir() =>
+        {
+            bail!("unsafe recent-scope directory: {}", directory.display())
+        }
+        Ok(_) => {}
+    }
+    let bound_directory = open_private_directory(directory)?;
+    validate_private_directory(&bound_directory, directory)?;
+    for entry in fs::read_dir(directory)
+        .with_context(|| format!("read recent-scope directory {}", directory.display()))?
+    {
+        *entries = entries
+            .checked_add(1)
+            .ok_or_else(|| anyhow!("recent-scope entry count overflow"))?;
+        if *entries > MAX_RECENT_SCOPE_ENTRIES {
+            bail!("too many recent-scope entries")
+        }
+        let entry =
+            entry.with_context(|| format!("read recent-scope entry in {}", directory.display()))?;
+        let name = entry
+            .file_name()
+            .into_string()
+            .map_err(|_| anyhow!("non-UTF-8 recent-scope entry"))?;
+        let Some(key) = name.strip_suffix(suffix) else {
+            continue;
+        };
+        if !valid_recent_scope_key(key) {
+            bail!("malformed recent-scope entry")
+        }
+        let path = entry.path();
+        let file = open_private_file(&path, false)?;
+        let metadata = bound_metadata(&file, &path)?;
+        let updated_unix = metadata
+            .modified()?
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| anyhow!("recent-scope timestamp predates the Unix epoch"))?
+            .as_secs();
+        if excluded.contains(key) {
+            continue;
+        }
+        if !candidates.contains_key(key) && candidates.len() == MAX_RECENT_SCOPE_ENTRIES {
+            bail!("too many unique recent scopes")
+        }
+        let candidate = candidates.entry(key.to_owned()).or_default();
+        candidate.updated_unix = candidate.updated_unix.max(updated_unix);
+        match layer {
+            RecentScopeLayer::Memory => candidate.has_memory = true,
+            RecentScopeLayer::Observability => candidate.has_observability = true,
+        }
+    }
+    bound_metadata(&bound_directory, directory)?;
+    Ok(())
+}
+
+fn load_recent_scope_statuses(root: &Path, scope: &Path) -> Result<Vec<RecentScopeStatus>> {
+    let mut excluded = BTreeSet::new();
+    if let Some(key) = memory::current_scope_key(false)? {
+        excluded.insert(key);
+    }
+    excluded.insert(observability::scope_key_for_path(scope)?);
+
+    let mut candidates = BTreeMap::new();
+    let mut entries = 0;
+    scan_recent_scope_directory(
+        &root.join("memory").join("scopes"),
+        ".jsonl",
+        RecentScopeLayer::Memory,
+        &excluded,
+        &mut candidates,
+        &mut entries,
+    )?;
+    scan_recent_scope_directory(
+        &root.join("observability").join("scopes"),
+        ".json",
+        RecentScopeLayer::Observability,
+        &excluded,
+        &mut candidates,
+        &mut entries,
+    )?;
+
+    let mut selected: Vec<_> = candidates.into_iter().collect();
+    selected.sort_by(|(left_key, left), (right_key, right)| {
+        right
+            .updated_unix
+            .cmp(&left.updated_unix)
+            .then_with(|| left_key.cmp(right_key))
+    });
+    selected.truncate(MAX_RECENT_SCOPES);
+    selected
+        .into_iter()
+        .map(|(token, candidate)| {
+            let memory_records = if candidate.has_memory {
+                memory::scoped_record_count_at(root, &token)?
+            } else {
+                0
+            };
+            let source_summaries = if candidate.has_observability {
+                observability::scoped_source_summary_count_at(root, &token)?
+            } else {
+                0
+            };
+            Ok(RecentScopeStatus {
+                token,
+                updated_unix: candidate.updated_unix,
+                memory_records,
+                source_summaries,
+            })
+        })
+        .collect()
+}
+
+fn optional_recent_scope_statuses(
+    root: &Path,
+    scope: &Path,
+    observability_degraded: &mut bool,
+) -> Vec<RecentScopeStatus> {
+    match load_recent_scope_statuses(root, scope) {
+        Ok(recent_scopes) => recent_scopes,
+        Err(_) => {
+            *observability_degraded = true;
+            Vec::new()
+        }
+    }
+}
+
 fn dashboard_snapshot_at(cfg: &Config, scope: Option<&Path>) -> Result<DashboardSnapshot> {
     let ids = match scope {
         Some(scope) => list_scoped(cfg, scope)?,
@@ -1427,6 +1853,10 @@ fn dashboard_snapshot_at(cfg: &Config, scope: Option<&Path>) -> Result<Dashboard
         }
     };
     let (provider, reasoning) = configured_default_command_provenance(cfg);
+    let recent_scopes = match scope {
+        Some(scope) => optional_recent_scope_statuses(&base, scope, &mut observability_degraded),
+        None => Vec::new(),
+    };
     Ok(DashboardSnapshot {
         scope: scope_label(scope),
         default_model: cfg.default_model.clone(),
@@ -1438,7 +1868,7 @@ fn dashboard_snapshot_at(cfg: &Config, scope: Option<&Path>) -> Result<Dashboard
         sessions,
         recent_observability,
         observability_degraded,
-        recent_scopes: Vec::new(),
+        recent_scopes,
     })
 }
 

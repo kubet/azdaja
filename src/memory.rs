@@ -280,7 +280,7 @@ pub fn single_line(text: &str) -> String {
         .collect()
 }
 
-fn current_scope_key(global: bool) -> Result<Option<String>> {
+pub(crate) fn current_scope_key(global: bool) -> Result<Option<String>> {
     if global {
         return Ok(None);
     }
@@ -303,6 +303,13 @@ fn ledger_path(root: &Path, scope_key: Option<&str>) -> Result<PathBuf> {
         None => root.join(MEMORY_DIR).join(GLOBAL_LEDGER),
     };
     Ok(path)
+}
+
+pub(crate) fn scoped_record_count_at(root: &Path, scope_key: &str) -> Result<usize> {
+    let path = ledger_path(root, Some(scope_key))?;
+    fs::symlink_metadata(&path)
+        .with_context(|| format!("read memory scope metadata {}", path.display()))?;
+    Ok(load_path(&path)?.len())
 }
 
 fn prepare_parent(root: &Path, scope_key: Option<&str>) -> Result<()> {

@@ -474,6 +474,13 @@ fn recent_path(root: &Path) -> std::path::PathBuf {
     root.join(RECENT_DIR).join(RECENT_FILE)
 }
 
+pub(crate) fn scoped_source_summary_count_at(root: &Path, scope_key: &str) -> Result<usize> {
+    let path = scoped_path(root, scope_key);
+    fs::symlink_metadata(&path)
+        .with_context(|| format!("read observability scope metadata {}", path.display()))?;
+    Ok(load_summary_path(&path)?.runs.len())
+}
+
 fn scopes_path(root: &Path) -> PathBuf {
     root.join(RECENT_DIR).join(SCOPES_DIR)
 }
@@ -492,7 +499,7 @@ fn append_recent_at(root: &Path, kind: RunKind, source: &SourceLocalAggregate) -
     append_recent_file(&recent_path(root), kind, source)
 }
 
-fn append_scoped_at(
+pub(crate) fn append_scoped_at(
     root: &Path,
     scope_key: &str,
     kind: RunKind,
