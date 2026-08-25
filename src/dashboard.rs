@@ -653,6 +653,7 @@ mod tests {
             },
         ];
         DashboardSnapshot {
+            recent_scopes: Vec::new(),
             scope: "azdaja · current folder".into(),
             default_model: "gpt-5.6-sol".into(),
             provider: "Jcode/OpenAI".into(),

@@ -1140,6 +1140,7 @@ mod tests {
             ],
             recent_observability,
             observability_degraded: false,
+            recent_scopes: Vec::new(),
         }
     }
 

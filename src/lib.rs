@@ -449,6 +449,14 @@ pub struct SessionStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecentScopeStatus {
+    pub token: String,
+    pub updated_unix: u64,
+    pub memory_records: usize,
+    pub source_summaries: usize,
+}
+
+#[derive(Debug)]
 pub struct DashboardSnapshot {
     /// Human-readable scope label. The label is derived from the current invocation and is not
     /// persisted in aggregate observability state.
@@ -466,6 +474,7 @@ pub struct DashboardSnapshot {
     /// Aggregate-only telemetry is optional. Core session state remains usable
     /// when an observability sidecar is missing, corrupt, or unsafe to read.
     pub observability_degraded: bool,
+    pub recent_scopes: Vec<RecentScopeStatus>,
 }
 fn now() -> u64 {
     SystemTime::now()
@@ -1429,6 +1438,7 @@ fn dashboard_snapshot_at(cfg: &Config, scope: Option<&Path>) -> Result<Dashboard
         sessions,
         recent_observability,
         observability_degraded,
+        recent_scopes: Vec::new(),
     })
 }
 
