@@ -263,6 +263,14 @@ fn recent_summary_line(snapshot: &DashboardSnapshot, timestamp: u64) -> Option<S
     ))
 }
 
+fn display_scope_token(token: &str) -> String {
+    if token.contains('/') || token.contains('\\') {
+        "unknown".to_owned()
+    } else {
+        clean(token)
+    }
+}
+
 fn recent_scope_line(scope: &RecentScopeStatus, timestamp: u64) -> String {
     let memories = if scope.memory_records == 1 {
         "memory"
@@ -276,11 +284,31 @@ fn recent_scope_line(scope: &RecentScopeStatus, timestamp: u64) -> String {
     };
     format!(
         "{} · {} {memories} · {} {summaries} · {} ago",
-        clean(&scope.token),
+        display_scope_token(&scope.token),
         scope.memory_records,
         scope.source_summaries,
         human_duration(timestamp.saturating_sub(scope.updated_unix))
     )
+}
+
+#[cfg(test)]
+mod recent_scope_tests {
+    use super::{RecentScopeStatus, recent_scope_line};
+
+    #[test]
+    fn recent_scope_line_uses_singular_words_and_hides_path_like_tokens() {
+        let scope = RecentScopeStatus {
+            token: "/Users/example/private-project".to_owned(),
+            updated_unix: 700,
+            memory_records: 1,
+            source_summaries: 1,
+        };
+
+        assert_eq!(
+            recent_scope_line(&scope, 1_000),
+            "unknown · 1 memory · 1 source summary · 5m ago"
+        );
+    }
 }
 
 fn session_line(session: &SessionStatus, timestamp: u64) -> String {
