@@ -1,5 +1,5 @@
 use azdaja::{
-    DashboardSnapshot, SessionStatus,
+    DashboardSnapshot, RecentScopeStatus, SessionStatus,
     observability::{MemoryConstellation, RecentRunAggregate, RunKind},
 };
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -263,6 +263,26 @@ fn recent_summary_line(snapshot: &DashboardSnapshot, timestamp: u64) -> Option<S
     ))
 }
 
+fn recent_scope_line(scope: &RecentScopeStatus, timestamp: u64) -> String {
+    let memories = if scope.memory_records == 1 {
+        "memory"
+    } else {
+        "memories"
+    };
+    let summaries = if scope.source_summaries == 1 {
+        "source summary"
+    } else {
+        "source summaries"
+    };
+    format!(
+        "{} · {} {memories} · {} {summaries} · {} ago",
+        clean(&scope.token),
+        scope.memory_records,
+        scope.source_summaries,
+        human_duration(timestamp.saturating_sub(scope.updated_unix))
+    )
+}
+
 fn session_line(session: &SessionStatus, timestamp: u64) -> String {
     let marker = if session.busy { "●" } else { "○" };
     let state = if session.busy { "running" } else { "idle" };
@@ -332,6 +352,15 @@ fn render_compact(
         output.push_str(&format!(
             "{}\n",
             truncate("recent    no source summary yet", width)
+        ));
+    }
+    for scope in snapshot.recent_scopes.iter().take(3) {
+        output.push_str(&format!(
+            "{}\n",
+            truncate(
+                &format!("project   {}", recent_scope_line(scope, timestamp)),
+                width
+            )
         ));
     }
     for session in snapshot.sessions.iter().take(3) {
@@ -502,6 +531,15 @@ fn render_at(
         DIM,
         color,
     ));
+    for (index, scope) in snapshot.recent_scopes.iter().take(3).enumerate() {
+        output.push_str(&row(
+            total,
+            if index == 0 { "projects" } else { "" },
+            &recent_scope_line(scope, timestamp),
+            "",
+            color,
+        ));
+    }
     for session in snapshot.sessions.iter().take(3) {
         output.push_str(&row(
             total,
