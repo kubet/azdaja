@@ -74,7 +74,7 @@ AZDAJA_DELTA_REPETITIONS=5 \
 python3 bench/claude-haiku-delta/run.py
 ```
 
-If an arm exceeds the bound, the runner records a sanitized `TimeoutExpired` row with return code `124`, continues the remaining scheduled arms, writes the result artifact, and exits nonzero. A timeout is never converted into a zero-token success or silently omitted from the paired result.
+If an arm exceeds the bound, the runner records a sanitized `TimeoutExpired` row with return code `124`, continues the remaining scheduled arms, writes the result artifact, and exits nonzero. A timeout is never converted into a zero-token success or silently omitted from the paired result. A zero-exit provider response without exactly one `Answer: <integer>` line is recorded as `AnswerContractError`, retained as an incorrect arm, and also makes the benchmark exit nonzero.
 
 Optional environment overrides:
 

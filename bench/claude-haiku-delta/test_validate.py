@@ -78,6 +78,31 @@ class ClaudeHaikuDeltaValidationTests(unittest.TestCase):
         finally:
             shutil.rmtree(campaign, ignore_errors=True)
 
+    def test_runner_labels_a_missing_exact_answer_contract(self) -> None:
+        campaign = Path(tempfile.mkdtemp(prefix="claude-delta-answer-contract-test-"))
+        envelope = {
+            "result": "I finished without the required final answer line.",
+            "num_turns": 1,
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+        }
+        completed = subprocess.CompletedProcess(
+            ["claude"],
+            0,
+            json.dumps(envelope).encode("utf-8"),
+            b"",
+        )
+        try:
+            with mock.patch.object(RUNNER.subprocess, "run", return_value=completed):
+                row = RUNNER.run_arm(campaign, 1, "native")
+            self.assertEqual(row["returncode"], 0)
+            self.assertFalse(row["timed_out"])
+            self.assertEqual(row["parse_error"], "AnswerContractError")
+            self.assertIsNone(row["answer"])
+            self.assertFalse(row["correct"])
+            self.assertEqual(row["result_text"], "")
+        finally:
+            shutil.rmtree(campaign, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

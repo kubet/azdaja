@@ -360,6 +360,8 @@ def run_arm(campaign: Path, repetition: int, arm: str) -> dict[str, Any]:
         try:
             envelope = json_envelope(completed.stdout)
             answer = exact_answer(result_text(envelope))
+            if answer is None:
+                parse_error = "AnswerContractError"
         except Exception as exc:
             parse_error = type(exc).__name__
     outer = usage_from_envelope(envelope)
