@@ -2,8 +2,13 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import shutil
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 BENCH = Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location("claude_delta_validate", BENCH / "validate.py")
@@ -11,6 +16,11 @@ if SPEC is None or SPEC.loader is None:
     raise RuntimeError("validator import failed")
 VALIDATOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VALIDATOR)
+RUNNER_SPEC = importlib.util.spec_from_file_location("claude_delta_runner", BENCH / "run.py")
+if RUNNER_SPEC is None or RUNNER_SPEC.loader is None:
+    raise RuntimeError("runner import failed")
+RUNNER = importlib.util.module_from_spec(RUNNER_SPEC)
+RUNNER_SPEC.loader.exec_module(RUNNER)
 
 
 class ClaudeHaikuDeltaValidationTests(unittest.TestCase):
@@ -27,6 +37,46 @@ class ClaudeHaikuDeltaValidationTests(unittest.TestCase):
     def test_gate_raises_instead_of_accepting_false(self) -> None:
         with self.assertRaises(VALIDATOR.ValidationError):
             VALIDATOR.require(False, "expected failure")
+
+    def test_runner_recomputes_the_frozen_v2_summary(self) -> None:
+        result = json.loads((BENCH / "results/v1-result.json").read_text(encoding="utf-8"))
+        summary = RUNNER.build_summary(result["rows"])
+        for key in (
+            "schema",
+            "pairs",
+            "native_correct",
+            "candidate_correct",
+            "native_mean_uncached",
+            "candidate_mean_uncached",
+            "native_median_uncached",
+            "candidate_median_uncached",
+            "native_mean_wall_seconds",
+            "candidate_mean_wall_seconds",
+            "native_median_wall_seconds",
+            "candidate_median_wall_seconds",
+            "native_mean_turns",
+            "candidate_mean_turns",
+            "candidate_exactly_one_successful_inner_each",
+            "resolved_candidate_inner_model",
+            "uncached_reduction_percent",
+            "wall_reduction_percent",
+        ):
+            self.assertEqual(summary[key], result[key], key)
+
+    def test_runner_records_a_timeout_instead_of_crashing(self) -> None:
+        campaign = Path(tempfile.mkdtemp(prefix="claude-delta-timeout-test-"))
+        try:
+            timeout = subprocess.TimeoutExpired(cmd=["claude"], timeout=RUNNER.TIMEOUT)
+            with mock.patch.object(RUNNER.subprocess, "run", side_effect=timeout):
+                row = RUNNER.run_arm(campaign, 1, "native")
+            self.assertEqual(row["returncode"], 124)
+            self.assertTrue(row["timed_out"])
+            self.assertEqual(row["parse_error"], "TimeoutExpired")
+            self.assertIsNone(row["answer"])
+            self.assertFalse(row["correct"])
+            self.assertEqual(row["result_text"], "")
+        finally:
+            shutil.rmtree(campaign, ignore_errors=True)
 
 
 if __name__ == "__main__":

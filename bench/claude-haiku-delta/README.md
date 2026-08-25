@@ -74,12 +74,15 @@ AZDAJA_DELTA_REPETITIONS=5 \
 python3 bench/claude-haiku-delta/run.py
 ```
 
+If an arm exceeds the bound, the runner records a sanitized `TimeoutExpired` row with return code `124`, continues the remaining scheduled arms, writes the result artifact, and exits nonzero. A timeout is never converted into a zero-token success or silently omitted from the paired result.
+
 Optional environment overrides:
 
 - `CLAUDE_BIN`: exact Claude Code executable
 - `AZDAJA_CLAUDE_BINARY`: exact managed Azdaja binary
 - `AZDAJA_DELTA_RESULT`: output JSON path
 - `AZDAJA_DELTA_REPETITIONS`: pair count
+- `AZDAJA_DELTA_TIMEOUT`: per-arm timeout in seconds, default `300`
 - `AZDAJA_DELTA_ARMS`: `native,candidate`, or one arm for diagnostics
 
 The frozen plan is [`plan.json`](plan.json). The sanitized result is [`results/v1-result.json`](results/v1-result.json).

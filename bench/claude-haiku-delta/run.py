@@ -23,7 +23,7 @@ AZDAJA = Path(os.environ.get("AZDAJA_CLAUDE_BINARY") or str(Path.home() / ".clau
 MODEL = "haiku"
 REPETITIONS = int(os.environ.get("AZDAJA_DELTA_REPETITIONS", "5"))
 ARM_FILTER = os.environ.get("AZDAJA_DELTA_ARMS", "native,candidate").split(",")
-TIMEOUT = 300
+TIMEOUT = int(os.environ.get("AZDAJA_DELTA_TIMEOUT", "300"))
 GOLD = 42
 
 spec = importlib.util.spec_from_file_location("delta_fixture", BENCH / "fixture.py")
@@ -340,16 +340,28 @@ def run_arm(campaign: Path, repetition: int, arm: str) -> dict[str, Any]:
         command = claude_command("Bash")
         prompt = CANDIDATE_PROMPT
     start = time.monotonic()
-    completed = subprocess.run(command, cwd=work, env=env, input=prompt, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=TIMEOUT, check=False)
+    timed_out = False
+    try:
+        completed = subprocess.run(command, cwd=work, env=env, input=prompt, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=TIMEOUT, check=False)
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        stdout = exc.stdout or b""
+        stderr = exc.stderr or b""
+        if isinstance(stdout, str):
+            stdout = stdout.encode("utf-8", "replace")
+        if isinstance(stderr, str):
+            stderr = stderr.encode("utf-8", "replace")
+        completed = subprocess.CompletedProcess(command, 124, stdout, stderr)
     wall = time.monotonic() - start
     envelope: dict[str, Any] = {}
-    parse_error = None
+    parse_error = "TimeoutExpired" if timed_out else None
     answer = None
-    try:
-        envelope = json_envelope(completed.stdout)
-        answer = exact_answer(result_text(envelope))
-    except Exception as exc:
-        parse_error = type(exc).__name__
+    if not timed_out:
+        try:
+            envelope = json_envelope(completed.stdout)
+            answer = exact_answer(result_text(envelope))
+        except Exception as exc:
+            parse_error = type(exc).__name__
     outer = usage_from_envelope(envelope)
     inner = inner_trace(trace) if trace is not None else {"attempts": 0, "successes": 0, "failures": 0, "usage_complete": True, "uncached": 0, "gross": 0, "models": [], "providers": []}
     measured_wrapper = wrapper_usage(inner_usage_path)
@@ -368,12 +380,13 @@ def run_arm(campaign: Path, repetition: int, arm: str) -> dict[str, Any]:
     if type(outer.get("gross")) is int and type(inner.get("gross")) is int:
         total_gross = int(outer["gross"]) + int(inner["gross"])
     row = {
-        "repetition": repetition,
+        "pair": repetition,
         "arm": arm,
         "model_alias": MODEL,
         "answer": answer,
         "correct": answer == GOLD,
         "returncode": completed.returncode,
+        "timed_out": timed_out,
         "wall_seconds": round(wall, 3),
         "parse_error": parse_error,
         "result_text": f"Answer: {answer}" if answer is not None else "",
@@ -389,12 +402,88 @@ def run_arm(campaign: Path, repetition: int, arm: str) -> dict[str, Any]:
         "stdout_bytes": len(completed.stdout),
         "stderr_bytes": len(completed.stderr),
     }
-    print("TRIAL " + json.dumps({key: row[key] for key in ("repetition", "arm", "correct", "answer", "returncode", "wall_seconds", "total_uncached", "num_turns")}, sort_keys=True), flush=True)
+    print("TRIAL " + json.dumps({key: row[key] for key in ("pair", "arm", "correct", "answer", "returncode", "timed_out", "wall_seconds", "total_uncached", "num_turns")}, sort_keys=True), flush=True)
     return row
 
 
 def mean(values: list[float]) -> float | None:
     return round(sum(values) / len(values), 3) if values else None
+
+
+def median(values: list[float]) -> float | int | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return round((ordered[middle - 1] + ordered[middle]) / 2, 3)
+
+
+def build_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    native = [row for row in rows if row["arm"] == "native"]
+    candidate = [row for row in rows if row["arm"] == "candidate"]
+    paired = []
+    for repetition in range(1, REPETITIONS + 1):
+        n = next(row for row in native if row["pair"] == repetition)
+        c = next(row for row in candidate if row["pair"] == repetition)
+        paired.append({
+            "pair": repetition,
+            "both_correct": n["correct"] and c["correct"],
+            "candidate_minus_native_wall_seconds": round(c["wall_seconds"] - n["wall_seconds"], 3),
+            "candidate_minus_native_uncached": (c["total_uncached"] - n["total_uncached"]) if type(c["total_uncached"]) is int and type(n["total_uncached"]) is int else None,
+        })
+    native_uncached = [row["total_uncached"] for row in native if type(row["total_uncached"]) is int]
+    candidate_uncached = [row["total_uncached"] for row in candidate if type(row["total_uncached"]) is int]
+    native_wall = [float(row["wall_seconds"]) for row in native]
+    candidate_wall = [float(row["wall_seconds"]) for row in candidate]
+    native_turns = [row["num_turns"] for row in native if type(row["num_turns"]) is int]
+    candidate_turns = [row["num_turns"] for row in candidate if type(row["num_turns"]) is int]
+    native_mean_uncached = mean(native_uncached)
+    candidate_mean_uncached = mean(candidate_uncached)
+    native_mean_wall = mean(native_wall)
+    candidate_mean_wall = mean(candidate_wall)
+    models = sorted({model for row in candidate for model in row["inner"].get("models", []) if isinstance(model, str)})
+    summary = {
+        "schema": "claude-code-haiku45-azdaja-delta/v2",
+        "fixture_sha256": hashlib.sha256(CONTEXT).hexdigest(),
+        "fixture_bytes": len(CONTEXT),
+        "gold": GOLD,
+        "model_alias": MODEL,
+        "pairs": REPETITIONS,
+        "native_correct": sum(row["correct"] for row in native),
+        "candidate_correct": sum(row["correct"] for row in candidate),
+        "native_mean_wall_seconds": native_mean_wall,
+        "candidate_mean_wall_seconds": candidate_mean_wall,
+        "native_median_wall_seconds": median(native_wall),
+        "candidate_median_wall_seconds": median(candidate_wall),
+        "native_mean_uncached": native_mean_uncached,
+        "candidate_mean_uncached": candidate_mean_uncached,
+        "native_median_uncached": median(native_uncached),
+        "candidate_median_uncached": median(candidate_uncached),
+        "native_mean_turns": round(mean(native_turns), 2) if native_turns else None,
+        "candidate_mean_turns": round(mean(candidate_turns), 2) if candidate_turns else None,
+        "candidate_exactly_one_successful_inner_each": all(row["inner"]["attempts"] == 1 and row["inner"]["successes"] == 1 and row["inner"]["failures"] == 0 and row["inner"]["usage_complete"] for row in candidate),
+        "resolved_candidate_inner_model": models[0] if len(models) == 1 else None,
+        "paired": paired,
+        "rows": rows,
+        "limitations": [
+            f"{REPETITIONS} paired trials on one deterministic synthetic projection task",
+            "Claude model alias haiku was used; resolved model identity is taken from Azdaja inner trace when available",
+            "candidate includes a Claude outer routing turn plus one Claude inner semantic turn",
+            "native may choose its own Read/Grep/Bash projection strategy",
+            "diagnostic evidence, not a broad superiority claim",
+        ],
+    }
+    if native_mean_uncached and candidate_mean_uncached is not None:
+        summary["uncached_reduction_percent"] = round((native_mean_uncached - candidate_mean_uncached) / native_mean_uncached * 100, 1)
+    else:
+        summary["uncached_reduction_percent"] = None
+    if native_mean_wall and candidate_mean_wall is not None:
+        summary["wall_reduction_percent"] = round((native_mean_wall - candidate_mean_wall) / native_mean_wall * 100, 1)
+    else:
+        summary["wall_reduction_percent"] = None
+    return summary
 
 
 def main() -> int:
@@ -422,46 +511,14 @@ def main() -> int:
             result_path.chmod(0o600)
             print("RESULT " + str(result_path), flush=True)
             return 0
-        paired = []
-        for repetition in range(1, REPETITIONS + 1):
-            n = next(row for row in native if row["repetition"] == repetition)
-            c = next(row for row in candidate if row["repetition"] == repetition)
-            paired.append({
-                "repetition": repetition,
-                "both_correct": n["correct"] and c["correct"],
-                "candidate_minus_native_wall_seconds": round(c["wall_seconds"] - n["wall_seconds"], 3),
-                "candidate_minus_native_uncached": (c["total_uncached"] - n["total_uncached"]) if type(c["total_uncached"]) is int and type(n["total_uncached"]) is int else None,
-            })
-        summary = {
-            "schema": "claude-code-haiku45-azdaja-delta/v1",
-            "fixture_sha256": hashlib.sha256(CONTEXT).hexdigest(),
-            "fixture_bytes": len(CONTEXT),
-            "gold": GOLD,
-            "model_alias": MODEL,
-            "repetitions": REPETITIONS,
-            "native_correct": sum(row["correct"] for row in native),
-            "candidate_correct": sum(row["correct"] for row in candidate),
-            "native_mean_wall_seconds": mean([row["wall_seconds"] for row in native]),
-            "candidate_mean_wall_seconds": mean([row["wall_seconds"] for row in candidate]),
-            "native_mean_uncached": mean([float(row["total_uncached"]) for row in native if type(row["total_uncached"]) is int]),
-            "candidate_mean_uncached": mean([float(row["total_uncached"]) for row in candidate if type(row["total_uncached"]) is int]),
-            "candidate_inner_exactly_one_success_each": all(row["inner"]["attempts"] == 1 and row["inner"]["successes"] == 1 and row["inner"]["failures"] == 0 and row["inner"]["usage_complete"] for row in candidate),
-            "paired": paired,
-            "rows": rows,
-            "limitations": [
-                "three paired trials on one deterministic synthetic projection task",
-                "Claude model alias haiku was used; resolved model identity is taken from Azdaja inner trace when available",
-                "candidate includes a Claude outer routing turn plus one Claude inner semantic turn",
-                "native may choose its own Read/Grep/Bash projection strategy",
-                "diagnostic evidence, not a broad superiority claim",
-            ],
-        }
+        summary = build_summary(rows)
         result_path = Path(os.environ.get("AZDAJA_DELTA_RESULT") or str(SCRATCH / "claude-haiku45-azdaja-delta-result.json"))
         result_path.write_text(json.dumps(summary, sort_keys=True, indent=2) + "\n", encoding="utf-8")
         result_path.chmod(0o600)
-        print("SUMMARY " + json.dumps({key: summary[key] for key in ("native_correct", "candidate_correct", "native_mean_wall_seconds", "candidate_mean_wall_seconds", "native_mean_uncached", "candidate_mean_uncached", "candidate_inner_exactly_one_success_each")}, sort_keys=True), flush=True)
+        print("SUMMARY " + json.dumps({key: summary[key] for key in ("native_correct", "candidate_correct", "native_mean_wall_seconds", "candidate_mean_wall_seconds", "native_mean_uncached", "candidate_mean_uncached", "candidate_exactly_one_successful_inner_each")}, sort_keys=True), flush=True)
         print("RESULT " + str(result_path), flush=True)
-        return 0
+        complete = all(row["returncode"] == 0 and not row["timed_out"] and type(row["answer"]) is int and type(row["total_uncached"]) is int and type(row["num_turns"]) is int for row in rows)
+        return 0 if complete else 2
     finally:
         shutil.rmtree(campaign, ignore_errors=True)
 

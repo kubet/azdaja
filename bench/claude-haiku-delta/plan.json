@@ -24,7 +24,7 @@
   },
   "runner": {
     "path": "run.py",
-    "sha256": "cd6749ec1b949674831a1e9699dcbd0844bb1e709bbf9168e499d5f5e54bab5f",
+    "sha256": "4bc411a8fadac5bb259a6ddf697d461dee2b7fc93ce2712d2737674c66768084",
     "timeout_seconds_per_arm": 300,
     "repetitions": 5,
     "retry": false,
