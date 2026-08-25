@@ -1,0 +1,475 @@
+{
+  "candidate_correct": 5,
+  "candidate_exactly_one_successful_inner_each": true,
+  "candidate_mean_turns": 2.0,
+  "candidate_mean_uncached": 10464.6,
+  "candidate_mean_wall_seconds": 27.638,
+  "candidate_median_uncached": 10027,
+  "candidate_median_wall_seconds": 24.151,
+  "fixture_bytes": 1306163,
+  "fixture_sha256": "cb2b72c4a945c07186044aad2ddfcb94fa9e1bbadd4bae03f59843568d655d79",
+  "gold": 42,
+  "limitations": [
+    "five paired trials on one deterministic synthetic metadata-projection task",
+    "candidate includes one outer Claude routing turn plus one inner Claude semantic turn",
+    "native may choose different Read/Grep/Bash strategies between trials",
+    "usage excludes cache-read tokens and includes cache creation, output, and all measured inner usage",
+    "diagnostic evidence, not a broad superiority or statistical-significance claim"
+  ],
+  "model_alias": "haiku",
+  "native_correct": 4,
+  "native_mean_turns": 11.2,
+  "native_mean_uncached": 25687.2,
+  "native_mean_wall_seconds": 67.745,
+  "native_median_uncached": 11904,
+  "native_median_wall_seconds": 46.754,
+  "paired": [
+    {
+      "both_correct": true,
+      "candidate_answer": 42,
+      "candidate_minus_native_uncached": -723,
+      "candidate_minus_native_wall_seconds": -14.842,
+      "native_answer": 42,
+      "pair": 1
+    },
+    {
+      "both_correct": true,
+      "candidate_answer": 42,
+      "candidate_minus_native_uncached": -150,
+      "candidate_minus_native_wall_seconds": -23.1,
+      "native_answer": 42,
+      "pair": 2
+    },
+    {
+      "both_correct": false,
+      "candidate_answer": 42,
+      "candidate_minus_native_uncached": -13397,
+      "candidate_minus_native_wall_seconds": -17.431,
+      "native_answer": 44,
+      "pair": 3
+    },
+    {
+      "both_correct": true,
+      "candidate_answer": 42,
+      "candidate_minus_native_uncached": -62072,
+      "candidate_minus_native_wall_seconds": -127.142,
+      "native_answer": 42,
+      "pair": 4
+    },
+    {
+      "both_correct": true,
+      "candidate_answer": 42,
+      "candidate_minus_native_uncached": 229,
+      "candidate_minus_native_wall_seconds": -18.018,
+      "native_answer": 42,
+      "pair": 5
+    }
+  ],
+  "pairs": 5,
+  "resolved_candidate_inner_model": "claude-haiku-4-5-20251001",
+  "rows": [
+    {
+      "answer": 42,
+      "arm": "native",
+      "correct": true,
+      "duration_api_ms": 47494,
+      "duration_ms": 47924,
+      "inner": {
+        "attempts": 0,
+        "failures": 0,
+        "gross": 0,
+        "models": [],
+        "providers": [],
+        "successes": 0,
+        "uncached": 0,
+        "usage_complete": true
+      },
+      "model_alias": "haiku",
+      "num_turns": 6,
+      "outer_usage": {
+        "cache_read": 58979,
+        "cache_write": 7250,
+        "gross": 70883,
+        "input": 49,
+        "output": 4605,
+        "uncached": 11904
+      },
+      "pair": 1,
+      "parse_error": null,
+      "result_text": "Answer: 42",
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 2673,
+      "stdout_sha256": "4f35830e3ffb6714efffa3468da9a455dd288412b23c7152c611c3cbe443c2ef",
+      "total_gross": 70883,
+      "total_uncached": 11904,
+      "wall_seconds": 48.24
+    },
+    {
+      "answer": 42,
+      "arm": "candidate",
+      "correct": true,
+      "duration_api_ms": 3325,
+      "duration_ms": 33063,
+      "inner": {
+        "attempts": 1,
+        "failures": 0,
+        "gross": 9068,
+        "models": [
+          "claude-haiku-4-5-20251001"
+        ],
+        "providers": [
+          "claude-code"
+        ],
+        "successes": 1,
+        "uncached": 9068,
+        "usage_complete": true
+      },
+      "model_alias": "haiku",
+      "num_turns": 2,
+      "outer_usage": {
+        "cache_read": 12508,
+        "cache_write": 1868,
+        "gross": 14621,
+        "input": 17,
+        "output": 228,
+        "uncached": 2113
+      },
+      "pair": 1,
+      "parse_error": null,
+      "result_text": "Answer: 42",
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 1505,
+      "stdout_sha256": "4578295b417ca702d8f9f5aec9449cc83325d7cf32f39cd6fec42c639cf8fd17",
+      "total_gross": 23689,
+      "total_uncached": 11181,
+      "wall_seconds": 33.398
+    },
+    {
+      "answer": 42,
+      "arm": "candidate",
+      "correct": true,
+      "duration_api_ms": 3653,
+      "duration_ms": 23321,
+      "inner": {
+        "attempts": 1,
+        "failures": 0,
+        "gross": 7863,
+        "models": [
+          "claude-haiku-4-5-20251001"
+        ],
+        "providers": [
+          "claude-code"
+        ],
+        "successes": 1,
+        "uncached": 7863,
+        "usage_complete": true
+      },
+      "model_alias": "haiku",
+      "num_turns": 2,
+      "outer_usage": {
+        "cache_read": 12508,
+        "cache_write": 1889,
+        "gross": 14672,
+        "input": 17,
+        "output": 258,
+        "uncached": 2164
+      },
+      "pair": 2,
+      "parse_error": null,
+      "result_text": "Answer: 42",
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 1505,
+      "stdout_sha256": "1a8769b52dcfe173bc6960f770172f40f2df0e4b1c345e4fd126bb588016e8ea",
+      "total_gross": 22535,
+      "total_uncached": 10027,
+      "wall_seconds": 23.654
+    },
+    {
+      "answer": 42,
+      "arm": "native",
+      "correct": true,
+      "duration_api_ms": 46002,
+      "duration_ms": 46413,
+      "inner": {
+        "attempts": 0,
+        "failures": 0,
+        "gross": 0,
+        "models": [],
+        "providers": [],
+        "successes": 0,
+        "uncached": 0,
+        "usage_complete": true
+      },
+      "model_alias": "haiku",
+      "num_turns": 4,
+      "outer_usage": {
+        "cache_read": 35352,
+        "cache_write": 5499,
+        "gross": 45529,
+        "input": 33,
+        "output": 4645,
+        "uncached": 10177
+      },
+      "pair": 2,
+      "parse_error": null,
+      "result_text": "Answer: 42",
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 3226,
+      "stdout_sha256": "959f42902e014e23898eb477445f7c277d6e989732b348bb385c7af2563c6599",
+      "total_gross": 45529,
+      "total_uncached": 10177,
+      "wall_seconds": 46.754
+    },
+    {
+      "answer": 44,
+      "arm": "native",
+      "correct": false,
+      "duration_api_ms": 39753,
+      "duration_ms": 40364,
+      "inner": {
+        "attempts": 0,
+        "failures": 0,
+        "gross": 0,
+        "models": [],
+        "providers": [],
+        "successes": 0,
+        "uncached": 0,
+        "usage_complete": true
+      },
+      "model_alias": "haiku",
+      "num_turns": 7,
+      "outer_usage": {
+        "cache_read": 78637,
+        "cache_write": 18403,
+        "gross": 102029,
+        "input": 57,
+        "output": 4932,
+        "uncached": 23392
+      },
+      "pair": 3,
+      "parse_error": null,
+      "result_text": "Answer: 44",
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 3324,
+      "stdout_sha256": "e5b998f330a322b70bcb5b1b28c6d8fa514f0a99f83a57ee6c57b5e3f6c69719",
+      "total_gross": 102029,
+      "total_uncached": 23392,
+      "wall_seconds": 40.725
+    },
+    {
+      "answer": 42,
+      "arm": "candidate",
+      "correct": true,
+      "duration_api_ms": 3993,
+      "duration_ms": 22947,
+      "inner": {
+        "attempts": 1,
+        "failures": 0,
+        "gross": 7792,
+        "models": [
+          "claude-haiku-4-5-20251001"
+        ],
+        "providers": [
+          "claude-code"
+        ],
+        "successes": 1,
+        "uncached": 7792,
+        "usage_complete": true
+      },
+      "model_alias": "haiku",
+      "num_turns": 2,
+      "outer_usage": {
+        "cache_read": 12508,
+        "cache_write": 1900,
+        "gross": 14711,
+        "input": 17,
+        "output": 286,
+        "uncached": 2203
+      },
+      "pair": 3,
+      "parse_error": null,
+      "result_text": "Answer: 42",
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 1505,
+      "stdout_sha256": "582538ff681bc1208f718b63492c86df86e32ff19dfee81b1b5454a8d44b5a5b",
+      "total_gross": 22503,
+      "total_uncached": 9995,
+      "wall_seconds": 23.294
+    },
+    {
+      "answer": 42,
+      "arm": "native",
+      "correct": true,
+      "duration_api_ms": 157559,
+      "duration_ms": 160526,
+      "inner": {
+        "attempts": 0,
+        "failures": 0,
+        "gross": 0,
+        "models": [],
+        "providers": [],
+        "successes": 0,
+        "uncached": 0,
+        "usage_complete": true
+      },
+      "model_alias": "haiku",
+      "num_turns": 35,
+      "outer_usage": {
+        "cache_read": 1615573,
+        "cache_write": 60406,
+        "gross": 1688900,
+        "input": 281,
+        "output": 12640,
+        "uncached": 73327
+      },
+      "pair": 4,
+      "parse_error": null,
+      "result_text": "Answer: 42",
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 4149,
+      "stdout_sha256": "326b6c607687e429b463e96e2c5f7567c408ffd397cff0b4ef8ed27271976b44",
+      "total_gross": 1688900,
+      "total_uncached": 73327,
+      "wall_seconds": 160.835
+    },
+    {
+      "answer": 42,
+      "arm": "candidate",
+      "correct": true,
+      "duration_api_ms": 4409,
+      "duration_ms": 33365,
+      "inner": {
+        "attempts": 1,
+        "failures": 0,
+        "gross": 8990,
+        "models": [
+          "claude-haiku-4-5-20251001"
+        ],
+        "providers": [
+          "claude-code"
+        ],
+        "successes": 1,
+        "uncached": 8990,
+        "usage_complete": true
+      },
+      "model_alias": "haiku",
+      "num_turns": 2,
+      "outer_usage": {
+        "cache_read": 12510,
+        "cache_write": 1935,
+        "gross": 14775,
+        "input": 17,
+        "output": 313,
+        "uncached": 2265
+      },
+      "pair": 4,
+      "parse_error": null,
+      "result_text": "Answer: 42",
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 1527,
+      "stdout_sha256": "6e8d66ba3f7e61d9d18addf46ea61286986f6d17087991d2b8bf873dfa87bd46",
+      "total_gross": 23765,
+      "total_uncached": 11255,
+      "wall_seconds": 33.693
+    },
+    {
+      "answer": 42,
+      "arm": "native",
+      "correct": true,
+      "duration_api_ms": 41431,
+      "duration_ms": 41845,
+      "inner": {
+        "attempts": 0,
+        "failures": 0,
+        "gross": 0,
+        "models": [],
+        "providers": [],
+        "successes": 0,
+        "uncached": 0,
+        "usage_complete": true
+      },
+      "model_alias": "haiku",
+      "num_turns": 4,
+      "outer_usage": {
+        "cache_read": 35415,
+        "cache_write": 5461,
+        "gross": 45051,
+        "input": 33,
+        "output": 4142,
+        "uncached": 9636
+      },
+      "pair": 5,
+      "parse_error": null,
+      "result_text": "Answer: 42",
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 3033,
+      "stdout_sha256": "2e71b1501550ccd8adf495d890e42bbeeb8bb142458fa475d49301ab48b18a4a",
+      "total_gross": 45051,
+      "total_uncached": 9636,
+      "wall_seconds": 42.169
+    },
+    {
+      "answer": 42,
+      "arm": "candidate",
+      "correct": true,
+      "duration_api_ms": 2825,
+      "duration_ms": 23797,
+      "inner": {
+        "attempts": 1,
+        "failures": 0,
+        "gross": 7890,
+        "models": [
+          "claude-haiku-4-5-20251001"
+        ],
+        "providers": [
+          "claude-code"
+        ],
+        "successes": 1,
+        "uncached": 7890,
+        "usage_complete": true
+      },
+      "model_alias": "haiku",
+      "num_turns": 2,
+      "outer_usage": {
+        "cache_read": 12510,
+        "cache_write": 1800,
+        "gross": 14485,
+        "input": 17,
+        "output": 158,
+        "uncached": 1975
+      },
+      "pair": 5,
+      "parse_error": null,
+      "result_text": "Answer: 42",
+      "returncode": 0,
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_bytes": 1502,
+      "stdout_sha256": "cef4d8573e39bb1ed01c5919a88eb01a471f0e4492d16f36b6042c16844f6ca6",
+      "total_gross": 22375,
+      "total_uncached": 9865,
+      "wall_seconds": 24.151
+    }
+  ],
+  "schema": "claude-code-haiku45-azdaja-delta/v2",
+  "uncached_reduction_percent": 59.3,
+  "wall_reduction_percent": 59.2
+}

@@ -1,0 +1,61 @@
+{
+  "schema": "claude-code-haiku45-azdaja-delta-plan/v1",
+  "claim_boundary": "Five-pair diagnostic on one deterministic synthetic metadata-projection task; not a broad superiority or statistical-significance claim.",
+  "model": {
+    "cli": "Claude Code 2.1.245",
+    "requested_alias": "haiku",
+    "resolved_candidate_inner_model": "claude-haiku-4-5-20251001",
+    "effort": "low"
+  },
+  "fixture": {
+    "generator": "../delta/fixture.py",
+    "generator_sha256": "7766da301184c649eb093431327a62e50832b035c833ea3ec458cf86b24dfd5e",
+    "generated_context_sha256": "cb2b72c4a945c07186044aad2ddfcb94fa9e1bbadd4bae03f59843568d655d79",
+    "context_bytes": 1306163,
+    "total_records": 306,
+    "selected_records": 64,
+    "expected_answer": 42
+  },
+  "prompts": {
+    "native": "../delta/prompt.txt",
+    "native_sha256": "5cb8c683c31cb6afce1b5c32427135a7f906d7cae5991fe31581716c1375b98a",
+    "candidate": "../delta/candidate-prefix.txt",
+    "candidate_sha256": "14cf4e18f8abdaf507730fcefc715db5a80d0a6c520c3e9edc93c89d73165b41"
+  },
+  "runner": {
+    "path": "run.py",
+    "sha256": "cd6749ec1b949674831a1e9699dcbd0844bb1e709bbf9168e499d5f5e54bab5f",
+    "timeout_seconds_per_arm": 300,
+    "repetitions": 5,
+    "retry": false,
+    "alternating_order": true
+  },
+  "arms": {
+    "native": {
+      "tools": ["Bash", "Read", "Grep"],
+      "azdaja_calls": 0
+    },
+    "candidate": {
+      "outer_tools": ["Bash(./azdaja-evaluate)"],
+      "lifecycle": ["start", "load", "exec", "final", "kill"],
+      "inner_attempt_ceiling": 1,
+      "inner_provider": "claude-code"
+    }
+  },
+  "accounting": {
+    "uncached_formula": "fresh input + cache creation + output; candidate total adds measured inner usage and excludes cache reads",
+    "complete_outer_and_inner_usage_required": true,
+    "quality_first": true
+  },
+  "result": {
+    "path": "results/v1-result.json",
+    "sha256": "83488924484aaebfc46513b0d452e36f98575e58b91e60682395c27c64d702ee",
+    "pairs": 5,
+    "native_correct": 4,
+    "candidate_correct": 5,
+    "native_median_uncached": 11904,
+    "candidate_median_uncached": 10027,
+    "native_median_wall_seconds": 46.754,
+    "candidate_median_wall_seconds": 24.151
+  }
+}
