@@ -179,7 +179,7 @@ mod recent_scope_status_tests {
                 .iter()
                 .map(|status| status.token.as_str())
                 .collect::<Vec<_>>(),
-            vec![third.as_str(), second.as_str(), fourth.as_str()]
+            vec![&third[..8], &second[..8], &fourth[..8]]
         );
         assert_eq!(
             (statuses[0].memory_records, statuses[0].source_summaries),
@@ -193,11 +193,13 @@ mod recent_scope_status_tests {
             (statuses[2].memory_records, statuses[2].source_summaries),
             (1, 0)
         );
-        assert!(
-            statuses
-                .iter()
-                .all(|status| valid_recent_scope_key(&status.token))
-        );
+        assert!(statuses.iter().all(|status| status.token.len() == 8));
+        assert!(statuses.iter().all(|status| {
+            status
+                .token
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        }));
         assert!(statuses.iter().all(|status| !status.token.contains('/')));
         assert!(statuses.iter().all(|status| status.token != current));
         fs::remove_dir_all(root).unwrap();
@@ -1810,7 +1812,7 @@ fn load_recent_scope_statuses(root: &Path, scope: &Path) -> Result<Vec<RecentSco
                 0
             };
             Ok(RecentScopeStatus {
-                token,
+                token: token[..8].to_owned(),
                 updated_unix: candidate.updated_unix,
                 memory_records,
                 source_summaries,

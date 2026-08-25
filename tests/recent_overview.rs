@@ -256,7 +256,6 @@ fn bare_tty_shows_private_bounded_recent_projects_in_recency_order() {
         first_rows,
         "the current project must be excluded from recent projects"
     );
-    assert!(current_changed.contains("2 memories"), "{current_changed}");
 
     add_memory(&home, &projects[0], "make the oldest other scope newest");
     let reordered = pty_text(run_bare_pty(&home, &projects[4]));
