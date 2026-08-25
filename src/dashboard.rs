@@ -452,7 +452,7 @@ fn render_list_at(
             CYAN,
             &truncate(
                 if snapshot.sessions.is_empty() {
-                    "next  map · start · solo · help"
+                    "next  map · start · solo · memory · list · list --global · doctor · help"
                 } else {
                     "commands  final <id> · kill <id> · map · help"
                 },
@@ -701,7 +701,9 @@ mod tests {
         assert!(rendered.contains("session   ● 01234567 running"));
         assert!(rendered.contains("next  map"));
         let wide = render_at(&data, false, 120, 1000);
-        assert!(wide.contains("next  map · list · memory · list --global · help"));
+        assert!(wide.contains(
+            "next  map · solo \"question\" -f ./document.txt · list · list --global · doctor · help"
+        ));
         assert!(!rendered.contains("q quit"));
         assert_plain_language(&rendered);
     }
@@ -773,7 +775,11 @@ mod tests {
         assert!(empty.contains("○ loaded"));
         assert!(empty.contains("variety 60%"));
         assert!(empty.contains("local metrics need attention"));
-        assert!(empty.contains("next  map · start · solo · help"));
+        assert!(
+            empty.contains(
+                "next  map · start · solo · memory · list · list --global · doctor · help"
+            )
+        );
         assert!(!empty.contains("kill <id>"));
         assert_plain_language(&empty);
     }

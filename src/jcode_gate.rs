@@ -535,7 +535,13 @@ fn handle_pre_tool(
         .filter(|value| !value.is_empty())
         .ok_or_else(|| contract("JCODE_HOOK_TOOL_NAME is required for pre_tool"))?;
     let input: Value = serde_json::from_slice(tool_input)?;
-    let requirement = classify_tool(tool_name, &input, 0, &context.canonical_cwd);
+    let requirement = if normalized_tool_name(tool_name) == "bash"
+        && is_exact_challenged_azdaja_command(&input, binary)
+    {
+        Requirement::Free
+    } else {
+        classify_tool(tool_name, &input, 0, &context.canonical_cwd)
+    };
     let storage = Storage::open(state_root)?;
     let heartbeat_now_ms = unix_time_millis()?;
     let mut state = storage
@@ -1195,6 +1201,69 @@ fn classify_bash(input: &Value) -> Requirement {
         return Requirement::Free;
     }
     Requirement::Memory
+}
+
+fn is_exact_challenged_azdaja_command(input: &Value, binary: &Path) -> bool {
+    let Some(command) = input.get("command").and_then(Value::as_str) else {
+        return false;
+    };
+    if has_unquoted_shell_control(command) || has_shell_expansion(command) {
+        return false;
+    }
+    let Some(words) = shlex::split(command) else {
+        return false;
+    };
+    if words.len() != 6 {
+        return false;
+    }
+    let Some(token) = words[0].strip_prefix(&format!("{CHALLENGE_ENV}=")) else {
+        return false;
+    };
+    is_lower_hex(token, 32)
+        && Path::new(&words[1]) == binary
+        && words[2] == "solo"
+        && !words[3].trim().is_empty()
+        && words[4] == "--repo"
+        && words[5] == "."
+}
+
+fn has_unquoted_shell_control(command: &str) -> bool {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Quote {
+        None,
+        Single,
+        Double,
+    }
+
+    let mut quote = Quote::None;
+    let mut escaped = false;
+    for character in command.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match quote {
+            Quote::Single => {
+                if character == '\'' {
+                    quote = Quote::None;
+                }
+            }
+            Quote::Double => match character {
+                '"' => quote = Quote::None,
+                '\\' => escaped = true,
+                '\n' | '\r' => return true,
+                _ => {}
+            },
+            Quote::None => match character {
+                '\'' => quote = Quote::Single,
+                '"' => quote = Quote::Double,
+                '\\' => escaped = true,
+                '\n' | '\r' | ';' | '|' | '>' | '<' | '&' => return true,
+                _ => {}
+            },
+        }
+    }
+    quote != Quote::None || escaped
 }
 
 fn has_shell_expansion(command: &str) -> bool {
@@ -2214,6 +2283,53 @@ mod tests {
             assert_eq!(
                 classify_bash(&json!({"command": command})),
                 Requirement::Memory,
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_the_exact_challenged_azdaja_command_bypasses_shell_memory_gating() {
+        let binary = Path::new("/managed/azdaja");
+        let token = "0123456789abcdef0123456789abcdef";
+        let exact = format!(
+            "{CHALLENGE_ENV}={token} /managed/azdaja solo \"summarize the repository\" --repo ."
+        );
+        assert!(is_exact_challenged_azdaja_command(
+            &json!({"command": exact}),
+            binary
+        ));
+        let spaced_binary = Path::new("/managed tools/azdaja");
+        let spaced = format!(
+            "{CHALLENGE_ENV}={token} {} solo \"summarize the repository\" --repo .",
+            shell_quote(spaced_binary)
+        );
+        assert!(is_exact_challenged_azdaja_command(
+            &json!({"command": spaced}),
+            spaced_binary
+        ));
+        let quoted_task_punctuation = format!(
+            "{CHALLENGE_ENV}={token} /managed/azdaja solo \"classify id|statement; compare <expected> & preserve output\" --repo ."
+        );
+        assert!(is_exact_challenged_azdaja_command(
+            &json!({"command": quoted_task_punctuation}),
+            binary
+        ));
+        for command in [
+            format!("{exact}; cat src/lib.rs"),
+            format!("{exact} && cat src/lib.rs"),
+            format!("{exact} | cat"),
+            format!("{CHALLENGE_ENV}={token} /managed/azdaja solo task;cat --repo ."),
+            format!("{CHALLENGE_ENV}={token} /managed/azdaja solo task|cat --repo ."),
+            format!("{CHALLENGE_ENV}={token} /managed/azdaja solo task&&cat --repo ."),
+            format!("{CHALLENGE_ENV}={token} /managed/azdaja solo task>victim --repo ."),
+            format!("{CHALLENGE_ENV}={token} /other/azdaja solo \"task\" --repo ."),
+            format!("{CHALLENGE_ENV}={token} /managed/azdaja solo \"$(cat src/lib.rs)\" --repo ."),
+            format!("{CHALLENGE_ENV}={token} /managed/azdaja solo \"task\" --repo .."),
+            "AZDAJA_JCODE_CHALLENGE=short /managed/azdaja solo \"task\" --repo .".to_owned(),
+        ] {
+            assert!(
+                !is_exact_challenged_azdaja_command(&json!({"command": command}), binary),
                 "{command}"
             );
         }

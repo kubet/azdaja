@@ -119,8 +119,8 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads()
         std::process::id()
     ));
     fs::create_dir(&dist).unwrap();
-    let darwin = dist.join("azdaja-v0.1.9-darwin-arm64");
-    let linux = dist.join("azdaja-v0.1.9-linux-x86_64");
+    let darwin = dist.join("azdaja-v0.1.10-darwin-arm64");
+    let linux = dist.join("azdaja-v0.1.10-linux-x86_64");
     fs::write(&darwin, b"raw darwin binary").unwrap();
     fs::write(&linux, b"raw linux binary").unwrap();
     let output = Command::new("sh")
@@ -147,8 +147,8 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads()
     let lines: Vec<_> = sums.lines().collect();
     assert_eq!(lines.len(), 4);
     for name in [
-        "azdaja-v0.1.9-darwin-arm64",
-        "azdaja-v0.1.9-linux-x86_64",
+        "azdaja-v0.1.10-darwin-arm64",
+        "azdaja-v0.1.10-linux-x86_64",
         "LICENSE",
         "THIRD-PARTY-NOTICES.md",
     ] {

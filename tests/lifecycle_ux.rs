@@ -12,8 +12,11 @@ use std::{
     process::{Command, Output, Stdio},
     sync::{Arc, Barrier},
     thread,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(debug_assertions)]
+use std::time::{Duration, Instant};
 
 struct Scratch(PathBuf);
 impl Scratch {
@@ -164,9 +167,14 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
     assert!(opencode_skill.contains("Its source load is the only `load`"));
     assert!(opencode_skill.contains("trap cleanup EXIT"));
     assert!(opencode_skill.contains("Use exactly one inline heredoc cell"));
-    assert!(opencode_skill.contains("OpenCode coworker lane (default)"));
+    assert!(opencode_skill.contains("## OpenCode coworker lane"));
     assert!(opencode_skill.contains("### Standard cell contract"));
     assert!(opencode_skill.contains("### Strict benchmark lane (explicit only)"));
+    assert!(
+        opencode_skill
+            .contains("If none disagree, skip adjudication and use the validated A labels")
+    );
+    assert!(opencode_skill.contains("Otherwise send one adjudication `llm_batch`"));
     assert!(opencode_skill.contains("normal conversational answer"));
     assert!(opencode_skill.contains("repository audits, code navigation"));
     assert!(opencode_skill.contains("a mere mention of Azdaja"));
@@ -818,6 +826,7 @@ fn fake_v2_and_mutated_owned_standalone_documents_refuse_before_mutation() {
     }
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn standalone_document_quarantine_rolls_back_every_owned_generation_at_every_step() {
     for state in ["current-v2", "previous-v2", "legacy-v1"] {
@@ -1006,6 +1015,7 @@ fn lifecycle_artifacts(home: &Path) -> Vec<PathBuf> {
     artifacts
 }
 
+#[cfg(debug_assertions)]
 fn run_with_lifecycle_env(
     binary: &Path,
     home: &Path,
@@ -1057,6 +1067,7 @@ fn concurrent_reinstall_barrier_two_workers_twenty_reinstalls_never_loses_target
     }
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn all_harness_install_and_uninstall_roll_back_every_injected_target_failure() {
     let scratch = Scratch::new("all-failpoints");
@@ -1120,6 +1131,7 @@ fn all_harness_install_and_uninstall_roll_back_every_injected_target_failure() {
     }
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn committed_install_cleanup_failure_keeps_the_successful_replacement_active() {
     let scratch = Scratch::new("committed-cleanup");
@@ -1152,6 +1164,7 @@ fn committed_install_cleanup_failure_keeps_the_successful_replacement_active() {
     assert!(assert_success(&run(binary, &scratch.0, &["doctor", "jcode"])).contains("PASS jcode"));
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn committed_uninstall_cleanup_failures_keep_every_removal_active_and_quarantined() {
     let scratch = Scratch::new("committed-uninstall-cleanup");
@@ -1216,6 +1229,7 @@ fn committed_uninstall_cleanup_failures_keep_every_removal_active_and_quarantine
     }));
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn jcode_config_replacement_after_final_validation_is_preserved_and_aborts_commit() {
     let scratch = Scratch::new("jcode-config-final-race");
@@ -1265,6 +1279,7 @@ fn jcode_config_replacement_after_final_validation_is_preserved_and_aborts_commi
     assert!(lifecycle_artifacts(&scratch.0).is_empty());
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn jcode_parent_replacement_at_final_barrier_never_reports_success_or_touches_foreign_tree() {
     let scratch = Scratch::new("jcode-parent-final-race");
@@ -1310,6 +1325,7 @@ fn jcode_parent_replacement_at_final_barrier_never_reports_success_or_touches_fo
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn unchanged_enabled_jcode_config_is_revalidated_before_reinstall_commit() {
     let scratch = Scratch::new("jcode-unchanged-install-race");
@@ -1350,6 +1366,7 @@ fn unchanged_enabled_jcode_config_is_revalidated_before_reinstall_commit() {
     assert!(scratch.0.join(".jcode/skills/azdaja").is_dir());
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn unchanged_absent_jcode_config_is_revalidated_before_uninstall_commit() {
     let scratch = Scratch::new("jcode-unchanged-uninstall-race");
@@ -1391,6 +1408,7 @@ fn unchanged_absent_jcode_config_is_revalidated_before_uninstall_commit() {
     assert!(scratch.0.join(".jcode/skills/azdaja").is_dir());
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn unchanged_absent_jcode_parent_replacement_aborts_without_touching_foreign_tree() {
     let scratch = Scratch::new("jcode-unchanged-parent-uninstall-race");
@@ -1462,6 +1480,7 @@ fn replacing_existing_jcode_config_preserves_unix_uid_gid_and_mode() {
     assert_eq!(replaced.permissions().mode() & 0o7777, original_mode);
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn jcode_config_permission_change_at_final_barrier_is_preserved_and_aborts_commit() {
     use std::os::unix::fs::PermissionsExt;
@@ -1509,6 +1528,7 @@ fn jcode_config_permission_change_at_final_barrier_is_preserved_and_aborts_commi
     assert!(!scratch.0.join(".jcode/skills/azdaja").exists());
 }
 
+#[cfg(debug_assertions)]
 fn wait_for_barrier(path: &Path) {
     let deadline = Instant::now() + Duration::from_secs(60);
     while !path.exists() {
@@ -1520,6 +1540,7 @@ fn wait_for_barrier(path: &Path) {
     }
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn late_unknown_and_changed_targets_abort_without_touching_other_selected_surfaces() {
     let scratch = Scratch::new("late-selected-change");
@@ -1577,6 +1598,7 @@ fn late_unknown_and_changed_targets_abort_without_touching_other_selected_surfac
     assert!(lifecycle_artifacts(&scratch.0).is_empty());
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn late_foreign_claude_rule_aborts_before_managed_target_commit() {
     let scratch = Scratch::new("late-claude-rule-change");

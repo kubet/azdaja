@@ -4634,9 +4634,15 @@ exit 9
     );
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
-    assert!(skill.contains("Azdaja 0.1.9") && skill.contains(dst.join("azdaja").to_str().unwrap()));
+    assert!(
+        skill.contains("Azdaja 0.1.10") && skill.contains(dst.join("azdaja").to_str().unwrap())
+    );
     assert!(skill.contains("one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle"));
-    assert!(skill.contains("llm_batch(prompts, workers=4)"));
+    assert!(skill.contains("llm_batch(prompts, workers=6)"));
+    assert!(skill.contains("Never rerun the whole transaction after a child call"));
+    assert!(skill.contains("Never call `llm` for batch classification"));
+    assert!(skill.contains("Do not emit per-record objects unless the user requested them"));
+    assert!(skill.contains("do not import modules"));
     assert!(skill.contains("Scan the complete loaded source"));
     assert!(skill.contains("Preserve source order, duplicates, and stable occurrence IDs"));
     assert!(skill.contains("create blind A/B prompts"));
@@ -4647,10 +4653,14 @@ exit 9
     assert!(skill.contains("Use native `sha256(text)`"));
     assert!(skill.contains("End with `FINAL(answer_dict)` exactly once"));
     assert!(!skill.contains("workers=16"));
+    let embedded_binary = dst.join("azdaja");
+    let embedded_binary = embedded_binary.to_str().unwrap();
+    let template_bytes = skill
+        .len()
+        .saturating_sub(skill.matches(embedded_binary).count() * embedded_binary.len());
     assert!(
-        skill.len() < 8_000,
-        "Claude skill grew to {} bytes",
-        skill.len()
+        template_bytes < 8_000,
+        "Claude skill template grew to {template_bytes} bytes"
     );
     let edited_config = fs::read_to_string(&cfg).unwrap().replace(
         "sub_llm_cmd = \"cat\"",
@@ -5027,6 +5037,31 @@ print('```python\nFINAL("repo-memory-ok")\n```')
         .to_owned();
     assert_eq!(challenge.len(), 32);
 
+    let challenged_command = format!(
+        "AZDAJA_JCODE_CHALLENGE={challenge} {} solo \"classify id|statement records; preserve <shape> & counts\" --repo .",
+        env!("CARGO_BIN_EXE_azdaja")
+    );
+    let allowed_challenge = hook(
+        "pre_tool",
+        Some("bash"),
+        &serde_json::json!({"command": challenged_command}).to_string(),
+    );
+    assert_eq!(
+        allowed_challenge.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&allowed_challenge.stderr)
+    );
+    let smuggled_read = hook(
+        "pre_tool",
+        Some("bash"),
+        &serde_json::json!({
+            "command": format!("{challenged_command}; cat src/lib.rs")
+        })
+        .to_string(),
+    );
+    assert_eq!(smuggled_read.status.code(), Some(2));
+
     for command in [
         "cp src/lib.rs /dev/stdout",
         "dd if=src/lib.rs bs=4096 count=1",
@@ -5296,7 +5331,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
         (
             "opencode",
             "OpenCode",
-            "session-sticky",
+            "Monty rejects generator expressions",
             xdg.join("opencode/skills/azdaja"),
         ),
     ];
@@ -5311,6 +5346,10 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
         let binary_text = binary.to_str().unwrap();
         assert!(binary.is_file(), "{harness} managed binary is missing");
         assert!(skill.contains(&format!("# Azdaja {}", env!("CARGO_PKG_VERSION"))));
+        assert!(
+            skill.contains("If none disagree, skip adjudication and use the validated A labels")
+        );
+        assert!(skill.contains("Otherwise send one adjudication `llm_batch`"));
         assert!(
             skill.contains(binary_text),
             "{harness} path was not embedded"

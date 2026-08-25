@@ -1241,11 +1241,11 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "claude" => Some((
             "Claude Code",
-            "<execution_state>Azdaja is active and session-sticky; stay in the main conversation.</execution_state>\n<execution_contract>\n1. The mandatory route is narrow: exhaustive semantic judgment or classification over one input that exceeds 1 MiB, exceeds 200 records, or requires judging every record.\n2. Use the standard coworker lane by default. Run one Bash lifecycle transaction with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; deterministic reduction is allowed and `llm_batch` is optional unless semantic judgment is required.\n3. Use the strict A/B, adjudication, JSON-only, fail-closed lane only for an explicit audit-grade, benchmark, or machine-graded exact-schema request.\n4. After a successful transaction, integrate `FINAL` into the normal conversational answer. Do not call Skill again in this session.\n5. Standard lane only: retry a failed managed transaction at most once. Then disclose the failure concisely and use a bounded fallback only when it can answer honestly. Strict lane remains fail-closed with no retry.\nFailure must not strand ordinary follow-up work.</execution_contract>",
+            "<execution_state>Azdaja is active and session-sticky; stay in the main conversation.</execution_state>\n<execution_contract>\n1. The mandatory route is narrow: exhaustive semantic judgment or classification over one input that exceeds 1 MiB, exceeds 200 records, or requires judging every record.\n2. Use the standard coworker lane by default. Run one Bash lifecycle transaction with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; deterministic reduction is allowed, while semantic judgment must use one ordered `llm_batch(..., workers=6)` pass.\n3. Use the strict A/B, adjudication, JSON-only, fail-closed lane only for an explicit audit-grade, benchmark, or machine-graded exact-schema request.\n4. After a successful transaction, integrate `FINAL` into the normal conversational answer. Do not call Skill again in this session.\n5. The first Bash lifecycle is the final tool call: answer from stdout or report failure. Never run a framing/diagnostic probe, another Azdaja command, or a whole-transaction retry after a child-model call. Never replace semantic judgment with keyword, regex, substring, or hand-written rules. Malformed or incomplete semantic output fails closed rather than fabricating labels.\nFailure must not strand ordinary follow-up work.</execution_contract>",
         )),
         "codex" => Some((
             "Codex",
-            "Codex skill activation is per-turn. Activate `$azdaja` only for this turn when the narrow trigger matches. OpenCode may also discover this Agent Skills compatibility profile, so its activation rules must remain safe under either host. Passive discovery, a repository name, or a mere mention is not activation; an explicit Azdaja request is. Standard is default: a scalar, final line, or exact format stays standard. Strict requires explicit redundancy or adjudication. Run one shell lifecycle with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; keep raw input in lowercase `source`. Standard uses deterministic projection, safe deduplication, one compact bounded batch, and no whole-transaction retry after child calls. Strict uses `workers=6`, canonical A/B, one adjudication, and no retry or fallback.",
+            "Codex skill activation is per-turn. Activate `$azdaja` only for this turn when the narrow trigger matches. OpenCode may also discover this Agent Skills compatibility profile, so its activation rules must remain safe under either host. Passive discovery, a repository name, or a mere mention is not activation; an explicit Azdaja request is. Standard is default: a scalar, final line, or exact format stays standard. Strict requires explicit redundancy or adjudication. NON-NEGOTIABLE TOOL BUDGET: after reading this skill, issue exactly one command execution by copying the managed wrapper literally. After that command returns, tool use is over even on exit 127 or any other failure. Run exactly one shell lifecycle with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; keep raw input in lowercase `source`. Standard uses deterministic projection, safe deduplication, one compact bounded batch; semantic judgments use one ordered `llm_batch(..., workers=6)` and never local label rules. The first shell lifecycle is the final tool call: answer from its stdout, or disclose its failure and stop immediately. Never start diagnostic, probe, or repair lifecycles after any failure; evaluations get no retry. Strict uses canonical A/B, one adjudication, and no retry or fallback.",
         )),
         "gemini" => Some((
             "Gemini",
@@ -1253,7 +1253,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "opencode" => Some((
             "OpenCode",
-            "Load only when the narrow trigger matches. Passive discovery, a repository name, or a mere mention is not activation; an explicit Azdaja request is. Once loaded, stay session-sticky. Standard is default: a scalar, final line, or exact format stays standard. Strict requires explicit redundancy or adjudication. Run one Bash lifecycle with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; keep raw input in lowercase `source`. Standard uses deterministic projection, safe deduplication, one compact bounded batch, and no whole-transaction retry after child calls. Strict uses `workers=6`, canonical A/B, one adjudication, and no retry or fallback.",
+            "Load only when the narrow trigger matches. Passive discovery or a mere mention is not activation; an explicit Azdaja request is. Set the one Bash call's `timeout` field to `300000` before sending it. Run exactly one lifecycle with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; keep raw input in lowercase `source`. The first lifecycle is the final tool call: answer from stdout, or disclose failure and stop without probes, retries, or fabrication. Monty rejects generator expressions: use explicit loops, never `any(... for ...)` or `all(... for ...)`. Semantic batches use `workers=6`.",
         )),
         _ => None,
     }
@@ -1289,33 +1289,55 @@ fn replace_skill_frontmatter_description(skill: &mut String, description: &str) 
 fn render_managed_skill(harness: &str, binary: &Path) -> String {
     let mut skill = SKILL.to_owned();
     if harness == "claude" {
-        skill = skill.replace("workers=8", "workers=4");
-        skill = skill.replace("at most 80 unique items", "at most 40 unique items");
-        skill = skill.replace("2 * shard_count <= 8", "2 * shard_count <= 16");
-        skill = skill.replace(
-            "## Claude Code and OpenCode",
-            "## Claude Code coworker lane (default)",
-        );
+        skill = skill.replace("workers=8", "workers=6");
+        skill = skill.replace("at most 80 unique items", "at most 256 unique items");
+        skill = skill.replace("80 KiB", "64 KiB");
+        skill = skill.replace("## Claude Code and OpenCode", "## Claude coworker lane");
         skill = skill.replace(
             "- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. OpenCode must not solve a matching task natively.\n",
             "",
         );
         skill = skill.replace(
+            "- Jcode: loading is awareness, not memory. On a broad-read block, put this request in `<user task>`, run the challenged `solo --repo .` once, and continue from its answer. Never retry the blocked read. Narrow reads, Git control, builds, and tests remain available.\n",
+            "",
+        );
+        skill = skill.replace(
+            "- Other hosts: one `solo` call only when its helpers are required; never retry or switch lanes.\n",
+            "",
+        );
+        skill = skill.replace(
+            "## Other-host `solo` lane\n\nUse `solo` once only when its exact-line or semantic helpers are required. Classify complete instances, preserve order and every occurrence, initialize zero-count labels, and verify domain, coverage, multiplicity, reductions, hashes, and schema before `FINAL`. Missing, malformed, failed, or disputed semantic output is an error. The runtime may make at most three root repair turns only before unsafe child-calling failures; the outer agent must never retry `solo` or switch lanes.\n",
+            "",
+        );
+        skill = skill.replace(
+            "- Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`.\n",
+            "- Use one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`.\n",
+        );
+        skill = skill.replace(
+            "- Keep raw input in Azdaja. Never copy it into host context or use a native full-source fallback.\n",
+            "- Keep raw input in Azdaja; no host copy or native full-source fallback.\n",
+        );
+        skill = skill.replace(
+            "- If asked, answer **yes**: Azdaja is installed and available as the local `az` virtual-memory tool. Never claim ignorance of Azdaja. Use only the embedded path below; bare `az` may be Azure CLI.\n",
+            "- If asked, answer **yes**: Azdaja is installed and available as the local `az` virtual-memory tool. Never claim ignorance of Azdaja; use the embedded path.\n",
+        );
+        skill = skill.replace(
             "Return the final value unchanged as the requested JSON object and sole response. Do not call another tool, add prose or Markdown, return a path, or merely report completion.\n\n### Cell contract",
             r#"### Standard cell contract
 
-Use this coworker lane by default. Load the source once and make one complete evidence pass.
+Use this coworker lane by default. Use the user-supplied input path verbatim; load once for one complete evidence pass. Do not search, pre-read, or query CLI help.
 
-- Deterministic parsing, filtering, counting, tail selection, checksums, and reductions are allowed inside the cell. Do not call a model for work that code can determine exactly.
-- `llm_batch` is optional. Use it only when the requested result needs semantic judgment. For semantic work, keep complete evidence and stable IDs, then use the fewest balanced shards in one ordered `llm_batch(..., workers=4)` pass. Add a later pass only if the user asks for audit-grade adjudication.
-- Validate coverage and the requested result. End with `FINAL(answer)` exactly once, passing the actual value.
-- If the managed transaction fails, retry it at most once in this standard lane. After that, disclose the failure concisely. Use a bounded fallback only when it can support an honest answer; never imply complete coverage from partial evidence.
+- Parse and reduce in code. Dedupe byte-identical evidence; retain occurrence IDs and multiplicities.
+- Semantic work uses shards of at most 256 unique items and 64 KiB each in one ordered `llm_batch(..., workers=6)`. Require compact positional JSON such as `{"labels":"TFT..."}`. Never call `llm` for batch classification; never use keyword, regex, substring, label-name, or hand-written semantic rules.
+- Validate coverage and the exact requested result shape. Do not emit per-record objects unless the user requested them. End with `FINAL(answer)` exactly once.
+- Fail on malformed, missing, extra, or `azdaja_error` output. The first Bash lifecycle is the final tool call. Never rerun the whole transaction after a child call or run a framing or diagnostic probe. Evaluations get no retry. Never fabricate labels or claim complete coverage from partial evidence.
+- `json` is preloaded; do not import modules, use host I/O, or catch failures to substitute labels.
 
-Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add useful prose or Markdown unless the user requested an exact format.
+Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add prose unless exact format was requested.
 
 ### Strict audit lane (explicit only)
 
-Use this lane only when the user explicitly requests audit-grade, benchmark, or machine-graded output with an exact schema. In this lane, the A/B views, global adjudication, exact JSON-only response, and fail-closed rules below are mandatory. Return stdout JSON unchanged as the sole assistant response.
+Use only for an explicit audit-grade, benchmark, or machine-graded exact schema. A/B, adjudication, JSON-only, and fail-closed rules below are mandatory. Return stdout JSON unchanged as the sole assistant response.
 
 #### Strict cell contract"#,
         );
@@ -1323,6 +1345,16 @@ Use this lane only when the user explicitly requests audit-grade, benchmark, or 
         skill = skill.replace("workers=8", "workers=6");
         skill = skill.replace("at most 80 unique items", "at most 256 unique items");
         skill = skill.replace("80 KiB", "64 KiB");
+        skill = skill.replacen(
+            "set -euo pipefail\nsid=\ncleanup() {",
+            "set -euo pipefail\nsid=\nstate=\ncleanup() {",
+            1,
+        );
+        skill = skill.replacen(
+            "  fi\n}\ntrap cleanup EXIT\nsid=",
+            "  fi\n}\ntrap cleanup EXIT\nstate=\"$(mktemp -d \"${TMPDIR:-/tmp}/azdaja-codex.XXXXXX\")\"\nchmod 700 \"$state\"\nexport AZDAJA_HOME=\"$state\"\nsid=",
+            1,
+        );
         skill = skill.replace(
             "## Claude Code and OpenCode",
             "## Codex coworker lane (default)",
@@ -1343,12 +1375,13 @@ Use this lane only when the user explicitly requests audit-grade, benchmark, or 
             "Return the final value unchanged as the requested JSON object and sole response. Do not call another tool, add prose or Markdown, return a path, or merely report completion.\n\n### Cell contract",
             r#"### Standard cell contract
 
-Use this Codex lane by default. Load once. A scalar, final line, or compact exact format stays standard unless redundant review or adjudication is explicit.
+Use this Codex lane by default. Use the supplied input path verbatim and run exactly one lifecycle. The wrapper creates an OS-managed private temporary `AZDAJA_HOME` and exports it before `start`, so Codex's default workspace sandbox does not need write access to the user's persistent Azdaja state. `kill` removes the session data; do not add a shell deletion command that Codex policy will reject. Copy the displayed wrapper byte-for-byte except for `<input-path>` and the Python cell. In particular, preserve the `sid="$('{{BIN}}' start)"` command substitution exactly, with no inserted whitespace inside the quoted executable path. After the first command execution returns, do not call any tool under any condition, including exit 127. When OpenCode loads this compatibility profile, set the one Bash call's `timeout` field to `300000` before sending it; never discover this by timing out first. Do not search for the input, inspect the managed binary, probe with smaller lifecycles, or query CLI help. A scalar, final line, or compact exact format stays standard unless redundant review or adjudication is explicit.
 
 - Parse and reduce in code. Project only declared-irrelevant fields. Dedupe byte-identical decision evidence; retain occurrence IDs and multiplicities, then expand labels.
-- Semantic work: make the fewest shards of at most 256 unique items and 64 KiB each; run one ordered `llm_batch(..., workers=6)`. Binary output is compact positional JSON such as `{"labels":"TFT..."}`, exactly one symbol per item, with no prose or per-item objects. No A/B or adjudication.
-- Validate complete coverage. End with `FINAL(answer)` exactly once, passing the actual value.
-- Fail on malformed, missing, extra, or `azdaja_error` output. Never rerun the whole transaction after a child call. Ordinary work may retry at most two failed shards once; evaluations get no retry. Otherwise disclose failure; never claim complete coverage from partial evidence.
+- Semantic work: make the fewest shards of at most 256 unique items and 64 KiB each; run one ordered `llm_batch(..., workers=6)`. Binary output is compact positional JSON such as `{"labels":"TFT..."}`, exactly one symbol per item, with no prose or per-item objects. Never call `llm` for batch classification and never use keyword, regex, substring, label-name, or hand-written semantic rules. No A/B or adjudication.
+- Validate complete coverage and the exact requested result shape. Do not emit per-record objects unless the user requested them. End with `FINAL(answer)` exactly once, passing the actual value.
+- Fail on malformed, missing, extra, or `azdaja_error` output. Never rerun the whole transaction after a child call, and never start a second lifecycle for setup, compile, validation, or provider failures. In this lane, evaluations get no retry. Disclose the failure and stop; never diagnose by running extra Azdaja commands or claim complete coverage from partial evidence.
+- Monty already provides `json`; do not import modules, use host I/O, or catch semantic failures to substitute default labels. Codex command transport can rewrite backslash escapes, so build line breaks with `chr(10)` and never place a `\n` escape inside a Python string literal.
 
 Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add useful prose or Markdown unless the user requested an exact format.
 
@@ -1371,6 +1404,22 @@ Use this lane only when the user explicitly requests redundant review or adjudic
             "",
         );
         skill = skill.replace(
+            "- Jcode: loading is awareness, not memory. On a broad-read block, put this request in `<user task>`, run the challenged `solo --repo .` once, and continue from its answer. Never retry the blocked read. Narrow reads, Git control, builds, and tests remain available.\n",
+            "",
+        );
+        skill = skill.replace(
+            "- Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`.\n",
+            "- Use one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`.\n",
+        );
+        skill = skill.replace(
+            "- Keep raw input in Azdaja. Never copy it into host context or use a native full-source fallback.\n",
+            "- Keep raw input in Azdaja; no host copy or native full-source fallback.\n",
+        );
+        skill = skill.replace(
+            "- If asked, answer **yes**: Azdaja is installed and available as the local `az` virtual-memory tool. Never claim ignorance of Azdaja. Use only the embedded path below; bare `az` may be Azure CLI.\n",
+            "- If asked, answer **yes**: Azdaja is installed and available as the local `az` virtual-memory tool. Never claim ignorance of Azdaja; use the embedded path.\n",
+        );
+        skill = skill.replace(
             "**Claude tool setting:** set the one Bash call's `timeout` field to `300000` before sending it; never discover this by timing out first.\n\n",
             "",
         );
@@ -1382,14 +1431,14 @@ Use this lane only when the user explicitly requests redundant review or adjudic
             "Return the final value unchanged as the requested JSON object and sole response. Do not call another tool, add prose or Markdown, return a path, or merely report completion.\n\n### Cell contract",
             r#"### Standard cell contract
 
-Use this lane by default. Load once. A scalar, final line, or compact exact format stays standard unless redundant review or adjudication is explicit.
+Use this lane by default. Set the Bash `timeout` field to `300000` before sending it. Load once; the first lifecycle is the final tool call. A scalar, final line, or compact exact format stays standard unless redundant review or adjudication is explicit.
 
-- Parse and reduce in code. Project only declared-irrelevant fields. Dedupe byte-identical decision evidence; retain occurrence IDs and multiplicities, then expand labels.
-- Semantic work: make the fewest shards of at most 256 unique items and 64 KiB each; run one ordered `llm_batch(..., workers=6)`. Binary output is compact positional JSON such as `{"labels":"TFT..."}`, exactly one symbol per item, with no prose or per-item objects. No A/B or adjudication.
-- Validate complete coverage. End with `FINAL(answer)` exactly once, passing the actual value.
-- Fail on malformed, missing, extra, or `azdaja_error` output. Never rerun the whole transaction after a child call. Ordinary work may retry at most two failed shards once; evaluations get no retry. Otherwise disclose failure; never claim complete coverage from partial evidence.
+- Parse and reduce in code. Project only declared-irrelevant fields. Preserve supplied IDs exactly; never synthesize ordinals. Dedupe byte-identical decision evidence; retain occurrence IDs and multiplicities, then expand labels.
+- Semantic work: make the fewest shards of at most 256 unique items and 64 KiB each; store each shard's item count while packing and never infer it from prompt lines. Run one ordered `llm_batch(..., workers=6)`. Binary output is compact positional JSON such as `{"labels":"TFT..."}`, exactly one symbol per item, with no prose or per-item objects. No A/B or adjudication.
+- Validate complete coverage with explicit loops. Monty does not support generator expressions: never write `any(... for ...)` or `all(... for ...)`; loop over each symbol and raise on the first invalid value. End with `FINAL(answer)` exactly once, passing the actual value.
+- Fail on malformed, missing, extra, or `azdaja_error` output. Never rerun the whole transaction after a child call; evaluations get no retry. Report failure and stop, with no framing probe or fabricated answer; never claim complete coverage from partial evidence.
 
-Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add useful prose or Markdown unless the user requested an exact format.
+Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add prose unless exact format was requested.
 
 ### Strict benchmark lane (explicit only)
 
@@ -7887,7 +7936,11 @@ mod tests {
             ("claude", "Claude Code", "<execution_state>"),
             ("codex", "Codex", "$azdaja"),
             ("gemini", "Gemini", "In Gemini"),
-            ("opencode", "OpenCode", "session-sticky"),
+            (
+                "opencode",
+                "OpenCode",
+                "Monty rejects generator expressions",
+            ),
         ] {
             let rendered = render_managed_skill(harness, binary);
             assert!(rendered.contains(&format!("## Harness activation: {display}")));
@@ -7909,23 +7962,26 @@ mod tests {
                     assert!(rendered.contains("repository audits, code navigation"));
                     assert!(rendered.contains("a mere mention of Azdaja"));
                 }
-                if harness == "claude" {
-                    assert!(rendered.contains("Load the source once"));
-                } else {
-                    assert!(rendered.contains("Load once"));
-                }
                 assert!(rendered.contains("installed and available local az virtual-memory tool"));
-                assert!(rendered.contains(
-                    "Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
-                ));
+                if matches!(harness, "claude" | "opencode") {
+                    assert!(rendered.contains(
+                        "Use one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
+                    ));
+                } else {
+                    assert!(rendered.contains(
+                        "Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
+                    ));
+                }
                 assert!(!rendered.contains("## Other-host `solo` lane"));
                 assert!(!rendered.contains("Other hosts: one `solo` call"));
                 if harness == "claude" {
-                    assert_eq!(rendered.matches("workers=4").count(), 3);
+                    assert_eq!(rendered.matches("workers=6").count(), 4);
                     assert!(rendered.contains("globally repack them into the fewest prompts"));
                     assert!(rendered.contains("exactly one literal `start`"));
-                    assert!(rendered.contains("at most 40 unique items"));
-                    assert!(rendered.contains("2 * shard_count <= 16"));
+                    assert!(rendered.contains("at most 256 unique items"));
+                    assert!(rendered.contains("64 KiB"));
+                    assert!(!rendered.contains("at most 40 unique items"));
+                    assert!(!rendered.contains("workers=4"));
                     assert!(!rendered.contains("workers=8"));
                 }
                 if matches!(harness, "codex" | "opencode") {
@@ -7965,6 +8021,7 @@ mod tests {
                 assert!(rendered.contains("installed and available local az virtual-memory tool"));
                 assert!(rendered.contains("before native inspection or broad manual reading"));
             }
+            assert!(rendered.contains("## Managed-skill awareness"));
             assert!(rendered.contains("virtual-memory tool"));
             assert!(rendered.contains(&shell_quote(binary)));
             assert!(!rendered.contains("{{VERSION}}"));
@@ -8031,16 +8088,25 @@ mod tests {
             "Project only declared-irrelevant fields",
             "Dedupe byte-identical decision evidence",
             "retain occurrence IDs and multiplicities",
+            "Preserve supplied IDs exactly; never synthesize ordinals",
             "Semantic work",
             "fewest shards",
             "at most 256 unique items and 64 KiB each",
+            "store each shard's item count while packing",
+            "never infer it from prompt lines",
             "compact positional JSON",
             r#"{"labels":"TFT..."}"#,
             "no prose or per-item objects",
             "normal conversational answer",
             "Never rerun the whole transaction",
             "evaluations get no retry",
+            "first lifecycle is the final tool call",
+            "no framing probe or fabricated answer",
+            "`timeout` field to `300000`",
             "never claim complete coverage from partial evidence",
+            "Monty does not support generator expressions",
+            "never write `any(... for ...)` or `all(... for ...)`",
+            "loop over each symbol and raise on the first invalid value",
         ] {
             assert!(
                 standard.contains(contract),
@@ -8060,7 +8126,8 @@ mod tests {
             "scalar answer, final line, or exact compact format alone does not select this lane",
             "create blind A/B prompts",
             "globally repack them into the fewest prompts",
-            "Send one adjudication `llm_batch`",
+            "skip adjudication and use the validated A labels",
+            "Otherwise send one adjudication `llm_batch`",
             "strict compact positional JSON output contract",
             "Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure",
             "Return stdout unchanged in the exact requested format",
@@ -8077,18 +8144,34 @@ mod tests {
     fn codex_and_opencode_efficiency_contract_is_bounded_and_fail_fast() {
         for harness in ["codex", "opencode"] {
             let rendered = render_managed_skill(harness, Path::new("/managed/azdaja"));
+            let normalized = rendered.to_ascii_lowercase();
             for required in [
                 "A benchmark label, scalar answer, final line, or exact compact format alone does not select this lane",
-                "deterministic projection, safe deduplication, one compact bounded batch",
                 "at most 256 unique items and 64 KiB each",
                 r#"{"labels":"TFT..."}"#,
-                "no whole-transaction retry after child calls",
                 "evaluations get no retry",
             ] {
                 assert!(
-                    rendered.contains(required),
+                    normalized.contains(&required.to_ascii_lowercase()),
                     "{harness} missing efficiency contract: {required}"
                 );
+            }
+            if harness == "codex" {
+                assert!(rendered.contains(
+                    "deterministic projection, safe deduplication, one compact bounded batch"
+                ));
+            } else {
+                for required in [
+                    "Project only declared-irrelevant fields",
+                    "Dedupe byte-identical decision evidence",
+                    "make the fewest shards of at most 256 unique items and 64 KiB each",
+                    "Run one ordered `llm_batch(..., workers=6)`",
+                ] {
+                    assert!(
+                        rendered.contains(required),
+                        "OpenCode missing bounded reduction contract: {required}"
+                    );
+                }
             }
             assert_eq!(rendered.matches("workers=6").count(), 4);
             assert!(!rendered.contains("workers=12"));
@@ -8112,13 +8195,22 @@ mod tests {
             .0;
         for contract in [
             "Use this coworker lane by default",
-            "Deterministic parsing, filtering, counting",
-            "`llm_batch` is optional",
-            "fewest balanced shards",
+            "Use the user-supplied input path verbatim",
+            "Parse and reduce in code",
+            "at most 256 unique items and 64 KiB each",
+            "one ordered `llm_batch(..., workers=6)`",
+            "Never call `llm` for batch classification",
+            "never use keyword, regex, substring, label-name, or hand-written semantic rules",
+            "exact requested result shape",
+            "Do not emit per-record objects unless the user requested them",
             "one complete evidence pass",
             "normal conversational answer",
-            "retry it at most once",
-            "bounded fallback only when it can support an honest answer",
+            "Never rerun the whole transaction after a child call",
+            "The first Bash lifecycle is the final tool call",
+            "framing or diagnostic probe",
+            "Evaluations get no retry",
+            "Never fabricate labels",
+            "do not import modules",
         ] {
             assert!(
                 standard.contains(contract),
@@ -8127,6 +8219,8 @@ mod tests {
         }
         assert!(!standard.contains("blind A/B"));
         assert!(!standard.contains("sole assistant response"));
+        assert!(!standard.contains("retry it at most once"));
+        assert!(!standard.contains("bounded fallback"));
 
         let strict = rendered
             .split_once("### Strict audit lane (explicit only)")
@@ -8135,7 +8229,8 @@ mod tests {
         for contract in [
             "create blind A/B prompts",
             "globally repack them into the fewest prompts",
-            "Send one adjudication `llm_batch`",
+            "skip adjudication and use the validated A labels",
+            "Otherwise send one adjudication `llm_batch`",
             "strict compact positional JSON output contract",
             "Treat `azdaja_error`, malformed, missing, extra, or unresolved output as failure",
             "sole assistant response",
@@ -8157,7 +8252,7 @@ mod tests {
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
         assert_eq!(
-            digest, "492ecb246c11cd400b2323e14dd88234729243dd51c57efe9c48bdb3dcf33725",
+            digest, "cb1fda17140352a53e2fbaf699f0449c2b2b8ca4bca2b27d311fe9586385d724",
             "OpenCode rendered bytes changed"
         );
     }
@@ -8226,14 +8321,56 @@ mod tests {
             "Never rerun the whole transaction after a child call",
             "evaluations get no retry",
             "create blind A/B prompts",
-            "Send one adjudication `llm_batch`",
+            "skip adjudication and use the validated A labels",
+            "Otherwise send one adjudication `llm_batch`",
         ] {
-            assert!(codex.contains(required), "Codex lacks {required:?}");
-            assert!(opencode.contains(required), "OpenCode lacks {required:?}");
+            assert!(
+                codex
+                    .to_ascii_lowercase()
+                    .contains(&required.to_ascii_lowercase()),
+                "Codex lacks {required:?}"
+            );
+            assert!(
+                opencode
+                    .to_ascii_lowercase()
+                    .contains(&required.to_ascii_lowercase()),
+                "OpenCode lacks {required:?}"
+            );
         }
         assert!(!codex.contains("## Other-host `solo` lane"));
         assert!(!codex.contains("before Read, Grep, or Bash inspection"));
         assert!(!codex.contains("Codex and OpenCode coworker lane (default)"));
+        for required in [
+            "NON-NEGOTIABLE TOOL BUDGET",
+            "copying the managed wrapper literally",
+            "After that command returns, tool use is over even on exit 127",
+            "OS-managed private temporary `AZDAJA_HOME`",
+            "default workspace sandbox does not need write access",
+            "`kill` removes the session data",
+            "do not add a shell deletion command",
+            r#"state="$(mktemp -d "${TMPDIR:-/tmp}/azdaja-codex.XXXXXX")""#,
+            r#"export AZDAJA_HOME="$state""#,
+            "Copy the displayed wrapper byte-for-byte",
+            "no inserted whitespace inside the quoted executable path",
+            "do not call any tool under any condition, including exit 127",
+            "run exactly one lifecycle",
+            "When OpenCode loads this compatibility profile",
+            "`timeout` field to `300000` before sending it",
+            "The first shell lifecycle is the final tool call",
+            "Do not search for the input",
+            "Never call `llm` for batch classification",
+            "never start a second lifecycle for setup, compile, validation, or provider failures",
+            "never diagnose by running extra Azdaja commands",
+            "Do not emit per-record objects unless the user requested them",
+            "build line breaks with `chr(10)`",
+            "never place a `\\n` escape inside a Python string literal",
+            "do not import modules",
+        ] {
+            assert!(
+                codex.contains(required),
+                "Codex lacks hardening clause {required:?}"
+            );
+        }
     }
 
     #[test]
@@ -8457,19 +8594,19 @@ mod tests {
         let expected = [
             (
                 "default",
-                "78c2b19e92f8620f6a3234c10cc3d5d6dc9e17c3f0e2da208b4d077e8ef8ab52",
+                "b53e165d81a5f4d14a296fd95c114f650aa5389edab9dd15096f2f1d02fd3102",
             ),
             (
                 "jcode",
-                "bac6f5197e8ac3bdeebb791096d440cb9b37bc446beddb20ab31d24cd2ebf3b0",
+                "39b09925fd26b626ac0a180f3cabceb87cf578dc2abd32a9336d4043cfc96a4d",
             ),
             (
                 "codex",
-                "41de2a17a4355b121bf1ab908a3014ad92e6ef9f566565fc19a84a120099907f",
+                "e207935ac0ee6c1bf8c11696a71d9d1cdadbb7bfa759acc8514a9f5afa055873",
             ),
             (
                 "gemini",
-                "ee0b6f4b729cf0151db6a222755aec997bd35689576445496b353cc7e2472522",
+                "9db0e99ab4f570d971c3f75c0add631935c15315f28c54bf0f4682bd9ce1b27e",
             ),
         ];
         let actual = expected

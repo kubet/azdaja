@@ -2,7 +2,7 @@
 set -eu
 set -f
 
-VERSION=0.1.9
+VERSION=0.1.10
 GLIBC_MIN=2.35
 RELEASE_BASE=https://azdaja.dev/releases/v$VERSION
 HARNESS=
@@ -1300,6 +1300,9 @@ printf 'Integrations: %s\n' "$DETECTION_REPORT"
 case " $INSTALL_NAMES " in
   *" jcode "*) printf '%s\n' 'Jcode memory handoff: configured' ;;
 esac
+if [ -n "$INSTALL_NAMES" ]; then
+  printf '%s\n' 'Reload: restart any already-open tool session; in Jcode run skill_manage reload_all'
+fi
 if [ "$ALIAS_SKIP" = true ]; then
   if [ "$ON_PATH" = true ]; then
     printf 'Next: azdaja doctor (az alias unavailable)\n'

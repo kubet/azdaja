@@ -678,12 +678,16 @@ mod tests {
 
     impl TestDir {
         fn new(label: &str) -> Self {
+            Self::new_in(&std::env::temp_dir(), label)
+        }
+
+        fn new_in(base: &Path, label: &str) -> Self {
             let nonce = NEXT_TEST_DIR.fetch_add(1, Ordering::Relaxed);
             let timestamp = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("clock after epoch")
                 .as_nanos();
-            let path = std::env::temp_dir().join(format!(
+            let path = base.join(format!(
                 "azdaja-repo-source-{label}-{}-{timestamp}-{nonce}",
                 std::process::id()
             ));
@@ -915,7 +919,9 @@ mod tests {
     fn skips_non_regular_entries() {
         use std::os::unix::net::UnixListener;
 
-        let root = TestDir::new("special");
+        // macOS's default TMPDIR is long enough that adding the fixture and socket names can
+        // exceed sockaddr_un::sun_path even though the repository code is behaving correctly.
+        let root = TestDir::new_in(Path::new("/tmp"), "special");
         root.write("safe", "ok");
         let socket_path = root.path().join("service.sock");
         let _listener = UnixListener::bind(&socket_path).expect("bind Unix socket");
