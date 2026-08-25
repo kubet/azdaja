@@ -2,7 +2,7 @@
 
 Use `azdaja` in every command below when the short `az` alias is unavailable.
 
-A bare interactive `azdaja` prints one static provider-free snapshot for the canonical working directory, then exits. It reads validated configuration, owner-only live-session state, and local numeric source summaries. A piped or otherwise non-terminal invocation keeps the stable five-line help output. Run `az map` for the optional full-screen view, or add `--global` to `list`, `map`, or `memory` when you explicitly need the user-global state root. `az --global` is a compact equivalent for the global static snapshot.
+A bare interactive `azdaja` prints one static provider-free snapshot for the canonical working directory, then exits. Current-folder detail remains primary. The snapshot may also include a bounded recent-project overview described below. A piped or otherwise non-terminal invocation keeps the stable five-line help output. Run `az map` for the optional full-screen view, or add `--global` to `list`, `map`, or `memory` when you explicitly need the user-global state root. `az --global` is a compact equivalent for the global static snapshot.
 
 ## Reading the snapshot
 
@@ -14,6 +14,10 @@ The snapshot uses plain operational labels:
 - `pattern` places summaries on a plain `repeated ← … → varied` axis and reports `avg variety`. The axis uses local aggregate numbers only. It is distributional, not semantic, and not a quality score.
 - `recent` describes the newest local source summary as loaded or finished, with size, line count, and age.
 - `scope` identifies whether the snapshot is for the current folder or the explicit global view. A current-folder snapshot does not mix sessions or source summaries from other folders.
+
+On a TTY, the bare snapshot may show at most three other recently active scopes after the current-folder detail. Candidates are merged from local memory and observability state, ordered by activity, and exclude the current scope. Each scope is represented only by a stable short hash token, never a raw path or basename. Memory-record and source-summary counts are bounded.
+
+Missing state omits the recent-project section. Unsafe, corrupt, or oversized state may remove optional metrics without affecting the primary snapshot. This overview reports recent activity, not confidence or quality. It does not change non-TTY output or explicit `list`, `map`, global, or machine-readable behavior, and it does not change evaluators or gates.
 
 Simultaneous live sessions may show different persisted default models because configuration can change between session starts or a session can be started with an explicit model. Individual model calls may also override a session's default. The console therefore does not claim one observed universal provider or model route.
 

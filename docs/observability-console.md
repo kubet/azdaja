@@ -12,6 +12,8 @@ The UI has three distinct surfaces:
 2. `az list` prints the current-folder live-session and source-summary table. When piped, it preserves stable raw session IDs for scripting. `az list --global` is the explicit user-global escape hatch.
 3. `az map` opens the optional full-screen view and refreshes at a low fixed rate. `az map --global` selects the same global scope. Narrow or incapable terminals receive the static snapshot instead.
 
+On a TTY, the bare snapshot may append a recent-project overview after the primary current-folder detail. Non-TTY output and explicit list, map, global, and machine-readable behavior are unchanged.
+
 ## Working-directory scope
 
 The default console is intentionally project-shaped without persisting a project name. Azdaja canonicalizes the invoking working directory and uses it to select:
@@ -83,6 +85,14 @@ The normal static snapshot uses these rows:
 - `next`: useful commands including `map`, `solo`, `list`, `list --global`, `doctor`, and `help`.
 
 The overview uses `avg variety`, not entropy notation or redundancy terminology. The value is computed from local source-summary numbers only. It is not a model score, semantic score, compression ratio, or confidence estimate.
+
+## Recent-project overview
+
+The bare interactive snapshot may show at most three other recently active scopes. It merges candidates from local memory and observability state, orders them by activity, and excludes the current scope.
+
+Scopes are represented only by stable short hash tokens. Raw paths and basename paths are never rendered. Memory-record and source-summary counts are bounded. Missing state omits the section; unsafe, corrupt, or oversized state degrades optional metrics rather than the primary current-folder detail.
+
+The overview is an activity summary, not a confidence or quality score. It does not change evaluator or gate behavior.
 
 ## Empty state
 
