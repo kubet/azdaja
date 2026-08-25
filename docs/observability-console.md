@@ -8,9 +8,19 @@ Azdaja keeps a complete UTF-8 source in a local evaluator and exposes selected e
 
 The UI has three distinct surfaces:
 
-1. A bare interactive `azdaja` prints a static provider-free snapshot and exits.
-2. `az list` prints the live-session and source-summary table. When piped, it preserves stable raw session IDs for scripting.
-3. `az map` opens the optional full-screen view and refreshes at a low fixed rate. Narrow or incapable terminals receive the static snapshot instead.
+1. A bare interactive `azdaja` prints a static provider-free snapshot for the current canonical working directory and exits.
+2. `az list` prints the current-folder live-session and source-summary table. When piped, it preserves stable raw session IDs for scripting. `az list --global` is the explicit user-global escape hatch.
+3. `az map` opens the optional full-screen view and refreshes at a low fixed rate. `az map --global` selects the same global scope. Narrow or incapable terminals receive the static snapshot instead.
+
+## Working-directory scope
+
+The default console is intentionally project-shaped without persisting a project name. Azdaja canonicalizes the invoking working directory and uses it to select:
+
+- sessions whose creation metadata binds them to that directory;
+- aggregate source history written under a private hash-derived key in `observability/scopes`;
+- the `scope` row shown in the static and full-screen views.
+
+The path itself is not serialized into aggregate JSON. The global `observability/recent.json` remains an aggregate cross-folder history for explicit `--global` inspection and compatibility. New session operations (`load`, `exec`, `final`, and `kill`) require the same canonical directory as `start`. Older sessions without a binding remain readable, but are excluded from the default current-folder view and shown only globally; their completion history is also written globally rather than attributed to the invoking folder.
 
 ## Plain vocabulary
 
@@ -70,7 +80,7 @@ The normal static snapshot uses these rows:
 - `pattern`: `repeated ← … → varied · avg variety N%`;
 - `recent`: newest loaded or finished source summary;
 - `session`: up to three live sessions with status, age, and persisted default model;
-- `next`: useful commands including `map`, `solo`, `list`, `doctor`, and `help`.
+- `next`: useful commands including `map`, `solo`, `list`, `list --global`, `doctor`, and `help`.
 
 The overview uses `avg variety`, not entropy notation or redundancy terminology. The value is computed from local source-summary numbers only. It is not a model score, semantic score, compression ratio, or confidence estimate.
 
@@ -90,7 +100,7 @@ The configured `new work` row remains visible because it is known before any ses
 
 ## Narrow state
 
-Narrow terminals preserve the same meaning in sanitized line-oriented output. Values may be truncated, but the labels remain `status`, `new work`, `live`, `memory`, `pattern`, `recent`, and `session`. A terminal that is too small for the full-screen map receives this static fallback rather than a clipped interactive layout.
+Narrow terminals preserve the same meaning in sanitized line-oriented output. Values may be truncated, but the labels remain `status`, `scope`, `new work`, `live`, `memory`, `pattern`, `recent`, and `session`. A terminal that is too small for the full-screen map receives this static fallback rather than a clipped interactive layout.
 
 Control characters from configuration or state are removed before rendering. Tabs become spaces. Color obeys terminal capability and `NO_COLOR`.
 
@@ -148,6 +158,18 @@ Entropy is deterministic and exact for the locally measured source bytes. Its in
 
 Normal exit and panic restore raw mode, cursor visibility, and the previous terminal screen. Read or validation failures are sanitized and displayed as local errors. A corrupt or unsafe source-summary sidecar degrades observability without making core live-session state unavailable.
 
+## Entropy, uncertainty, and collective-agent boundaries
+
+The console computes exact Shannon entropy over the empirical UTF-8 byte histogram:
+
+```text
+H_byte = -sum(p_b * log2(p_b)), b in 0..255
+```
+
+This is a source-text distribution measurement. It is not the semantic entropy of sampled model answers and cannot be interpreted as calibrated correctness probability. Semantic entropy needs repeated answers plus semantic-equivalence clustering. Self-consistency and multi-agent debate show why repeated proposals can help on some tasks, but agreement can still share a common error. In Azdaja, disagreement is therefore a candidate escalation or abstention signal, never a headline “quality” number.
+
+For future agent memory, retain the narrow local-first pattern: inspectable records, typed properties, explicit `supports`/`supersedes`/`derived-from` links, provenance, append-only run history, and scope-first deterministic retrieval. Do not add a graph view, vector store, automatic reflection loop, or cross-project memory without an acceptance task that measures benefit and leakage.
+
 ## Non-goals
 
 The v0.1.8 console does not claim:
@@ -159,3 +181,5 @@ The v0.1.8 console does not claim:
 - coverage without an explicit denominator;
 - answer quality from byte variety;
 - privacy guarantees for fields outside the source-summary contract.
+
+Research references: [semantic entropy](https://www.nature.com/articles/s41586-024-07421-0), [self-consistency](https://arxiv.org/abs/2203.11171), [multi-agent debate](https://arxiv.org/abs/2305.14325), [Obsidian backlinks](https://help.obsidian.md/plugins/backlinks), and [Obsidian properties](https://help.obsidian.md/Editing+and+formatting/Properties).

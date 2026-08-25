@@ -428,6 +428,10 @@ struct Meta {
     monty: String,
     created: u64,
     sub_model: Option<String>,
+    /// Canonical working directory that owns this session. Older sessions may not have this
+    /// field and remain readable as legacy, unscoped state.
+    #[serde(default)]
+    cwd: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -445,6 +449,9 @@ pub struct SessionStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DashboardSnapshot {
+    /// Human-readable scope label. The label is derived from the current invocation and is not
+    /// persisted in aggregate observability state.
+    pub scope: String,
     pub default_model: String,
     /// Runner configured for new work, not a route observed from an existing session.
     pub provider: String,
@@ -531,6 +538,35 @@ pub fn state_home() -> Result<PathBuf> {
     debug_assert!(p.is_absolute());
     secure_dir(&p)?;
     Ok(p)
+}
+
+fn canonical_current_dir() -> Result<PathBuf> {
+    let cwd = env::current_dir().context("cannot resolve current working directory")?;
+    fs::canonicalize(&cwd).with_context(|| {
+        format!(
+            "cannot canonicalize current working directory {}",
+            cwd.display()
+        )
+    })
+}
+
+fn session_scope_matches(meta: &Meta, scope: &Path) -> bool {
+    meta.cwd.as_deref().is_some_and(|bound| bound == scope)
+}
+
+fn ensure_session_scope(sid: &str, meta: &Meta) -> Result<()> {
+    let Some(bound) = meta.cwd.as_deref() else {
+        // Sessions created before cwd binding was introduced remain usable. They are excluded from
+        // current-folder dashboards and are still visible through the explicit global view.
+        return Ok(());
+    };
+    let current = canonical_current_dir()?;
+    if bound != current {
+        bail!(
+            "session {sid} is scoped to a different working directory; run az from its originating directory"
+        )
+    }
+    Ok(())
 }
 #[cfg(unix)]
 fn metadata_matches(open: &fs::Metadata, path: &fs::Metadata) -> bool {
@@ -1035,9 +1071,7 @@ fn read_meta(dir: &Path) -> Result<Meta> {
     Ok(serde_json::from_slice(&bytes)?)
 }
 
-pub fn reap(cfg: &Config) -> Result<()> {
-    let base = state_home()?;
-    secure_dir(&base.join("locks"))?;
+fn reap_prompts(cfg: &Config, base: &Path) -> Result<()> {
     let prompt_dir = base.join("prompts");
     secure_dir(&prompt_dir)?;
     let prompt_age = cfg.idle_timeout.max(cfg.sub_timeout.saturating_mul(2));
@@ -1049,8 +1083,12 @@ pub fn reap(cfg: &Config) -> Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+fn reap_sessions(cfg: &Config, base: &Path, scope: Option<&Path>) -> Result<()> {
     let cutoff = SystemTime::now().checked_sub(Duration::from_secs(cfg.idle_timeout));
-    for e in fs::read_dir(&base)? {
+    for e in fs::read_dir(base)? {
         let e = e?;
         let name = e.file_name().to_string_lossy().into_owned();
         if !valid_sid(&name) || e.file_type()?.is_symlink() {
@@ -1060,9 +1098,18 @@ pub fn reap(cfg: &Config) -> Result<()> {
         let Ok(directory) = open_private_directory(&entry_path) else {
             continue;
         };
-        if validate_private_directory(&directory, &entry_path).is_err()
-            || !cutoff.is_some_and(|c| e.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < c))
-        {
+        if validate_private_directory(&directory, &entry_path).is_err() {
+            continue;
+        }
+        if let Some(scope) = scope {
+            let Ok(meta) = read_meta(&entry_path) else {
+                continue;
+            };
+            if !session_scope_matches(&meta, scope) {
+                continue;
+            }
+        }
+        if !cutoff.is_some_and(|c| e.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < c)) {
             continue;
         }
         let lock_path = base.join("locks").join(&name).with_extension("lock");
@@ -1077,10 +1124,10 @@ pub fn reap(cfg: &Config) -> Result<()> {
     }
     Ok(())
 }
-pub fn list(cfg: &Config) -> Result<Vec<String>> {
-    reap(cfg)?;
+
+fn session_ids(base: &Path) -> Result<Vec<String>> {
     let mut v = Vec::new();
-    for e in fs::read_dir(state_home()?)? {
+    for e in fs::read_dir(base)? {
         let e = e?;
         let n = e.file_name().to_string_lossy().into_owned();
         if valid_sid(&n) && e.file_type()?.is_dir() {
@@ -1089,6 +1136,26 @@ pub fn list(cfg: &Config) -> Result<Vec<String>> {
     }
     v.sort();
     Ok(v)
+}
+
+pub fn reap(cfg: &Config) -> Result<()> {
+    let base = state_home()?;
+    secure_dir(&base.join("locks"))?;
+    reap_prompts(cfg, &base)?;
+    reap_sessions(cfg, &base, None)
+}
+
+pub fn list(cfg: &Config) -> Result<Vec<String>> {
+    reap(cfg)?;
+    session_ids(&state_home()?)
+}
+
+fn list_scoped(cfg: &Config, scope: &Path) -> Result<Vec<String>> {
+    let base = state_home()?;
+    secure_dir(&base.join("locks"))?;
+    reap_prompts(cfg, &base)?;
+    reap_sessions(cfg, &base, Some(scope))?;
+    session_ids(&base)
 }
 
 fn session_is_busy(base: &Path, sid: &str) -> Result<bool> {
@@ -1112,14 +1179,20 @@ fn session_is_busy(base: &Path, sid: &str) -> Result<bool> {
 fn dashboard_sessions(
     base: &Path,
     ids: Vec<String>,
+    scope: Option<&Path>,
     observability_degraded: &mut bool,
 ) -> Result<Vec<SessionStatus>> {
     let mut sessions = Vec::with_capacity(ids.len());
     for id in ids {
-        let status = (|| -> Result<SessionStatus> {
+        let status = (|| -> Result<Option<SessionStatus>> {
             let (dir, directory) = session_dir_at(base, &id)?;
             validate_private_directory(&directory, &dir)?;
             let meta = read_meta(&dir)?;
+            if let Some(scope) = scope
+                && !session_scope_matches(&meta, scope)
+            {
+                return Ok(None);
+            }
             let state_path = dir.join("state.monty");
             let state = open_private_file(&state_path, false)?;
             let metadata = validate_private_file(&state, &state_path)?;
@@ -1136,7 +1209,7 @@ fn dashboard_sessions(
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
-            Ok(SessionStatus {
+            Ok(Some(SessionStatus {
                 id: id.clone(),
                 created: meta.created,
                 updated,
@@ -1152,10 +1225,14 @@ fn dashboard_sessions(
                 completed_sources: observability
                     .as_ref()
                     .map_or(0, |summary| summary.completed_loaded_sources),
-            })
+            }))
         })();
         match status {
-            Ok(status) => sessions.push(status),
+            Ok(Some(status)) => sessions.push(status),
+            Ok(None) => {}
+            Err(_error) if scope.is_some() => {
+                *observability_degraded = true;
+            }
             Err(error) => match fs::symlink_metadata(base.join(&id)) {
                 Err(missing) if missing.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(metadata) => return Err(metadata.into()),
@@ -1306,12 +1383,33 @@ fn configured_default_command_provenance(cfg: &Config) -> (String, String) {
     }
 }
 
-pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
-    let ids = list(cfg)?;
+fn scope_label(scope: Option<&Path>) -> String {
+    match scope {
+        Some(path) => {
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .filter(|name| !name.is_empty())
+                .unwrap_or("/");
+            format!("{name} · current folder")
+        }
+        None => "all folders · global local stats".into(),
+    }
+}
+
+fn dashboard_snapshot_at(cfg: &Config, scope: Option<&Path>) -> Result<DashboardSnapshot> {
+    let ids = match scope {
+        Some(scope) => list_scoped(cfg, scope)?,
+        None => list(cfg)?,
+    };
     let base = state_home()?;
     let mut observability_degraded = false;
-    let sessions = dashboard_sessions(&base, ids, &mut observability_degraded)?;
-    let recent_observability = match observability::load_recent_summary() {
+    let sessions = dashboard_sessions(&base, ids, scope, &mut observability_degraded)?;
+    let recent_observability = match scope {
+        Some(scope) => observability::load_scoped_summary(scope),
+        None => observability::load_recent_summary(),
+    };
+    let recent_observability = match recent_observability {
         Ok(summary) => summary,
         Err(_) => {
             observability_degraded = true;
@@ -1320,6 +1418,7 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
     };
     let (provider, reasoning) = configured_default_command_provenance(cfg);
     Ok(DashboardSnapshot {
+        scope: scope_label(scope),
         default_model: cfg.default_model.clone(),
         provider,
         reasoning,
@@ -1332,16 +1431,33 @@ pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
     })
 }
 
+pub fn dashboard_snapshot(cfg: &Config) -> Result<DashboardSnapshot> {
+    let scope = canonical_current_dir()?;
+    dashboard_snapshot_at(cfg, Some(&scope))
+}
+
+pub fn dashboard_snapshot_global(cfg: &Config) -> Result<DashboardSnapshot> {
+    dashboard_snapshot_at(cfg, None)
+}
+
 fn new_session_meta(cfg: &Config, sub_model: Option<String>) -> Meta {
     Meta {
         version: VERSION.into(),
         monty: MONTY_VERSION.into(),
         created: now(),
         sub_model: Some(sub_model.unwrap_or_else(|| cfg.default_model.clone())),
+        cwd: None,
     }
 }
 
+fn new_session_meta_for_cwd(cfg: &Config, sub_model: Option<String>, cwd: PathBuf) -> Meta {
+    let mut meta = new_session_meta(cfg, sub_model);
+    meta.cwd = Some(cwd);
+    meta
+}
+
 pub fn start(cfg: &Config, sub_model: Option<String>) -> Result<String> {
+    let cwd = canonical_current_dir()?;
     let _global = global_lock()?;
     reap(cfg)?;
     if list(cfg)?.len() >= cfg.max_sessions {
@@ -1375,7 +1491,7 @@ pub fn start(cfg: &Config, sub_model: Option<String>) -> Result<String> {
             repl.feed_run(PRELUDE, vec![], PrintWriter::Disabled)
                 .context("Monty capability canary failed")?;
             save_repl(&stage, &repl)?;
-            let meta = new_session_meta(cfg, sub_model.clone());
+            let meta = new_session_meta_for_cwd(cfg, sub_model.clone(), cwd.clone());
             atomic_write(&stage.join("meta.json"), &serde_json::to_vec(&meta)?)?;
             Ok(())
         })();
@@ -1411,7 +1527,7 @@ fn fnv1a(bytes: &[u8]) -> u64 {
     h
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
         0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
@@ -2582,6 +2698,8 @@ pub fn load(sid: &str, path: &Path, var: &str, cfg: &Config) -> Result<String> {
     let (dir, directory) = session_dir(sid)?;
     let _guard = lock(&dir)?;
     validate_private_directory(&directory, &dir)?;
+    let meta = read_meta(&dir)?;
+    ensure_session_scope(sid, &meta)?;
     let text = fs::read_to_string(path)
         .with_context(|| format!("input is not UTF-8: {}", path.display()))?;
     let source = observability::SourceLocalAggregate::from_text(&text);
@@ -4516,6 +4634,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
     let _guard = lock(&dir)?;
     validate_private_directory(&directory, &dir)?;
     let meta = read_meta(&dir)?;
+    ensure_session_scope(sid, &meta)?;
     let model = meta.sub_model.as_deref().unwrap_or(&cfg.default_model);
     let repl = load_repl(&dir)?;
     let (
@@ -4568,7 +4687,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
     if finalized {
         // Completion history is aggregate-only and best effort. The authoritative
         // final value and evaluator snapshot are already committed.
-        let _ = observability::record_session_completion(&dir);
+        let _ = observability::record_session_completion(&dir, meta.cwd.as_deref());
     }
     Ok(ExecResult {
         output: cap(&output, cfg.output_cap),
@@ -4585,6 +4704,8 @@ pub fn final_answer(sid: &str, cfg: &Config) -> Result<String> {
     let (dir, directory) = session_dir(sid)?;
     let _guard = lock(&dir)?;
     validate_private_directory(&directory, &dir)?;
+    let meta = read_meta(&dir)?;
+    ensure_session_scope(sid, &meta)?;
     let path = dir.join("final");
     let mut file = open_private_file(&path, false).context("session has no final answer")?;
     let mut bytes = Vec::new();
@@ -4596,6 +4717,8 @@ pub fn kill(sid: &str) -> Result<()> {
     let (dir, directory) = session_dir(sid)?;
     let _guard = lock(&dir)?;
     validate_private_directory(&directory, &dir)?;
+    let meta = read_meta(&dir)?;
+    ensure_session_scope(sid, &meta)?;
     fs::remove_dir_all(dir)?;
     Ok(())
 }
@@ -8230,6 +8353,7 @@ mod unit_tests {
             monty: MONTY_VERSION.into(),
             created: 1,
             sub_model: None,
+            cwd: None,
         };
         atomic_write(
             &session.join("meta.json"),
@@ -8243,7 +8367,7 @@ mod unit_tests {
 
         let mut observability_degraded = false;
         let statuses =
-            dashboard_sessions(&root, vec![id.into()], &mut observability_degraded).unwrap();
+            dashboard_sessions(&root, vec![id.into()], None, &mut observability_degraded).unwrap();
 
         assert_eq!(statuses.len(), 1);
         assert_eq!(statuses[0].sub_model, None);
@@ -9063,7 +9187,7 @@ JSONL
         let id = "0123456789abcdef".to_owned();
         let mut degraded = false;
 
-        let sessions = dashboard_sessions(&root, vec![id.clone()], &mut degraded).unwrap();
+        let sessions = dashboard_sessions(&root, vec![id.clone()], None, &mut degraded).unwrap();
         assert!(sessions.is_empty());
         assert!(!degraded);
 
@@ -9071,7 +9195,7 @@ JSONL
         fs::create_dir(&corrupt).unwrap();
         #[cfg(unix)]
         chmod(&corrupt, 0o700).unwrap();
-        assert!(dashboard_sessions(&root, vec![id], &mut degraded).is_err());
+        assert!(dashboard_sessions(&root, vec![id], None, &mut degraded).is_err());
 
         fs::remove_dir_all(root).unwrap();
     }

@@ -17,7 +17,7 @@ What makes it different:
 - **Context virtualization:** the root works through variables and computed excerpts instead of receiving the complete source in every request.
 - **Deterministic reduction:** Python handles exact operations before the model handles ambiguous language.
 - **Bare recursion:** subcalls are model calls rather than new agent environments.
-- **Measured memory:** the provider-free console separates live sessions from local numeric source summaries, labels the configured default for new work, and marks model-boundary exposure or coverage as unmeasured instead of inventing a generic context score.
+- **Measured memory:** the provider-free console scopes live sessions and local numeric source summaries to the canonical working directory by default, labels the configured default for new work, and marks model-boundary exposure or coverage as unmeasured instead of inventing a generic context score. `az list --global` and `az map --global` are explicit global views.
 - **Tool adapters:** one managed integration supports Jcode, Claude, Codex, Gemini, and OpenCode. Every profile is rendered from the same default skill contract with tool-specific activation, execution, and reload guidance.
 
 ## Install
@@ -54,7 +54,7 @@ az uninstall all
 
 ## Use
 
-Run `azdaja` with no arguments in a terminal to print a static provider-free snapshot. Its `new work` row describes this invocation's configured default model, runner, and thinking level. It is not an observed universal route. Every live session separately shows the default model persisted when that session was created, so simultaneous sessions can differ, and individual model calls can still override the session default.
+Run `azdaja` with no arguments in a terminal to print a static provider-free snapshot for the current folder. Its `scope` row makes that boundary visible. Its `new work` row describes this invocation's configured default model, runner, and thinking level. It is not an observed universal route. Every live session separately shows the default model persisted when that session was created, so simultaneous sessions can differ, and individual model calls can still override the session default. Use `az list --global` or `az map --global` when you intentionally want the user-global state root.
 
 Numeric source summaries are shown separately from live sessions. The `repeated ← … → varied` constellation uses only local aggregate numbers, never source text, and its `avg variety` label is a plain distributional summary rather than a quality score. Exact byte entropy is available only in measured details. Run `az map` for the optional full-screen view; narrow terminals fall back to the same static line-oriented snapshot.
 

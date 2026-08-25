@@ -1,11 +1,17 @@
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use std::{fs, io::Read, path::Path, time::UNIX_EPOCH};
+use std::{
+    fs,
+    io::Read,
+    path::{Path, PathBuf},
+    time::UNIX_EPOCH,
+};
 
 const SCHEMA_VERSION: u32 = 1;
 const RECENT_LIMIT: usize = 24;
 const RECENT_DIR: &str = "observability";
 const RECENT_FILE: &str = "recent.json";
+const SCOPES_DIR: &str = "scopes";
 const SESSION_FILE: &str = "observability.json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -375,13 +381,23 @@ pub(crate) fn record_session_source_load(
     Ok(())
 }
 
-pub(crate) fn record_session_completion(session_dir: &Path) -> Result<()> {
+pub(crate) fn record_session_completion(session_dir: &Path, scope: Option<&Path>) -> Result<()> {
     let root = crate::state_home()?;
     let _guard = crate::global_lock()?;
-    record_session_completion_at(&root, session_dir)
+    let scope_key = scope.and_then(|path| scope_key_for_path(path).ok());
+    record_session_completion_at_with_scope(&root, session_dir, scope_key.as_deref())
 }
 
+#[cfg(test)]
 fn record_session_completion_at(root: &Path, session_dir: &Path) -> Result<()> {
+    record_session_completion_at_with_scope(root, session_dir, None)
+}
+
+fn record_session_completion_at_with_scope(
+    root: &Path,
+    session_dir: &Path,
+    scope_key: Option<&str>,
+) -> Result<()> {
     let Some(mut summary) = load_session_summary_at(session_dir)? else {
         return Ok(());
     };
@@ -395,18 +411,59 @@ fn record_session_completion_at(root: &Path, session_dir: &Path) -> Result<()> {
     summary.completed_loaded_sources = summary.loaded_sources;
     summary.updated_unix = unix_now();
     write_session_summary_at(session_dir, &summary)?;
-    append_recent_at(root, RunKind::SessionFinal, &source)
+    append_recent_at(root, RunKind::SessionFinal, &source)?;
+    if let Some(scope_key) = scope_key {
+        append_scoped_at(root, scope_key, RunKind::SessionFinal, &source)?;
+    }
+    Ok(())
 }
 
 pub fn record_solo_completion(source: &SourceLocalAggregate) -> Result<()> {
     let root = crate::state_home()?;
     let _guard = crate::global_lock()?;
-    append_recent_at(&root, RunKind::SoloFinal, source)
+    append_recent_at(&root, RunKind::SoloFinal, source)?;
+    let cwd = std::env::current_dir()?;
+    let scope_key = scope_key_for_path(&cwd)?;
+    append_scoped_at(&root, &scope_key, RunKind::SoloFinal, source)
 }
 
 pub fn load_recent_summary() -> Result<RecentAggregateSummary> {
     let root = crate::state_home()?;
     load_recent_summary_at(&root)
+}
+
+/// Return the stable private key used for aggregate state belonging to one canonical working
+/// directory. The path itself is never written into observability JSON.
+pub fn scope_key_for_path(path: &Path) -> Result<String> {
+    let canonical = fs::canonicalize(path)
+        .with_context(|| format!("canonicalize observability scope {}", path.display()))?;
+    Ok(crate::sha256_hex(&scope_key_material(&canonical)))
+}
+
+fn scope_key_material(path: &Path) -> Vec<u8> {
+    let mut material = b"azdaja-observability-scope-v1\0".to_vec();
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        material.extend_from_slice(path.as_os_str().as_bytes());
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        for unit in path.as_os_str().encode_wide() {
+            material.extend_from_slice(&unit.to_le_bytes());
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    material.extend_from_slice(path.to_string_lossy().as_bytes());
+    material
+}
+
+/// Load the numeric source-summary history for one working-directory scope.
+pub fn load_scoped_summary(path: &Path) -> Result<RecentAggregateSummary> {
+    let root = crate::state_home()?;
+    let key = scope_key_for_path(path)?;
+    load_scoped_summary_at(&root, &key)
 }
 
 pub(crate) fn load_session_summary(session_dir: &Path) -> Result<Option<SessionAggregateSummary>> {
@@ -417,6 +474,14 @@ fn recent_path(root: &Path) -> std::path::PathBuf {
     root.join(RECENT_DIR).join(RECENT_FILE)
 }
 
+fn scopes_path(root: &Path) -> PathBuf {
+    root.join(RECENT_DIR).join(SCOPES_DIR)
+}
+
+fn scoped_path(root: &Path, key: &str) -> PathBuf {
+    scopes_path(root).join(format!("{key}.json"))
+}
+
 fn session_path(session_dir: &Path) -> std::path::PathBuf {
     session_dir.join(SESSION_FILE)
 }
@@ -424,7 +489,21 @@ fn session_path(session_dir: &Path) -> std::path::PathBuf {
 fn append_recent_at(root: &Path, kind: RunKind, source: &SourceLocalAggregate) -> Result<()> {
     let dir = root.join(RECENT_DIR);
     crate::secure_dir(&dir)?;
-    let mut summary = load_recent_summary_at(root)?;
+    append_recent_file(&recent_path(root), kind, source)
+}
+
+fn append_scoped_at(
+    root: &Path,
+    scope_key: &str,
+    kind: RunKind,
+    source: &SourceLocalAggregate,
+) -> Result<()> {
+    crate::secure_dir(&scopes_path(root))?;
+    append_recent_file(&scoped_path(root, scope_key), kind, source)
+}
+
+fn append_recent_file(path: &Path, kind: RunKind, source: &SourceLocalAggregate) -> Result<()> {
+    let mut summary = load_summary_path(path)?;
     summary.schema_version = SCHEMA_VERSION;
     summary.updated_unix = unix_now();
     summary.max_recent_runs = RECENT_LIMIT;
@@ -439,15 +518,22 @@ fn append_recent_at(root: &Path, kind: RunKind, source: &SourceLocalAggregate) -
     );
     summary.runs.truncate(RECENT_LIMIT);
     let bytes = serde_json::to_vec_pretty(&summary)?;
-    crate::atomic_write(&recent_path(root), &bytes)
+    crate::atomic_write(path, &bytes)
 }
 
 fn load_recent_summary_at(root: &Path) -> Result<RecentAggregateSummary> {
-    let path = recent_path(root);
-    if !summary_path_exists(&path)? {
+    load_summary_path(&recent_path(root))
+}
+
+fn load_scoped_summary_at(root: &Path, scope_key: &str) -> Result<RecentAggregateSummary> {
+    load_summary_path(&scoped_path(root, scope_key))
+}
+
+fn load_summary_path(path: &Path) -> Result<RecentAggregateSummary> {
+    if !summary_path_exists(path)? {
         return Ok(RecentAggregateSummary::empty());
     }
-    let bytes = read_private_summary_file(&path)
+    let bytes = read_private_summary_file(path)
         .with_context(|| format!("read private observability summary {}", path.display()))?;
     let mut summary: RecentAggregateSummary = serde_json::from_slice(&bytes)
         .with_context(|| format!("parse aggregate observability summary {}", path.display()))?;
@@ -679,6 +765,57 @@ mod tests {
         let grid = constellation.render_grid(24);
         assert_eq!(grid.len(), CONSTELLATION_ROWS);
         assert!(grid.iter().all(|row| row.chars().count() == 24));
+    }
+
+    #[test]
+    fn scoped_histories_are_isolated_deterministic_and_path_free() {
+        let root = unique_temp_dir("scoped-root");
+        let first = unique_temp_dir("scoped-first");
+        let second = unique_temp_dir("scoped-second");
+        let first_key = scope_key_for_path(&first).expect("first scope key");
+        let second_key = scope_key_for_path(&second).expect("second scope key");
+        assert_ne!(first_key, second_key);
+        assert_eq!(
+            first_key,
+            scope_key_for_path(&first.join(".")).expect("canonical scope key")
+        );
+
+        let first_source = SourceLocalAggregate::from_text("first project source\n");
+        let second_source = SourceLocalAggregate::from_text("second project source\n");
+        append_scoped_at(&root, &first_key, RunKind::SoloFinal, &first_source)
+            .expect("write first scope");
+        append_scoped_at(&root, &second_key, RunKind::SoloFinal, &second_source)
+            .expect("write second scope");
+
+        let first_summary = load_scoped_summary_at(&root, &first_key).expect("read first scope");
+        let second_summary = load_scoped_summary_at(&root, &second_key).expect("read second scope");
+        assert_eq!(first_summary.runs.len(), 1);
+        assert_eq!(first_summary.runs[0].source, first_source);
+        assert_eq!(second_summary.runs.len(), 1);
+        assert_eq!(second_summary.runs[0].source, second_source);
+        assert!(load_recent_summary_at(&root).unwrap().runs.is_empty());
+
+        let first_json = fs::read_to_string(scoped_path(&root, &first_key)).unwrap();
+        assert!(!first_json.contains(first.to_string_lossy().as_ref()));
+        assert!(!first_json.contains("first project source"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn scope_keys_distinguish_non_utf8_directory_names() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        let first = PathBuf::from(OsString::from_vec(
+            [b"project".as_slice(), &[0x80]].concat(),
+        ));
+        let second = PathBuf::from(OsString::from_vec(
+            [b"project".as_slice(), &[0x81]].concat(),
+        ));
+        assert_ne!(
+            crate::sha256_hex(&scope_key_material(&first)),
+            crate::sha256_hex(&scope_key_material(&second))
+        );
     }
 
     #[test]

@@ -10,8 +10,8 @@ use azdaja::{
     Config, DEFAULT_CONFIG, EnteredTurnBudget, ExecFailureKind, MONTY_VERSION, RootDriver,
     SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS, SEMANTIC_MANIFEST_RESPONSE_ENVELOPE_CHARS, SKILL,
     SoloSession, VERSION, call_model, capability_check, claude_hook, config_error_report,
-    dashboard_snapshot, exec, final_answer, kill, list, load, model_trace_request_id,
-    model_transport_error_category, model_transport_error_is_transient,
+    dashboard_snapshot, dashboard_snapshot_global, exec, final_answer, kill, load,
+    model_trace_request_id, model_transport_error_category, model_transport_error_is_transient,
     provider_interrupt_exit_status, provider_interrupted, start,
 };
 use fs2::FileExt;
@@ -167,8 +167,8 @@ const COMMAND_USAGES: [(&str, &str); 12] = [
     ("load", "Usage: az load <session-id> <path> <variable>"),
     ("exec", "Usage: az exec <session-id>"),
     ("final", "Usage: az final <session-id>"),
-    ("list", "Usage: az list"),
-    ("map", "Usage: az map"),
+    ("list", "Usage: az list [--global]"),
+    ("map", "Usage: az map [--global]"),
     ("kill", "Usage: az kill <session-id>"),
     (
         "solo",
@@ -329,6 +329,21 @@ fn run() -> Result<bool> {
         top_help();
         return Ok(true);
     }
+    if args[0] == "--global" {
+        if args.len() != 1 {
+            return Err(CliUsageError("Usage: az --global").into());
+        }
+        let config = Config::load()?;
+        let snapshot = dashboard_snapshot_global(&config)?;
+        let term = env::var("TERM").ok();
+        let no_color = env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty());
+        let color = banner::color_enabled(io::stdout().is_terminal(), no_color, term.as_deref());
+        print!(
+            "{}",
+            dashboard::render(&snapshot, color, dashboard::terminal_width())
+        );
+        return Ok(true);
+    }
     if args[0] == "help" {
         if args.len() == 1 {
             top_help();
@@ -393,37 +408,57 @@ fn run() -> Result<bool> {
             print!("{}", final_answer(&args[1], &Config::load()?)?)
         }
         "list" => {
-            exact(&args, 1, "list")?;
+            let global = global_flag(&args, "list")?;
             let config = Config::load()?;
             if io::stdout().is_terminal() {
                 let term = env::var("TERM").ok();
                 let no_color = env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty());
                 let color = banner::color_enabled(true, no_color, term.as_deref());
-                let snapshot = dashboard_snapshot(&config)?;
+                let snapshot = if global {
+                    dashboard_snapshot_global(&config)?
+                } else {
+                    dashboard_snapshot(&config)?
+                };
                 print!(
                     "{}",
                     dashboard::render_list(&snapshot, color, dashboard::terminal_width())
                 );
             } else {
-                for id in list(&config)? {
-                    println!("{id}")
+                let snapshot = if global {
+                    dashboard_snapshot_global(&config)?
+                } else {
+                    dashboard_snapshot(&config)?
+                };
+                for session in snapshot.sessions {
+                    println!("{}", session.id)
                 }
             }
         }
         "map" => {
-            exact(&args, 1, "map")?;
+            let global = global_flag(&args, "map")?;
             let term = env::var("TERM").ok();
             let no_color = env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty());
             let color =
                 banner::color_enabled(io::stdout().is_terminal(), no_color, term.as_deref());
             if io::stdout().is_terminal() && io::stdin().is_terminal() {
-                tui::run(
-                    || Config::load().and_then(|config| dashboard_snapshot(&config)),
-                    console_integrations,
-                    color,
-                )?;
+                let load_snapshot = move || {
+                    Config::load().and_then(|config| {
+                        if global {
+                            dashboard_snapshot_global(&config)
+                        } else {
+                            dashboard_snapshot(&config)
+                        }
+                    })
+                };
+                tui::run(load_snapshot, console_integrations, color)?;
             } else {
-                let snapshot = Config::load().and_then(|config| dashboard_snapshot(&config))?;
+                let snapshot = Config::load().and_then(|config| {
+                    if global {
+                        dashboard_snapshot_global(&config)
+                    } else {
+                        dashboard_snapshot(&config)
+                    }
+                })?;
                 print!(
                     "{}",
                     dashboard::render(&snapshot, color, dashboard::terminal_width())
@@ -493,6 +528,14 @@ fn exact(args: &[String], n: usize, command: &str) -> Result<()> {
         return Err(usage_error(command));
     }
     Ok(())
+}
+
+fn global_flag(args: &[String], command: &str) -> Result<bool> {
+    match args {
+        [_] => Ok(false),
+        [_, flag] if flag == "--global" => Ok(true),
+        _ => Err(usage_error(command)),
+    }
 }
 fn doctor(args: &[String]) -> Result<bool> {
     if args.get(1).is_some_and(|s| s == "--caps") {

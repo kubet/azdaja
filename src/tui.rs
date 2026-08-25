@@ -492,6 +492,11 @@ fn summary_rows(snapshot: &DashboardSnapshot) -> Vec<VisualRow> {
     vec![
         status,
         VisualRow {
+            label: "scope",
+            value: clean(&snapshot.scope),
+            tone: Tone::Dim,
+        },
+        VisualRow {
             label: "new work",
             value: new_work_line(snapshot),
             tone: Tone::Accent,
@@ -1102,6 +1107,7 @@ mod tests {
             },
         }];
         DashboardSnapshot {
+            scope: "azdaja · current folder".into(),
             default_model: "gpt-5.6-sol".into(),
             provider: "Jcode/OpenAI".into(),
             reasoning: "medium".into(),
@@ -1179,7 +1185,9 @@ mod tests {
         let rows = overview_rows(&data, 1000, 0);
         assert_eq!(
             rows.iter().map(|row| row.label).collect::<Vec<_>>(),
-            ["status", "new work", "live", "memory", "pattern", "recent"]
+            [
+                "status", "scope", "new work", "live", "memory", "pattern", "recent",
+            ]
         );
         let text = rows_text(rows);
         assert!(text.contains("new work gpt-5.6-sol via Jcode/OpenAI · medium thinking"));

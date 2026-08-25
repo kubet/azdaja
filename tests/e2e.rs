@@ -64,6 +64,25 @@ fn run(home: &Path, cfg: &Path, args: &[&str], input: &str) -> Output {
         .unwrap();
     child.wait_with_output().unwrap()
 }
+fn run_in(home: &Path, cfg: &Path, current_dir: &Path, args: &[&str], input: &str) -> Output {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_azdaja"));
+    c.env_remove("RLM_DEPTH")
+        .current_dir(current_dir)
+        .args(args)
+        .env("AZDAJA_HOME", home.join("state"))
+        .env("AZDAJA_CONFIG", cfg)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = c.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
 fn run_with_solo_trace(
     home: &Path,
     cfg: &Path,
@@ -914,6 +933,160 @@ fn lifecycle_is_persistent_and_load_is_metadata_only() {
     assert!(ok(run(&t, &cfg, &["list"], "")).contains(&id));
     ok(run(&t, &cfg, &["kill", &id], ""));
     assert!(!ok(run(&t, &cfg, &["list"], "")).contains(&id));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn sessions_and_observability_are_working_directory_scoped_with_explicit_global_escape_hatch() {
+    let t = temp("cwd-scope");
+    let cfg = config(&t, "cat", 512, 1, 2, 4);
+    let first = t.join("project-first");
+    let second = t.join("project-second");
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+    let input = first.join("input.txt");
+    fs::write(&input, "first project source\n").unwrap();
+
+    let sid = ok(run_in(&t, &cfg, &first, &["start"], ""))
+        .trim()
+        .to_owned();
+    ok(run_in(
+        &t,
+        &cfg,
+        &first,
+        &["load", &sid, input.to_str().unwrap(), "ctx"],
+        "",
+    ));
+
+    let blocked = run_in(&t, &cfg, &second, &["exec", &sid], "len(ctx)\n");
+    assert_eq!(blocked.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&blocked.stderr)
+            .contains("scoped to a different working directory")
+    );
+
+    let first_map = ok(run_in(&t, &cfg, &first, &["map"], ""));
+    assert!(
+        first_map.contains("project-first · current folder"),
+        "{first_map}"
+    );
+    assert!(
+        first_map.contains("memory   1 source summary"),
+        "{first_map}"
+    );
+    let second_map = ok(run_in(&t, &cfg, &second, &["map"], ""));
+    assert!(
+        second_map.contains("project-second · current folder"),
+        "{second_map}"
+    );
+    assert!(second_map.contains("none yet"), "{second_map}");
+
+    ok(run_in(
+        &t,
+        &cfg,
+        &first,
+        &["exec", &sid],
+        "FINAL('scope-safe')\n",
+    ));
+    assert_eq!(
+        ok(run_in(&t, &cfg, &first, &["final", &sid], "")).trim(),
+        "scope-safe"
+    );
+
+    let second_list = ok(run_in(&t, &cfg, &second, &["list"], ""));
+    assert!(!second_list.contains(&sid), "{second_list}");
+    let global_list = ok(run_in(&t, &cfg, &second, &["list", "--global"], ""));
+    assert!(global_list.contains(&sid), "{global_list}");
+    let global_map = ok(run_in(&t, &cfg, &second, &["--global"], ""));
+    assert!(
+        global_map.contains("all folders · global local stats"),
+        "{global_map}"
+    );
+    assert!(global_map.contains("finished"), "{global_map}");
+
+    let blocked_kill = run_in(&t, &cfg, &second, &["kill", &sid], "");
+    assert_eq!(blocked_kill.status.code(), Some(2));
+    ok(run_in(&t, &cfg, &first, &["kill", &sid], ""));
+    assert!(!ok(run_in(&t, &cfg, &first, &["list", "--global"], "")).contains(&sid));
+
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn legacy_sessions_complete_into_global_history_without_folder_contamination() {
+    let t = temp("legacy-scope");
+    let cfg = config(&t, "cat", 512, 1, 2, 4);
+    let first = t.join("project-first");
+    let second = t.join("project-second");
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+    let input = first.join("input.txt");
+    fs::write(&input, "legacy project source\n").unwrap();
+
+    let sid = ok(run_in(&t, &cfg, &first, &["start"], ""))
+        .trim()
+        .to_owned();
+    ok(run_in(
+        &t,
+        &cfg,
+        &first,
+        &["load", &sid, input.to_str().unwrap(), "ctx"],
+        "",
+    ));
+
+    let meta_path = t.join("state").join(&sid).join("meta.json");
+    let mut meta: serde_json::Value =
+        serde_json::from_slice(&fs::read(&meta_path).unwrap()).unwrap();
+    meta.as_object_mut().unwrap().remove("cwd");
+    fs::write(&meta_path, serde_json::to_vec_pretty(&meta).unwrap()).unwrap();
+
+    ok(run_in(
+        &t,
+        &cfg,
+        &second,
+        &["exec", &sid],
+        "FINAL('legacy-safe')\n",
+    ));
+    assert_eq!(
+        ok(run_in(&t, &cfg, &second, &["final", &sid], "")).trim(),
+        "legacy-safe"
+    );
+    let second_map = ok(run_in(&t, &cfg, &second, &["map"], ""));
+    assert!(
+        second_map.contains("project-second · current folder"),
+        "{second_map}"
+    );
+    assert!(second_map.contains("none yet"), "{second_map}");
+    let global_map = ok(run_in(&t, &cfg, &second, &["map", "--global"], ""));
+    assert!(global_map.contains("finished"), "{global_map}");
+
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn corrupt_foreign_metadata_degrades_scoped_dashboard_without_blocking_it() {
+    let t = temp("foreign-corruption");
+    let cfg = config(&t, "cat", 512, 1, 2, 4);
+    let first = t.join("project-first");
+    let second = t.join("project-second");
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+    let sid = ok(run_in(&t, &cfg, &first, &["start"], ""))
+        .trim()
+        .to_owned();
+    fs::write(t.join("state").join(&sid).join("meta.json"), "{").unwrap();
+
+    let second_map = ok(run_in(&t, &cfg, &second, &["map"], ""));
+    assert!(
+        second_map.contains("project-second · current folder"),
+        "{second_map}"
+    );
+    assert!(
+        second_map.contains("local metrics need attention"),
+        "{second_map}"
+    );
+    assert!(!second_map.contains(&sid), "{second_map}");
+
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -7428,8 +7601,8 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
         ("load", "Usage: az load <session-id> <path> <variable>"),
         ("exec", "Usage: az exec <session-id>"),
         ("final", "Usage: az final <session-id>"),
-        ("list", "Usage: az list"),
-        ("map", "Usage: az map"),
+        ("list", "Usage: az list [--global]"),
+        ("map", "Usage: az map [--global]"),
         ("kill", "Usage: az kill <session-id>"),
         (
             "solo",

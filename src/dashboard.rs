@@ -142,6 +142,10 @@ fn status_line(snapshot: &DashboardSnapshot) -> (&'static str, &'static str) {
     }
 }
 
+fn scope_line(snapshot: &DashboardSnapshot) -> String {
+    clean(&snapshot.scope)
+}
+
 fn memory_constellation(snapshot: &DashboardSnapshot) -> Option<MemoryConstellation> {
     let mut summary = snapshot.recent_observability.clone();
     for session in snapshot.sessions.iter().rev() {
@@ -293,6 +297,10 @@ fn render_compact(
     ));
     output.push_str(&format!(
         "{}\n",
+        truncate(&format!("scope     {}", scope_line(snapshot)), width)
+    ));
+    output.push_str(&format!(
+        "{}\n",
         paint(
             color,
             status_style,
@@ -337,7 +345,7 @@ fn render_compact(
     }
     output.push_str(&format!(
         "{}\n",
-        truncate("next  map · solo · list · doctor · help", width)
+        truncate("next  map · list · list --global · help", width)
     ));
     output
 }
@@ -358,12 +366,13 @@ fn render_list_at(
 ) -> String {
     let width = terminal_columns.max(20);
     let mut output = format!(
-        "{}\n{}\n{}\n\n",
+        "{}\n{}\n{}\n{}\n\n",
         paint(
             color,
             BOLD,
             &truncate("azdaja · memory constellation", width)
         ),
+        truncate(&format!("scope         {}", scope_line(snapshot)), width),
         truncate(&format!("new work      {}", new_work_line(snapshot)), width),
         truncate(&format!("live sessions  {}", live_line(snapshot)), width)
     );
@@ -467,6 +476,7 @@ fn render_at(
     let (status, status_style) = status_line(snapshot);
     let mut output = top_border(total, "azdaja · memory constellation", color);
     output.push_str(&row(total, "status", status, status_style, color));
+    output.push_str(&row(total, "scope", &scope_line(snapshot), DIM, color));
     output.push_str(&row(
         total,
         "new work",
@@ -508,7 +518,7 @@ fn render_at(
         paint(
             color,
             CYAN,
-            "map · solo \"question\" -f ./document.txt · list · doctor · help"
+            "map · solo \"question\" -f ./document.txt · list · list --global · doctor · help"
         )
     ));
     output
@@ -577,6 +587,7 @@ mod tests {
             },
         ];
         DashboardSnapshot {
+            scope: "azdaja · current folder".into(),
             default_model: "gpt-5.6-sol".into(),
             provider: "Jcode/OpenAI".into(),
             reasoning: "low".into(),
@@ -688,7 +699,7 @@ mod tests {
         assert!(rendered.contains("pattern   repeated ←"));
         assert!(rendered.contains("recent    finished"));
         assert!(rendered.contains("session   ● 01234567 running"));
-        assert!(rendered.contains("next  map · solo · list · doctor · help"));
+        assert!(rendered.contains("next  map · list · list --global · help"));
         assert!(!rendered.contains("q quit"));
         assert_plain_language(&rendered);
     }
