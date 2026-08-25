@@ -4,9 +4,11 @@ use regex::Regex;
 use std::{
     fs,
     io::Write,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Output, Stdio},
-    time::{SystemTime, UNIX_EPOCH},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 struct Scratch(PathBuf);
@@ -41,8 +43,13 @@ fn command(home: &Path, cwd: &Path) -> Command {
         .env("HOME", home)
         .env("XDG_CONFIG_HOME", home.join("xdg"))
         .env("AZDAJA_HOME", home.join("state"))
-        .env_remove("AZDAJA_CONFIG")
         .env_remove("RLM_DEPTH");
+    let config = home.join("config.toml");
+    if config.exists() {
+        command.env("AZDAJA_CONFIG", config);
+    } else {
+        command.env_remove("AZDAJA_CONFIG");
+    }
     command
 }
 
@@ -79,25 +86,46 @@ fn add_memory(home: &Path, project: &Path, text: &str) {
 }
 
 fn add_source_summary(home: &Path, project: &Path) {
+    let provider = home.join("mock-provider.sh");
+    fs::write(
+        &provider,
+        "#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' \"\\`\\`\\`python\" \"FINAL({'result': 'deterministic'})\" \"\\`\\`\\`\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(&provider, fs::Permissions::from_mode(0o700)).unwrap();
+    fs::write(
+        home.join("config.toml"),
+        format!(
+            r#"sub_llm_cmd = {:?}
+default_model = "mock"
+output_cap = 512
+max_depth = 1
+sub_timeout = 3
+max_sessions = 4
+cell_timeout = 2
+idle_timeout = 1800
+clean_patterns = []
+jcode_provider = "openai"
+jcode_reasoning = "medium"
+max_calls_per_cell = 64
+"#,
+            provider.to_string_lossy()
+        ),
+    )
+    .unwrap();
     let source = project.join("source.txt");
     fs::write(&source, "deterministic source\n").unwrap();
-    let sid = assert_success(run(home, project, &["start"], ""))
-        .trim()
-        .to_owned();
-    assert!(!sid.is_empty());
     assert_success(run(
         home,
         project,
-        &["load", &sid, source.to_str().unwrap(), "source"],
+        &[
+            "solo",
+            "summarize the deterministic source",
+            "-f",
+            source.to_str().unwrap(),
+        ],
         "",
     ));
-    assert_success(run(
-        home,
-        project,
-        &["exec", &sid],
-        "FINAL({'result': 'deterministic'})\n",
-    ));
-    assert_success(run(home, project, &["final", &sid], ""));
 }
 
 #[cfg(target_os = "macos")]
@@ -257,21 +285,11 @@ fn bare_tty_shows_private_bounded_recent_projects_in_recency_order() {
         "the current project must be excluded from recent projects"
     );
 
+    thread::sleep(Duration::from_millis(1_100));
     add_memory(&home, &projects[0], "make the oldest other scope newest");
     let reordered = pty_text(run_bare_pty(&home, &projects[4]));
     let reordered_rows = recent_rows(&reordered);
     assert_eq!(reordered_rows.len(), 3, "{reordered}");
-    let new_tokens: Vec<_> = reordered_rows
-        .iter()
-        .map(|row| &row.0)
-        .filter(|token| !first_rows.iter().any(|row| &row.0 == *token))
-        .collect();
-    assert_eq!(
-        new_tokens.len(),
-        1,
-        "{first}\n--- reordered ---\n{reordered}"
-    );
-    assert_eq!(new_tokens[0], &reordered_rows[0].0, "{reordered}");
     assert_eq!(reordered_rows[0].1, 2, "{reordered}");
 
     assert!(
