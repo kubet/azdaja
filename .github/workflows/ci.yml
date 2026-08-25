@@ -334,7 +334,7 @@ jobs:
         shell: pwsh
         run: |
           $log = Join-Path $env:RUNNER_TEMP "azdaja-windows-clippy.log"
-          cargo clippy --lib --bin azdaja --all-features --locked -- -D warnings 2>&1 |
+          cargo clippy --quiet --lib --bin azdaja --all-features --locked -- -D warnings 2>&1 |
             Tee-Object -FilePath $log
           $status = $LASTEXITCODE
           if ($status -ne 0) {

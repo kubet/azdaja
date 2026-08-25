@@ -8594,19 +8594,19 @@ mod tests {
         let expected = [
             (
                 "default",
-                "b53e165d81a5f4d14a296fd95c114f650aa5389edab9dd15096f2f1d02fd3102",
+                "4c3be849a0b44c397177eb4c0d186ee0439061c4302924a44ded7696bb388258",
             ),
             (
                 "jcode",
-                "39b09925fd26b626ac0a180f3cabceb87cf578dc2abd32a9336d4043cfc96a4d",
+                "ef3f2c170549470bf42eb0b73664b105b75e1b28298abc6c47ef7c5378fd265b",
             ),
             (
                 "codex",
-                "e207935ac0ee6c1bf8c11696a71d9d1cdadbb7bfa759acc8514a9f5afa055873",
+                "38e8285fbd90587463a7669749411418728aa5ede360c4eb24e8b8c86a04593f",
             ),
             (
                 "gemini",
-                "9db0e99ab4f570d971c3f75c0add631935c15315f28c54bf0f4682bd9ce1b27e",
+                "2a5da9b1cdcdf682f6e2ee14f6fa69ef59846ab680981c0963e563f649dabcff",
             ),
         ];
         let actual = expected
