@@ -1439,7 +1439,7 @@ fn public_v020_site_assets_match_the_bound_checksum_manifest() {
         ),
         (
             "azdaja-v0.1.10-linux-x86_64",
-            "9c392d2bb04d9811b146a6cd056717bd4e785f7ea8817e47647cb245fdcda6ef",
+            "aa651d5becb653e47c0bacb575b134d0135875568e00ef1339e2c747a7255edf",
         ),
         (
             "LICENSE",
