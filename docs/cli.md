@@ -2,7 +2,7 @@
 
 Use `azdaja` in every command below when the short `az` alias is unavailable.
 
-A bare interactive `azdaja` prints one static provider-free snapshot for the canonical working directory, then exits. It reads validated configuration, owner-only live-session state, and local numeric source summaries. A piped or otherwise non-terminal invocation keeps the stable five-line help output. Run `az map` for the optional full-screen view, or add `--global` to `list` or `map` when you explicitly need the user-global state root. `az --global` is a compact equivalent for the global static snapshot.
+A bare interactive `azdaja` prints one static provider-free snapshot for the canonical working directory, then exits. It reads validated configuration, owner-only live-session state, and local numeric source summaries. A piped or otherwise non-terminal invocation keeps the stable five-line help output. Run `az map` for the optional full-screen view, or add `--global` to `list`, `map`, or `memory` when you explicitly need the user-global state root. `az --global` is a compact equivalent for the global static snapshot.
 
 ## Reading the snapshot
 
@@ -36,6 +36,7 @@ Keys in `az map`: arrows or `j/k` select, Enter inspects, `d` toggles measured d
 | `final` | `az final <session-id>` | Print the session's final value. |
 | `list` | `az list [--global]` | Show the current-folder live-session and source-summary table, or explicitly show the global state root. When piped, emit stable raw session IDs for the selected scope. |
 | `map` | `az map [--global]` | Open the optional full-screen local source-summary constellation for the current folder or explicit global scope, with a static fallback when not interactive. |
+| `memory` | `az memory <add\|list\|show> ...` | Maintain an explicit, bounded, user-authored local ledger of decisions, observations, failures, hypotheses, and disagreements with typed tags and links. Current-folder scope is default; `--global` selects a separate global ledger. |
 | `kill` | `az kill <session-id>` | Remove a session. |
 | `solo` | `az solo <question> (-f <path> \| --repo <directory>) [--model <model>] [--sub-model <model>]` | Run one question over one UTF-8 file or a deterministic bounded repository bundle. |
 | `doctor` | `az doctor [jcode|claude|codex|gemini|opencode|all|--caps]` | Check configured execution or inspect named integration files. |
@@ -68,4 +69,6 @@ The console's byte entropy is a deterministic zero-order histogram over locally 
 
 The useful Obsidian-like pattern is the storage discipline, not a graph UI: small typed records, explicit provenance, backlinks or relations, append-only history, and deterministic scope-first retrieval. Automatic reflection, embeddings, global cross-project memory, and graph distance are deliberately deferred until a task-specific evaluation justifies them.
 
-References: [semantic entropy](https://www.nature.com/articles/s41586-024-07421-0), [self-consistency](https://arxiv.org/abs/2203.11171), [multi-agent debate](https://arxiv.org/abs/2305.14325), [Obsidian backlinks](https://help.obsidian.md/plugins/backlinks), and [Obsidian properties](https://help.obsidian.md/Editing+and+formatting/Properties).
+`az memory` is the first concrete slice of that discipline. Records are user-entered JSONL under the private state root, bounded to 256 records and 512 KiB per ledger, keyed by the canonical working-directory scope without serializing the path. Links must target an existing record, `show` reports backlinks, corrupted or linked ledgers fail closed, and records are never injected into a model automatically. A `disagreement` record is a place to preserve a minority view for later human review, not a correctness or confidence score.
+
+References: [local-first software](https://doi.org/10.1145/3359591.3359737), [W3C PROV](https://www.w3.org/TR/prov-overview/), [semantic uncertainty](https://arxiv.org/abs/2302.09664), [self-consistency](https://arxiv.org/abs/2203.11171), [Mirror-Consistency](https://aclanthology.org/2024.findings-emnlp.135/), [MemGPT](https://arxiv.org/abs/2310.08560), [Generative Agents](https://arxiv.org/abs/2304.03442), [Lost in the Middle](https://arxiv.org/abs/2307.03172), [Obsidian internal links](https://help.obsidian.md/Linking+notes+and+files/Internal+links), [Obsidian backlinks](https://help.obsidian.md/Plugins/Backlinks), and [Obsidian properties](https://help.obsidian.md/Editing+and+formatting/Properties).

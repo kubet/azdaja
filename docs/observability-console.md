@@ -1,6 +1,6 @@
 # Virtual-memory observability console
 
-Status: implemented on `main` for Azdaja v0.1.8.
+Status: implemented on `main` for Azdaja v0.1.9.
 
 ## Product boundary
 
@@ -168,11 +168,11 @@ H_byte = -sum(p_b * log2(p_b)), b in 0..255
 
 This is a source-text distribution measurement. It is not the semantic entropy of sampled model answers and cannot be interpreted as calibrated correctness probability. Semantic entropy needs repeated answers plus semantic-equivalence clustering. Self-consistency and multi-agent debate show why repeated proposals can help on some tasks, but agreement can still share a common error. In Azdaja, disagreement is therefore a candidate escalation or abstention signal, never a headline “quality” number.
 
-For future agent memory, retain the narrow local-first pattern: inspectable records, typed properties, explicit `supports`/`supersedes`/`derived-from` links, provenance, append-only run history, and scope-first deterministic retrieval. Do not add a graph view, vector store, automatic reflection loop, or cross-project memory without an acceptance task that measures benefit and leakage.
+The implemented `az memory` ledger applies the narrow local-first pattern without changing the evaluator: inspectable JSONL records, typed kinds and tags, explicit `supports`/`supersedes`/`derived-from`/`related-to` links, manual provenance, bounded append-only history, and scope-first deterministic retrieval. It supports a separate explicit global ledger, but never merges project ledgers implicitly and never injects records into a model. A graph view, vector store, automatic reflection loop, and model-authored memory remain out of scope until an acceptance task measures benefit and leakage.
 
 ## Non-goals
 
-The v0.1.8 console does not claim:
+The v0.1.9 console does not claim:
 
 - one observed universal model or provider route;
 - semantic similarity from constellation distance;

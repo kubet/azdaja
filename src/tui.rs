@@ -720,7 +720,7 @@ fn constellation_lines(
     lines.push(Line::from(vec![
         Span::styled("next  ", subtle_style(color)),
         Span::styled("solo \"question\" -f ./document.txt", accent_style(color)),
-        Span::raw(" · list · doctor · help"),
+        Span::raw(" · list · memory · doctor · help"),
     ]));
     lines
 }

@@ -4634,7 +4634,7 @@ exit 9
     );
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
-    assert!(skill.contains("Azdaja 0.1.8") && skill.contains(dst.join("azdaja").to_str().unwrap()));
+    assert!(skill.contains("Azdaja 0.1.9") && skill.contains(dst.join("azdaja").to_str().unwrap()));
     assert!(skill.contains("one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle"));
     assert!(skill.contains("llm_batch(prompts, workers=4)"));
     assert!(skill.contains("Scan the complete loaded source"));
@@ -7617,10 +7617,11 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
             "uninstall",
             "Usage: az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]",
         ),
+        ("memory", "Usage: az memory <add|list|show> [--global]"),
         ("help", "Usage: az help [command]"),
     ];
     let bare = format!(
-        "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
+        "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
         env!("CARGO_PKG_VERSION")
     );
     for name in ["az", "azdaja"] {
@@ -7668,12 +7669,16 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
                         "{usage}\nNo name: remove detected Azdaja tool integrations only.\n'standalone' removes the curl-installed command and documents. 'all' removes both.\nExamples:\n  az uninstall jcode\n  az uninstall standalone\n  az uninstall all\n"
                     )
                 ),
+                "memory" => {
+                    assert!(stdout.starts_with(&format!("{usage}\nAdd: az memory add")));
+                    assert!(stdout.contains("Records are explicit, local-first, bounded"));
+                }
                 _ => assert_eq!(stdout, format!("{usage}\n")),
             }
             assert!(output.stderr.is_empty());
         }
 
-        let invalid: [(&[&str], &str); 12] = [
+        let invalid: [(&[&str], &str); 13] = [
             (&["start", "extra"], expected[0].1),
             (&["load", "only-one"], expected[1].1),
             (&["exec", "session", "extra"], expected[2].1),
@@ -7685,7 +7690,8 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
             (&["doctor", "--bogus"], expected[8].1),
             (&["install", "--bogus"], expected[9].1),
             (&["uninstall", "--harness"], expected[10].1),
-            (&["help", "start", "extra"], expected[11].1),
+            (&["memory", "bogus"], expected[11].1),
+            (&["help", "start", "extra"], expected[12].1),
         ];
         for (args, usage) in invalid {
             let output = Command::new(&executable).args(args).output().unwrap();

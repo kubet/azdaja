@@ -162,7 +162,7 @@ fn preflight_repair_solo_trace(
     Ok(())
 }
 
-const COMMAND_USAGES: [(&str, &str); 12] = [
+const COMMAND_USAGES: [(&str, &str); 13] = [
     ("start", "Usage: az start"),
     ("load", "Usage: az load <session-id> <path> <variable>"),
     ("exec", "Usage: az exec <session-id>"),
@@ -183,6 +183,7 @@ const COMMAND_USAGES: [(&str, &str); 12] = [
         "uninstall",
         "Usage: az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]",
     ),
+    ("memory", "Usage: az memory <add|list|show> [--global]"),
     ("help", "Usage: az help [command]"),
 ];
 
@@ -224,7 +225,10 @@ fn command_help(args: &[String]) -> Result<bool> {
     };
     // These commands own richer help bodies. Let their parser print those bodies
     // while COMMAND_USAGES remains the canonical public first/error line.
-    if matches!(args[0].as_str(), "doctor" | "install" | "uninstall") {
+    if matches!(
+        args[0].as_str(),
+        "doctor" | "install" | "uninstall" | "memory"
+    ) {
         return Ok(false);
     }
     if args
@@ -252,7 +256,7 @@ fn help(interactive_banner: bool) {
         print!("{}", banner::banner(color));
     }
     println!(
-        "AZDAJA v{VERSION} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt"
+        "AZDAJA v{VERSION} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt"
     );
 }
 
@@ -370,6 +374,7 @@ fn run() -> Result<bool> {
                 uninstall_cmd(&requested)?;
                 Ok(true)
             }
+            "memory" => memory_cmd(&requested),
             command => bail!("unknown command '{command}' (run 'az help')"),
         };
     }
@@ -471,6 +476,7 @@ fn run() -> Result<bool> {
             println!("killed {}", args[1])
         }
         "doctor" => return doctor(&args),
+        "memory" => return memory_cmd(&args),
         "claude-hook" => {
             exact(&args, 1, "claude-hook")?;
             let mut input = String::new();
@@ -536,6 +542,153 @@ fn global_flag(args: &[String], command: &str) -> Result<bool> {
         [_, flag] if flag == "--global" => Ok(true),
         _ => Err(usage_error(command)),
     }
+}
+
+fn memory_cmd(args: &[String]) -> Result<bool> {
+    if args
+        .get(1)
+        .is_some_and(|arg| matches!(arg.as_str(), "-h" | "--help"))
+    {
+        exact(args, 2, "memory")?;
+        println!(
+            "Usage: az memory <add|list|show> [--global]\n\
+             Add: az memory add <decision|observation|failure|hypothesis|disagreement> <text> [--tag <tag>] [--link <relation:id>] [--global]\n\
+             List: az memory list [--global]\n\
+             Show: az memory show <id> [--global]\n\
+             Records are explicit, local-first, bounded, and never injected into a model automatically."
+        );
+        return Ok(true);
+    }
+    match args.get(1).map(String::as_str) {
+        Some("list") => {
+            let global = memory_global_flag(args, 2)?;
+            let records = azdaja::memory::list_current(global)?;
+            println!(
+                "memory scope  {} · {} records · bounded local ledger",
+                if global { "global" } else { "current folder" },
+                records.len()
+            );
+            if records.is_empty() {
+                println!(
+                    "none yet · add a decision, observation, failure, hypothesis, or disagreement"
+                );
+            } else {
+                for record in records.iter().rev() {
+                    let tags = if record.tags.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" · tags={}", record.tags.join(","))
+                    };
+                    let links = if record.links.is_empty() {
+                        String::new()
+                    } else {
+                        let links = record
+                            .links
+                            .iter()
+                            .map(|link| format!("{}:{}", link.relation.as_str(), link.target_id))
+                            .collect::<Vec<_>>()
+                            .join(",");
+                        format!(" · links={links}")
+                    };
+                    println!(
+                        "{} · {} · {}{}{} · {}",
+                        record.id,
+                        record.kind.as_str(),
+                        record.created_unix,
+                        tags,
+                        links,
+                        memory_one_line(&record.text)
+                    );
+                }
+            }
+        }
+        Some("show") => {
+            if args.len() < 3 || args.len() > 4 {
+                return Err(usage_error("memory"));
+            }
+            let global = memory_global_flag(args, 3)?;
+            let view = azdaja::memory::show_current(global, &args[2])?;
+            let record = view.record;
+            println!("id        {}", record.id);
+            println!("kind      {}", record.kind.as_str());
+            println!("created   {}", record.created_unix);
+            println!("provenance {}", record.provenance.origin);
+            if !record.tags.is_empty() {
+                println!("tags      {}", record.tags.join(","));
+            }
+            for link in &record.links {
+                println!("link      {}:{}", link.relation.as_str(), link.target_id);
+            }
+            for backlink in &view.backlinks {
+                println!(
+                    "backlink  {}:{}",
+                    backlink.relation.as_str(),
+                    backlink.source_id
+                );
+            }
+            println!("text      {}", record.text);
+        }
+        Some("add") => {
+            if args.len() < 4 {
+                return Err(usage_error("memory"));
+            }
+            let kind = azdaja::memory::MemoryKind::parse(&args[2])?;
+            let text = &args[3];
+            let mut global = false;
+            let mut tags = Vec::new();
+            let mut links = Vec::new();
+            let mut index = 4;
+            while index < args.len() {
+                match args[index].as_str() {
+                    "--global" => {
+                        global = true;
+                        index += 1;
+                    }
+                    "--tag" => {
+                        let tag = args.get(index + 1).ok_or_else(|| usage_error("memory"))?;
+                        tags.push(tag.clone());
+                        index += 2;
+                    }
+                    "--link" => {
+                        let link = args.get(index + 1).ok_or_else(|| usage_error("memory"))?;
+                        links.push(azdaja::memory::MemoryLink::parse(link)?);
+                        index += 2;
+                    }
+                    _ => return Err(usage_error("memory")),
+                }
+            }
+            let record = azdaja::memory::add_current(global, kind, text.clone(), tags, links)?;
+            println!(
+                "recorded {} · {} · {}",
+                record.id,
+                record.kind.as_str(),
+                if global { "global" } else { "current folder" }
+            );
+        }
+        _ => return Err(usage_error("memory")),
+    }
+    Ok(true)
+}
+
+fn memory_global_flag(args: &[String], index: usize) -> Result<bool> {
+    match args.get(index) {
+        None => Ok(false),
+        Some(flag) if flag == "--global" && args.len() == index + 1 => Ok(true),
+        _ => Err(usage_error("memory")),
+    }
+}
+
+fn memory_one_line(text: &str) -> String {
+    text.chars()
+        .map(|character| {
+            if character == '\t' || !character.is_control() {
+                character
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .replace('\n', " ")
 }
 fn doctor(args: &[String]) -> Result<bool> {
     if args.get(1).is_some_and(|s| s == "--caps") {
@@ -8304,19 +8457,19 @@ mod tests {
         let expected = [
             (
                 "default",
-                "c24802b210d6b0e1f968d55009abe2c0e0e1651e2d72a4244093bc5b0ea1a592",
+                "78c2b19e92f8620f6a3234c10cc3d5d6dc9e17c3f0e2da208b4d077e8ef8ab52",
             ),
             (
                 "jcode",
-                "7ef1485c6bb8262a6e07d86ec540798dcbeafcde28838f51d75b722517cfaad0",
+                "bac6f5197e8ac3bdeebb791096d440cb9b37bc446beddb20ab31d24cd2ebf3b0",
             ),
             (
                 "codex",
-                "222e37723a392eaed64f863dce91e1c6577c9e7f6ab8e5cbeb311659ac768992",
+                "41de2a17a4355b121bf1ab908a3014ad92e6ef9f566565fc19a84a120099907f",
             ),
             (
                 "gemini",
-                "beb0fce4b6b0a3a28dc8942e30605e043c478c5b7bee9c07d46b1bca67476966",
+                "ee0b6f4b729cf0151db6a222755aec997bd35689576445496b353cc7e2472522",
             ),
         ];
         let actual = expected

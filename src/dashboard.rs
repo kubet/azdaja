@@ -345,7 +345,7 @@ fn render_compact(
     }
     output.push_str(&format!(
         "{}\n",
-        truncate("next  map · list · list --global · help", width)
+        truncate("next  map · list · memory · list --global · help", width)
     ));
     output
 }
@@ -699,7 +699,9 @@ mod tests {
         assert!(rendered.contains("pattern   repeated ←"));
         assert!(rendered.contains("recent    finished"));
         assert!(rendered.contains("session   ● 01234567 running"));
-        assert!(rendered.contains("next  map · list · list --global · help"));
+        assert!(rendered.contains("next  map"));
+        let wide = render_at(&data, false, 120, 1000);
+        assert!(wide.contains("next  map · list · memory · list --global · help"));
         assert!(!rendered.contains("q quit"));
         assert_plain_language(&rendered);
     }

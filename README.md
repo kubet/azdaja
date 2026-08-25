@@ -33,7 +33,7 @@ The stable `azdaja.dev/install` URL serves the current published installer. Its 
 Alternatively, install from source with Rust 1.95:
 
 ```bash
-cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.8 --locked
+cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.9 --locked
 ```
 
 `azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.
@@ -80,7 +80,7 @@ az final "$sid"
 az kill "$sid"
 ```
 
-Commands: `help`, `solo`, `map`, `install`, `doctor`, `start`, `load`, `exec`, `final`, `list`, `kill`, and `uninstall`.
+Commands: `help`, `solo`, `map`, `install`, `doctor`, `start`, `load`, `exec`, `final`, `list`, `kill`, `memory`, and `uninstall`. Use `az memory add decision "..."` for an explicit project-scoped note, `az memory list` to inspect it, and `--global` only for the separate global ledger.
 
 See the [CLI reference](docs/cli.md) for signatures, process custody, signal behavior, temporary files, and configuration errors.
 

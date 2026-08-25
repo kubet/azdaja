@@ -80,7 +80,7 @@ fn non_tty_bare_command_is_exactly_five_line_help_without_sprite() {
     assert_eq!(
         stdout,
         format!(
-            "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
+            "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
             env!("CARGO_PKG_VERSION")
         )
     );
@@ -132,6 +132,100 @@ fn help_alias_is_concise_and_command_help_uses_plain_targets() {
         stderr,
         "error: unknown command 'spaceship' (run 'az help')\n"
     );
+
+    let memory_help = Command::new(binary())
+        .args(["help", "memory"])
+        .output()
+        .unwrap();
+    assert!(memory_help.status.success());
+    let memory_help = String::from_utf8(memory_help.stdout).unwrap();
+    assert!(memory_help.contains("Usage: az memory <add|list|show>"));
+    assert!(memory_help.contains("explicit, local-first, bounded"));
+}
+
+#[test]
+fn memory_cli_is_scope_first_linked_and_global_only_when_explicit() {
+    let scratch = Scratch::new("memory-ledger");
+    let first = scratch.0.join("first");
+    let second = scratch.0.join("second");
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+
+    let add = |cwd: &Path, args: &[&str]| {
+        let output = command(&scratch.0)
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap()
+    };
+
+    let first_record = add(
+        &first,
+        &[
+            "memory",
+            "add",
+            "decision",
+            "keep the evaluator core unchanged",
+            "--tag",
+            "architecture",
+        ],
+    );
+    let id = first_record
+        .split_whitespace()
+        .find(|part| part.starts_with('m'))
+        .unwrap()
+        .to_owned();
+    assert_eq!(id.len(), 17);
+
+    let linked = add(
+        &first,
+        &[
+            "memory",
+            "add",
+            "disagreement",
+            "retain the minority view for later review",
+            "--link",
+            &format!("supports:{id}"),
+        ],
+    );
+    assert!(linked.contains("disagreement"));
+
+    let listed = add(&first, &["memory", "list"]);
+    assert!(listed.contains("memory scope  current folder"));
+    assert!(listed.contains("decision"));
+    assert!(listed.contains("disagreement"));
+    assert!(listed.contains(&id));
+    assert!(!listed.contains(first.to_string_lossy().as_ref()));
+
+    let shown = add(&first, &["memory", "show", &id]);
+    assert!(shown.contains("provenance manual"));
+    assert!(shown.contains("backlink"));
+    assert!(shown.contains("supports"));
+
+    let isolated = add(&second, &["memory", "list"]);
+    assert!(isolated.contains("current folder · 0 records"));
+    assert!(!isolated.contains(&id));
+
+    let global = add(
+        &first,
+        &[
+            "memory",
+            "add",
+            "observation",
+            "global is an explicit escape hatch",
+            "--global",
+        ],
+    );
+    assert!(global.contains("global"));
+    let global_list = add(&second, &["memory", "list", "--global"]);
+    assert!(global_list.contains("global · 1 records"));
+    assert!(global_list.contains("explicit escape hatch"));
 }
 
 #[test]

@@ -25,6 +25,7 @@ use std::{
 };
 
 pub mod jcode_gate;
+pub mod memory;
 pub mod observability;
 pub mod repo_source;
 
@@ -695,7 +696,7 @@ fn validate_private_file(_: &File, path: &Path) -> Result<fs::Metadata> {
     )
 }
 
-fn open_private_file(path: &Path, write: bool) -> Result<File> {
+pub(crate) fn open_private_file(path: &Path, write: bool) -> Result<File> {
     let file = open_regular_nofollow(path, write)?;
     validate_private_file(&file, path)?;
     Ok(file)
@@ -800,7 +801,7 @@ fn chmod(_: &Path, _: u32) -> Result<()> {
     Ok(())
 }
 
-fn secure_dir(path: &Path) -> Result<()> {
+pub(crate) fn secure_dir(path: &Path) -> Result<()> {
     fs::create_dir_all(path)?;
     let file = open_private_directory(path)?;
     #[cfg(unix)]
@@ -922,7 +923,7 @@ impl Drop for OwnedPrivateDirectory {
     }
 }
 
-fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
+pub(crate) fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         let parent = open_private_directory(parent)?;
         validate_private_directory(&parent, path.parent().expect("checked parent"))?;
@@ -990,7 +991,7 @@ fn session_dir_at(base: &Path, sid: &str) -> Result<(PathBuf, File)> {
 fn session_dir(sid: &str) -> Result<(PathBuf, File)> {
     session_dir_at(&state_home()?, sid)
 }
-fn open_lock_file(path: &Path) -> Result<File> {
+pub(crate) fn open_lock_file(path: &Path) -> Result<File> {
     if let Some(parent) = path.parent() {
         secure_dir(parent)?
     }
@@ -1018,7 +1019,7 @@ fn open_lock_file(path: &Path) -> Result<File> {
     validate_private_file(&file, path)?;
     Ok(file)
 }
-fn lock_path(path: &Path) -> Result<File> {
+pub(crate) fn lock_path(path: &Path) -> Result<File> {
     let file = open_lock_file(path)?;
     FileExt::lock_exclusive(&file)?;
     validate_private_file(&file, path)?;
