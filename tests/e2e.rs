@@ -4635,7 +4635,7 @@ exit 9
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
     assert!(
-        skill.contains("Azdaja 0.1.10") && skill.contains(dst.join("azdaja").to_str().unwrap())
+        skill.contains("Azdaja 0.1.11") && skill.contains(dst.join("azdaja").to_str().unwrap())
     );
     assert!(skill.contains("one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle"));
     assert!(skill.contains("llm_batch(prompts, workers=6)"));
