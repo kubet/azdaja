@@ -6854,6 +6854,7 @@ struct SoloProgramFailure {
     output: Option<String>,
     failure_line: Option<String>,
     external_calls: usize,
+    semantic_calls: usize,
 }
 
 /// Monotonic, process-local timings not represented by provider attempt rows.
@@ -6868,6 +6869,7 @@ struct SoloRuntimeMetrics {
     snapshot_load_count: u32,
     snapshot_load_wall_ns: u128,
     sub_call_count: u64,
+    semantic_call_count: u64,
     sub_call_wall_ns: u128,
     projection_ledger_calls: Option<u64>,
     projection_calls: Option<u64>,
@@ -6891,6 +6893,7 @@ struct SoloRuntimeTrace<'a> {
     snapshot_load_count: u32,
     snapshot_load_wall_ns: u128,
     sub_call_count: u64,
+    semantic_call_count: u64,
     sub_call_wall_ns: u128,
     projection_ledger_calls: Option<u64>,
     projection_calls: Option<u64>,
@@ -6907,7 +6910,7 @@ fn solo_runtime_trace(
     metrics: &SoloRuntimeMetrics,
 ) -> Result<String> {
     let row = SoloRuntimeTrace {
-        schema_version: 2,
+        schema_version: 3,
         event: "solo_runtime",
         request_id,
         outcome,
@@ -6918,6 +6921,7 @@ fn solo_runtime_trace(
         snapshot_load_count: metrics.snapshot_load_count,
         snapshot_load_wall_ns: metrics.snapshot_load_wall_ns,
         sub_call_count: metrics.sub_call_count,
+        semantic_call_count: metrics.semantic_call_count,
         sub_call_wall_ns: metrics.sub_call_wall_ns,
         projection_ledger_calls: metrics.projection_ledger_calls,
         projection_calls: metrics.projection_calls,
@@ -7091,6 +7095,7 @@ fn execute_solo_reply(
         output: None,
         failure_line: None,
         external_calls: 0,
+        semantic_calls: 0,
     })?;
     validate_solo_python(&code).map_err(|error| SoloProgramFailure {
         kind: classify_program_failure(&error.to_string(), SoloProgramFailureKind::Compile),
@@ -7099,6 +7104,7 @@ fn execute_solo_reply(
         output: None,
         failure_line: None,
         external_calls: 0,
+        semantic_calls: 0,
     })?;
     runtime.exec_invocation_count = runtime.exec_invocation_count.saturating_add(1);
     let exec_started = Instant::now();
@@ -7113,10 +7119,14 @@ fn execute_solo_reply(
         output: None,
         failure_line: None,
         external_calls: 0,
+        semantic_calls: 0,
     })?;
     runtime.sub_call_count = runtime
         .sub_call_count
         .saturating_add(u64::try_from(result.external_calls).unwrap_or(u64::MAX));
+    runtime.semantic_call_count = runtime
+        .semantic_call_count
+        .saturating_add(u64::try_from(result.semantic_calls).unwrap_or(u64::MAX));
     runtime.sub_call_wall_ns = runtime
         .sub_call_wall_ns
         .saturating_add(result.sub_call_wall_ns);
@@ -7159,6 +7169,7 @@ fn execute_solo_reply(
             output: Some(result.output),
             failure_line: result.failure_line,
             external_calls: result.external_calls,
+            semantic_calls: result.semantic_calls,
         });
     }
     if !result.finalized {
@@ -7169,6 +7180,7 @@ fn execute_solo_reply(
             output: Some(result.output),
             failure_line: None,
             external_calls: result.external_calls,
+            semantic_calls: result.semantic_calls,
         });
     }
     let blank = session
@@ -7180,6 +7192,7 @@ fn execute_solo_reply(
             output: Some(result.output.clone()),
             failure_line: None,
             external_calls: result.external_calls,
+            semantic_calls: result.semantic_calls,
         })?;
     if blank {
         return Err(SoloProgramFailure {
@@ -7189,18 +7202,23 @@ fn execute_solo_reply(
             output: Some(result.output),
             failure_line: None,
             external_calls: result.external_calls,
+            semantic_calls: result.semantic_calls,
         });
     }
-    if classification_requires_semantic_calls && result.external_calls == 0 {
+    if classification_without_semantic_calls(
+        classification_requires_semantic_calls,
+        result.semantic_calls,
+    ) {
         return Err(SoloProgramFailure {
             kind: SoloProgramFailureKind::ClassificationWithoutSemanticCalls,
             error: anyhow!(
-                "solo semantic gate rejected FINAL: classification-worded task completed with sub_call_count=0"
+                "solo semantic gate rejected FINAL: classification-worded task completed with semantic_call_count=0"
             ),
             code: Some(code),
             output: Some(result.output),
             failure_line: None,
             external_calls: result.external_calls,
+            semantic_calls: result.semantic_calls,
         });
     }
     let answer = session
@@ -7212,12 +7230,17 @@ fn execute_solo_reply(
             output: Some(result.output.clone()),
             failure_line: None,
             external_calls: result.external_calls,
+            semantic_calls: result.semantic_calls,
         })?;
     Ok((
         normalize_answer_prefix(&answer, answer_prefix),
         code,
         result.output,
     ))
+}
+
+fn classification_without_semantic_calls(required: bool, semantic_calls: usize) -> bool {
+    required && semantic_calls == 0
 }
 
 fn redact_quoted_literals(line: &str) -> String {
@@ -8818,6 +8841,7 @@ mod tests {
                 output: None,
                 failure_line: None,
                 external_calls: 0,
+                semantic_calls: 0,
             };
             assert!(solo_program_failure_is_repairable(
                 &failure,
@@ -8831,6 +8855,7 @@ mod tests {
             ));
             let child_call_failure = SoloProgramFailure {
                 external_calls: 1,
+                semantic_calls: 0,
                 ..failure
             };
             assert!(!solo_program_failure_is_repairable(
@@ -8850,6 +8875,7 @@ mod tests {
                 output: None,
                 failure_line: None,
                 external_calls: 0,
+                semantic_calls: 0,
             };
             assert!(!solo_program_failure_is_repairable(
                 &failure,
@@ -8868,6 +8894,7 @@ mod tests {
             output: Some(String::new()),
             failure_line: None,
             external_calls: 0,
+            semantic_calls: 0,
         };
         let prompt = root_repair_prompt(&failure);
         assert!(prompt.ends_with(SOLO_FINAL_CONTRACT));
@@ -8893,6 +8920,9 @@ mod tests {
 
     #[test]
     fn classification_final_gate_is_typed_axiomatic_and_fail_closed() {
+        assert!(classification_without_semantic_calls(true, 0));
+        assert!(!classification_without_semantic_calls(true, 1));
+        assert!(!classification_without_semantic_calls(false, 0));
         for question in [
             "How many data points should be classified as label 'spam'?",
             "Which of the labels is the least common?",
@@ -8915,7 +8945,21 @@ mod tests {
             output: Some(String::new()),
             failure_line: None,
             external_calls: 0,
+            semantic_calls: 0,
         };
+        let incidental_llm_then_grep = SoloProgramFailure {
+            kind: SoloProgramFailureKind::ClassificationWithoutSemanticCalls,
+            error: anyhow!("incidental llm call did not perform semantic classification"),
+            code: Some("llm('incidental')\nFINAL(str(ctx.count('spam')))".to_owned()),
+            output: Some(String::new()),
+            failure_line: None,
+            external_calls: 1,
+            semantic_calls: 0,
+        };
+        assert!(classification_without_semantic_calls(
+            true,
+            incidental_llm_then_grep.semantic_calls
+        ));
         let prompt = root_repair_prompt(&failure);
         assert!(prompt.contains(
             "Labels are produced by classifying instances, never found by searching for label fields."
@@ -8941,6 +8985,7 @@ mod tests {
             output: None,
             failure_line: None,
             external_calls: 0,
+            semantic_calls: 0,
         };
         let line_limit_prompt = root_repair_prompt(&line_limit_failure);
         assert!(line_limit_prompt.contains("at or below 40 nonblank lines"));
@@ -8960,6 +9005,7 @@ mod tests {
             output: None,
             failure_line: None,
             external_calls: 0,
+            semantic_calls: 0,
         };
         let ontology_prompt = root_repair_prompt(&ontology_failure);
         assert!(ontology_prompt.contains("source_ontology()"));
@@ -8984,6 +9030,7 @@ mod tests {
                 output: None,
                 failure_line: None,
                 external_calls: 0,
+                semantic_calls: 0,
             };
             let prompt = root_repair_prompt(&failure);
             assert!(prompt.len() <= 1024);
@@ -9002,6 +9049,7 @@ mod tests {
             output: Some("Traceback\n  File \"<python-input-1>\", line 2, in <module>\nAssertionError: secret-source-value".to_owned()),
             failure_line: Some(source_line.to_owned()),
             external_calls: 0,
+        semantic_calls: 0,
         };
         let diagnostic_prompt = root_repair_prompt(&diagnostic_failure);
         assert!(diagnostic_prompt.contains("failing model-authored line"));
@@ -9019,6 +9067,7 @@ mod tests {
             ),
             failure_line: Some("raise ValueError(ctx)".to_owned()),
             external_calls: 0,
+        semantic_calls: 0,
         };
         let spoofed_prompt = root_repair_prompt(&spoofed_frame_failure);
         assert!(spoofed_prompt.contains("failing model-authored line"));
@@ -9041,6 +9090,7 @@ mod tests {
                 ),
                 failure_line: Some(adversarial_line.clone()),
                 external_calls: 0,
+        semantic_calls: 0,
             };
             let prompt = root_repair_prompt(&failure);
             assert!(prompt.len() <= 1024);
@@ -9055,6 +9105,7 @@ mod tests {
             output: None,
             failure_line: Some("x = 1 + None".to_owned()),
             external_calls: 0,
+            semantic_calls: 0,
         };
         assert_eq!(
             ordinary_program_failure.kind,
@@ -9080,6 +9131,7 @@ mod tests {
                 output: None,
                 failure_line: None,
                 external_calls: 0,
+                semantic_calls: 0,
             };
             assert!(!solo_program_failure_is_repairable(&failure, 1, 3));
         }
@@ -9112,12 +9164,14 @@ mod tests {
             output: None,
             failure_line: None,
             external_calls: 0,
+            semantic_calls: 0,
         };
         let helper_prompt = root_repair_prompt(&helper_contract);
         assert!(helper_prompt.contains("helper rejected its arguments"));
         assert!(solo_program_failure_is_repairable(&helper_contract, 1, 3));
         let helper_after_calls = SoloProgramFailure {
             external_calls: 2,
+            semantic_calls: 0,
             ..helper_contract
         };
         assert!(!solo_program_failure_is_repairable(
@@ -9140,6 +9194,7 @@ mod tests {
             output: None,
             failure_line: None,
             external_calls: 0,
+            semantic_calls: 0,
         };
         let projection_prompt = root_repair_prompt(&projection_boundary);
         assert!(
@@ -9307,7 +9362,7 @@ mod tests {
             "=== solo runtime trace end request_id=\"1-2-3\" ==="
         );
         let row: serde_json::Value = serde_json::from_str(lines[lines.len() - 2]).unwrap();
-        assert_eq!(row["schema_version"], 2);
+        assert_eq!(row["schema_version"], 3);
         assert_eq!(row["event"], "solo_runtime");
         assert_eq!(row["outcome"], "failed");
         for key in [

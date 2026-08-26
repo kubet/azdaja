@@ -3572,6 +3572,7 @@ pub struct ExecResult {
     pub success: bool,
     pub finalized: bool,
     pub external_calls: usize,
+    pub semantic_calls: usize,
     /// Gross monotonic wall spent inside logical model-call batches during this cell.
     pub sub_call_wall_ns: u128,
     pub semantic_projection: Option<SemanticProjectionProvenance>,
@@ -4303,6 +4304,7 @@ type RunCellOutcome = (
     bool,
     Option<Final>,
     usize,
+    usize,
     Duration,
     Option<ExcType>,
     Option<String>,
@@ -4770,6 +4772,7 @@ fn run_cell(
                 false,
                 final_out,
                 call_count,
+                semantic_call_count,
                 sub_call_wall,
                 Some(exception),
                 failure_line,
@@ -4797,6 +4800,7 @@ fn run_cell(
                     true,
                     final_out,
                     call_count,
+                    semantic_call_count,
                     sub_call_wall,
                     None,
                     None,
@@ -4850,6 +4854,7 @@ fn run_cell(
                             false,
                             final_out,
                             call_count,
+                            semantic_call_count,
                             sub_call_wall,
                             Some(exception),
                             failure_line,
@@ -4879,6 +4884,7 @@ fn run_cell(
                         false,
                         final_out,
                         call_count,
+                        semantic_call_count,
                         sub_call_wall,
                         Some(exception),
                         failure_line,
@@ -4907,6 +4913,7 @@ fn run_cell(
                         false,
                         final_out,
                         call_count,
+                        semantic_call_count,
                         sub_call_wall,
                         Some(exception),
                         failure_line,
@@ -4922,6 +4929,7 @@ fn run_cell(
                     false,
                     final_out,
                     call_count,
+                    semantic_call_count,
                     sub_call_wall,
                     None,
                     None,
@@ -5378,6 +5386,7 @@ impl SoloSession {
             success,
             mut final_out,
             external_calls,
+            semantic_calls,
             sub_call_wall,
             mut exception,
             mut failure_line,
@@ -5431,6 +5440,7 @@ impl SoloSession {
             success,
             finalized,
             external_calls,
+            semantic_calls,
             sub_call_wall_ns: sub_call_wall.as_nanos(),
             semantic_projection,
             failure_kind: exec_failure_kind(exception),
@@ -5466,6 +5476,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         success,
         mut final_out,
         external_calls,
+        semantic_calls,
         sub_call_wall,
         mut exception,
         mut failure_line,
@@ -5517,6 +5528,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         success,
         finalized,
         external_calls,
+        semantic_calls,
         sub_call_wall_ns: sub_call_wall.as_nanos(),
         semantic_projection,
         failure_kind: exec_failure_kind(exception),
@@ -11568,7 +11580,7 @@ mod lexical_relevance_tests {
         let cfg = Config::default();
         let mut session = SoloSession::new(&cfg, None).unwrap();
         let repl = session.repl.take().unwrap();
-        let (_, _, success, _, calls, _, failure, _, _) = run_cell(
+        let (_, _, success, _, calls, _, _, failure, _, _) = run_cell(
             repl,
             "lexical_relevance('source', 'query', 4000)",
             &cfg,
@@ -11818,7 +11830,7 @@ FINAL(len(selected))"#;
         let cfg = Config::default();
         let mut session = SoloSession::new(&cfg, None).unwrap();
         let repl = session.repl.take().unwrap();
-        let (_, _, success, _, calls, _, failure, _, _) = run_cell(
+        let (_, _, success, _, calls, _, _, failure, _, _) = run_cell(
             repl,
             "exact_line_records('Row: x', 'Row: ')",
             &cfg,
@@ -12054,7 +12066,7 @@ mod exact_line_ledger_projection_tests {
         let mut repl = MontyRepl::new("ordinary", tracker, CompileOptions::default());
         repl.feed_run(PRELUDE, vec![], PrintWriter::Disabled)
             .unwrap();
-        let (_, _, success, _, calls, _, failure, _, provenance) = run_cell(
+        let (_, _, success, _, calls, _, _, failure, _, provenance) = run_cell(
             repl,
             "exact_line_ledger('Row: x', 'Row: ')",
             &cfg,
