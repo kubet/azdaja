@@ -3058,37 +3058,32 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
                         }) && !(object.contains_key("file_path") && object.contains_key("path"))
                     });
                     if let Some(path) = path {
-                        if claude_hook_has_shell_expansion(path) {
-                            ClaudeHookBashAccess::Broad
-                        } else {
-                            let resolved = claude_hook_resolve(&cwd, path);
-                            if claude_hook_path_or_scope_is_large(&resolved, &cwd)? {
-                                let limit =
-                                    tool_input.get("limit").and_then(serde_json::Value::as_u64);
-                                let offset_safe = match tool_input.get("offset") {
-                                    None => true,
-                                    Some(offset) => offset.as_u64() == Some(0),
-                                };
-                                if fields_safe
-                                    && offset_safe
-                                    && limit.is_some_and(|limit| (1..=10).contains(&limit))
-                                    && claude_hook_is_line_text(&resolved)
-                                    && claude_hook_head_sample_bytes(
-                                        &resolved,
-                                        limit.unwrap_or(0) as usize,
-                                        CLAUDE_HOOK_SAMPLE_BYTES,
-                                    )
-                                    .ok()
-                                    .flatten()
-                                    .is_some()
-                                {
-                                    ClaudeHookBashAccess::Sample
-                                } else {
-                                    ClaudeHookBashAccess::Broad
-                                }
+                        let resolved = claude_hook_resolve(&cwd, path);
+                        if claude_hook_path_or_scope_is_large(&resolved, &cwd)? {
+                            let limit = tool_input.get("limit").and_then(serde_json::Value::as_u64);
+                            let offset_safe = match tool_input.get("offset") {
+                                None => true,
+                                Some(offset) => offset.as_u64() == Some(0),
+                            };
+                            if fields_safe
+                                && offset_safe
+                                && limit.is_some_and(|limit| (1..=10).contains(&limit))
+                                && claude_hook_is_line_text(&resolved)
+                                && claude_hook_head_sample_bytes(
+                                    &resolved,
+                                    limit.unwrap_or(0) as usize,
+                                    CLAUDE_HOOK_SAMPLE_BYTES,
+                                )
+                                .ok()
+                                .flatten()
+                                .is_some()
+                            {
+                                ClaudeHookBashAccess::Sample
                             } else {
-                                ClaudeHookBashAccess::None
+                                ClaudeHookBashAccess::Broad
                             }
+                        } else {
+                            ClaudeHookBashAccess::None
                         }
                     } else {
                         ClaudeHookBashAccess::Broad
@@ -10755,9 +10750,10 @@ PY
         let base = unique_temp_dir("azdaja-claude-hook-litmus");
         let root = base.join("markers");
         let large = base.join("observations.jsonl");
-        let small = base.join("small.txt");
+        let small = base.join("small![literal].txt");
         fs::write(&large, vec![b'x'; 5_000_000]).unwrap();
         fs::write(&small, vec![b's'; 2 * 1024]).unwrap();
+        fs::write(base.join("small.txt"), vec![b's'; 2 * 1024]).unwrap();
         let session = "litmus";
         let prompt = event(
             session,
