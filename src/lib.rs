@@ -6429,10 +6429,15 @@ fn bridge_process_group_alive(pid: libc::pid_t) -> Result<bool> {
         return Ok(true);
     }
     let error = std::io::Error::last_os_error();
-    if error.raw_os_error() == Some(libc::ESRCH) {
-        Ok(false)
-    } else {
-        Err(error.into())
+    match error.raw_os_error() {
+        Some(libc::ESRCH) => Ok(false),
+        // POSIX defines EPERM from kill(..., 0) as evidence that the target
+        // exists but the caller is not permitted to signal it. Hosted macOS
+        // runners can return this for an owned process-group probe while still
+        // permitting the subsequent real group signal. Preserve the existence
+        // information instead of turning a sandbox policy into a false failure.
+        Some(libc::EPERM) => Ok(true),
+        _ => Err(error.into()),
     }
 }
 
