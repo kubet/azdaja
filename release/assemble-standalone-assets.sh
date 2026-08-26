@@ -5,10 +5,15 @@ VERSION=0.1.12
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 OUT=${1:-$ROOT/dist-v$VERSION}
 DARWIN=azdaja-v$VERSION-darwin-arm64
+DARWIN_X86_64=azdaja-v$VERSION-darwin-x86_64
 LINUX=azdaja-v$VERSION-linux-x86_64
 
 [ -f "$OUT/$DARWIN" ] && [ ! -L "$OUT/$DARWIN" ] || {
   printf 'assemble-standalone-assets: missing raw platform binary %s\n' "$OUT/$DARWIN" >&2
+  exit 2
+}
+[ -f "$OUT/$DARWIN_X86_64" ] && [ ! -L "$OUT/$DARWIN_X86_64" ] || {
+  printf 'assemble-standalone-assets: missing raw platform binary %s\n' "$OUT/$DARWIN_X86_64" >&2
   exit 2
 }
 [ -f "$OUT/$LINUX" ] && [ ! -L "$OUT/$LINUX" ] || {
@@ -40,9 +45,9 @@ cmp -s "$ROOT/THIRD-PARTY-NOTICES.md" "$OUT/THIRD-PARTY-NOTICES.md.tmp.$$"
 mv -f "$OUT/LICENSE.tmp.$$" "$OUT/LICENSE"
 mv -f "$OUT/THIRD-PARTY-NOTICES.md.tmp.$$" "$OUT/THIRD-PARTY-NOTICES.md"
 {
-  for payload in "$DARWIN" "$LINUX" LICENSE THIRD-PARTY-NOTICES.md; do
+  for payload in "$DARWIN" "$DARWIN_X86_64" "$LINUX" LICENSE THIRD-PARTY-NOTICES.md; do
     printf '%s  %s\n' "$(sha256_file "$OUT/$payload")" "$payload"
   done
 } > "$OUT/SHA256SUMS.tmp.$$"
 mv -f "$OUT/SHA256SUMS.tmp.$$" "$OUT/SHA256SUMS"
-printf '%s\n' "assembled four checksummed payloads plus SHA256SUMS in $OUT"
+printf '%s\n' "assembled five checksummed payloads plus SHA256SUMS in $OUT"

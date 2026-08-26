@@ -535,6 +535,10 @@ case "$OS-$ARCH" in
     ASSET=azdaja-v$VERSION-darwin-arm64
     printf '%s\n' 'Checking platform... macOS arm64 supported'
     ;;
+  Darwin-x86_64)
+    ASSET=azdaja-v$VERSION-darwin-x86_64
+    printf '%s\n' 'Checking platform... macOS x86-64 supported'
+    ;;
   Linux-x86_64)
     ASSET=azdaja-v$VERSION-linux-x86_64
     if [ "${AZDAJA_INSTALL_TEST_MODE:-}" = local ]; then
@@ -576,7 +580,7 @@ case "$OS-$ARCH" in
     ;;
   *)
     printf 'Checking platform... %s-%s unsupported\n' "$OS" "$ARCH"
-    fail "unsupported platform $OS-$ARCH; v$VERSION binaries support Apple Silicon macOS 11+ and Linux x86-64 with glibc $GLIBC_MIN+"
+    fail "unsupported platform $OS-$ARCH; v$VERSION binaries support macOS 11+ on arm64 or x86-64, and Linux x86-64 with glibc $GLIBC_MIN+"
     ;;
 esac
 
@@ -793,13 +797,15 @@ NOTICES_SIZE=$(wc -c < "$TMP/THIRD-PARTY-NOTICES.md" | tr -d ' ')
 [ "$NOTICES_SIZE" -le 4194304 ] || fail 'THIRD-PARTY-NOTICES.md exceeds the 4 MiB download cap'
 
 DARWIN_ASSET=azdaja-v$VERSION-darwin-arm64
+DARWIN_X86_64_ASSET=azdaja-v$VERSION-darwin-x86_64
 LINUX_ASSET=azdaja-v$VERSION-linux-x86_64
 ENTRY_COUNT=$(awk 'NF { n += 1 } END { print n + 0 }' "$TMP/SHA256SUMS")
-[ "$ENTRY_COUNT" -eq 4 ] || fail 'SHA256SUMS must contain exactly the two platform binaries, LICENSE, and THIRD-PARTY-NOTICES.md'
+[ "$ENTRY_COUNT" -eq 5 ] || fail 'SHA256SUMS must contain exactly the three platform binaries, LICENSE, and THIRD-PARTY-NOTICES.md'
 MALFORMED_ENTRY=$(awk 'NF && NF != 2 { print; exit }' "$TMP/SHA256SUMS")
 [ -z "$MALFORMED_ENTRY" ] || fail 'SHA256SUMS contains a malformed payload entry'
-UNKNOWN_ENTRY=$(awk -v darwin="$DARWIN_ASSET" -v linux="$LINUX_ASSET" '
-  NF && $2 != darwin && $2 != "*" darwin && $2 != linux && $2 != "*" linux &&
+UNKNOWN_ENTRY=$(awk -v darwin="$DARWIN_ASSET" -v darwin_x86_64="$DARWIN_X86_64_ASSET" -v linux="$LINUX_ASSET" '
+  NF && $2 != darwin && $2 != "*" darwin &&
+    $2 != darwin_x86_64 && $2 != "*" darwin_x86_64 && $2 != linux && $2 != "*" linux &&
     $2 != "LICENSE" && $2 != "*LICENSE" &&
     $2 != "THIRD-PARTY-NOTICES.md" && $2 != "*THIRD-PARTY-NOTICES.md" { print; exit }
 ' "$TMP/SHA256SUMS")
@@ -820,6 +826,7 @@ EXPECTED_SHA256=$(manifest_sha256 "$ASSET")
 # Require the full supported release set even though this invocation downloads
 # only its selected platform binary.
 manifest_sha256 "$DARWIN_ASSET" >/dev/null
+manifest_sha256 "$DARWIN_X86_64_ASSET" >/dev/null
 manifest_sha256 "$LINUX_ASSET" >/dev/null
 EXPECTED_LICENSE_SHA256=$(manifest_sha256 LICENSE)
 EXPECTED_NOTICES_SHA256=$(manifest_sha256 THIRD-PARTY-NOTICES.md)

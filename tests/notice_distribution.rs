@@ -108,7 +108,7 @@ fn readme_has_exactly_three_install_blocks_and_readme_site_link_notices() {
 }
 
 #[test]
-fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads() {
+fn standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -120,8 +120,10 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads()
     ));
     fs::create_dir(&dist).unwrap();
     let darwin = dist.join("azdaja-v0.1.12-darwin-arm64");
+    let darwin_x86_64 = dist.join("azdaja-v0.1.12-darwin-x86_64");
     let linux = dist.join("azdaja-v0.1.12-linux-x86_64");
     fs::write(&darwin, b"raw darwin binary").unwrap();
+    fs::write(&darwin_x86_64, b"raw darwin x86-64 binary").unwrap();
     fs::write(&linux, b"raw linux binary").unwrap();
     let output = Command::new("sh")
         .arg(root.join("release/assemble-standalone-assets.sh"))
@@ -134,6 +136,10 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads()
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(fs::read(&darwin).unwrap(), b"raw darwin binary");
+    assert_eq!(
+        fs::read(&darwin_x86_64).unwrap(),
+        b"raw darwin x86-64 binary"
+    );
     assert_eq!(fs::read(&linux).unwrap(), b"raw linux binary");
     assert_eq!(
         fs::read(dist.join("LICENSE")).unwrap(),
@@ -145,9 +151,10 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_four_payloads()
     );
     let sums = fs::read_to_string(dist.join("SHA256SUMS")).unwrap();
     let lines: Vec<_> = sums.lines().collect();
-    assert_eq!(lines.len(), 4);
+    assert_eq!(lines.len(), 5);
     for name in [
         "azdaja-v0.1.12-darwin-arm64",
+        "azdaja-v0.1.12-darwin-x86_64",
         "azdaja-v0.1.12-linux-x86_64",
         "LICENSE",
         "THIRD-PARTY-NOTICES.md",

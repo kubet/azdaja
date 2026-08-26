@@ -299,7 +299,11 @@ fn alias_free_system_path(root: &Path) -> String {
 fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     let release = root.join(name);
     fs::create_dir_all(&release).unwrap();
-    for asset in ["azdaja-v0.1.12-darwin-arm64", "azdaja-v0.1.12-linux-x86_64"] {
+    for asset in [
+        "azdaja-v0.1.12-darwin-arm64",
+        "azdaja-v0.1.12-darwin-x86_64",
+        "azdaja-v0.1.12-linux-x86_64",
+    ] {
         fs::copy(candidate, release.join(asset)).unwrap();
     }
     let source = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -314,7 +318,7 @@ fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     fs::write(
         release.join("SHA256SUMS"),
         format!(
-            "{digest}  azdaja-v0.1.12-darwin-arm64\n{digest}  azdaja-v0.1.12-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
+            "{digest}  azdaja-v0.1.12-darwin-arm64\n{digest}  azdaja-v0.1.12-darwin-x86_64\n{digest}  azdaja-v0.1.12-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
         ),
     )
     .unwrap();
@@ -641,8 +645,10 @@ fn installers_are_identical_and_bind_current_assets_and_sums() {
     assert!(text.contains("RELEASE_BASE=https://azdaja.dev/releases/v$VERSION"));
     assert!(text.contains("$BASE_URL/SHA256SUMS"));
     assert!(text.contains("azdaja-v$VERSION-darwin-arm64"));
+    assert!(text.contains("azdaja-v$VERSION-darwin-x86_64"));
     assert!(text.contains("azdaja-v$VERSION-linux-x86_64"));
     assert!(text.contains("Darwin-arm64)"));
+    assert!(text.contains("Darwin-x86_64)"));
     assert!(text.contains("Linux-x86_64)"));
     assert!(text.contains("GLIBC_MIN=2.35"));
     assert!(text.contains("getconf GNU_LIBC_VERSION"));
@@ -1538,6 +1544,10 @@ fn public_v021_site_assets_match_the_bound_checksum_manifest() {
             "4e0463d0661eba4ee8e844fd351f9896719d8473fa0c17947078883bfd8dca29",
         ),
         (
+            "azdaja-v0.1.12-darwin-x86_64",
+            "78fc11691454176c67933ecd631c92a2efd424e1b15bd354b55920614bc94f2e",
+        ),
+        (
             "azdaja-v0.1.12-linux-x86_64",
             "d8127b720053d10ccde553151a7a88adcc92e16a8679f818b8ec1292a79ab7ab",
         ),
@@ -1578,6 +1588,24 @@ fn public_v021_binary_headers_match_the_advertised_platforms() {
         0
     );
 
+    let darwin_x86_64_path = root.join("azdaja-v0.1.12-darwin-x86_64");
+    let darwin_x86_64 = fs::read(&darwin_x86_64_path).unwrap();
+    assert!(darwin_x86_64.len() >= 8);
+    assert_eq!(&darwin_x86_64[..4], &[0xcf, 0xfa, 0xed, 0xfe]);
+    assert_eq!(
+        u32::from_le_bytes(darwin_x86_64[4..8].try_into().unwrap()),
+        0x0100_0007,
+        "Intel Darwin asset must be a 64-bit x86 Mach-O executable"
+    );
+    assert_ne!(
+        fs::metadata(&darwin_x86_64_path)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o111,
+        0
+    );
+
     let linux_path = root.join("azdaja-v0.1.12-linux-x86_64");
     let linux = fs::read(&linux_path).unwrap();
     assert!(linux.len() >= 20);
@@ -1598,7 +1626,11 @@ fn public_v021_binary_headers_match_the_advertised_platforms() {
 #[test]
 fn public_v021_binaries_expose_the_installer_config_staging_protocol() {
     let release = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.12");
-    for name in ["azdaja-v0.1.12-darwin-arm64", "azdaja-v0.1.12-linux-x86_64"] {
+    for name in [
+        "azdaja-v0.1.12-darwin-arm64",
+        "azdaja-v0.1.12-darwin-x86_64",
+        "azdaja-v0.1.12-linux-x86_64",
+    ] {
         let bytes = fs::read(release.join(name)).unwrap();
         assert!(
             bytes
@@ -1796,8 +1828,12 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     let server = FixtureServer::start(&scratch.0, &fixture_root);
     let system_path = alias_free_system_path(&scratch.0);
 
-    for (os, arch) in [("Darwin", "arm64"), ("Linux", "x86_64")] {
-        let home = scratch.0.join(format!("platform-{os}"));
+    for (os, arch) in [
+        ("Darwin", "arm64"),
+        ("Darwin", "x86_64"),
+        ("Linux", "x86_64"),
+    ] {
+        let home = scratch.0.join(format!("platform-{os}-{arch}"));
         let bin = home.join("bin");
         fs::create_dir_all(&home).unwrap();
         let output = run_installer(InstallRun {
@@ -1833,6 +1869,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     let requests = fs::read_to_string(&server.log).unwrap();
     assert!(requests.contains("/good/SHA256SUMS"));
     assert!(requests.contains("/good/azdaja-v0.1.12-darwin-arm64"));
+    assert!(requests.contains("/good/azdaja-v0.1.12-darwin-x86_64"));
     assert!(requests.contains("/good/azdaja-v0.1.12-linux-x86_64"));
 
     let home = scratch.0.join("atomic-home");
@@ -2015,9 +2052,15 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
     let mut positive_cells = 0;
     let mut expected_refusals = 0;
 
-    for (os, arch) in [("Darwin", "arm64"), ("Linux", "x86_64")] {
+    for (os, arch) in [
+        ("Darwin", "arm64"),
+        ("Darwin", "x86_64"),
+        ("Linux", "x86_64"),
+    ] {
         for harness in ["jcode", "claude", "codex", "gemini", "opencode"] {
-            let home = scratch.0.join(format!("matrix-{os}-detected-{harness}"));
+            let home = scratch
+                .0
+                .join(format!("matrix-{os}-{arch}-detected-{harness}"));
             let bin = home.join("bin");
             fs::create_dir_all(&home).unwrap();
             mark_detected(&home, harness);
@@ -2049,7 +2092,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
             positive_cells += 1;
         }
 
-        let home = scratch.0.join(format!("matrix-{os}-all"));
+        let home = scratch.0.join(format!("matrix-{os}-{arch}-all"));
         let bin = home.join("bin");
         fs::create_dir_all(&home).unwrap();
         let output = run_installer(InstallRun {
@@ -2082,7 +2125,7 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
         positive_cells += 1;
 
         let before = fs::read_to_string(&server.log).unwrap_or_default();
-        let home = scratch.0.join(format!("matrix-{os}-none"));
+        let home = scratch.0.join(format!("matrix-{os}-{arch}-none"));
         fs::create_dir(&home).unwrap();
         let output = run_installer(InstallRun {
             home: &home,
@@ -2103,7 +2146,9 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
         assert_eq!(fs::read_to_string(&server.log).unwrap_or_default(), before);
         expected_refusals += 1;
 
-        let home = scratch.0.join(format!("matrix-{os}-already-installed"));
+        let home = scratch
+            .0
+            .join(format!("matrix-{os}-{arch}-already-installed"));
         let bin = home.join("bin");
         fs::create_dir_all(&bin).unwrap();
         fs::write(bin.join("azdaja"), b"old-managed-binary").unwrap();
@@ -2137,8 +2182,8 @@ fn local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states() {
         positive_cells += 1;
     }
 
-    assert_eq!(positive_cells, 14);
-    assert_eq!(expected_refusals, 2);
+    assert_eq!(positive_cells, 21);
+    assert_eq!(expected_refusals, 3);
 }
 
 #[test]
