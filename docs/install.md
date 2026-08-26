@@ -2,7 +2,7 @@
 
 ## Compatibility preflight
 
-The standalone installer accepts Apple Silicon macOS 11 or newer and x86-64 Linux with glibc 2.35 or newer. On Linux, it parses `getconf GNU_LIBC_VERSION` and refuses musl, an older glibc, a missing `getconf`, or an invalid result before download or mutation under `HOME`. Use a newer glibc host or build with Rust 1.95 when that preflight fails.
+The standalone installer accepts macOS 11 or newer on Apple Silicon and Intel, plus x86-64 Linux with glibc 2.35 or newer. On Linux, it parses `getconf GNU_LIBC_VERSION` and refuses musl, an older glibc, a missing `getconf`, or an invalid result before download or mutation under `HOME`. Use a newer glibc host or build with Rust 1.95 when that preflight fails.
 
 A set `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, or `XDG_DATA_HOME` must be absolute. Empty or relative XDG config and state values fall back to the corresponding absolute `HOME` paths; an invalid data root fails closed.
 

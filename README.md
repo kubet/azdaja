@@ -22,7 +22,7 @@ What makes it different:
 
 ## Install
 
-The curl installer adds the standalone command, detects supported tool executables, and prompts you to choose integrations. It distinguishes a tool being found from an Azdaja integration being present or needing repair, shows exact destinations before mutation, and prints named download, verification, staging, and write phases. Pass `--all` for an unattended install of every integration. It never calls a model provider. It supports Apple Silicon macOS 11+ and x86-64 Linux with glibc 2.35 or newer.
+The curl installer adds the standalone command, detects supported tool executables, and prompts you to choose integrations. It distinguishes a tool being found from an Azdaja integration being present or needing repair, shows exact destinations before mutation, and prints named download, verification, staging, and write phases. Pass `--all` for an unattended install of every integration. It never calls a model provider. It supports macOS 11+ on Apple Silicon and Intel, plus x86-64 Linux with glibc 2.35 or newer.
 
 ```bash
 curl -fsSL https://azdaja.dev/install | sh

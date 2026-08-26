@@ -139,6 +139,26 @@ fn readme_has_exactly_three_install_blocks_and_readme_site_link_notices() {
 }
 
 #[test]
+fn public_platform_claims_include_every_installer_target() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let readme = fs::read_to_string(root.join("README.md")).unwrap();
+    let install_doc = fs::read_to_string(root.join("docs/install.md")).unwrap();
+    let site = fs::read_to_string(root.join("site/index.html")).unwrap();
+    let installer = fs::read_to_string(root.join("site/install")).unwrap();
+
+    assert!(readme.contains("macOS 11+ on Apple Silicon and Intel"));
+    assert!(install_doc.contains("macOS 11 or newer on Apple Silicon and Intel"));
+    assert!(site.contains("macOS 11+ on Apple Silicon and Intel"));
+    for asset in [
+        "azdaja-v$VERSION-darwin-arm64",
+        "azdaja-v$VERSION-darwin-x86_64",
+        "azdaja-v$VERSION-linux-x86_64",
+    ] {
+        assert!(installer.contains(asset), "installer is missing {asset}");
+    }
+}
+
+#[test]
 fn standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let nonce = SystemTime::now()
