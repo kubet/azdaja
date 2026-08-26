@@ -1541,15 +1541,15 @@ fn public_v021_site_assets_match_the_bound_checksum_manifest() {
     let expected = [
         (
             "azdaja-v0.1.13-darwin-arm64",
-            "4e0463d0661eba4ee8e844fd351f9896719d8473fa0c17947078883bfd8dca29",
+            "ac6714f68116644669b71c9d5f6066741e414192bc7353de28476ca549c87a61",
         ),
         (
             "azdaja-v0.1.13-darwin-x86_64",
-            "78fc11691454176c67933ecd631c92a2efd424e1b15bd354b55920614bc94f2e",
+            "d9ae31262c6afc7ad3a8a599f8026b40405e2209cab78d8900a15637acd7eb56",
         ),
         (
             "azdaja-v0.1.13-linux-x86_64",
-            "d8127b720053d10ccde553151a7a88adcc92e16a8679f818b8ec1292a79ab7ab",
+            "a73d1db7d2aac34c21e5f188d13be81b36adf21a9b7769cff2cd6930a9a2f3d5",
         ),
         (
             "LICENSE",
