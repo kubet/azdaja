@@ -619,7 +619,22 @@ fn open_regular_file_without_following(path: &Path) -> Result<Option<File>> {
     if !open_metadata.file_type().is_file() {
         return Ok(None);
     }
-    if !metadata_matches(&path_metadata, &open_metadata) {
+    #[cfg(windows)]
+    let identity_matches = {
+        let mut verify_options = OpenOptions::new();
+        verify_options.read(true);
+        configure_no_follow(&mut verify_options);
+        let verify = verify_options.open(path).with_context(|| {
+            format!(
+                "cannot re-open repository file {} for identity validation",
+                path.display()
+            )
+        })?;
+        crate::windows_file_identity(&file)? == crate::windows_file_identity(&verify)?
+    };
+    #[cfg(not(windows))]
+    let identity_matches = metadata_matches(&path_metadata, &open_metadata);
+    if !identity_matches {
         bail!(
             "repository file identity changed before it could be read: {}; retry when the repository is stable",
             path.display()
@@ -648,13 +663,6 @@ fn configure_no_follow(_: &mut OpenOptions) {}
 fn metadata_matches(path: &fs::Metadata, open: &fs::Metadata) -> bool {
     use std::os::unix::fs::MetadataExt;
     path.dev() == open.dev() && path.ino() == open.ino()
-}
-
-#[cfg(windows)]
-fn metadata_matches(path: &fs::Metadata, open: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    path.volume_serial_number() == open.volume_serial_number()
-        && path.file_index() == open.file_index()
 }
 
 #[cfg(not(any(unix, windows)))]

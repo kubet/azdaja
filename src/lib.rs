@@ -12,7 +12,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     env,
     fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
+    io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{
@@ -23,6 +23,9 @@ use std::{
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(unix)]
+use std::io::{BufRead, BufReader};
 
 pub mod jcode_gate;
 pub mod memory;
@@ -95,12 +98,14 @@ mod recent_scope_status_tests {
         format!("{byte:064x}")
     }
 
+    #[cfg(unix)]
     fn memory_path(root: &Path, key: &str) -> PathBuf {
         root.join("memory")
             .join("scopes")
             .join(format!("{key}.jsonl"))
     }
 
+    #[cfg(unix)]
     fn observability_path(root: &Path, key: &str) -> PathBuf {
         root.join("observability")
             .join("scopes")
@@ -128,6 +133,7 @@ mod recent_scope_status_tests {
         );
     }
 
+    #[cfg(unix)]
     fn add_memory(root: &Path, key: &str, text: &str) {
         memory::append_at(
             root,
@@ -140,6 +146,7 @@ mod recent_scope_status_tests {
         .unwrap();
     }
 
+    #[cfg(unix)]
     fn add_observability(root: &Path, key: &str, text: &str) {
         let source = observability::SourceLocalAggregate::from_text(text);
         observability::append_scoped_at(root, key, observability::RunKind::SoloFinal, &source)
@@ -850,17 +857,39 @@ fn metadata_matches(open: &fs::Metadata, path: &fs::Metadata) -> bool {
     use std::os::unix::fs::MetadataExt;
     open.dev() == path.dev() && open.ino() == path.ino()
 }
-#[cfg(windows)]
-fn metadata_matches(open: &fs::Metadata, path: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    open.volume_serial_number().is_some()
-        && open.volume_serial_number() == path.volume_serial_number()
-        && open.file_index().is_some()
-        && open.file_index() == path.file_index()
-}
 #[cfg(not(any(unix, windows)))]
 fn metadata_matches(_: &fs::Metadata, _: &fs::Metadata) -> bool {
     false
+}
+
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct WindowsFileIdentity {
+    volume_serial: u32,
+    file_index: u64,
+    pub(crate) links: u32,
+}
+
+#[cfg(windows)]
+pub(crate) fn windows_file_identity(file: &File) -> Result<WindowsFileIdentity> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::{
+        Foundation::HANDLE,
+        Storage::FileSystem::{BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle},
+    };
+
+    let mut info = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: `file` owns a live OS handle and `info` is writable for the duration of the call.
+    let succeeded =
+        unsafe { GetFileInformationByHandle(file.as_raw_handle() as HANDLE, &mut info) };
+    if succeeded == 0 {
+        return Err(std::io::Error::last_os_error()).context("inspect Windows file identity");
+    }
+    Ok(WindowsFileIdentity {
+        volume_serial: info.dwVolumeSerialNumber,
+        file_index: (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+        links: info.nNumberOfLinks,
+    })
 }
 
 #[cfg(unix)]
@@ -881,7 +910,25 @@ fn bound_metadata(file: &File, path: &Path) -> Result<fs::Metadata> {
     let open = file.metadata()?;
     let current = fs::symlink_metadata(path)
         .with_context(|| format!("path binding changed: {}", path.display()))?;
-    if metadata_is_link_or_reparse(&current) || !metadata_matches(&open, &current) {
+    #[cfg(windows)]
+    let identity_matches = {
+        use std::os::windows::fs::OpenOptionsExt;
+        let mut options = OpenOptions::new();
+        let flags = FILE_FLAG_OPEN_REPARSE_POINT
+            | if open.file_type().is_dir() {
+                FILE_FLAG_BACKUP_SEMANTICS
+            } else {
+                0
+            };
+        options.read(true).custom_flags(flags);
+        let rebound = options
+            .open(path)
+            .with_context(|| format!("path binding changed: {}", path.display()))?;
+        windows_file_identity(file)? == windows_file_identity(&rebound)?
+    };
+    #[cfg(not(windows))]
+    let identity_matches = metadata_matches(&open, &current);
+    if metadata_is_link_or_reparse(&current) || !identity_matches {
         bail!("path binding changed: {}", path.display())
     }
     Ok(open)
@@ -936,9 +983,8 @@ fn validate_private_file_identity(file: &File, path: &Path) -> Result<fs::Metada
 }
 #[cfg(windows)]
 fn validate_private_file_identity(file: &File, path: &Path) -> Result<fs::Metadata> {
-    use std::os::windows::fs::MetadataExt;
     let metadata = bound_metadata(file, path)?;
-    if !metadata.file_type().is_file() || metadata.number_of_links() != Some(1) {
+    if !metadata.file_type().is_file() || windows_file_identity(file)?.links != 1 {
         bail!("unsafe private file: {}", path.display())
     }
     Ok(metadata)
@@ -1072,11 +1118,6 @@ fn chmod(path: &Path, mode: u32) -> Result<()> {
     bound_metadata(&file, path)?;
     Ok(())
 }
-#[cfg(not(unix))]
-fn chmod(_: &Path, _: u32) -> Result<()> {
-    Ok(())
-}
-
 pub(crate) fn secure_dir(path: &Path) -> Result<()> {
     fs::create_dir_all(path)?;
     let file = open_private_directory(path)?;
@@ -5213,6 +5254,7 @@ fn batch_item_value(result: CallItemResult) -> String {
 }
 
 #[derive(Clone, Copy)]
+#[cfg_attr(windows, allow(dead_code))]
 struct CallManyPolicy {
     call_limit: usize,
     batch: bool,
@@ -5641,6 +5683,7 @@ impl EnteredTurnBudget {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(windows, allow(dead_code))]
 enum ModelSetupSubstage {
     Connect,
     Hello,
@@ -5697,6 +5740,7 @@ impl std::fmt::Display for JcodeApiError {
 
 impl std::error::Error for JcodeApiError {}
 
+#[cfg_attr(windows, allow(dead_code))]
 fn jcode_frame_error(frame: &serde_json::Value) -> anyhow::Error {
     let message = frame
         .get("message")
@@ -6790,6 +6834,7 @@ static SOLO_SHARED_JCODE_DRAINS: AtomicU32 = AtomicU32::new(0);
 
 pub struct SoloJcodeLeaseGuard {
     armed: bool,
+    #[cfg_attr(windows, allow(dead_code))]
     session_id: Option<String>,
 }
 impl Drop for SoloJcodeLeaseGuard {
@@ -7568,6 +7613,7 @@ fn model_setup_error_category(
     }
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn model_setup_error_is_transient(error: &anyhow::Error, substage: ModelSetupSubstage) -> bool {
     if let Some(provider) = error.downcast_ref::<JcodeApiError>() {
         return provider.transient;
@@ -7595,6 +7641,8 @@ fn ensure_private_model_trace_file(file: &File, path: &Path) -> Result<()> {
             bail!("model trace sink is not a private bound file")
         }
     }
+    #[cfg(not(unix))]
+    let _ = path;
     Ok(())
 }
 

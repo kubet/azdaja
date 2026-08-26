@@ -607,6 +607,7 @@ fn load_session_summary_at(session_dir: &Path) -> Result<Option<SessionAggregate
 mod tests {
     use super::*;
     use std::fs;
+    #[cfg(unix)]
     use std::io::Write;
     use std::path::PathBuf;
 

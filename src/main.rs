@@ -1553,17 +1553,60 @@ fn install_metadata_matches(open: &fs::Metadata, path: &fs::Metadata) -> bool {
     use std::os::unix::fs::MetadataExt;
     open.dev() == path.dev() && open.ino() == path.ino()
 }
-#[cfg(windows)]
-fn install_metadata_matches(open: &fs::Metadata, path: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    open.volume_serial_number().is_some()
-        && open.volume_serial_number() == path.volume_serial_number()
-        && open.file_index().is_some()
-        && open.file_index() == path.file_index()
-}
 #[cfg(not(any(unix, windows)))]
 fn install_metadata_matches(_: &fs::Metadata, _: &fs::Metadata) -> bool {
     false
+}
+
+#[cfg(windows)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct InstallFileIdentity {
+    volume_serial: u32,
+    file_index: u64,
+    links: u32,
+}
+
+#[cfg(windows)]
+fn install_file_identity(file: &fs::File) -> Result<InstallFileIdentity> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::{
+        Foundation::HANDLE,
+        Storage::FileSystem::{BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle},
+    };
+
+    let mut info = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: `file` owns a live OS handle and `info` is writable for the duration of the call.
+    let succeeded =
+        unsafe { GetFileInformationByHandle(file.as_raw_handle() as HANDLE, &mut info) };
+    if succeeded == 0 {
+        return Err(io::Error::last_os_error()).context("inspect Windows install file identity");
+    }
+    Ok(InstallFileIdentity {
+        volume_serial: info.dwVolumeSerialNumber,
+        file_index: (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+        links: info.nNumberOfLinks,
+    })
+}
+
+#[cfg(windows)]
+fn install_path_identity_matches(file: &fs::File, path: &Path, directory: bool) -> Result<bool> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let current = fs::symlink_metadata(path)?;
+    if install_metadata_is_link_or_reparse(&current) {
+        return Ok(false);
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true).custom_flags(
+        FILE_FLAG_OPEN_REPARSE_POINT
+            | if directory {
+                FILE_FLAG_BACKUP_SEMANTICS
+            } else {
+                0
+            },
+    );
+    let rebound = options.open(path)?;
+    Ok(install_file_identity(file)? == install_file_identity(&rebound)?)
 }
 
 #[cfg(unix)]
@@ -1580,14 +1623,11 @@ fn install_security_metadata(metadata: &fs::Metadata) -> InstallSecurityMetadata
 }
 
 #[cfg(windows)]
-type InstallSecurityMetadata = (u32, u64);
+type InstallSecurityMetadata = (u32,);
 #[cfg(windows)]
 fn install_security_metadata(metadata: &fs::Metadata) -> InstallSecurityMetadata {
     use std::os::windows::fs::MetadataExt;
-    (
-        metadata.file_attributes(),
-        metadata.number_of_links().unwrap_or_default(),
-    )
+    (metadata.file_attributes(),)
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -1612,10 +1652,14 @@ fn install_metadata_is_link_or_reparse(_: &fs::Metadata) -> bool {
 fn validate_install_directory_binding(file: &fs::File, path: &Path) -> Result<()> {
     let open = file.metadata()?;
     let current = fs::symlink_metadata(path)?;
+    #[cfg(windows)]
+    let identity_matches = install_path_identity_matches(file, path, true)?;
+    #[cfg(not(windows))]
+    let identity_matches = install_metadata_matches(&open, &current);
     if !open.file_type().is_dir()
         || install_metadata_is_link_or_reparse(&current)
         || !current.file_type().is_dir()
-        || !install_metadata_matches(&open, &current)
+        || !identity_matches
     {
         bail!("managed directory binding changed: {}", path.display())
     }
@@ -1699,7 +1743,11 @@ fn validate_bound_install_directory(
     let current = open_install_directory_bound(parent, name, display_path)?;
     let expected_metadata = expected.metadata()?;
     let current_metadata = current.metadata()?;
-    if !install_metadata_matches(&expected_metadata, &current_metadata)
+    #[cfg(windows)]
+    let identity_matches = install_file_identity(expected)? == install_file_identity(&current)?;
+    #[cfg(not(windows))]
+    let identity_matches = install_metadata_matches(&expected_metadata, &current_metadata);
+    if !identity_matches
         || install_security_metadata(&expected_metadata)
             != install_security_metadata(&current_metadata)
     {
@@ -1718,10 +1766,14 @@ struct LifecycleLock {
 fn validate_lifecycle_lock_binding(file: &fs::File, path: &Path) -> Result<()> {
     let open = file.metadata()?;
     let current = fs::symlink_metadata(path)?;
+    #[cfg(windows)]
+    let identity_matches = install_path_identity_matches(file, path, false)?;
+    #[cfg(not(windows))]
+    let identity_matches = install_metadata_matches(&open, &current);
     if !open.file_type().is_file()
         || install_metadata_is_link_or_reparse(&current)
         || !current.file_type().is_file()
-        || !install_metadata_matches(&open, &current)
+        || !identity_matches
     {
         bail!("lifecycle lock binding changed: {}", path.display())
     }
@@ -1740,8 +1792,7 @@ fn validate_lifecycle_lock_binding(file: &fs::File, path: &Path) -> Result<()> {
     }
     #[cfg(windows)]
     {
-        use std::os::windows::fs::MetadataExt;
-        if open.number_of_links() != Some(1) {
+        if install_file_identity(file)?.links != 1 {
             bail!("lifecycle lock has multiple links: {}", path.display())
         }
     }
@@ -2290,7 +2341,12 @@ fn validate_bound_install_file(
     let mut current = open_install_regular_bound(directory, name, display_path)?;
     let expected_metadata = expected_file.metadata()?;
     let current_metadata = current.metadata()?;
-    if !install_metadata_matches(&expected_metadata, &current_metadata)
+    #[cfg(windows)]
+    let identity_matches =
+        install_file_identity(expected_file)? == install_file_identity(&current)?;
+    #[cfg(not(windows))]
+    let identity_matches = install_metadata_matches(&expected_metadata, &current_metadata);
+    if !identity_matches
         || install_security_metadata(&expected_metadata) != expected_security
         || install_security_metadata(&current_metadata) != expected_security
     {
@@ -2416,7 +2472,11 @@ fn open_bound_install_regular(path: &Path) -> Result<Option<BoundInstallFile>> {
     options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
     let mut file = options.open(path)?;
     let open = file.metadata()?;
-    if !install_metadata_matches(&open, &current) {
+    #[cfg(windows)]
+    let identity_matches = install_path_identity_matches(&file, path, false)?;
+    #[cfg(not(windows))]
+    let identity_matches = install_metadata_matches(&open, &current);
+    if !identity_matches {
         bail!("Jcode config binding changed: {}", path.display())
     }
     #[cfg(unix)]
@@ -2431,8 +2491,7 @@ fn open_bound_install_regular(path: &Path) -> Result<Option<BoundInstallFile>> {
     }
     #[cfg(windows)]
     {
-        use std::os::windows::fs::MetadataExt;
-        if open.number_of_links() != Some(1) {
+        if install_file_identity(&file)?.links != 1 {
             bail!("Jcode config has multiple links: {}", path.display())
         }
     }
@@ -2440,9 +2499,11 @@ fn open_bound_install_regular(path: &Path) -> Result<Option<BoundInstallFile>> {
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)?;
     let after = fs::symlink_metadata(path)?;
-    if install_metadata_is_link_or_reparse(&after)
-        || !install_metadata_matches(&file.metadata()?, &after)
-    {
+    #[cfg(windows)]
+    let identity_matches = install_path_identity_matches(&file, path, false)?;
+    #[cfg(not(windows))]
+    let identity_matches = install_metadata_matches(&file.metadata()?, &after);
+    if install_metadata_is_link_or_reparse(&after) || !identity_matches {
         bail!("Jcode config binding changed: {}", path.display())
     }
     Ok(Some(BoundInstallFile {
@@ -2501,8 +2562,13 @@ fn revalidate_jcode_hook_config(plan: &JcodeHookConfigPlan) -> Result<()> {
         Some(original) => {
             let current = fs::symlink_metadata(&plan.path)?;
             let open = original.file.metadata()?;
+            #[cfg(windows)]
+            let identity_matches =
+                install_path_identity_matches(&original.file, &plan.path, false)?;
+            #[cfg(not(windows))]
+            let identity_matches = install_metadata_matches(&open, &current);
             if install_metadata_is_link_or_reparse(&current)
-                || !install_metadata_matches(&open, &current)
+                || !identity_matches
                 || install_security_metadata(&open) != original.security
                 || install_security_metadata(&current) != original.security
                 || read_install_regular(&plan.path)? != original.bytes
@@ -3516,8 +3582,13 @@ fn read_install_regular(path: &Path) -> Result<Vec<u8>> {
     #[cfg(windows)]
     options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
     let mut file = options.open(path)?;
+    #[cfg(not(windows))]
     let open = file.metadata()?;
-    if !install_metadata_matches(&open, &current) {
+    #[cfg(windows)]
+    let identity_matches = install_path_identity_matches(&file, path, false)?;
+    #[cfg(not(windows))]
+    let identity_matches = install_metadata_matches(&open, &current);
+    if !identity_matches {
         bail!("managed file binding changed: {}", path.display())
     }
     #[cfg(unix)]
@@ -3532,17 +3603,18 @@ fn read_install_regular(path: &Path) -> Result<Vec<u8>> {
     }
     #[cfg(windows)]
     {
-        use std::os::windows::fs::MetadataExt;
-        if open.number_of_links() != Some(1) {
+        if install_file_identity(&file)?.links != 1 {
             bail!("managed file has multiple links: {}", path.display())
         }
     }
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)?;
     let after = fs::symlink_metadata(path)?;
-    if install_metadata_is_link_or_reparse(&after)
-        || !install_metadata_matches(&file.metadata()?, &after)
-    {
+    #[cfg(windows)]
+    let identity_matches = install_path_identity_matches(&file, path, false)?;
+    #[cfg(not(windows))]
+    let identity_matches = install_metadata_matches(&file.metadata()?, &after);
+    if install_metadata_is_link_or_reparse(&after) || !identity_matches {
         bail!("managed file binding changed: {}", path.display())
     }
     Ok(bytes)
@@ -4130,10 +4202,10 @@ fn read_foreign_regular_bounded(path: &Path, max_bytes: u64) -> Result<Vec<u8>> 
     if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > max_bytes {
         bail!("Codex SKILL.md is too large to inspect: {}", path.display())
     }
-    let current = fs::symlink_metadata(path)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
+        let current = fs::symlink_metadata(path)?;
         if before.dev() != current.dev() || before.ino() != current.ino() {
             bail!("Codex SKILL.md changed while reading: {}", path.display())
         }
@@ -5007,7 +5079,10 @@ fn document_lifecycle_lock_path(home: &Path) -> Result<PathBuf> {
 
 fn acquire_document_lifecycle_lock(home: &Path) -> Result<DocumentLifecycleLock> {
     let path = document_lifecycle_lock_path(home)?;
+    #[cfg(unix)]
     let mut builder = fs::DirBuilder::new();
+    #[cfg(not(unix))]
+    let builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {
         use std::os::unix::fs::DirBuilderExt;
