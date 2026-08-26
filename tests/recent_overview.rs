@@ -183,7 +183,7 @@ fn pty_text(output: Output) -> String {
 
 fn recent_rows(text: &str) -> Vec<(String, usize, usize)> {
     let row = Regex::new(
-        r"(?m)([0-9a-f]{8}) · ([0-9]+) memor(?:y|ies) · ([0-9]+) source summar(?:y|ies) · [^\n│]+",
+        r"(?m)(?:[^·\n│]+ · )?([0-9a-f]{8}) · ([0-9]+) memor(?:y|ies) · ([0-9]+) source summar(?:y|ies) ·[^\n│]*",
     )
     .unwrap();
     row.captures_iter(text)
@@ -303,10 +303,13 @@ fn bare_tty_shows_private_bounded_recent_projects_in_recency_order() {
             !reordered.contains(absolute.as_ref()),
             "leaked {absolute}: {reordered}"
         );
-        if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
-            assert!(!reordered.contains(name), "leaked {name}: {reordered}");
-        }
     }
+    assert!(reordered.contains("private-project-0"), "{reordered}");
+    assert!(reordered.contains("private-project-3"), "{reordered}");
+    assert!(
+        reordered.contains("private-project-1") || reordered.contains("private-project-2"),
+        "{reordered}"
+    );
     assert!(
         reordered.contains(projects[4].file_name().unwrap().to_str().unwrap()),
         "current-folder detail disappeared: {reordered}"
@@ -321,8 +324,10 @@ fn non_tty_and_explicit_commands_remain_help_or_command_output_without_state() {
     fs::create_dir(&home).unwrap();
     fs::create_dir(&project).unwrap();
     let state = home.join("state");
-    let row =
-        Regex::new(r"[0-9a-f]{8} · [0-9]+ memor(?:y|ies) · [0-9]+ source summar(?:y|ies)").unwrap();
+    let row = Regex::new(
+        r"(?:[^·\n│]+ · )?[0-9a-f]{8} · [0-9]+ memor(?:y|ies) · [0-9]+ source summar(?:y|ies)",
+    )
+    .unwrap();
 
     let bare = run(&home, &project, &[], "");
     assert!(bare.status.success());

@@ -235,7 +235,10 @@ mod recent_scope_status_tests {
         );
         let long = format!("{}tail", "a".repeat(RECENT_SCOPE_LABEL_MAX_CHARS));
         assert_eq!(
-            sanitized_scope_basename_label(Path::new(&long)).unwrap().chars().count(),
+            sanitized_scope_basename_label(Path::new(&long))
+                .unwrap()
+                .chars()
+                .count(),
             RECENT_SCOPE_LABEL_MAX_CHARS
         );
     }
@@ -302,8 +305,11 @@ mod recent_scope_status_tests {
         let statuses = optional_recent_scope_statuses(&root, &current, &mut degraded);
         assert_eq!(statuses[0].scope_label, None);
 
-        crate::atomic_write(&recent_scope_label_path(&root, &legacy_key).unwrap(), b"not json")
-            .unwrap();
+        crate::atomic_write(
+            &recent_scope_label_path(&root, &legacy_key).unwrap(),
+            b"not json",
+        )
+        .unwrap();
         let statuses = optional_recent_scope_statuses(&root, &current, &mut degraded);
         assert_eq!(statuses[0].scope_label, None);
         fs::remove_dir_all(root).unwrap();
