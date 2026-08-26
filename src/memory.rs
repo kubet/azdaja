@@ -177,6 +177,9 @@ pub fn append_at(
     validate_new_fields(&text, &tags, &links)?;
     let path = ledger_path(root, scope_key)?;
     prepare_parent(root, scope_key)?;
+    if let Some(scope_key) = scope_key {
+        crate::persist_current_scope_label_for_key_at(root, scope_key);
+    }
     let _lock = crate::lock_path(&path.with_extension("lock"))?;
     let mut records = load_path(&path)?;
     if records.len() >= MAX_RECORDS {

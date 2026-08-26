@@ -506,6 +506,7 @@ pub(crate) fn append_scoped_at(
     source: &SourceLocalAggregate,
 ) -> Result<()> {
     crate::secure_dir(&scopes_path(root))?;
+    crate::persist_current_scope_label_for_key_at(root, scope_key);
     append_recent_file(&scoped_path(root, scope_key), kind, source)
 }
 

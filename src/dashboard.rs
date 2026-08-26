@@ -271,6 +271,19 @@ fn display_scope_token(token: &str) -> String {
     }
 }
 
+fn display_scope_identity(scope: &RecentScopeStatus) -> String {
+    let token = display_scope_token(&scope.token);
+    match scope.scope_label.as_deref().map(clean).filter(|label| {
+        !label.is_empty()
+            && label.chars().count() <= 40
+            && !label.contains('/')
+            && !label.contains('\\')
+    }) {
+        Some(label) => format!("{label} · {token}"),
+        None => token,
+    }
+}
+
 fn recent_scope_line(scope: &RecentScopeStatus, timestamp: u64) -> String {
     let memories = if scope.memory_records == 1 {
         "memory"
@@ -284,7 +297,7 @@ fn recent_scope_line(scope: &RecentScopeStatus, timestamp: u64) -> String {
     };
     format!(
         "{} · {} {memories} · {} {summaries} · {} ago",
-        display_scope_token(&scope.token),
+        display_scope_identity(scope),
         scope.memory_records,
         scope.source_summaries,
         human_duration(timestamp.saturating_sub(scope.updated_unix))
@@ -298,6 +311,7 @@ mod recent_scope_tests {
     #[test]
     fn recent_scope_line_uses_singular_words_and_hides_path_like_tokens() {
         let scope = RecentScopeStatus {
+            scope_label: None,
             token: "/Users/example/private-project".to_owned(),
             updated_unix: 700,
             memory_records: 1,

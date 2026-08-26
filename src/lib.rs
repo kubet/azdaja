@@ -223,6 +223,93 @@ mod recent_scope_status_tests {
     }
 
     #[test]
+    fn scope_basename_labels_are_sanitized_and_bounded() {
+        assert_eq!(
+            sanitized_scope_basename_label(Path::new("/private/tmp/azdaja")),
+            Some("azdaja".to_owned())
+        );
+        assert_eq!(sanitized_scope_basename_label(Path::new("/")), None);
+        assert_eq!(
+            sanitized_scope_basename_label(Path::new("safe\u{202e}\n\u{1b}名字")),
+            Some("safe名字".to_owned())
+        );
+        let long = format!("{}tail", "a".repeat(RECENT_SCOPE_LABEL_MAX_CHARS));
+        assert_eq!(
+            sanitized_scope_basename_label(Path::new(&long)).unwrap().chars().count(),
+            RECENT_SCOPE_LABEL_MAX_CHARS
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn persisted_scope_label_is_basename_only_and_keeps_scope_identity() {
+        static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = CWD_LOCK.lock().unwrap();
+        let original = env::current_dir().unwrap();
+        let state = root("label-state");
+        let parent = root("label-parent");
+        let project = parent.join("azdaja");
+        fs::create_dir(&project).unwrap();
+        let key = observability::scope_key_for_path(&project).unwrap();
+
+        env::set_current_dir(&project).unwrap();
+        memory::append_at(
+            &state,
+            Some(&key),
+            memory::MemoryKind::Decision,
+            "remember only a private basename label".to_owned(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        env::set_current_dir(&original).unwrap();
+
+        let label_path = recent_scope_label_path(&state, &key).unwrap();
+        let label_json = fs::read_to_string(&label_path).unwrap();
+        assert!(label_json.contains("azdaja"));
+        assert!(!label_json.contains(parent.to_string_lossy().as_ref()));
+
+        let mut degraded = false;
+        let statuses = optional_recent_scope_statuses(&state, &original, &mut degraded);
+        assert!(!degraded);
+        assert_eq!(statuses.len(), 1);
+        assert_eq!(statuses[0].token, key[..8]);
+        assert_eq!(statuses[0].scope_label.as_deref(), Some("azdaja"));
+
+        fs::remove_dir_all(state).unwrap();
+        fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn legacy_and_corrupt_scope_label_metadata_fall_back_to_token_only() {
+        let root = root("label-fallback");
+        let current = canonical_current_dir().unwrap();
+        let legacy_key = key(9);
+        add_memory(&root, &legacy_key, "legacy scope without a label");
+        let mut degraded = false;
+        let statuses = optional_recent_scope_statuses(&root, &current, &mut degraded);
+        assert!(!degraded);
+        assert_eq!(statuses[0].token, legacy_key[..8]);
+        assert_eq!(statuses[0].scope_label, None);
+
+        crate::secure_dir(&recent_scope_label_directory(&root)).unwrap();
+        crate::atomic_write(
+            &recent_scope_label_path(&root, &legacy_key).unwrap(),
+            br#"{"schema_version":1,"label":"bad/path"}"#,
+        )
+        .unwrap();
+        let statuses = optional_recent_scope_statuses(&root, &current, &mut degraded);
+        assert_eq!(statuses[0].scope_label, None);
+
+        crate::atomic_write(&recent_scope_label_path(&root, &legacy_key).unwrap(), b"not json")
+            .unwrap();
+        let statuses = optional_recent_scope_statuses(&root, &current, &mut degraded);
+        assert_eq!(statuses[0].scope_label, None);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn more_than_1024_entries_degrades_to_an_empty_enrichment() {
         let root = root("entry-cap");
         let directory = root.join("memory").join("scopes");
@@ -725,6 +812,7 @@ pub struct SessionStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecentScopeStatus {
     pub token: String,
+    pub scope_label: Option<String>,
     pub updated_unix: u64,
     pub memory_records: usize,
     pub source_summaries: usize,
@@ -1717,6 +1805,98 @@ fn scope_label(scope: Option<&Path>) -> String {
 
 const MAX_RECENT_SCOPE_ENTRIES: usize = 1024;
 const MAX_RECENT_SCOPES: usize = 3;
+const RECENT_SCOPE_LABEL_DIR: &str = "scope-labels";
+const RECENT_SCOPE_LABEL_MAX_CHARS: usize = 64;
+const RECENT_SCOPE_LABEL_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Serialize, Deserialize)]
+struct RecentScopeLabelMetadata {
+    schema_version: u32,
+    label: String,
+}
+
+fn safe_scope_label_char(character: char) -> bool {
+    !character.is_control()
+        && character != '/'
+        && character != '\\'
+        && !matches!(
+            character,
+            '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}' | '\u{fffd}'
+        )
+}
+
+fn sanitized_scope_basename_label(path: &Path) -> Option<String> {
+    let basename = path.file_name()?.to_str()?;
+    let mut label = String::new();
+    for character in basename.chars() {
+        if safe_scope_label_char(character) {
+            label.push(character);
+            if label.chars().count() == RECENT_SCOPE_LABEL_MAX_CHARS {
+                break;
+            }
+        }
+    }
+    if label.is_empty() { None } else { Some(label) }
+}
+
+fn recent_scope_label_directory(root: &Path) -> PathBuf {
+    root.join("observability").join(RECENT_SCOPE_LABEL_DIR)
+}
+
+fn recent_scope_label_path(root: &Path, scope_key: &str) -> Result<PathBuf> {
+    if !valid_recent_scope_key(scope_key) {
+        bail!("malformed recent-scope label key")
+    }
+    Ok(recent_scope_label_directory(root).join(format!("{scope_key}.json")))
+}
+
+pub(crate) fn persist_current_scope_label_for_key_at(root: &Path, scope_key: &str) {
+    let result = (|| -> Result<()> {
+        if !valid_recent_scope_key(scope_key) {
+            return Ok(());
+        }
+        let current = canonical_current_dir()?;
+        if observability::scope_key_for_path(&current)? != scope_key {
+            return Ok(());
+        }
+        let Some(label) = sanitized_scope_basename_label(&current) else {
+            return Ok(());
+        };
+        let directory = recent_scope_label_directory(root);
+        secure_dir(&directory)?;
+        let metadata = RecentScopeLabelMetadata {
+            schema_version: RECENT_SCOPE_LABEL_SCHEMA_VERSION,
+            label,
+        };
+        atomic_write(
+            &recent_scope_label_path(root, scope_key)?,
+            serde_json::to_string_pretty(&metadata)?.as_bytes(),
+        )
+    })();
+    let _ = result;
+}
+
+fn load_recent_scope_label_at(root: &Path, scope_key: &str) -> Option<String> {
+    let path = recent_scope_label_path(root, scope_key).ok()?;
+    let mut file = open_private_file(&path, false).ok()?;
+    let metadata = bound_metadata(&file, &path).ok()?;
+    if !metadata.file_type().is_file() {
+        return None;
+    }
+    let mut text = String::new();
+    file.read_to_string(&mut text).ok()?;
+    let metadata: RecentScopeLabelMetadata = serde_json::from_str(&text).ok()?;
+    if metadata.schema_version != RECENT_SCOPE_LABEL_SCHEMA_VERSION {
+        return None;
+    }
+    if metadata.label.is_empty()
+        || metadata.label.chars().count() > RECENT_SCOPE_LABEL_MAX_CHARS
+        || !metadata.label.chars().all(safe_scope_label_char)
+    {
+        return None;
+    }
+    Some(metadata.label)
+}
 
 #[derive(Default)]
 struct RecentScopeCandidate {
@@ -1854,6 +2034,7 @@ fn load_recent_scope_statuses(root: &Path, scope: &Path) -> Result<Vec<RecentSco
             };
             Ok(RecentScopeStatus {
                 token: token[..8].to_owned(),
+                scope_label: load_recent_scope_label_at(root, &token),
                 updated_unix: candidate.updated_unix,
                 memory_records,
                 source_summaries,
@@ -10684,6 +10865,30 @@ mod claude_hook_tests {
         ));
         fs::create_dir_all(&path).unwrap();
         path
+    }
+
+    #[test]
+    fn recent_scope_label_basename_is_bounded_and_safe() {
+        assert!(safe_scope_label_char('a'));
+        assert!(!safe_scope_label_char('/'));
+        assert!(!safe_scope_label_char('\n'));
+
+        let base = unique_temp_dir("azdaja-recent-scope-label");
+        let nested = base.join("project-name");
+        fs::create_dir_all(&nested).unwrap();
+        assert_eq!(
+            sanitized_scope_basename_label(&nested),
+            Some("project-name".to_owned())
+        );
+
+        let long = base.join("x".repeat(RECENT_SCOPE_LABEL_MAX_CHARS + 8));
+        fs::create_dir_all(&long).unwrap();
+        assert_eq!(
+            sanitized_scope_basename_label(&long),
+            Some("x".repeat(RECENT_SCOPE_LABEL_MAX_CHARS))
+        );
+
+        fs::remove_dir_all(base).unwrap();
     }
 
     fn managed_transaction() -> &'static str {
