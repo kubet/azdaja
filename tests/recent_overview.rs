@@ -243,6 +243,7 @@ fn bare_tty_shows_private_bounded_recent_projects_in_recency_order() {
     for (index, project) in projects.iter().enumerate() {
         add_memory(&home, project, &format!("memory-only scope {index}"));
     }
+    thread::sleep(Duration::from_millis(1_100));
     add_source_summary(&home, &projects[3]);
 
     let first = pty_text(run_bare_pty(&home, &projects[4]));
