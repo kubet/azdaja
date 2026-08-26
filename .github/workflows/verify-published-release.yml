@@ -6,7 +6,6 @@ on:
       version:
         description: Release version without the v prefix
         required: true
-        default: 0.1.12
         type: string
 
 permissions:

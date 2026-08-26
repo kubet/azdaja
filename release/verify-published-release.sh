@@ -1,17 +1,32 @@
 #!/bin/sh
-# Usage: release/verify-published-release.sh [version]
+# Usage: release/verify-published-release.sh VERSION
 # Read-only post-publication audit of the installer, manifests, and payloads.
 set -eu
 
-VERSION=${1:-0.1.12}
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+usage() {
+  printf '%s\n' 'Usage: release/verify-published-release.sh VERSION'
+}
+case "${1-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+[ "$#" -eq 1 ] || {
+  usage >&2
+  exit 2
+}
+VERSION=$1
 SITE_BASE=${AZDAJA_SITE_BASE:-https://azdaja.dev}
 GITHUB_RELEASE_BASE=${AZDAJA_GITHUB_RELEASE_BASE:-https://github.com/kubet/azdaja/releases/download/v$VERSION}
+GITHUB_TAG_BASE=${AZDAJA_GITHUB_TAG_BASE:-https://raw.githubusercontent.com/kubet/azdaja/v$VERSION/site/releases/v$VERSION}
 EXPECTED_DIR=${AZDAJA_EXPECTED_DIR:-$ROOT/site/releases/v$VERSION}
 TEST_MODE=${AZDAJA_VERIFY_TEST_MODE:-}
 
 SITE_BASE=${SITE_BASE%/}
 GITHUB_RELEASE_BASE=${GITHUB_RELEASE_BASE%/}
+GITHUB_TAG_BASE=${GITHUB_TAG_BASE%/}
 DARWIN=azdaja-v$VERSION-darwin-arm64
 DARWIN_X86_64=azdaja-v$VERSION-darwin-x86_64
 LINUX=azdaja-v$VERSION-linux-x86_64
@@ -40,6 +55,7 @@ validate_base() {
 }
 validate_base AZDAJA_SITE_BASE "$SITE_BASE"
 validate_base AZDAJA_GITHUB_RELEASE_BASE "$GITHUB_RELEASE_BASE"
+validate_base AZDAJA_GITHUB_TAG_BASE "$GITHUB_TAG_BASE"
 
 [ -d "$EXPECTED_DIR" ] && [ ! -L "$EXPECTED_DIR" ] || \
   fail "expected release directory is missing or unsafe: $EXPECTED_DIR" 2
@@ -149,18 +165,25 @@ grep -F 'ASSET=azdaja-v$VERSION-darwin-x86_64' "$INSTALLER" >/dev/null || \
 
 SITE_MANIFEST=$TMP/site-SHA256SUMS
 GITHUB_MANIFEST=$TMP/github-SHA256SUMS
+TAG_MANIFEST=$TMP/tag-SHA256SUMS
 fetch "$SITE_BASE/releases/v$VERSION/SHA256SUMS" "$SITE_MANIFEST"
 fetch "$GITHUB_RELEASE_BASE/SHA256SUMS" "$GITHUB_MANIFEST"
+fetch "$GITHUB_TAG_BASE/SHA256SUMS" "$TAG_MANIFEST"
 [ "$(file_size "$SITE_MANIFEST")" -le 1048576 ] || \
   fail 'site SHA256SUMS exceeds the 1 MiB verification cap'
 [ "$(file_size "$GITHUB_MANIFEST")" -le 1048576 ] || \
   fail 'GitHub release SHA256SUMS exceeds the 1 MiB verification cap'
+[ "$(file_size "$TAG_MANIFEST")" -le 1048576 ] || \
+  fail 'GitHub tag SHA256SUMS exceeds the 1 MiB verification cap'
 validate_manifest "$SITE_MANIFEST" site
 validate_manifest "$GITHUB_MANIFEST" 'GitHub release'
+validate_manifest "$TAG_MANIFEST" 'GitHub tag'
 cmp -s "$LOCAL_MANIFEST" "$SITE_MANIFEST" || \
   fail 'site SHA256SUMS differs from the reviewed local release manifest'
 cmp -s "$LOCAL_MANIFEST" "$GITHUB_MANIFEST" || \
   fail 'GitHub release SHA256SUMS differs from the reviewed local release manifest'
+cmp -s "$LOCAL_MANIFEST" "$TAG_MANIFEST" || \
+  fail 'GitHub tag SHA256SUMS differs from the reviewed local release manifest'
 
 verify_channel() {
   label=$1
@@ -177,6 +200,9 @@ verify_channel() {
 }
 verify_channel site "$SITE_BASE/releases/v$VERSION" "$SITE_MANIFEST" "$TMP/site"
 verify_channel 'GitHub release' "$GITHUB_RELEASE_BASE" "$GITHUB_MANIFEST" "$TMP/github"
+verify_channel 'GitHub tag' "$GITHUB_TAG_BASE" "$TAG_MANIFEST" "$TMP/tag"
 
-printf 'verified published v%s across %s and %s\n' \
-  "$VERSION" "$SITE_BASE" "$GITHUB_RELEASE_BASE"
+printf 'verified published v%s\n' "$VERSION"
+printf '  site: %s\n' "$SITE_BASE"
+printf '  GitHub release: %s\n' "$GITHUB_RELEASE_BASE"
+printf '  GitHub tag: %s\n' "$GITHUB_TAG_BASE"

@@ -33,6 +33,7 @@ struct Fixture {
     expected: PathBuf,
     site: PathBuf,
     github: PathBuf,
+    tag: PathBuf,
 }
 
 fn sha256(path: &Path) -> String {
@@ -68,6 +69,7 @@ fn fixture(scratch: &Scratch) -> Fixture {
     let expected = scratch.0.join("expected");
     let site = scratch.0.join("site");
     let github = scratch.0.join("github");
+    let tag = scratch.0.join("tag");
     fs::create_dir_all(&expected).unwrap();
 
     let payloads = vec![
@@ -96,6 +98,7 @@ fn fixture(scratch: &Scratch) -> Fixture {
         &payloads,
     );
     copy_release(&expected, &github, &payloads);
+    copy_release(&expected, &tag, &payloads);
     fs::write(
         site.join("install"),
         format!(
@@ -109,6 +112,7 @@ fn fixture(scratch: &Scratch) -> Fixture {
         expected,
         site,
         github,
+        tag,
     }
 }
 
@@ -124,6 +128,10 @@ fn run_verifier(fixture: &Fixture) -> Output {
         .env(
             "AZDAJA_GITHUB_RELEASE_BASE",
             format!("file://{}", fixture.github.display()),
+        )
+        .env(
+            "AZDAJA_GITHUB_TAG_BASE",
+            format!("file://{}", fixture.tag.display()),
         )
         .env("AZDAJA_EXPECTED_DIR", &fixture.expected)
         .output()
@@ -149,6 +157,7 @@ fn workflow_dispatch_runs_the_read_only_publication_verifier() {
     assert!(workflow.contains("workflow_dispatch:"));
     assert!(workflow.contains("contents: read"));
     assert!(workflow.contains("release/verify-published-release.sh \"$VERSION\""));
+    assert!(!workflow.contains("default: 0.1.12"));
     assert!(!workflow.contains("contents: write"));
     assert!(!workflow.contains("gh release upload"));
 }
@@ -177,6 +186,19 @@ fn publication_verifier_rejects_a_non_semver_release_selector() {
 }
 
 #[test]
+fn publication_verifier_requires_an_explicit_version() {
+    let output = Command::new("sh")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("release/verify-published-release.sh"))
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("Usage: release/verify-published-release.sh VERSION")
+    );
+}
+
+#[test]
 fn publication_verifier_accepts_complete_matching_boundaries() {
     let scratch = Scratch::new("complete");
     let fixture = fixture(&scratch);
@@ -188,9 +210,10 @@ fn publication_verifier_accepts_complete_matching_boundaries() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("verified published v9.9.9 across file://"));
+    assert!(stdout.contains("verified published v9.9.9"));
     assert!(stdout.contains(&fixture.site.display().to_string()));
     assert!(stdout.contains(&fixture.github.display().to_string()));
+    assert!(stdout.contains(&fixture.tag.display().to_string()));
 }
 
 #[test]
@@ -229,5 +252,26 @@ fn publication_verifier_rejects_a_two_binary_github_manifest() {
     assert!(
         String::from_utf8_lossy(&output.stderr)
             .contains("GitHub release SHA256SUMS must contain exactly five payload entries")
+    );
+}
+
+#[test]
+fn publication_verifier_rejects_a_tag_without_the_intel_payload() {
+    let scratch = Scratch::new("tag-manifest");
+    let fixture = fixture(&scratch);
+    let manifest_path = fixture.tag.join("SHA256SUMS");
+    let stale = fs::read_to_string(&manifest_path)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.contains("darwin-x86_64"))
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
+    fs::write(manifest_path, stale).unwrap();
+
+    let output = run_verifier(&fixture);
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("GitHub tag SHA256SUMS must contain exactly five payload entries")
     );
 }
