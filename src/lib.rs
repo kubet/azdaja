@@ -9706,10 +9706,13 @@ JSONL
         };
         let public = UnixListener::bind(&paths.socket).unwrap();
         let mut command = Command::new("sh");
+        // Keep the group leader alive through TERM so escalation tests the whole
+        // group without creating an orphaned group that hosted macOS sandboxes
+        // may refuse to probe even when every process belongs to this test.
         command
             .args([
                 "-c",
-                "trap 'exit 0' TERM; (trap '' TERM; exec sleep 30) & wait",
+                "trap '' HUP TERM; (trap '' HUP TERM; exec sleep 30) & wait",
             ])
             .process_group(0);
         let mut child = command.spawn().unwrap();
@@ -9746,10 +9749,13 @@ JSONL
         assert!(socket_alive(&jcode_daemon_socket(&paths)));
 
         let mut command = Command::new("sh");
+        // Keep the group leader alive through TERM so escalation tests the whole
+        // group without creating an orphaned group that hosted macOS sandboxes
+        // may refuse to probe even when every process belongs to this test.
         command
             .args([
                 "-c",
-                "trap 'exit 0' TERM; (trap '' TERM; exec sleep 30) & wait",
+                "trap '' HUP TERM; (trap '' HUP TERM; exec sleep 30) & wait",
             ])
             .process_group(0);
         let mut child = command.spawn().unwrap();

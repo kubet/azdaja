@@ -1528,6 +1528,106 @@ fn public_v020_binaries_expose_the_installer_config_staging_protocol() {
 }
 
 #[test]
+fn public_v021_site_assets_match_the_bound_checksum_manifest() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let release = root.join("site/releases/v0.1.11");
+    let sums = fs::read_to_string(release.join("SHA256SUMS")).unwrap();
+    let expected = [
+        (
+            "azdaja-v0.1.11-darwin-arm64",
+            "3c44f4fda9c058758288ecfbf7456ac0275e0032fb8229e200f2eac43f9c0ffc",
+        ),
+        (
+            "azdaja-v0.1.11-linux-x86_64",
+            "1cc202b50949c24a4e27fef311b4c993e643726c70913887c6e9b56803a09dd7",
+        ),
+        (
+            "LICENSE",
+            "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096",
+        ),
+        (
+            "THIRD-PARTY-NOTICES.md",
+            "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3",
+        ),
+    ];
+    let expected_sums = expected
+        .iter()
+        .map(|(name, digest)| format!("{digest}  {name}\n"))
+        .collect::<String>();
+    assert_eq!(sums, expected_sums);
+    for (name, digest) in expected {
+        assert_eq!(sha256(&release.join(name)), digest);
+    }
+}
+
+#[test]
+fn public_v021_binary_headers_match_the_advertised_platforms() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.11");
+
+    let darwin_path = root.join("azdaja-v0.1.11-darwin-arm64");
+    let darwin = fs::read(&darwin_path).unwrap();
+    assert!(darwin.len() >= 8);
+    assert_eq!(&darwin[..4], &[0xcf, 0xfa, 0xed, 0xfe]);
+    assert_eq!(
+        u32::from_le_bytes(darwin[4..8].try_into().unwrap()),
+        0x0100_000c,
+        "Darwin asset must be a 64-bit ARM Mach-O executable"
+    );
+    assert_ne!(
+        fs::metadata(&darwin_path).unwrap().permissions().mode() & 0o111,
+        0
+    );
+
+    let linux_path = root.join("azdaja-v0.1.11-linux-x86_64");
+    let linux = fs::read(&linux_path).unwrap();
+    assert!(linux.len() >= 20);
+    assert_eq!(&linux[..4], b"\x7fELF");
+    assert_eq!(linux[4], 2, "Linux asset must be ELF64");
+    assert_eq!(linux[5], 1, "Linux asset must be little-endian");
+    assert_eq!(
+        u16::from_le_bytes(linux[18..20].try_into().unwrap()),
+        62,
+        "Linux asset must target x86-64"
+    );
+    assert_ne!(
+        fs::metadata(&linux_path).unwrap().permissions().mode() & 0o111,
+        0
+    );
+}
+
+#[test]
+fn public_v021_binaries_expose_the_installer_config_staging_protocol() {
+    let release = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.11");
+    for name in ["azdaja-v0.1.11-darwin-arm64", "azdaja-v0.1.11-linux-x86_64"] {
+        let bytes = fs::read(release.join(name)).unwrap();
+        assert!(
+            bytes
+                .windows(b"--print-config".len())
+                .any(|window| window == b"--print-config"),
+            "{name} must expose the bootstrap config-staging protocol"
+        );
+    }
+
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        let scratch = Scratch::new();
+        let home = scratch.0.join("v021-print-config-home");
+        fs::create_dir(&home).unwrap();
+        let output = Command::new(release.join("azdaja-v0.1.11-darwin-arm64"))
+            .args(["install", "jcode", "--print-config"])
+            .env("HOME", &home)
+            .env("JCODE_HOME", home.join(".jcode"))
+            .env_remove("AZDAJA_HOME")
+            .output()
+            .unwrap();
+        let config = assert_success(&output);
+        assert!(config.contains("sub_llm_cmd = \"jcode-api\""));
+        assert!(config.contains("default_model = \"gpt-5.6-sol\""));
+        assert_eq!(fs::read_dir(home).unwrap().count(), 0);
+    }
+}
+
+#[test]
 fn linux_glibc_floor_refuses_below_and_accepts_exact_boundary_and_above() {
     let scratch = Scratch::new();
     let fixture_root = scratch.0.join("releases");
