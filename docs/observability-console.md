@@ -16,13 +16,13 @@ On a TTY, the bare snapshot may append a recent-project overview after the prima
 
 ## Working-directory scope
 
-The default console is intentionally project-shaped without persisting a project name. Azdaja canonicalizes the invoking working directory and uses it to select:
+The default console is intentionally project-shaped without persisting a project name. Azdaja canonicalizes the invoking working directory and uses its hash as the durable scope identity while optionally deriving the final basename as a local display label to select:
 
 - sessions whose creation metadata binds them to that directory;
 - aggregate source history written under a private hash-derived key in `observability/scopes`;
 - the `scope` row shown in the static and full-screen views.
 
-The path itself is not serialized into aggregate JSON. The global `observability/recent.json` remains an aggregate cross-folder history for explicit `--global` inspection and compatibility. New session operations (`load`, `exec`, `final`, and `kill`) require the same canonical directory as `start`. Older sessions without a binding remain readable, but are excluded from the default current-folder view and shown only globally; their completion history is also written globally rather than attributed to the invoking folder.
+The path itself is not serialized into aggregate JSON. The global `observability/recent.json` remains an aggregate cross-folder history for explicit `--global` inspection and compatibility. New session operations (`load`, `exec`, `final`, and `kill`) require the same canonical directory as `start`. Older sessions without a binding remain readable, but are excluded from the default current-folder view and shown only globally; their completion history is also written globally rather than attributed to the invoking folder. The canonical working-directory hash is the identity used for scope grouping, and any basename label is display-only.
 
 ## Plain vocabulary
 
@@ -90,7 +90,7 @@ The overview uses `avg variety`, not entropy notation or redundancy terminology.
 
 The bare interactive snapshot may show at most three other recently active scopes. It merges candidates from local memory and observability state, orders them by activity, and excludes the current scope.
 
-Scopes are represented only by stable short hash tokens. Raw paths and basename paths are never rendered. Memory-record and source-summary counts are bounded. Missing state omits the section; unsafe, corrupt, or oversized state degrades optional metrics rather than the primary current-folder detail.
+Scopes keep their canonical working-directory hash as identity and may render the final basename as a local display label beside a stable short hash token. Full paths are never stored or rendered, and unsafe or legacy labels fall back to the token alone. Memory-record and source-summary counts are bounded. Missing state omits the section; unsafe, corrupt, or oversized state degrades optional metrics rather than the primary current-folder detail.
 
 The overview is an activity summary, not a confidence or quality score. It does not change evaluator or gate behavior.
 

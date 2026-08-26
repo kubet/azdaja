@@ -181,18 +181,27 @@ fn pty_text(output: Output) -> String {
         .replace('\r', "")
 }
 
-fn recent_rows(text: &str) -> Vec<(String, usize, usize)> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RecentRow {
+    label: Option<String>,
+    token: String,
+    memories: usize,
+    summaries: usize,
+}
+
+fn recent_rows(text: &str) -> Vec<RecentRow> {
     let row = Regex::new(
-        r"(?m)(?:[^·\n│]+ · )?([0-9a-f]{8}) · ([0-9]+) memor(?:y|ies) · ([0-9]+) source summar(?:y|ies) ·[^\n│]*",
+        r"(?m)^│\s*(?:projects?\s+)?(?:(?P<label>[^·\n│]+?)\s+·\s+)?(?P<token>[0-9a-f]{8})\s+·\s+(?P<memories>[0-9]+)\s+memor(?:y|ies)\s+·\s+(?P<summaries>[0-9]+)\s+source summar(?:y|ies)\s+·",
     )
     .unwrap();
     row.captures_iter(text)
-        .map(|capture| {
-            (
-                capture[1].to_owned(),
-                capture[2].parse().unwrap(),
-                capture[3].parse().unwrap(),
-            )
+        .map(|capture| RecentRow {
+            label: capture
+                .name("label")
+                .map(|label| label.as_str().trim().to_owned()),
+            token: capture["token"].to_owned(),
+            memories: capture["memories"].parse().unwrap(),
+            summaries: capture["summaries"].parse().unwrap(),
         })
         .collect()
 }
@@ -257,22 +266,36 @@ fn bare_tty_shows_private_bounded_recent_projects_in_recency_order() {
     assert!(
         first_rows
             .iter()
-            .any(|(_, memories, summaries)| *memories == 1 && *summaries == 1),
+            .any(|row| row.memories == 1 && row.summaries == 1),
         "{first}"
     );
     assert!(
         first_rows
             .iter()
-            .any(|(_, memories, summaries)| *memories == 1 && *summaries == 0),
+            .any(|row| row.memories == 1 && row.summaries == 0),
         "{first}"
     );
+    for row in &first_rows {
+        assert!(
+            row.label
+                .as_deref()
+                .is_some_and(|label| !label.is_empty() && label.len() <= 64),
+            "missing or oversized label in {row:?}: {first}"
+        );
+        assert!(
+            match row.label.as_deref() {
+                Some(label) => {
+                    !label.starts_with('/') && !label.starts_with('~') && !label.contains("/Users/")
+                }
+                None => true,
+            },
+            "unsafe label in {row:?}: {first}"
+        );
+    }
 
     let stable = pty_text(run_bare_pty(&home, &projects[4]));
-    assert_eq!(
-        recent_rows(&stable),
-        first_rows,
-        "overview must not touch recency"
-    );
+    let stable_rows = recent_rows(&stable);
+    assert_eq!(stable_rows, first_rows, "overview must not touch recency");
 
     add_memory(
         &home,
@@ -280,9 +303,9 @@ fn bare_tty_shows_private_bounded_recent_projects_in_recency_order() {
         "current scope changes stay in current detail",
     );
     let current_changed = pty_text(run_bare_pty(&home, &projects[4]));
+    let current_changed_rows = recent_rows(&current_changed);
     assert_eq!(
-        recent_rows(&current_changed),
-        first_rows,
+        current_changed_rows, first_rows,
         "the current project must be excluded from recent projects"
     );
 
@@ -291,7 +314,78 @@ fn bare_tty_shows_private_bounded_recent_projects_in_recency_order() {
     let reordered = pty_text(run_bare_pty(&home, &projects[4]));
     let reordered_rows = recent_rows(&reordered);
     assert_eq!(reordered_rows.len(), 3, "{reordered}");
-    assert_eq!(reordered_rows[0].1, 2, "{reordered}");
+    assert_eq!(reordered_rows[0].memories, 2, "{reordered}");
+    assert!(
+        reordered_rows
+            == vec![
+                RecentRow {
+                    label: Some("private-project-0".to_owned()),
+                    token: reordered_rows[0].token.clone(),
+                    memories: 2,
+                    summaries: 0,
+                },
+                RecentRow {
+                    label: Some("private-project-3".to_owned()),
+                    token: reordered_rows[1].token.clone(),
+                    memories: 1,
+                    summaries: 1,
+                },
+                RecentRow {
+                    label: Some("private-project-1".to_owned()),
+                    token: reordered_rows[2].token.clone(),
+                    memories: 1,
+                    summaries: 0,
+                },
+            ]
+            || reordered_rows
+                == vec![
+                    RecentRow {
+                        label: Some("private-project-0".to_owned()),
+                        token: reordered_rows[0].token.clone(),
+                        memories: 2,
+                        summaries: 0,
+                    },
+                    RecentRow {
+                        label: Some("private-project-3".to_owned()),
+                        token: reordered_rows[1].token.clone(),
+                        memories: 1,
+                        summaries: 1,
+                    },
+                    RecentRow {
+                        label: Some("private-project-2".to_owned()),
+                        token: reordered_rows[2].token.clone(),
+                        memories: 1,
+                        summaries: 0,
+                    },
+                ],
+        "equal-activity scopes must use the stable token tie-breaker: {reordered}"
+    );
+    assert_eq!(
+        first_rows
+            .iter()
+            .map(|row| (&row.label, &row.token))
+            .collect::<Vec<_>>(),
+        stable_rows
+            .iter()
+            .map(|row| (&row.label, &row.token))
+            .collect::<Vec<_>>(),
+        "labels and tokens must stay stable across repeated overview reads"
+    );
+    assert_eq!(
+        stable_rows
+            .iter()
+            .map(|row| (&row.label, &row.token))
+            .collect::<Vec<_>>(),
+        current_changed_rows
+            .iter()
+            .map(|row| (&row.label, &row.token))
+            .collect::<Vec<_>>(),
+        "current scope changes must not rewrite recent row identity"
+    );
+    assert_ne!(
+        reordered_rows[2].token, reordered_rows[0].token,
+        "basename collisions must remain distinguishable by token"
+    );
 
     assert!(
         !reordered.contains(home.to_string_lossy().as_ref()),
@@ -304,15 +398,49 @@ fn bare_tty_shows_private_bounded_recent_projects_in_recency_order() {
             "leaked {absolute}: {reordered}"
         );
     }
-    assert!(reordered.contains("private-project-0"), "{reordered}");
-    assert!(reordered.contains("private-project-3"), "{reordered}");
+    let reordered_labels = reordered_rows
+        .iter()
+        .filter_map(|row| row.label.as_deref())
+        .collect::<Vec<_>>();
     assert!(
-        reordered.contains("private-project-1") || reordered.contains("private-project-2"),
-        "{reordered}"
+        reordered_labels
+            == vec![
+                "private-project-0",
+                "private-project-3",
+                "private-project-1"
+            ]
+            || reordered_labels
+                == vec![
+                    "private-project-0",
+                    "private-project-3",
+                    "private-project-2"
+                ],
+        "equal-activity scopes must use the stable token tie-breaker: {reordered}"
     );
     assert!(
         reordered.contains(projects[4].file_name().unwrap().to_str().unwrap()),
         "current-folder detail disappeared: {reordered}"
+    );
+
+    let legacy = recent_rows(
+        "│ projects 4e75beb5 · 2 memories · 0 source summaries · 1s ago │\n│          private-project-3 · df2a760f · 1 memory · 1 source summary · 1s ago │",
+    );
+    assert_eq!(
+        legacy,
+        vec![
+            RecentRow {
+                label: None,
+                token: "4e75beb5".to_owned(),
+                memories: 2,
+                summaries: 0,
+            },
+            RecentRow {
+                label: Some("private-project-3".to_owned()),
+                token: "df2a760f".to_owned(),
+                memories: 1,
+                summaries: 1,
+            },
+        ]
     );
 }
 
