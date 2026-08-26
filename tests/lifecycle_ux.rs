@@ -357,6 +357,8 @@ fn claude_activation_rule_is_owned_checked_removed_and_never_clobbers_foreign_co
     let hook_bytes = fs::read(&hooks).unwrap();
     let hook_text = std::str::from_utf8(&hook_bytes).unwrap();
     assert!(plugin_text.contains("\"name\": \"azdaja\""));
+    assert!(plugin_text.contains("\"name\": \"kubet\""));
+    assert!(plugin_text.contains("\"url\": \"https://github.com/kubet\""));
     for marker in [
         "UserPromptSubmit",
         "PreToolUse",

@@ -5585,6 +5585,8 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
         fs::read_to_string(t.join(".claude/skills/azdaja/.claude-plugin/plugin.json")).unwrap();
     let hooks = fs::read_to_string(t.join(".claude/skills/azdaja/hooks/hooks.json")).unwrap();
     assert!(plugin.contains("\"name\": \"azdaja\""));
+    assert!(plugin.contains("\"name\": \"kubet\""));
+    assert!(plugin.contains("\"url\": \"https://github.com/kubet\""));
     assert!(hooks.contains("UserPromptSubmit"));
     assert!(hooks.contains("PreToolUse"));
     assert!(hooks.contains("PostToolUse"));

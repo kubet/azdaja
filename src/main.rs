@@ -1267,7 +1267,11 @@ fn render_claude_plugin_manifest() -> String {
     serde_json::to_string_pretty(&serde_json::json!({
         "name": "azdaja",
         "version": VERSION,
-        "description": "Routes exhaustive large-input semantic judgment through the managed Azdaja skill without intercepting normal Claude Code work."
+        "description": "Routes exhaustive large-input semantic judgment through the managed Azdaja skill without intercepting normal Claude Code work.",
+        "author": {
+            "name": "kubet",
+            "url": "https://github.com/kubet"
+        }
     }))
     .expect("static Claude plugin manifest")
         + "
