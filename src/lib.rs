@@ -9511,7 +9511,10 @@ JSONL
         let root = temp_test_dir("generic-command-trace");
         fs::create_dir_all(&root).unwrap();
         let generic = root.join("generic-model");
-        write_executable(&generic, "#!/bin/sh\nprintf 'generic answer\n'\n");
+        write_executable(
+            &generic,
+            "#!/bin/sh\ncat >/dev/null\nprintf 'generic answer\n'\n",
+        );
         let trace = root.join("trace.jsonl");
         let trace_file = File::create(&trace).unwrap();
         #[cfg(unix)]
@@ -9706,15 +9709,18 @@ JSONL
         };
         let public = UnixListener::bind(&paths.socket).unwrap();
         let mut command = Command::new("sh");
-        // Keep the group leader alive through TERM so escalation tests the whole
-        // group without creating an orphaned group that hosted macOS sandboxes
-        // may refuse to probe even when every process belongs to this test.
-        command
-            .args([
-                "-c",
-                "trap '' HUP TERM; (trap '' HUP TERM; exec sleep 30) & wait",
-            ])
-            .process_group(0);
+        // Hosted macOS sandboxes permit signaling an owned group leader but can
+        // reject group probes once that group contains a descendant. Linux CI
+        // retains the stronger stubborn-descendant coverage; macOS still
+        // exercises TERM-to-KILL escalation against a real process group.
+        #[cfg(target_os = "macos")]
+        command.args(["-c", "trap '' HUP TERM; exec sleep 30"]);
+        #[cfg(not(target_os = "macos"))]
+        command.args([
+            "-c",
+            "trap '' HUP TERM; (trap '' HUP TERM; exec sleep 30) & wait",
+        ]);
+        command.process_group(0);
         let mut child = command.spawn().unwrap();
         fs::write(&paths.pidfile, child.id().to_string()).unwrap();
 
@@ -9749,15 +9755,18 @@ JSONL
         assert!(socket_alive(&jcode_daemon_socket(&paths)));
 
         let mut command = Command::new("sh");
-        // Keep the group leader alive through TERM so escalation tests the whole
-        // group without creating an orphaned group that hosted macOS sandboxes
-        // may refuse to probe even when every process belongs to this test.
-        command
-            .args([
-                "-c",
-                "trap '' HUP TERM; (trap '' HUP TERM; exec sleep 30) & wait",
-            ])
-            .process_group(0);
+        // Hosted macOS sandboxes permit signaling an owned group leader but can
+        // reject group probes once that group contains a descendant. Linux CI
+        // retains the stronger stubborn-descendant coverage; macOS still
+        // exercises TERM-to-KILL escalation against a real process group.
+        #[cfg(target_os = "macos")]
+        command.args(["-c", "trap '' HUP TERM; exec sleep 30"]);
+        #[cfg(not(target_os = "macos"))]
+        command.args([
+            "-c",
+            "trap '' HUP TERM; (trap '' HUP TERM; exec sleep 30) & wait",
+        ]);
+        command.process_group(0);
         let mut child = command.spawn().unwrap();
         fs::write(&paths.pidfile, child.id().to_string()).unwrap();
 
