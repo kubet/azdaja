@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for trying Azdaja. The v0.1.12 binary installer supports Apple Silicon macOS and Linux x86_64; other platforms are source-only.
+        Thanks for trying Azdaja. The v0.1.13 binary installer supports Apple Silicon and Intel macOS, plus Linux x86_64; other platforms are source-only.
 
         Do not paste or attach raw build logs, repository content, transcripts, traces, config files, host paths, OAuth material, tokens, or secrets. Synthetic or sanitized reproductions only.
   - type: dropdown
@@ -14,7 +14,7 @@ body:
     attributes:
       label: Installation path
       options:
-        - v0.1.12 macOS arm64 or Linux x86_64 installer
+        - v0.1.13 macOS arm64, macOS x86_64, or Linux x86_64 installer
         - Locked source installation on another platform
     validations:
       required: true

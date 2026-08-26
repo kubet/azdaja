@@ -28,7 +28,7 @@ body:
     attributes:
       label: Installation path
       options:
-        - v0.1.12 macOS arm64 or Linux x86_64 installer
+        - v0.1.13 macOS arm64, macOS x86_64, or Linux x86_64 installer
         - Locked source installation on another platform
     validations:
       required: true

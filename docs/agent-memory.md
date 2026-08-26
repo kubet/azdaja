@@ -1,6 +1,6 @@
 # Agent memory and uncertainty research
 
-Status: the first product slice is implemented, with the v0.1.12 scope clarified below. This note records what the evidence supports, what it does not support, and how the implementation is tested.
+Status: the first product slice is implemented, with the v0.1.13 scope clarified below. This note records what the evidence supports, what it does not support, and how the implementation is tested.
 
 ## Executive decision
 
@@ -20,7 +20,7 @@ The shipped slice is `az memory`:
 
 This is deliberately smaller than an Obsidian vault. The value being tested is inspectability, custody, provenance, and deterministic scope. No claim is made that links or atomic records universally improve reasoning.
 
-## Current v0.1.12 capability boundary
+## Current v0.1.13 capability boundary
 
 Implemented: a manual, bounded, local memory ledger; `az memory list --kind disagreement` for manually recorded local disagreement records; and exact byte entropy only.
 

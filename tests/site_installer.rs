@@ -300,9 +300,9 @@ fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     let release = root.join(name);
     fs::create_dir_all(&release).unwrap();
     for asset in [
-        "azdaja-v0.1.12-darwin-arm64",
-        "azdaja-v0.1.12-darwin-x86_64",
-        "azdaja-v0.1.12-linux-x86_64",
+        "azdaja-v0.1.13-darwin-arm64",
+        "azdaja-v0.1.13-darwin-x86_64",
+        "azdaja-v0.1.13-linux-x86_64",
     ] {
         fs::copy(candidate, release.join(asset)).unwrap();
     }
@@ -318,7 +318,7 @@ fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     fs::write(
         release.join("SHA256SUMS"),
         format!(
-            "{digest}  azdaja-v0.1.12-darwin-arm64\n{digest}  azdaja-v0.1.12-darwin-x86_64\n{digest}  azdaja-v0.1.12-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
+            "{digest}  azdaja-v0.1.13-darwin-arm64\n{digest}  azdaja-v0.1.13-darwin-x86_64\n{digest}  azdaja-v0.1.13-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
         ),
     )
     .unwrap();
@@ -447,7 +447,7 @@ fn installer_line<'a>(stdout: &'a str, prefix: &str) -> &'a str {
 fn assert_installer_preamble(stdout: &str) {
     assert!(
         stdout.starts_with(
-            "Azdaja installer v0.1.12\nProvider-free install. No model provider will be called.\n"
+            "Azdaja installer v0.1.13\nProvider-free install. No model provider will be called.\n"
         ),
         "{stdout}"
     );
@@ -594,7 +594,7 @@ fn assert_alias_identity_and_local_caps(home: &Path, bin: &Path, path: &str) {
             let help = String::from_utf8(short_output.stdout).unwrap();
             assert_eq!(
                 help,
-                "AZDAJA v0.1.12 — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
+                "AZDAJA v0.1.13 — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
             );
         }
     }
@@ -641,7 +641,7 @@ fn installers_are_identical_and_bind_current_assets_and_sums() {
     );
 
     let text = String::from_utf8(site).unwrap();
-    assert_eq!(text.matches("VERSION=0.1.12").count(), 1);
+    assert_eq!(text.matches("VERSION=0.1.13").count(), 1);
     assert!(text.contains("RELEASE_BASE=https://azdaja.dev/releases/v$VERSION"));
     assert!(text.contains("$BASE_URL/SHA256SUMS"));
     assert!(text.contains("azdaja-v$VERSION-darwin-arm64"));
@@ -725,8 +725,8 @@ fn interactive_selection_installs_only_the_chosen_detected_subset() {
     assert_installer_preamble(&stdout);
     for phase in [
         "Plan:\n",
-        "Downloading azdaja v0.1.12...\n",
-        "Downloading azdaja v0.1.12... ok\n",
+        "Downloading azdaja v0.1.13...\n",
+        "Downloading azdaja v0.1.13... ok\n",
         "Verifying SHA-256...\n",
         "Verifying SHA-256... ok\n",
         "Checking destinations...\n",
@@ -747,7 +747,7 @@ fn interactive_selection_installs_only_the_chosen_detected_subset() {
     }
     assert_eq!(
         installer_line(&stdout, "Installed:"),
-        "Installed: azdaja v0.1.12"
+        "Installed: azdaja v0.1.13"
     );
     assert_eq!(
         installer_line(&stdout, "Integrations:"),
@@ -1536,19 +1536,19 @@ fn public_v020_binaries_expose_the_installer_config_staging_protocol() {
 #[test]
 fn public_v021_site_assets_match_the_bound_checksum_manifest() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let release = root.join("site/releases/v0.1.12");
+    let release = root.join("site/releases/v0.1.13");
     let sums = fs::read_to_string(release.join("SHA256SUMS")).unwrap();
     let expected = [
         (
-            "azdaja-v0.1.12-darwin-arm64",
+            "azdaja-v0.1.13-darwin-arm64",
             "4e0463d0661eba4ee8e844fd351f9896719d8473fa0c17947078883bfd8dca29",
         ),
         (
-            "azdaja-v0.1.12-darwin-x86_64",
+            "azdaja-v0.1.13-darwin-x86_64",
             "78fc11691454176c67933ecd631c92a2efd424e1b15bd354b55920614bc94f2e",
         ),
         (
-            "azdaja-v0.1.12-linux-x86_64",
+            "azdaja-v0.1.13-linux-x86_64",
             "d8127b720053d10ccde553151a7a88adcc92e16a8679f818b8ec1292a79ab7ab",
         ),
         (
@@ -1572,9 +1572,9 @@ fn public_v021_site_assets_match_the_bound_checksum_manifest() {
 
 #[test]
 fn public_v021_binary_headers_match_the_advertised_platforms() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.12");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.13");
 
-    let darwin_path = root.join("azdaja-v0.1.12-darwin-arm64");
+    let darwin_path = root.join("azdaja-v0.1.13-darwin-arm64");
     let darwin = fs::read(&darwin_path).unwrap();
     assert!(darwin.len() >= 8);
     assert_eq!(&darwin[..4], &[0xcf, 0xfa, 0xed, 0xfe]);
@@ -1588,7 +1588,7 @@ fn public_v021_binary_headers_match_the_advertised_platforms() {
         0
     );
 
-    let darwin_x86_64_path = root.join("azdaja-v0.1.12-darwin-x86_64");
+    let darwin_x86_64_path = root.join("azdaja-v0.1.13-darwin-x86_64");
     let darwin_x86_64 = fs::read(&darwin_x86_64_path).unwrap();
     assert!(darwin_x86_64.len() >= 8);
     assert_eq!(&darwin_x86_64[..4], &[0xcf, 0xfa, 0xed, 0xfe]);
@@ -1606,7 +1606,7 @@ fn public_v021_binary_headers_match_the_advertised_platforms() {
         0
     );
 
-    let linux_path = root.join("azdaja-v0.1.12-linux-x86_64");
+    let linux_path = root.join("azdaja-v0.1.13-linux-x86_64");
     let linux = fs::read(&linux_path).unwrap();
     assert!(linux.len() >= 20);
     assert_eq!(&linux[..4], b"\x7fELF");
@@ -1625,11 +1625,11 @@ fn public_v021_binary_headers_match_the_advertised_platforms() {
 
 #[test]
 fn public_v021_binaries_expose_the_installer_config_staging_protocol() {
-    let release = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.12");
+    let release = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.13");
     for name in [
-        "azdaja-v0.1.12-darwin-arm64",
-        "azdaja-v0.1.12-darwin-x86_64",
-        "azdaja-v0.1.12-linux-x86_64",
+        "azdaja-v0.1.13-darwin-arm64",
+        "azdaja-v0.1.13-darwin-x86_64",
+        "azdaja-v0.1.13-linux-x86_64",
     ] {
         let bytes = fs::read(release.join(name)).unwrap();
         assert!(
@@ -1645,7 +1645,7 @@ fn public_v021_binaries_expose_the_installer_config_staging_protocol() {
         let scratch = Scratch::new();
         let home = scratch.0.join("v021-print-config-home");
         fs::create_dir(&home).unwrap();
-        let output = Command::new(release.join("azdaja-v0.1.12-darwin-arm64"))
+        let output = Command::new(release.join("azdaja-v0.1.13-darwin-arm64"))
             .args(["install", "jcode", "--print-config"])
             .env("HOME", &home)
             .env("JCODE_HOME", home.join(".jcode"))
@@ -1728,7 +1728,7 @@ fn linux_glibc_floor_refuses_below_and_accepts_exact_boundary_and_above() {
         assert_installer_preamble(&stdout);
         assert_eq!(
             installer_line(&stdout, "Installed:"),
-            "Installed: azdaja v0.1.12"
+            "Installed: azdaja v0.1.13"
         );
         assert!(bin.join("azdaja").is_file());
     }
@@ -1850,7 +1850,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         assert_installer_preamble(&stdout);
         assert_eq!(
             installer_line(&stdout, "Installed:"),
-            "Installed: azdaja v0.1.12"
+            "Installed: azdaja v0.1.13"
         );
         assert_eq!(
             installer_line(&stdout, "Integrations:"),
@@ -1868,9 +1868,9 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     }
     let requests = fs::read_to_string(&server.log).unwrap();
     assert!(requests.contains("/good/SHA256SUMS"));
-    assert!(requests.contains("/good/azdaja-v0.1.12-darwin-arm64"));
-    assert!(requests.contains("/good/azdaja-v0.1.12-darwin-x86_64"));
-    assert!(requests.contains("/good/azdaja-v0.1.12-linux-x86_64"));
+    assert!(requests.contains("/good/azdaja-v0.1.13-darwin-arm64"));
+    assert!(requests.contains("/good/azdaja-v0.1.13-darwin-x86_64"));
+    assert!(requests.contains("/good/azdaja-v0.1.13-linux-x86_64"));
 
     let home = scratch.0.join("atomic-home");
     let bin = home.join("bin");
@@ -1906,7 +1906,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     });
     assert_success(&good);
     let version = Command::new(&existing).arg("--version").output().unwrap();
-    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.12 "));
+    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.13 "));
     assert_alias_identity_and_local_caps(&home, &bin, &system_path);
 
     let home = scratch.0.join("path-home");
