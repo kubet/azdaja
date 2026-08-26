@@ -1,6 +1,6 @@
 # Agent memory and uncertainty research
 
-Status: the first product slice is implemented in Azdaja v0.1.9. This note records what the evidence supports, what it does not support, and how the implementation is tested.
+Status: the first product slice is implemented, with the v0.1.12 scope clarified below. This note records what the evidence supports, what it does not support, and how the implementation is tested.
 
 ## Executive decision
 
@@ -12,12 +12,19 @@ The shipped slice is `az memory`:
 - typed kinds: `decision`, `observation`, `failure`, `hypothesis`, and `disagreement`;
 - bounded tags and explicit `supports`, `supersedes`, `derived-from`, and `related-to` links;
 - manual provenance and backlinks on `show`;
+- `az memory list --kind disagreement`, with the fixed caveat that entries are manually recorded local records, not independent agent disagreement receipts;
 - current canonical working-directory scope by default;
 - a separate `--global` ledger only when explicitly requested;
 - append-only logical history capped at 256 records and 512 KiB per ledger;
-- no automatic prompt injection, model-authored memory, cross-project merge, or semantic ranking.
+- no automatic prompt injection, model-authored memory, cross-project merge, semantic ranking, calibrated confidence, automatic wisdom-of-agents, or automatic memory retrieval/injection.
 
 This is deliberately smaller than an Obsidian vault. The value being tested is inspectability, custody, provenance, and deterministic scope. No claim is made that links or atomic records universally improve reasoning.
+
+## Current v0.1.12 capability boundary
+
+Implemented: a manual, bounded, local memory ledger; `az memory list --kind disagreement` for manually recorded local disagreement records; and exact byte entropy only.
+
+Explicitly not implemented: automatic wisdom-of-agents, independent agent disagreement receipts, semantic entropy, calibrated confidence, or automatic memory retrieval/injection. The research references below are design constraints, not claims that Azdaja now performs collective intelligence, semantic uncertainty estimation, or long-term autonomous memory management.
 
 ## Evidence and limits
 

@@ -178,11 +178,11 @@ H_byte = -sum(p_b * log2(p_b)), b in 0..255
 
 This is a source-text distribution measurement. It is not the semantic entropy of sampled model answers and cannot be interpreted as calibrated correctness probability. Semantic entropy needs repeated answers plus semantic-equivalence clustering. Self-consistency and multi-agent debate show why repeated proposals can help on some tasks, but agreement can still share a common error. In Azdaja, disagreement is therefore a candidate escalation or abstention signal, never a headline “quality” number.
 
-The implemented `az memory` ledger applies the narrow local-first pattern without changing the evaluator: inspectable JSONL records, typed kinds and tags, explicit `supports`/`supersedes`/`derived-from`/`related-to` links, manual provenance, bounded append-only history, and scope-first deterministic retrieval. It supports a separate explicit global ledger, but never merges project ledgers implicitly and never injects records into a model. A graph view, vector store, automatic reflection loop, and model-authored memory remain out of scope until an acceptance task measures benefit and leakage.
+The implemented `az memory` ledger applies the narrow local-first pattern without changing the evaluator: inspectable JSONL records, typed kinds and tags, explicit `supports`/`supersedes`/`derived-from`/`related-to` links, manual provenance, bounded append-only history, and scope-first deterministic storage. `az memory list --kind disagreement` lists manually recorded local disagreement records, with the fixed caveat that they are not independent agent disagreement receipts. It supports a separate explicit global ledger, but never merges project ledgers implicitly and never injects records into a model. A graph view, vector store, automatic wisdom-of-agents, independent agent disagreement receipts, automatic reflection loop, model-authored memory, calibrated confidence, semantic entropy, and automatic memory retrieval/injection remain out of scope until an acceptance task measures benefit and leakage.
 
 ## Non-goals
 
-The v0.1.9 console does not claim:
+The console does not claim:
 
 - one observed universal model or provider route;
 - semantic similarity from constellation distance;
@@ -192,4 +192,4 @@ The v0.1.9 console does not claim:
 - answer quality from byte variety;
 - privacy guarantees for fields outside the source-summary contract.
 
-Research references: [semantic entropy](https://www.nature.com/articles/s41586-024-07421-0), [self-consistency](https://arxiv.org/abs/2203.11171), [multi-agent debate](https://arxiv.org/abs/2305.14325), [Obsidian backlinks](https://help.obsidian.md/plugins/backlinks), and [Obsidian properties](https://help.obsidian.md/Editing+and+formatting/Properties).
+Research references: [semantic entropy](https://www.nature.com/articles/s41586-024-07421-0) for meaning-level uncertainty, [self-consistency](https://arxiv.org/abs/2203.11171), [mirror-consistency](https://aclanthology.org/2024.findings-emnlp.135/), and [multi-agent debate](https://arxiv.org/abs/2305.14325) for collective/disagreement signals, plus long-term memory patterns such as [MemGPT](https://arxiv.org/abs/2310.08560), [Generative Agents](https://arxiv.org/abs/2304.03442), [Obsidian backlinks](https://help.obsidian.md/plugins/backlinks), and [Obsidian properties](https://help.obsidian.md/Editing+and+formatting/Properties).
