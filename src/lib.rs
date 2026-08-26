@@ -3115,15 +3115,21 @@ fn claude_hook_is_managed_transaction_for(command: &str, binary: &Path) -> bool 
     const SID: &str = "sid=";
     const CLEANUP: &str = "cleanup() {";
     const CLEANUP_GUARD: &str = "if [[ -n \"$sid\" ]]; then";
+    const KILL: &str = "\"$AZ\" kill \"$sid\" >/dev/null 2>&1 || true";
     const CLEANUP_END: &str = "fi";
     const FUNCTION_END: &str = "}";
     const TRAP: &str = "trap cleanup EXIT";
+    const START: &str = "sid=\"$(\"$AZ\" start)\"";
+    const LOAD_PREFIX: &str = "\"$AZ\" load \"$sid\" ";
+    const LOAD_SUFFIX: &str = " source >/dev/null";
+    const FINAL: &str = "\"$AZ\" final \"$sid\"";
 
     if command.len() > 128 * 1024 || command.contains('\0') || command.contains('\r') {
         return false;
     }
-    let lines = command.lines().map(str::trim).collect::<Vec<_>>();
-    if lines.len() < 14 {
+    let raw_lines = command.lines().collect::<Vec<_>>();
+    let lines = raw_lines.iter().map(|line| line.trim()).collect::<Vec<_>>();
+    if lines.len() < 15 {
         return false;
     }
 
@@ -3133,20 +3139,16 @@ fn claude_hook_is_managed_transaction_for(command: &str, binary: &Path) -> bool 
     }
     cursor += 1;
 
-    let mut assigned_binary = None;
-    if let Some(assignment) = lines.get(cursor).and_then(|line| line.strip_prefix("AZ=")) {
-        let Some(words) = shlex::split(assignment) else {
-            return false;
-        };
-        if words.len() != 1
-            || claude_hook_has_shell_expansion(assignment)
-            || !claude_hook_managed_binary_path(&words[0], binary)
-        {
-            return false;
-        }
-        assigned_binary = Some(words[0].clone());
-        cursor += 1;
+    let Some(assignment) = lines.get(cursor).and_then(|line| line.strip_prefix("AZ=")) else {
+        return false;
+    };
+    let Some(assigned_binary) = claude_hook_safe_literal_word(assignment) else {
+        return false;
+    };
+    if Path::new(&assigned_binary) != binary {
+        return false;
     }
+    cursor += 1;
 
     if lines.get(cursor) != Some(&SID)
         || lines.get(cursor + 1) != Some(&CLEANUP)
@@ -3156,14 +3158,7 @@ fn claude_hook_is_managed_transaction_for(command: &str, binary: &Path) -> bool 
     }
     cursor += 3;
 
-    let Some(kill) = lines.get(cursor).and_then(|line| shlex::split(line)) else {
-        return false;
-    };
-    if kill.len() != 7 || kill[1..] != ["kill", "$sid", ">/dev/null", "2>&1", "||", "true"] {
-        return false;
-    }
-    let runner = kill[0].clone();
-    if !claude_hook_managed_runner(&runner, assigned_binary.as_deref(), binary) {
+    if lines.get(cursor) != Some(&KILL) {
         return false;
     }
     cursor += 1;
@@ -3176,59 +3171,43 @@ fn claude_hook_is_managed_transaction_for(command: &str, binary: &Path) -> bool 
     }
     cursor += 3;
 
-    let Some(start_line) = lines.get(cursor) else {
+    if lines.get(cursor) != Some(&START) {
         return false;
-    };
-    let Some(start_inner) = start_line
-        .strip_prefix("sid=\"$(")
-        .and_then(|line| line.strip_suffix(")\""))
+    }
+    cursor += 1;
+
+    let Some(raw_input) = lines
+        .get(cursor)
+        .and_then(|line| line.strip_prefix(LOAD_PREFIX))
+        .and_then(|line| line.strip_suffix(LOAD_SUFFIX))
     else {
         return false;
     };
-    if !claude_hook_managed_invocation(start_inner, &runner, &["start"]) {
+    let Some(input) = claude_hook_safe_literal_word(raw_input) else {
+        return false;
+    };
+    if input.is_empty() {
         return false;
     }
     cursor += 1;
 
-    let Some(load) = lines.get(cursor).and_then(|line| shlex::split(line)) else {
+    let Some(exec_line) = lines.get(cursor) else {
         return false;
     };
-    if load.len() != 6
-        || load[0] != runner
-        || load[1] != "load"
-        || load[2] != "$sid"
-        || load[4] != "source"
-        || load[5] != ">/dev/null"
-        || load[3].is_empty()
-        || claude_hook_has_shell_expansion(&load[3])
-        || load[3]
-            .chars()
-            .any(|character| matches!(character, ';' | '&' | '|' | '<' | '>' | '`'))
-    {
+    let Some(delimiter) = claude_hook_managed_heredoc(exec_line) else {
         return false;
-    }
+    };
     cursor += 1;
 
-    let Some(cat_line) = lines.get(cursor) else {
-        return false;
-    };
-    let Some((delimiter, exec)) = claude_hook_managed_heredoc(cat_line) else {
-        return false;
-    };
-    if !claude_hook_managed_invocation(&exec, &runner, &["exec", "$sid", ">/dev/null"]) {
-        return false;
-    }
-    cursor += 1;
-
-    let Some(relative_end) = lines[cursor..]
+    let Some(relative_end) = raw_lines[cursor..]
         .iter()
-        .position(|line| *line == delimiter.as_str())
+        .position(|line| *line == delimiter)
     else {
         return false;
     };
     let heredoc_end = cursor + relative_end;
     if heredoc_end == cursor
-        || lines[cursor..heredoc_end]
+        || raw_lines[cursor..heredoc_end]
             .iter()
             .filter(|line| line.starts_with("FINAL("))
             .count()
@@ -3238,40 +3217,51 @@ fn claude_hook_is_managed_transaction_for(command: &str, binary: &Path) -> bool 
     }
     cursor = heredoc_end + 1;
 
-    lines.len() == cursor + 1
-        && claude_hook_managed_invocation(lines[cursor], &runner, &["final", "$sid"])
+    lines.len() == cursor + 1 && lines[cursor] == FINAL
 }
 
-fn claude_hook_managed_binary_path(value: &str, binary: &Path) -> bool {
-    let path = Path::new(value);
-    !claude_hook_has_shell_expansion(value)
-        && !value
-            .chars()
-            .any(|character| matches!(character, ';' | '&' | '|' | '<' | '>' | '`'))
-        && path == binary
-}
-
-fn claude_hook_managed_runner(runner: &str, assigned_binary: Option<&str>, binary: &Path) -> bool {
-    match assigned_binary {
-        Some(path) => runner == "$AZ" && claude_hook_managed_binary_path(path, binary),
-        None => claude_hook_managed_binary_path(runner, binary),
+fn claude_hook_safe_literal_word(raw: &str) -> Option<String> {
+    let words = shlex::split(raw)?;
+    if words.len() != 1 {
+        return None;
     }
+    let value = words.into_iter().next()?;
+    let plain = raw == value
+        && !raw.chars().any(|character| {
+            character.is_whitespace()
+                || matches!(
+                    character,
+                    '\'' | '"'
+                        | '\\'
+                        | '$'
+                        | '~'
+                        | '{'
+                        | '}'
+                        | '*'
+                        | '?'
+                        | '['
+                        | ']'
+                        | '!'
+                        | ';'
+                        | '&'
+                        | '|'
+                        | '<'
+                        | '>'
+                        | '`'
+                )
+        });
+    let quoted = raw == claude_hook_shell_quote(&value);
+    (plain || quoted).then_some(value)
 }
 
-fn claude_hook_managed_invocation(line: &str, runner: &str, arguments: &[&str]) -> bool {
-    shlex::split(line).is_some_and(|words| {
-        words.len() == arguments.len() + 1
-            && words[0] == runner
-            && words[1..]
-                .iter()
-                .map(String::as_str)
-                .eq(arguments.iter().copied())
-    })
+fn claude_hook_shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-fn claude_hook_managed_heredoc(line: &str) -> Option<(String, String)> {
-    let rest = line.strip_prefix("cat <<'")?;
-    let (delimiter, exec) = rest.split_once("' | ")?;
+fn claude_hook_managed_heredoc(line: &str) -> Option<&str> {
+    let delimiter = line
+        .strip_prefix("\"$AZ\" exec \"$sid\" >/dev/null <<'")?
+        .strip_suffix('\'')?;
     if delimiter.is_empty()
         || !delimiter.chars().all(|character| {
             character.is_ascii_uppercase() || character.is_ascii_digit() || character == '_'
@@ -3279,7 +3269,7 @@ fn claude_hook_managed_heredoc(line: &str) -> Option<(String, String)> {
     {
         return None;
     }
-    Some((delimiter.to_owned(), exec.to_owned()))
+    Some(delimiter)
 }
 
 fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
@@ -11056,7 +11046,7 @@ mod claude_hook_tests {
     }
 
     fn test_shell_quote(path: &Path) -> String {
-        format!("'{}'", path.to_string_lossy().replace('\'', "'\"'\"'"))
+        format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
     }
 
     fn managed_transaction() -> String {
@@ -11072,7 +11062,7 @@ fi
 trap cleanup EXIT
 sid="$("$AZ" start)"
 "$AZ" load "$sid" fixture.jsonl source >/dev/null
-cat <<'PY' | "$AZ" exec "$sid" >/dev/null
+"$AZ" exec "$sid" >/dev/null <<'PY'
 FINAL({})
 PY
 "$AZ" final "$sid""#
@@ -11087,10 +11077,24 @@ PY
         let literal = valid
             .replace(&assignment, "")
             .replace("\"$AZ\"", &test_shell_quote(&env::current_exe().unwrap()));
-        assert!(
-            claude_hook_is_managed_transaction(&literal),
-            "rejected rendered literal transaction:\n{literal}"
+        assert!(!claude_hook_is_managed_transaction(&literal));
+
+        let special_binary = Path::new("/tmp/az'daja-$literal");
+        let special = valid.replacen(
+            assignment.trim_end(),
+            &format!("AZ={}", test_shell_quote(special_binary)),
+            1,
         );
+        assert!(claude_hook_is_managed_transaction_for(
+            &special,
+            special_binary
+        ));
+
+        let quoted_input = valid.replace("fixture.jsonl", "'$fixture;name.jsonl'");
+        assert!(claude_hook_is_managed_transaction(&quoted_input));
+
+        let indented_delimiter = valid.replace("FINAL({})\nPY", "  PY\nFINAL({})\nPY");
+        assert!(claude_hook_is_managed_transaction(&indented_delimiter));
 
         for invalid in [
             format!("{valid}\necho escaped"),
@@ -11098,9 +11102,15 @@ PY
             valid.replace("fixture.jsonl", "fixture.jsonl;cat-secret"),
             valid.replace("fixture.jsonl", "$(cat-secret)"),
             valid.replace(assignment.trim_end(), "AZ=\"/tmp/$(cat-secret)/azdaja\""),
+            valid.replace(assignment.trim_end(), "AZ=/tmp/azdaja-$unquoted-expansion"),
             valid.replace("\"$AZ\" final", "'/different/azdaja' final"),
-            valid.replace("cat <<'PY'", "cat <<PY"),
+            valid.replace("<<'PY'", "<<PY"),
+            valid.replace(
+                "\"$AZ\" exec \"$sid\" >/dev/null <<'PY'",
+                "cat <<'PY' | \"$AZ\" exec \"$sid\" >/dev/null",
+            ),
             valid.replace("FINAL({})", "# FINAL({})"),
+            valid.replace("FINAL({})", "  FINAL({})"),
             valid.replace("\"$AZ\" load", "\"$AZ\" solo\n\"$AZ\" load"),
         ] {
             assert!(

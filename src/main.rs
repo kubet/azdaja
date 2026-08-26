@@ -8172,7 +8172,7 @@ mod tests {
         assert!(rendered.contains("discard initial shard boundaries"));
         assert!(rendered.contains(&format!(r#"sid="$({managed} start)""#)));
         assert!(rendered.contains(&format!(r#"{managed} load "$sid" '<input-path>' source"#)));
-        assert!(rendered.contains(&format!(r#"cat <<'PY' | {managed} exec "$sid""#)));
+        assert!(rendered.contains(&format!(r#"{managed} exec "$sid" >/dev/null <<'PY'"#)));
         assert!(rendered.contains(&format!(r#"{managed} final "$sid""#)));
         assert!(rendered.contains(&format!(r#"{managed} kill "$sid""#)));
         assert_eq!(rendered.matches(managed).count(), 5);
@@ -8372,7 +8372,7 @@ mod tests {
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
         assert_eq!(
-            digest, "cb1fda17140352a53e2fbaf699f0449c2b2b8ca4bca2b27d311fe9586385d724",
+            digest, "ea7094ca649543fe33e8666ee232b4e0c4aaa677c7536fbb340183d40a158d6c",
             "OpenCode rendered bytes changed"
         );
     }
@@ -8714,19 +8714,19 @@ mod tests {
         let expected = [
             (
                 "default",
-                "cb8561d9964f8af3eb9710c802299bce0c89dad2801834b1c89cc371c52126ff",
+                "b607050bcc99dd6379f5733aa85d1acfe3e252de7b25cf4f6382882923b67e61",
             ),
             (
                 "jcode",
-                "000967d3095b93a626b19af5bf783d1589b356413be0effd8d8a8b03817902eb",
+                "83618251684453ccc6806cc60fdda537c3c226f56c063307b4a13aa983f54037",
             ),
             (
                 "codex",
-                "c0bbe1995b513d33c1c850d5d4730f04eb514c6da4c3511a32813b643df1277e",
+                "9efe94b5225fb150e8f76a0a9073e7aeb884a6ee8d5094fee94ed93fd84ad21b",
             ),
             (
                 "gemini",
-                "0c04b58d0a07e7b54b91d38d11272ce6f2993a6e9e0eba0b5c2d8e38dca99255",
+                "dd7b2f9edeec37bda23e2069fb651935addda7fa0f3a4796ce384a0f86b5f691",
             ),
         ];
         let actual = expected

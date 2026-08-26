@@ -31,7 +31,7 @@ cleanup() {
 trap cleanup EXIT
 sid="$({{BIN}} start)"
 {{BIN}} load "$sid" '<input-path>' source >/dev/null
-cat <<'PY' | {{BIN}} exec "$sid" >/dev/null
+{{BIN}} exec "$sid" >/dev/null <<'PY'
 <one compact Python cell ending in FINAL(...)>
 PY
 {{BIN}} final "$sid"

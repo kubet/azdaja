@@ -197,7 +197,7 @@ cleanup() {
 trap cleanup EXIT
 sid="$("$azdaja" start)"
 "$azdaja" load "$sid" "$input" source >/dev/null
-cat <<'PY' | "$azdaja" exec "$sid" >/dev/null
+"$azdaja" exec "$sid" >/dev/null <<'PY'
 FINAL(str(len(source)))
 PY
 "$azdaja" final "$sid"
