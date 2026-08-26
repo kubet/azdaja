@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     fs,
     path::Path,
     process::Command,
@@ -19,6 +20,36 @@ fn sha256(path: &Path) -> String {
         }
     }
     panic!("no SHA-256 utility available");
+}
+
+fn cargo_tree_packages(root: &Path, target: &str) -> BTreeSet<String> {
+    let output = Command::new(env!("CARGO"))
+        .args([
+            "tree",
+            "--locked",
+            "--target",
+            target,
+            "--no-dedupe",
+            "--prefix",
+            "none",
+            "--format",
+            "{p}",
+        ])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "cargo tree failed for {target}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| line.strip_suffix(" (proc-macro)").unwrap_or(line))
+        .filter(|line| !line.starts_with("azdaja v"))
+        .map(str::to_owned)
+        .collect()
 }
 
 #[test]
@@ -168,4 +199,67 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads()
         );
     }
     fs::remove_dir_all(dist).unwrap();
+}
+
+#[test]
+fn ci_builds_every_documented_standalone_target_explicitly() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap();
+    let job = ci
+        .split_once("\n  standalone-targets:\n")
+        .expect("standalone target job must exist")
+        .1
+        .split_once("\n  windows-safety:\n")
+        .expect("standalone target job must remain independently scoped")
+        .0;
+
+    for entry in [
+        "          - os: macos-14\n            rust_target: aarch64-apple-darwin\n            asset: darwin-arm64",
+        "          - os: macos-14\n            rust_target: x86_64-apple-darwin\n            asset: darwin-x86_64",
+        "          - os: ubuntu-22.04\n            rust_target: x86_64-unknown-linux-gnu\n            asset: linux-x86_64",
+    ] {
+        assert!(
+            job.contains(entry),
+            "missing mandatory CI matrix entry: {entry}"
+        );
+    }
+    assert!(job.contains("cargo build --release --locked --target \"${{ matrix.rust_target }}\""));
+    assert!(job.contains("Verify standalone target architecture"));
+    assert!(job.contains("unreviewed standalone target"));
+}
+
+#[test]
+fn intel_darwin_dependency_delta_is_already_in_the_reviewed_notice_corpus() {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let arm = cargo_tree_packages(root, "aarch64-apple-darwin");
+    let intel = cargo_tree_packages(root, "x86_64-apple-darwin");
+    let linux = cargo_tree_packages(root, "x86_64-unknown-linux-gnu");
+
+    assert_eq!(arm.len(), 189);
+    assert_eq!(intel.len(), 190);
+    assert_eq!(linux.len(), 190);
+    assert_eq!(
+        intel.difference(&arm).cloned().collect::<Vec<_>>(),
+        ["spin v0.9.9"]
+    );
+    assert!(arm.difference(&intel).next().is_none());
+    assert!(linux.contains("spin v0.9.9"));
+    assert_eq!(
+        arm.union(&intel)
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            .union(&linux)
+            .count(),
+        191
+    );
+
+    let notices = fs::read_to_string(root.join("THIRD-PARTY-NOTICES.md")).unwrap();
+    assert!(notices.contains("| `spin` | `0.9.9` | `MIT` | `x86_64-unknown-linux-gnu` |"));
+    assert!(notices.contains("pkg:cargo/spin@0.9.9 — `LICENSE` (archive_named_legal_file)"));
+    assert!(
+        notices.contains("pkg:cargo/spin@0.9.9 — `src/barrier.rs` (archive_legal_header_block)")
+    );
 }

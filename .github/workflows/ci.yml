@@ -329,6 +329,63 @@ jobs:
           compression-level: 0
           retention-days: 7
 
+  standalone-targets:
+    name: standalone ${{ matrix.asset }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            rust_target: aarch64-apple-darwin
+            asset: darwin-arm64
+          - os: macos-14
+            rust_target: x86_64-apple-darwin
+            asset: darwin-x86_64
+          - os: ubuntu-22.04
+            rust_target: x86_64-unknown-linux-gnu
+            asset: linux-x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.95.0
+          targets: ${{ matrix.rust_target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: standalone-${{ matrix.rust_target }}
+      - name: Build documented standalone target
+        run: cargo build --release --locked --target "${{ matrix.rust_target }}"
+      - name: Verify standalone target architecture
+        shell: bash
+        env:
+          RUST_TARGET: ${{ matrix.rust_target }}
+        run: |
+          set -euo pipefail
+          binary="target/$RUST_TARGET/release/azdaja"
+          test -x "$binary"
+          python3 - "$binary" "$RUST_TARGET" <<'PY'
+          import pathlib
+          import struct
+          import sys
+
+          binary = pathlib.Path(sys.argv[1]).read_bytes()
+          target = sys.argv[2]
+          if target == "aarch64-apple-darwin":
+              assert binary[:4] == b"\xcf\xfa\xed\xfe", binary[:4]
+              assert struct.unpack("<I", binary[4:8])[0] == 0x0100000C
+          elif target == "x86_64-apple-darwin":
+              assert binary[:4] == b"\xcf\xfa\xed\xfe", binary[:4]
+              assert struct.unpack("<I", binary[4:8])[0] == 0x01000007
+          elif target == "x86_64-unknown-linux-gnu":
+              assert binary[:4] == b"\x7fELF", binary[:4]
+              assert binary[5] == 1, "release ELF must be little-endian"
+              assert struct.unpack("<H", binary[18:20])[0] == 62
+          else:
+              raise AssertionError(f"unreviewed standalone target: {target}")
+          PY
+
   windows-safety:
     runs-on: windows-latest
     timeout-minutes: 30
