@@ -1297,19 +1297,16 @@ fn is_git_build_test_lint_or_format(command: &str) -> bool {
             };
             saw_command = true;
             let program = program.rsplit('/').next().unwrap_or(program);
-            let first = arguments.first().copied().unwrap_or("");
             let allowed = match program {
                 "git" => git_command_is_safe(arguments),
-                "cargo" => matches!(
-                    first,
-                    "build" | "check" | "test" | "clippy" | "fmt" | "bench" | "doc"
-                ),
+                "cargo" => cargo_command_is_safe(arguments),
+                "rustup" => rustup_build_setup_is_safe(arguments),
                 "rustc" | "rustfmt" | "make" | "gmake" | "ninja" | "pytest" | "ruff" | "black"
                 | "eslint" | "prettier" => true,
-                "go" => matches!(first, "build" | "test" | "vet" | "fmt"),
+                "go" => matches!(arguments.first(), Some(&("build" | "test" | "vet" | "fmt"))),
                 "npm" | "pnpm" | "yarn" | "bun" => matches!(
-                    first,
-                    "test" | "build" | "lint" | "format" | "fmt" | "check" | "run"
+                    arguments.first(),
+                    Some(&("test" | "build" | "lint" | "format" | "fmt" | "check" | "run"))
                 ),
                 "mvn" | "mvnw" | "gradle" | "gradlew" => true,
                 "cmake" => arguments.contains(&"--build") || arguments.contains(&"--check"),
@@ -1322,6 +1319,95 @@ fn is_git_build_test_lint_or_format(command: &str) -> bool {
         }
     }
     saw_command
+}
+
+fn cargo_command_is_safe(arguments: &[&str]) -> bool {
+    let arguments = match arguments.first() {
+        Some(argument) if argument.starts_with('+') && argument.len() > 1 => &arguments[1..],
+        _ => arguments,
+    };
+    matches!(
+        arguments.first(),
+        Some(&("build" | "check" | "test" | "clippy" | "fmt" | "bench" | "doc" | "metadata"))
+    )
+}
+
+fn rustup_build_setup_is_safe(arguments: &[&str]) -> bool {
+    match arguments {
+        ["target", "add", rest @ ..] => rustup_target_add_arguments_are_safe(rest),
+        ["toolchain", "add" | "install" | "update", rest @ ..] => {
+            !rest.is_empty()
+                && rest
+                    .iter()
+                    .all(|argument| !matches!(*argument, "--path" | "-p"))
+        }
+        _ => false,
+    }
+}
+
+fn rustup_target_add_arguments_are_safe(arguments: &[&str]) -> bool {
+    let mut saw_target = false;
+    let mut index = 0;
+    while let Some(argument) = arguments.get(index).copied() {
+        if argument == "--toolchain" {
+            index += 1;
+            if arguments
+                .get(index)
+                .is_none_or(|value| value.is_empty() || value.starts_with('-'))
+            {
+                return false;
+            }
+        } else if let Some(toolchain) = argument.strip_prefix("--toolchain=") {
+            if toolchain.is_empty() {
+                return false;
+            }
+        } else if argument.starts_with('-') {
+            return false;
+        } else {
+            saw_target = true;
+        }
+        index += 1;
+    }
+    saw_target
+}
+
+#[cfg(test)]
+mod build_command_classification_tests {
+    use super::is_git_build_test_lint_or_format;
+
+    #[test]
+    fn allows_toolchain_qualified_cargo_build_and_build_rustup_setup() {
+        assert!(is_git_build_test_lint_or_format(
+            "cargo +1.95.0 build --release --locked --target x86_64-apple-darwin"
+        ));
+        assert!(is_git_build_test_lint_or_format(
+            "rustup target add x86_64-apple-darwin --toolchain 1.95.0"
+        ));
+        assert!(is_git_build_test_lint_or_format("cargo +nightly metadata"));
+        assert!(is_git_build_test_lint_or_format(
+            "rustup toolchain install 1.95.0 --profile minimal"
+        ));
+    }
+
+    #[test]
+    fn rejects_nearby_read_capable_and_compound_commands() {
+        assert!(!is_git_build_test_lint_or_format(
+            "cargo +1.95.0 read src/lib.rs"
+        ));
+        assert!(!is_git_build_test_lint_or_format(
+            "rustup run 1.95.0 cat src/lib.rs"
+        ));
+        assert!(!is_git_build_test_lint_or_format("rustup which rustc"));
+        assert!(!is_git_build_test_lint_or_format(
+            "rustup target add x86_64-apple-darwin --toolchain 1.95.0 && cat src/lib.rs"
+        ));
+        assert!(!is_git_build_test_lint_or_format(
+            "cargo +1.95.0 build --release; cat src/lib.rs"
+        ));
+        assert!(!is_git_build_test_lint_or_format(
+            "rustup toolchain link local /tmp/toolchain"
+        ));
+    }
 }
 
 fn git_workflow_requires_memory(command: &str) -> bool {
