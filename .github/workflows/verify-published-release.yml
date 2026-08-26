@@ -1,0 +1,24 @@
+name: Verify published release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without the v prefix
+        required: true
+        default: 0.1.12
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify installer, manifests, and payloads
+        env:
+          VERSION: ${{ inputs.version }}
+        run: release/verify-published-release.sh "$VERSION"
