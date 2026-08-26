@@ -698,6 +698,7 @@ pub struct Config {
     pub clean_patterns: Vec<String>,
     pub jcode_provider: String,
     pub jcode_reasoning: String,
+    pub jcode_repair_model: Option<String>,
     pub max_calls_per_cell: usize,
 }
 impl Default for Config {
@@ -714,6 +715,7 @@ impl Default for Config {
             clean_patterns: Vec::new(),
             jcode_provider: "openai".into(),
             jcode_reasoning: "medium".into(),
+            jcode_repair_model: None,
             max_calls_per_cell: MAX_CALLS_PER_CELL,
         }
     }
@@ -770,6 +772,13 @@ impl Config {
         }
         if self.default_model.trim().is_empty() {
             bail!("default_model cannot be empty")
+        }
+        if self
+            .jcode_repair_model
+            .as_deref()
+            .is_some_and(|model| model.trim().is_empty())
+        {
+            bail!("jcode_repair_model cannot be empty when present")
         }
         if self.output_cap < 256 {
             bail!("output_cap must be at least 256")
