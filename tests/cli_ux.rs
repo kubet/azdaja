@@ -229,6 +229,124 @@ fn memory_cli_is_scope_first_linked_and_global_only_when_explicit() {
 }
 
 #[test]
+fn memory_list_kind_filters_cover_all_kinds_and_fail_cleanly() {
+    let scratch = Scratch::new("memory-list-kind");
+    let first = scratch.0.join("first");
+    let second = scratch.0.join("second");
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+
+    let ok_output = |cwd: &Path, args: &[&str]| {
+        let output = command(&scratch.0)
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        utf8(&output).0.to_owned()
+    };
+    let raw_output = |cwd: &Path, args: &[&str]| {
+        command(&scratch.0)
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+
+    for (kind, text) in [
+        ("decision", "keep the interface stable"),
+        ("observation", "observed a bounded ledger"),
+        ("failure", "prior approach leaked state"),
+        ("hypothesis", "kind filters should stay read only"),
+        ("disagreement", "manual disagreement for review"),
+    ] {
+        let added = ok_output(&first, &["memory", "add", kind, text]);
+        assert!(added.contains(kind), "{added}");
+    }
+    ok_output(
+        &first,
+        &[
+            "memory",
+            "add",
+            "disagreement",
+            "global disagreement note",
+            "--global",
+        ],
+    );
+
+    for (kind, expected) in [
+        ("decision", "keep the interface stable"),
+        ("observation", "observed a bounded ledger"),
+        ("failure", "prior approach leaked state"),
+        ("hypothesis", "kind filters should stay read only"),
+        ("disagreement", "manual disagreement for review"),
+    ] {
+        let listed = ok_output(&first, &["memory", "list", "--kind", kind]);
+        assert!(listed.contains("current folder · 1 records"), "{listed}");
+        assert!(listed.contains(kind), "{listed}");
+        assert!(listed.contains(expected), "{listed}");
+        assert!(!listed.contains("global disagreement note"), "{listed}");
+        if kind == "disagreement" {
+            assert!(
+                listed.contains(
+                    "manual notes only · not agent consensus, confidence, or semantic entropy"
+                ),
+                "{listed}"
+            );
+            assert!(!listed.contains("vote"), "{listed}");
+            assert!(!listed.contains("verdict"), "{listed}");
+            assert!(!listed.contains("retrieval"), "{listed}");
+            assert!(!listed.contains("injection"), "{listed}");
+        } else {
+            assert!(!listed.contains("manual notes only"), "{listed}");
+        }
+    }
+
+    let none = ok_output(&second, &["memory", "list", "--kind", "decision"]);
+    assert!(none.contains("current folder · 0 records"), "{none}");
+    assert!(none.contains("none yet · add a decision"), "{none}");
+
+    let multiple = ok_output(
+        &first,
+        &["memory", "list", "--kind", "disagreement", "--global"],
+    );
+    assert!(multiple.contains("global · 1 records"), "{multiple}");
+    assert!(multiple.contains("global disagreement note"), "{multiple}");
+    assert!(
+        !multiple.contains("keep the interface stable"),
+        "{multiple}"
+    );
+
+    let reordered = ok_output(
+        &first,
+        &["memory", "list", "--global", "--kind", "disagreement"],
+    );
+    assert_eq!(multiple, reordered);
+
+    let invalid = raw_output(&first, &["memory", "list", "--kind", "consensus"]);
+    let (stdout, stderr) = utf8(&invalid);
+    assert_eq!(invalid.status.code(), Some(2));
+    assert!(stdout.is_empty());
+    assert!(
+        stderr.contains("unknown memory kind \"consensus\""),
+        "{stderr}"
+    );
+
+    let missing = raw_output(&first, &["memory", "list", "--kind"]);
+    let (stdout, stderr) = utf8(&missing);
+    assert_eq!(missing.status.code(), Some(2));
+    assert!(stdout.is_empty());
+    assert!(
+        stderr.contains("memory list --kind requires one of decision, observation, failure, hypothesis, or disagreement"),
+        "{stderr}"
+    );
+}
+
+#[test]
 fn map_keeps_a_private_numeric_source_summary_after_the_session_is_killed() {
     let scratch = Scratch::new("memory-map");
     let cfg = config(&scratch.0, "cat");

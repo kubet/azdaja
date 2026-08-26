@@ -1013,6 +1013,107 @@ fn sessions_and_observability_are_working_directory_scoped_with_explicit_global_
 }
 
 #[test]
+fn memory_list_kind_filters_are_scope_correct_and_do_not_mutate_state() {
+    let t = temp("memory-kind-filter");
+    let cfg = config(&t, "cat", 512, 1, 2, 4);
+    let first = t.join("project-first");
+    let second = t.join("project-second");
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+
+    ok(run_in(
+        &t,
+        &cfg,
+        &first,
+        &["memory", "add", "observation", "first scoped observation"],
+        "",
+    ));
+    ok(run_in(
+        &t,
+        &cfg,
+        &first,
+        &["memory", "add", "observation", "second scoped observation"],
+        "",
+    ));
+    ok(run_in(
+        &t,
+        &cfg,
+        &first,
+        &["memory", "add", "disagreement", "manual disagreement note"],
+        "",
+    ));
+    ok(run_in(
+        &t,
+        &cfg,
+        &first,
+        &[
+            "memory",
+            "add",
+            "disagreement",
+            "global disagreement note",
+            "--global",
+        ],
+        "",
+    ));
+
+    let scopes_dir = t.join("state").join("memory").join("scopes");
+    let scope_path = fs::read_dir(&scopes_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .unwrap();
+    let scoped_before = fs::read(&scope_path).unwrap();
+    let global_path = t.join("state").join("memory").join("global.jsonl");
+    let global_before = fs::read(&global_path).unwrap();
+
+    let scoped = ok(run_in(
+        &t,
+        &cfg,
+        &first,
+        &["memory", "list", "--kind", "observation"],
+        "",
+    ));
+    assert!(scoped.contains("current folder · 2 records"), "{scoped}");
+    assert!(scoped.contains("first scoped observation"), "{scoped}");
+    assert!(scoped.contains("second scoped observation"), "{scoped}");
+    assert!(!scoped.contains("manual disagreement note"), "{scoped}");
+
+    let global = ok(run_in(
+        &t,
+        &cfg,
+        &second,
+        &["memory", "list", "--global", "--kind", "disagreement"],
+        "",
+    ));
+    assert!(global.contains("global · 1 records"), "{global}");
+    assert!(
+        global.contains("manual notes only · not agent consensus, confidence, or semantic entropy"),
+        "{global}"
+    );
+    assert!(global.contains("global disagreement note"), "{global}");
+    assert!(!global.contains("manual disagreement note"), "{global}");
+    assert!(!global.contains("vote"), "{global}");
+    assert!(!global.contains("verdict"), "{global}");
+    assert!(!global.contains("retrieval"), "{global}");
+    assert!(!global.contains("injection"), "{global}");
+
+    let empty = ok(run_in(
+        &t,
+        &cfg,
+        &second,
+        &["memory", "list", "--kind", "failure"],
+        "",
+    ));
+    assert!(empty.contains("current folder · 0 records"), "{empty}");
+    assert!(empty.contains("none yet · add a failure"), "{empty}");
+
+    assert_eq!(scoped_before, fs::read(&scope_path).unwrap());
+    assert_eq!(global_before, fs::read(&global_path).unwrap());
+
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
 fn legacy_sessions_complete_into_global_history_without_folder_contamination() {
     let t = temp("legacy-scope");
     let cfg = config(&t, "cat", 512, 1, 2, 4);

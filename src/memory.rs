@@ -160,6 +160,12 @@ pub fn list_current(global: bool) -> Result<Vec<MemoryRecord>> {
     list_at(&root, scope_key.as_deref())
 }
 
+pub fn list_current_kind(global: bool, kind: MemoryKind) -> Result<Vec<MemoryRecord>> {
+    let root = crate::state_home()?;
+    let scope_key = current_scope_key(global)?;
+    list_kind_at(&root, scope_key.as_deref(), kind)
+}
+
 pub fn show_current(global: bool, id: &str) -> Result<MemoryView> {
     let root = crate::state_home()?;
     let scope_key = current_scope_key(global)?;
@@ -245,6 +251,17 @@ pub fn list_at(root: &Path, scope_key: Option<&str>) -> Result<Vec<MemoryRecord>
     prepare_parent(root, scope_key)?;
     let _lock = crate::lock_path(&path.with_extension("lock"))?;
     load_path(&path)
+}
+
+pub fn list_kind_at(
+    root: &Path,
+    scope_key: Option<&str>,
+    kind: MemoryKind,
+) -> Result<Vec<MemoryRecord>> {
+    Ok(list_at(root, scope_key)?
+        .into_iter()
+        .filter(|record| record.kind == kind)
+        .collect())
 }
 
 pub fn show_at(root: &Path, scope_key: Option<&str>, id: &str) -> Result<MemoryView> {
@@ -622,5 +639,98 @@ mod tests {
             .unwrap()
             .len();
         assert!(bytes <= MAX_LEDGER_BYTES as u64);
+    }
+
+    #[test]
+    fn kind_filters_are_stable_and_read_only() {
+        let root = root("kind-filter");
+        let key = "f".repeat(64);
+        append_at(
+            &root,
+            Some(&key),
+            MemoryKind::Decision,
+            "first decision".into(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        append_at(
+            &root,
+            Some(&key),
+            MemoryKind::Observation,
+            "first observation".into(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        append_at(
+            &root,
+            Some(&key),
+            MemoryKind::Decision,
+            "second decision".into(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        append_at(
+            &root,
+            Some(&key),
+            MemoryKind::Disagreement,
+            "manual disagreement".into(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+
+        let path = ledger_path(&root, Some(&key)).unwrap();
+        let before = fs::read(&path).unwrap();
+        let decisions = list_kind_at(&root, Some(&key), MemoryKind::Decision).unwrap();
+        let disagreements = list_kind_at(&root, Some(&key), MemoryKind::Disagreement).unwrap();
+        let failures = list_kind_at(&root, Some(&key), MemoryKind::Failure).unwrap();
+        let after = fs::read(&path).unwrap();
+
+        assert_eq!(before, after);
+        assert_eq!(
+            decisions
+                .iter()
+                .map(|record| record.text.as_str())
+                .collect::<Vec<_>>(),
+            vec!["first decision", "second decision"]
+        );
+        assert_eq!(disagreements.len(), 1);
+        assert_eq!(disagreements[0].text, "manual disagreement");
+        assert!(failures.is_empty());
+    }
+
+    #[test]
+    fn global_and_scoped_kind_filters_stay_isolated() {
+        let root = root("kind-filter-scope");
+        let key = "1".repeat(64);
+        append_at(
+            &root,
+            Some(&key),
+            MemoryKind::Observation,
+            "scoped observation".into(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        append_at(
+            &root,
+            None,
+            MemoryKind::Observation,
+            "global observation".into(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+
+        let scoped = list_kind_at(&root, Some(&key), MemoryKind::Observation).unwrap();
+        let global = list_kind_at(&root, None, MemoryKind::Observation).unwrap();
+
+        assert_eq!(scoped.len(), 1);
+        assert_eq!(scoped[0].text, "scoped observation");
+        assert_eq!(global.len(), 1);
+        assert_eq!(global[0].text, "global observation");
     }
 }

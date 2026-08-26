@@ -40,6 +40,8 @@ const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
 
 const CANARY_PROMPT: &str = "Reverse the six-letter ASCII string AJADZA. Reply with the reversed string only, no punctuation.";
 const CANARY_ANSWER: &str = "AZDAJA";
+const DISAGREEMENT_CAVEAT: &str =
+    "manual notes only · not agent consensus, confidence, or semantic entropy";
 
 fn ensure_private_trace_file(file: &fs::File, path: &Path) -> Result<()> {
     let metadata = file.metadata()?;
@@ -553,7 +555,7 @@ fn memory_cmd(args: &[String]) -> Result<bool> {
         println!(
             "Usage: az memory <add|list|show> [--global]\n\
              Add: az memory add <decision|observation|failure|hypothesis|disagreement> <text> [--tag <tag>] [--link <relation:id>] [--global]\n\
-             List: az memory list [--global]\n\
+             List: az memory list [--kind <decision|observation|failure|hypothesis|disagreement>] [--global]\n\
              Show: az memory show <id> [--global]\n\
              Records are explicit, local-first, bounded, and never injected into a model automatically."
         );
@@ -561,17 +563,31 @@ fn memory_cmd(args: &[String]) -> Result<bool> {
     }
     match args.get(1).map(String::as_str) {
         Some("list") => {
-            let global = memory_global_flag(args, 2)?;
-            let records = azdaja::memory::list_current(global)?;
+            let list_args = parse_memory_list_args(args)?;
+            let records = match list_args.kind {
+                Some(kind) => azdaja::memory::list_current_kind(list_args.global, kind)?,
+                None => azdaja::memory::list_current(list_args.global)?,
+            };
             println!(
                 "memory scope  {} · {} records · bounded local ledger",
-                if global { "global" } else { "current folder" },
+                if list_args.global {
+                    "global"
+                } else {
+                    "current folder"
+                },
                 records.len()
             );
+            if list_args.kind == Some(azdaja::memory::MemoryKind::Disagreement) {
+                println!("{DISAGREEMENT_CAVEAT}");
+            }
             if records.is_empty() {
-                println!(
-                    "none yet · add a decision, observation, failure, hypothesis, or disagreement"
-                );
+                if let Some(kind) = list_args.kind {
+                    println!("none yet · add a {}", kind.as_str());
+                } else {
+                    println!(
+                        "none yet · add a decision, observation, failure, hypothesis, or disagreement"
+                    );
+                }
             } else {
                 for record in records.iter().rev() {
                     let tags = if record.tags.is_empty() {
@@ -676,6 +692,35 @@ fn memory_global_flag(args: &[String], index: usize) -> Result<bool> {
         Some(flag) if flag == "--global" && args.len() == index + 1 => Ok(true),
         _ => Err(usage_error("memory")),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MemoryListArgs {
+    global: bool,
+    kind: Option<azdaja::memory::MemoryKind>,
+}
+
+fn parse_memory_list_args(args: &[String]) -> Result<MemoryListArgs> {
+    let mut global = false;
+    let mut kind = None;
+    let mut index = 2;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--global" => {
+                global = true;
+                index += 1;
+            }
+            "--kind" => {
+                let raw = args
+                    .get(index + 1)
+                    .ok_or_else(|| anyhow!("memory list --kind requires one of decision, observation, failure, hypothesis, or disagreement"))?;
+                kind = Some(azdaja::memory::MemoryKind::parse(raw)?);
+                index += 2;
+            }
+            _ => return Err(usage_error("memory")),
+        }
+    }
+    Ok(MemoryListArgs { global, kind })
 }
 
 fn memory_one_line(text: &str) -> String {
