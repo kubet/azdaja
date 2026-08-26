@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14]
+        os: [ubuntu-22.04, macos-14]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -77,6 +77,13 @@ jobs:
       - run: cargo clippy --all-targets --all-features --locked -- -D warnings
       - run: cargo test --all --locked -- --test-threads=1
       - run: cargo build --release --locked
+      - name: Verify advertised Linux glibc floor
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(getconf GNU_LIBC_VERSION)" = "glibc 2.35"
+          target/release/azdaja --version
       - name: Release-only 50 MiB product acceptance
         run: >-
           AZDAJA_PRODUCT_BINARY=target/release/azdaja
