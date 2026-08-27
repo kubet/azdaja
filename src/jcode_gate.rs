@@ -597,6 +597,33 @@ fn handle_pre_tool(
                 )
             }
         }
+        Requirement::ShellNarrow(units) => {
+            if state.active_challenge.is_some() {
+                return block_with_challenge(
+                    &storage,
+                    &mut state,
+                    &context,
+                    now,
+                    heartbeat_now_ms,
+                    binary,
+                );
+            }
+            let next = state.narrow_units.saturating_add(units);
+            if next <= NARROW_SESSION_BUDGET {
+                state.narrow_units = next;
+                storage.save_session(&state)?;
+                Ok(Decision::Allow)
+            } else {
+                block_with_challenge(
+                    &storage,
+                    &mut state,
+                    &context,
+                    now,
+                    heartbeat_now_ms,
+                    binary,
+                )
+            }
+        }
         Requirement::Memory => block_with_challenge(
             &storage,
             &mut state,
@@ -966,11 +993,6 @@ fn consume_challenge(
 ) -> GateResult<()> {
     let mut state = validate_active_challenge(storage, record, challenge_hash)?;
     state.active_challenge = None;
-    // A successful repository-memory pass starts a fresh bounded-follow-up
-    // allowance. Otherwise a session that exhausted its narrow budget before
-    // the pass immediately re-blocks the very reads the handoff message says
-    // remain available.
-    state.narrow_units = 0;
     storage.save_session(&state)?;
     storage.remove_challenge(challenge_hash)?;
     Ok(())
@@ -1005,6 +1027,7 @@ fn discard_active_challenge(storage: &Storage, state: &mut SessionState) -> Gate
 enum Requirement {
     Free,
     Narrow(u64),
+    ShellNarrow(u64),
     Memory,
 }
 
@@ -1178,6 +1201,7 @@ fn classify_batch(input: &Value, depth: usize, cwd: &Path) -> Requirement {
         return Requirement::Free;
     }
     let mut units = 0u64;
+    let mut includes_shell_read = false;
     for call in calls {
         let Some(tool) = call.get("tool").and_then(Value::as_str) else {
             return Requirement::Memory;
@@ -1186,13 +1210,21 @@ fn classify_batch(input: &Value, depth: usize, cwd: &Path) -> Requirement {
         match classify_tool(tool, nested_input, depth, cwd) {
             Requirement::Free => {}
             Requirement::Narrow(value) => units = units.saturating_add(value),
+            Requirement::ShellNarrow(value) => {
+                units = units.saturating_add(value);
+                includes_shell_read = true;
+            }
             Requirement::Memory => return Requirement::Memory,
         }
     }
     if units == 0 {
         Requirement::Free
     } else {
-        Requirement::Narrow(units)
+        if includes_shell_read {
+            Requirement::ShellNarrow(units)
+        } else {
+            Requirement::Narrow(units)
+        }
     }
 }
 
@@ -1365,7 +1397,7 @@ fn classify_bash(input: &Value, cwd: &Path) -> Requirement {
         return Requirement::Memory;
     };
     if let Some(units) = classify_bounded_bash_read(command, cwd) {
-        return Requirement::Narrow(units);
+        return Requirement::ShellNarrow(units);
     }
     if git_workflow_requires_memory(command) {
         return Requirement::Memory;
@@ -2495,7 +2527,7 @@ mod tests {
     }
 
     #[test]
-    fn successful_repository_pass_resets_the_narrow_followup_budget() {
+    fn successful_repository_pass_preserves_the_exhausted_read_budget() {
         let scratch = Scratch::new();
         let state = scratch.state();
         for offset in 0..8 {
@@ -2527,7 +2559,7 @@ mod tests {
             NOW + 9,
         )
         .unwrap();
-        assert_eq!(
+        assert!(matches!(
             call(
                 &state,
                 &scratch.cwd,
@@ -2536,8 +2568,8 @@ mod tests {
                 NOW + 10,
             )
             .unwrap(),
-            Decision::Allow
-        );
+            Decision::Block(_)
+        ));
         let context = BoundContext::new("session/raw id", &scratch.cwd).unwrap();
         let storage = Storage::open(&state).unwrap();
         assert_eq!(
@@ -2546,7 +2578,7 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .narrow_units,
-            64
+            512
         );
     }
 
