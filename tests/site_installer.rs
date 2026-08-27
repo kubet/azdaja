@@ -51,6 +51,7 @@ impl FixtureServer {
             r#"import functools
 import http.server
 import pathlib
+import socketserver
 import sys
 
 root, port_file, log_file = map(pathlib.Path, sys.argv[1:])
@@ -58,8 +59,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         with log_file.open("a", encoding="utf-8") as stream:
             stream.write(self.path + "\n")
+class Server(http.server.ThreadingHTTPServer):
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = host
+        self.server_port = port
 handler = functools.partial(Handler, directory=str(root))
-server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+server = Server(("127.0.0.1", 0), handler)
 port_file.write_text(str(server.server_address[1]), encoding="ascii")
 server.serve_forever()
 "#,
@@ -72,11 +79,23 @@ server.serve_forever()
             .arg(&log)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .unwrap();
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                let stderr = child
+                    .stderr
+                    .take()
+                    .map(|mut stream| {
+                        let mut output = String::new();
+                        std::io::Read::read_to_string(&mut stream, &mut output).unwrap();
+                        output
+                    })
+                    .unwrap_or_default();
+                panic!("fixture HTTP server exited with {status}: {stderr}");
+            }
             if let Ok(port_text) = fs::read_to_string(&port_file)
                 && let Ok(port) = port_text.trim().parse::<u16>()
                 && port != 0
