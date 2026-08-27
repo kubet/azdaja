@@ -10,6 +10,8 @@ fn public_surface_leads_with_the_product_contract_not_capacity_marketing() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let active_surfaces = [
         "README.md",
+        ".github/ISSUE_TEMPLATE/first-use-feedback.yml",
+        ".github/ISSUE_TEMPLATE/product-defect.yml",
         "site/index.html",
         "site/saga.html",
         "docs/launch-package.md",

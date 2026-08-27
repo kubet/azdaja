@@ -48,7 +48,7 @@ body:
     attributes:
       label: Approximate input size, if reached
       description: Enter `not reached` if installation or doctor failed before processing.
-      placeholder: 50 MiB or not reached
+      placeholder: Approximate bytes or not reached
     validations:
       required: true
   - type: dropdown

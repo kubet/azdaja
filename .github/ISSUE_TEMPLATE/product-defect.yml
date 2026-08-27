@@ -16,9 +16,9 @@ body:
       options:
         - One-command installation or upgrade
         - Doctor or authentication
-        - 50 MiB build-log processing
-        - 50 MiB repository-dump processing
-        - 50 MiB transcript processing
+        - Build-log processing
+        - Repository-dump processing
+        - Transcript processing
         - Config preservation or uninstall
         - Other CLI/runtime behavior
     validations:
