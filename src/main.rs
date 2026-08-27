@@ -7131,6 +7131,14 @@ fn quoted_literal_matches_label(literal: &str, labels: &[String], regex_shaped: 
 }
 
 fn code_greps_label_literals(question: &str, code: &str) -> bool {
+    let normalized_question = question.to_ascii_lowercase();
+    if !classification_worded_task(question)
+        && ["literal", "substring", "exact text", "verbatim"]
+            .iter()
+            .any(|marker| normalized_question.contains(marker))
+    {
+        return false;
+    }
     if code_calls_semantic_manifest(code) {
         return false;
     }
@@ -9349,6 +9357,10 @@ FINAL(answer)"###,
             r#"rows = [row for row in ctx.splitlines() if "Date: May" in row]"#,
         ));
         assert!(!code_greps_label_literals(
+            "How many times does the literal string 'spam' occur?",
+            r#"count = ctx.count("spam")"#,
+        ));
+        assert!(!code_greps_label_literals(
             "How many records should be classified as label 'spam'?",
             "labels = semantic_manifest_records(items, task, ['spam', 'ham'])",
         ));
@@ -9395,6 +9407,11 @@ FINAL(answer)"###,
             true,
             incidental_llm_then_grep.semantic_calls
         ));
+        assert!(solo_program_failure_is_repairable(
+            &incidental_llm_then_grep,
+            1,
+            SOLO_ROOT_TURN_LIMIT
+        ));
         let prompt = root_repair_prompt(&failure);
         assert!(prompt.contains(
             "Labels are produced by classifying instances, never found by searching for label fields."
@@ -9405,6 +9422,30 @@ FINAL(answer)"###,
         assert!(!prompt.contains("Parse the exact text that is present"));
         assert!(prompt.len() <= 1024);
         assert!(solo_program_failure_is_repairable(&failure, 1, 4));
+        for (kind, needle) in [
+            (
+                SoloProgramFailureKind::LabelLiteralGrep,
+                "requested label literal in grep-shaped code",
+            ),
+            (
+                SoloProgramFailureKind::DegenerateZeroAggregate,
+                "zero aggregate over a large classification input",
+            ),
+        ] {
+            let failure = SoloProgramFailure {
+                kind,
+                error: anyhow!("typed semantic guard"),
+                code: Some(r#"FINAL("Answer: 0")"#.to_owned()),
+                output: Some(String::new()),
+                failure_line: None,
+                external_calls: 1,
+                semantic_calls: 0,
+            };
+            let prompt = root_repair_prompt(&failure);
+            assert!(prompt.contains(needle));
+            assert!(prompt.len() <= 1024);
+            assert!(solo_program_failure_is_repairable(&failure, 1, 4));
+        }
     }
 
     #[test]
