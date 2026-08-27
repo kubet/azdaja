@@ -1,0 +1,13 @@
+{
+  "name": "azdaja",
+  "displayName": "Azdaja",
+  "version": "0.1.13",
+  "description": "Virtual memory for language models with a bounded model-facing surface",
+  "author": {
+    "name": "kubet",
+    "url": "https://github.com/kubet"
+  },
+  "repository": "https://github.com/kubet/azdaja",
+  "license": "MIT",
+  "skills": "./skills/"
+}
