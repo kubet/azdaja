@@ -555,6 +555,7 @@ fn handle_pre_tool(
     if state.workspace_hash != context.workspace_hash {
         discard_active_challenge(&storage, &mut state)?;
         state.workspace_hash.clone_from(&context.workspace_hash);
+        state.narrow_units = 0;
         storage.save_session(&state)?;
     }
 
@@ -965,6 +966,11 @@ fn consume_challenge(
 ) -> GateResult<()> {
     let mut state = validate_active_challenge(storage, record, challenge_hash)?;
     state.active_challenge = None;
+    // A successful repository-memory pass starts a fresh bounded-follow-up
+    // allowance. Otherwise a session that exhausted its narrow budget before
+    // the pass immediately re-blocks the very reads the handoff message says
+    // remain available.
+    state.narrow_units = 0;
     storage.save_session(&state)?;
     storage.remove_challenge(challenge_hash)?;
     Ok(())
@@ -1009,7 +1015,7 @@ fn classify_tool(tool_name: &str, input: &Value, depth: usize, cwd: &Path) -> Re
     match normalized_tool_name(tool_name) {
         "read" => classify_read(input, cwd),
         "agentgrep" => classify_agentgrep(input),
-        "bash" => classify_bash(input),
+        "bash" => classify_bash(input, cwd),
         "batch" => classify_batch(input, depth + 1, cwd),
         _ => Requirement::Free,
     }
@@ -1190,10 +1196,177 @@ fn classify_batch(input: &Value, depth: usize, cwd: &Path) -> Requirement {
     }
 }
 
-fn classify_bash(input: &Value) -> Requirement {
+fn bounded_literal_file(cwd: &Path, raw: &str) -> bool {
+    if raw.is_empty()
+        || raw.starts_with('-')
+        || raw.contains([
+            '\n', '\r', '\0', '$', '~', '{', '}', '*', '?', '[', ']', '!',
+        ])
+    {
+        return false;
+    }
+    let requested = Path::new(raw);
+    let joined = if requested.is_absolute() {
+        requested.to_path_buf()
+    } else {
+        cwd.join(requested)
+    };
+    let Ok(named) = fs::symlink_metadata(&joined) else {
+        return false;
+    };
+    if named.file_type().is_symlink()
+        || !named.file_type().is_file()
+        || named.len() > MAX_NARROW_READ_BYTES
+    {
+        return false;
+    }
+    fs::canonicalize(&joined).is_ok_and(|canonical| canonical.starts_with(cwd))
+}
+
+fn bounded_head_or_tail(program: &str, arguments: &[&str], cwd: &Path) -> Option<u64> {
+    let mut count = 10u64;
+    let mut operands = Vec::new();
+    let mut index = 0usize;
+    let mut options_done = false;
+    while index < arguments.len() {
+        let argument = arguments[index];
+        if !options_done && argument == "--" {
+            options_done = true;
+            index += 1;
+            continue;
+        }
+        if !options_done && matches!(argument, "-n" | "--lines") {
+            let value = *arguments.get(index + 1)?;
+            count = value.parse().ok()?;
+            index += 2;
+            continue;
+        }
+        if !options_done {
+            if let Some(value) = argument.strip_prefix("--lines=") {
+                count = value.parse().ok()?;
+                index += 1;
+                continue;
+            }
+            if let Some(value) = argument.strip_prefix('-')
+                && !value.is_empty()
+                && value.bytes().all(|byte| byte.is_ascii_digit())
+            {
+                count = value.parse().ok()?;
+                index += 1;
+                continue;
+            }
+            if argument.starts_with('-') {
+                return None;
+            }
+        }
+        options_done = true;
+        operands.push(argument);
+        index += 1;
+    }
+    if !(1..=MAX_NARROW_READ_LINES).contains(&count) || operands.len() != 1 {
+        return None;
+    }
+    let path = operands[0];
+    let bounded = if program == "head" {
+        narrow_read_is_byte_bounded(cwd, path, 1, count)
+    } else {
+        bounded_literal_file(cwd, path)
+    };
+    bounded.then_some(count)
+}
+
+fn bounded_sed(arguments: &[&str], cwd: &Path) -> Option<u64> {
+    let ["-n", expression, path] = arguments else {
+        return None;
+    };
+    let range = expression.strip_suffix('p')?;
+    let (start, end) = match range.split_once(',') {
+        Some((start, end)) => (start.parse::<u64>().ok()?, end.parse::<u64>().ok()?),
+        None => {
+            let line = range.parse::<u64>().ok()?;
+            (line, line)
+        }
+    };
+    let count = end.checked_sub(start)?.checked_add(1)?;
+    if start == 0 || !(1..=MAX_NARROW_READ_LINES).contains(&count) {
+        return None;
+    }
+    narrow_read_is_byte_bounded(cwd, path, start, count).then_some(count)
+}
+
+fn bounded_fixed_grep(arguments: &[&str], cwd: &Path) -> Option<u64> {
+    let mut fixed = false;
+    let mut max_count = None;
+    let mut operands = Vec::new();
+    let mut index = 0usize;
+    let mut options_done = false;
+    while index < arguments.len() {
+        let argument = arguments[index];
+        if !options_done && argument == "--" {
+            options_done = true;
+            index += 1;
+            continue;
+        }
+        if !options_done {
+            match argument {
+                "-F" | "--fixed-strings" => fixed = true,
+                "-n" | "--line-number" | "-h" | "--no-filename" | "-H" | "--with-filename"
+                | "--color=never" => {}
+                "-m" | "--max-count" => {
+                    let value = *arguments.get(index + 1)?;
+                    max_count = Some(value.parse::<u64>().ok()?);
+                    index += 1;
+                }
+                _ => {
+                    if let Some(value) = argument.strip_prefix("--max-count=") {
+                        max_count = Some(value.parse::<u64>().ok()?);
+                    } else if argument.starts_with('-') {
+                        return None;
+                    } else {
+                        options_done = true;
+                        operands.push(argument);
+                    }
+                }
+            }
+            index += 1;
+            continue;
+        }
+        operands.push(argument);
+        index += 1;
+    }
+    if !fixed || operands.len() != 2 || operands[0].is_empty() {
+        return None;
+    }
+    let charge = max_count.unwrap_or(MAX_NARROW_READ_LINES);
+    if !(1..=MAX_NARROW_READ_LINES).contains(&charge) || !bounded_literal_file(cwd, operands[1]) {
+        return None;
+    }
+    Some(charge)
+}
+
+fn classify_bounded_bash_read(command: &str, cwd: &Path) -> Option<u64> {
+    if has_unquoted_shell_control(command) || has_shell_expansion(command) {
+        return None;
+    }
+    let parsed = shlex::split(command)?;
+    let words = parsed.iter().map(String::as_str).collect::<Vec<_>>();
+    let (program, arguments) = command_words(&words)?;
+    let program = program.rsplit('/').next().unwrap_or(program);
+    match program {
+        "head" | "tail" => bounded_head_or_tail(program, arguments, cwd),
+        "sed" => bounded_sed(arguments, cwd),
+        "grep" => bounded_fixed_grep(arguments, cwd),
+        _ => None,
+    }
+}
+
+fn classify_bash(input: &Value, cwd: &Path) -> Requirement {
     let Some(command) = input.get("command").and_then(Value::as_str) else {
         return Requirement::Memory;
     };
+    if let Some(units) = classify_bounded_bash_read(command, cwd) {
+        return Requirement::Narrow(units);
+    }
     if git_workflow_requires_memory(command) {
         return Requirement::Memory;
     }
@@ -2227,6 +2400,90 @@ mod tests {
     }
 
     #[test]
+    fn bounded_read_only_bash_scans_are_allowed_and_charged() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        let source = "needle value\nother value\n".repeat(1_200);
+        assert!(source.len() < MAX_NARROW_READ_BYTES as usize);
+        fs::write(scratch.cwd.join("small.log"), source).unwrap();
+        for command in [
+            "/usr/bin/head -n 20 small.log",
+            "/usr/bin/tail -n 20 small.log",
+            "/usr/bin/sed -n 10,29p small.log",
+            "/usr/bin/grep -F -n -m 8 -- needle small.log",
+        ] {
+            assert_eq!(
+                call(
+                    &state,
+                    &scratch.cwd,
+                    "bash",
+                    json!({"command":command}),
+                    NOW,
+                )
+                .unwrap(),
+                Decision::Allow,
+                "bounded scan was gated: {command}"
+            );
+        }
+    }
+
+    #[test]
+    fn successful_repository_pass_resets_the_narrow_followup_budget() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        for offset in 0..8 {
+            assert_eq!(
+                call(
+                    &state,
+                    &scratch.cwd,
+                    "read",
+                    json!({"file_path":"src/lib.rs","start_line":10,"limit":64}),
+                    NOW + offset,
+                )
+                .unwrap(),
+                Decision::Allow
+            );
+        }
+        let blocked = call(
+            &state,
+            &scratch.cwd,
+            "read",
+            json!({"file_path":"src/lib.rs","start_line":10,"limit":1}),
+            NOW + 8,
+        )
+        .unwrap();
+        let challenge = token(&blocked);
+        complete_at(
+            &state,
+            &challenge,
+            &completed_repo(&scratch.cwd, "repository pass complete"),
+            NOW + 9,
+        )
+        .unwrap();
+        assert_eq!(
+            call(
+                &state,
+                &scratch.cwd,
+                "read",
+                json!({"file_path":"src/lib.rs","start_line":10,"limit":64}),
+                NOW + 10,
+            )
+            .unwrap(),
+            Decision::Allow
+        );
+        let context = BoundContext::new("session/raw id", &scratch.cwd).unwrap();
+        let storage = Storage::open(&state).unwrap();
+        assert_eq!(
+            storage
+                .load_session(&context.session_hash)
+                .unwrap()
+                .unwrap()
+                .narrow_units,
+            64
+        );
+    }
+
+    #[test]
     fn recursive_batch_blocks_when_any_nested_call_is_broad() {
         let scratch = Scratch::new();
         let state = scratch.state();
@@ -2352,14 +2609,15 @@ mod tests {
 
     #[test]
     fn unrecognized_bash_commands_fail_closed() {
+        let cwd = env::current_dir().unwrap();
         for command in [
             "cp src/lib.rs -",
             "dd if=src/lib.rs of=/dev/stdout",
             "base64 src/lib.rs",
-            "sed -n '1p' src/lib.rs",
             "awk '{print}' src/lib.rs",
-            "head -n 1 src/lib.rs",
             "tail -n 1 src/lib.rs",
+            "grep -n receipt src/lib.rs",
+            "grep -R -F receipt .",
             "printf '%s' \"${SOURCE}\"",
             "cat <(git status --short)",
             "cargo run",
@@ -2367,7 +2625,7 @@ mod tests {
             "python3 -c 'print(1)'",
         ] {
             assert_eq!(
-                classify_bash(&json!({"command": command})),
+                classify_bash(&json!({"command": command}), &cwd),
                 Requirement::Memory,
                 "{command}"
             );
