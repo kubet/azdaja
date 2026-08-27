@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#e8ddc4">
+  <meta name="description" content="How one wrong zero exposed Azdaja's grep disease, receipt boundaries, and bounded large-input architecture.">
+  <meta property="og:title" content="Azdaja: the zero that changed the product">
+  <meta property="og:description" content="A 2.4-million-character inbox, a model-written regex, and the fail-closed architecture built after Answer: 0.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://azdaja.dev/saga.html">
+  <meta property="og:image" content="https://azdaja.dev/og-card.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <title>The zero that changed Azdaja</title>
+  <link rel="icon" href="/icon-384.png" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="article-shell">
+    <a class="wordmark" href="/">Azdaja</a>
+    <article class="saga">
+      <header>
+        <p class="eyebrow">A launch autopsy</p>
+        <h1>The zero that changed the product</h1>
+        <p class="standfirst">Row <code>rah-120010240</code> contained a roughly 2.4-million-character inbox. The root model wrote a regex, made zero semantic subcalls, and returned <strong>Answer: 0</strong>. The gold answer was <strong>5815</strong>.</p>
+      </header>
+
+      <p>That miss was not a context-window failure. The full source was still present inside Azdaja's local evaluator. It was a strategy failure: a semantic task had been reduced to literal matching, the program found nothing, and the system treated nothing as evidence.</p>
+
+      <p>Azdaja's name comes from the many-headed Serbian dragon. "Virtual memory" is a useful metaphor for the experience, not a claim that the program replaces an operating system or a model's context window. The implementation is a bounded local evaluator that retains the complete UTF-8 input and exposes only a controlled model-facing surface.</p>
+
+      <section>
+        <h2>RAH and Oolong, briefly</h2>
+        <p>RAH and Oolong are long-input evaluation settings in which the answer depends on information spread across inputs that are awkward or impossible to place in one ordinary model turn. They include exact extraction, counting, classification, and aggregation tasks. A correct system must do more than load the bytes. It must choose a strategy that preserves the task's semantics, call a model when labels require judgment, and prove that every required record was handled. Azdaja uses these tasks as diagnostic pressure, not as permission to claim that one private score is an official leaderboard result.</p>
+      </section>
+
+      <figure class="architecture">
+        <svg viewBox="0 0 920 300" role="img" aria-labelledby="arch-title arch-desc">
+          <title id="arch-title">Azdaja bounded large-input architecture</title>
+          <desc id="arch-desc">The complete input remains in a local evaluator. The root model sees metadata and a bounded escaped sample, writes inspection code, optionally requests bounded semantic batches, and produces one validated final answer plus receipts.</desc>
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z"></path></marker>
+          </defs>
+          <g class="node"><rect x="20" y="90" width="170" height="110" rx="8"></rect><text x="105" y="130">Complete input</text><text x="105" y="158">local custody</text><text x="105" y="184">UTF-8 source</text></g>
+          <g class="node"><rect x="250" y="90" width="190" height="110" rx="8"></rect><text x="345" y="130">Bounded root</text><text x="345" y="158">metadata + sample</text><text x="345" y="184">inspection code</text></g>
+          <g class="node"><rect x="500" y="30" width="190" height="100" rx="8"></rect><text x="595" y="70">Local evaluator</text><text x="595" y="98">exact scans</text><text x="595" y="118">constrained Python</text></g>
+          <g class="node"><rect x="500" y="170" width="190" height="100" rx="8"></rect><text x="595" y="210">Semantic batches</text><text x="595" y="238">bounded model calls</text><text x="595" y="258">when judgment is needed</text></g>
+          <g class="node"><rect x="750" y="90" width="150" height="110" rx="8"></rect><text x="825" y="130">Validated final</text><text x="825" y="158">answer</text><text x="825" y="184">receipts or refusal</text></g>
+          <path class="edge" d="M190 145 H250"></path><path class="edge" d="M440 125 L500 90"></path><path class="edge" d="M440 165 L500 215"></path><path class="edge" d="M690 80 L750 125"></path><path class="edge" d="M690 220 L750 170"></path>
+        </svg>
+        <figcaption>The root turn is bounded. The complete source remains local. Semantic model calls are explicit, counted, and tied to the task rather than inferred from any incidental call.</figcaption>
+      </figure>
+
+      <section>
+        <h2>Grep disease</h2>
+        <p>The bad pattern appeared repeatedly: extract label words from the question, search the source for those literal strings, count the matches, and return zero when the strings are absent. It looks like useful code. It can even survive one incidental model call. But it has not judged a single record.</p>
+        <p>The repair chain therefore moved from question wording to execution evidence. Gates now distinguish semantic calls from incidental calls, detect code that greps question labels, reject degenerate zero aggregates over large inputs, and allow bounded repair after small incidental spend. Planner probes vote on strategy, never on the final answer.</p>
+      </section>
+
+      <section>
+        <h2>The receipt boundary</h2>
+        <p>The deeper product change was record integrity. JSONL and CSV inputs preserve source order, duplicate occurrences, multiline rows, and byte bindings. A schema-v3 receipt must cover every authoritative record exactly once. Omission, reordering, tampering, replay, unknown output, malformed input, or an invalid typed final value fails closed.</p>
+        <p>This is the moat Azdaja is trying to earn: every record is judged, receipted, or the run does not pretend to have completed.</p>
+      </section>
+
+      <section>
+        <h2>What the number means</h2>
+        <p>The retained launch diagnostic scored <strong>68.6%</strong> on a fixed 199-row, validation-derived RAH slice. It was a private single-arm diagnostic with 185 valid predictions and 14 retained failures counted as zero. It is not an official leaderboard result, not a paired comparison, and not a general model-superiority claim.</p>
+        <p>The public product claim is simpler to reproduce: v0.1.13 answers three exact 52,428,800-byte scenarios in one root turn each, with zero child calls, a root prompt below 65,536 bytes, and a 90-second watchdog.</p>
+      </section>
+
+      <section>
+        <h2>Lineage, not invention</h2>
+        <p>Azdaja belongs to the recursive language model line of work rather than standing outside it. The relevant lineage includes <a href="https://arxiv.org/abs/2512.24601">arXiv:2512.24601</a> and <a href="https://arxiv.org/abs/2606.13643">arXiv:2606.13643</a>. The contribution here is an implementation and product contract around bounded execution, complete local custody, typed outputs, and receipts.</p>
+      </section>
+
+      <section>
+        <h2>The launch lesson</h2>
+        <p>Loading the whole input was never enough. The system had to prove that the model chose a semantic strategy, that every record crossed the boundary, and that a suspiciously empty answer could not pass as confidence. One wrong zero made that visible.</p>
+        <p><a href="https://github.com/kubet/azdaja/blob/main/docs/launch-saga.md">Read the full custody and scorer history</a>, <a href="https://github.com/kubet/azdaja/blob/v0.1.13/tests/product_50mb.rs">reproduce the 50 MiB test</a>, or <a href="https://github.com/kubet/azdaja/releases/tag/v0.1.13">download v0.1.13</a>.</p>
+      </section>
+    </article>
+    <footer><a href="/">home</a> · <a href="https://github.com/kubet/azdaja">github</a> · <a href="https://github.com/kubet/azdaja/blob/main/LICENSE">license</a></footer>
+  </main>
+</body>
+</html>

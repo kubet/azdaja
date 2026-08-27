@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#e8ddc4">
-  <meta name="description" content="Azdaja — a minimal recursive language model layer for macOS 11+ on Apple Silicon and Intel, plus x86-64 Linux with glibc 2.35+.">
+  <meta name="description" content="Azdaja analyzes exact 52,428,800-byte inputs through a bounded root surface and local evaluator on macOS and x86-64 Linux.">
   <meta property="og:title" content="Azdaja">
-  <meta property="og:description" content="Think beyond the context window on macOS 11+ on Apple Silicon and Intel, or x86-64 Linux with glibc 2.35+.">
+  <meta property="og:description" content="Three exact 52,428,800-byte scenarios, one root turn each, zero child calls, and a root prompt below 65,536 bytes.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://azdaja.dev/">
   <meta property="og:image" content="https://azdaja.dev/og-card.jpg">
@@ -19,16 +19,17 @@
 <body>
   <main>
     <img src="/azdaja-mark.webp" width="360" height="540" alt="Azdaja dragon">
-    <h1>Think beyond<br>the context window</h1>
+    <h1>Analyze 50 MiB<br>through one bounded root turn</h1>
     <div class="copy">
-      <p>Aždaja (roughly azh-DAH-yah) is the many-headed Serbian dragon: one persistent body, parallel model-call heads, and an appetite for contexts too large for one window.</p>
+      <p>Azdaja v0.1.13 ships a reproducible test over three exact 52,428,800-byte inputs: one root turn each, zero child calls, a root prompt below 65,536 bytes, and a 90-second watchdog.</p>
+      <p>Aždaja (roughly azh-DAH-yah) is the many-headed Serbian dragon. Virtual memory is the metaphor: one persistent local source, bounded model-facing surfaces, and parallel model-call heads when semantic judgment is required.</p>
       <p>One binary, callable by any agent that can run a command. Model subcalls still route through a supported Jcode, Claude, Codex, Gemini, or OpenCode harness. It retains the full file locally in a persistent Python session; the root model sees metadata plus a fixed bounded, escaped structural sample, writes code to inspect the context inside the evaluator, and calls sub-models in parallel when needed. Exact work can scan the complete input; oversized semantic sources may use bounded lexical window selection. There is no prebuilt external index.</p>
       <p>Point it at the fifty-megabyte log, a textual repository dump, or the transcript that never fit. It reads what it needs, fans out heads where it must, and comes back with one answer.</p>
     </div>
     <section class="install" aria-label="Install Azdaja">
       <code class="install-command">$ curl -fsSL https://azdaja.dev/install | sh</code>
     </section>
-    <footer><a href="https://github.com/kubet/azdaja">github</a> · <a href="https://github.com/kubet/azdaja/blob/main/LICENSE">license</a> · <a href="https://github.com/kubet/azdaja/blob/main/THIRD-PARTY-NOTICES.md">third-party notices</a></footer>
+    <footer><a href="/saga.html">saga</a> · <a href="https://github.com/kubet/azdaja">github</a> · <a href="https://github.com/kubet/azdaja/blob/main/LICENSE">license</a> · <a href="https://github.com/kubet/azdaja/blob/main/THIRD-PARTY-NOTICES.md">third-party notices</a></footer>
   </main>
 </body>
 </html>
