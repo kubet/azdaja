@@ -175,7 +175,7 @@ const COMMAND_USAGES: [(&str, &str); 13] = [
     ("kill", "Usage: az kill <session-id>"),
     (
         "solo",
-        "Usage: az solo <question> (-f <path|-> | --repo <directory>) [--input-format <text|jsonl>] [--receipt <absolute-path>] [--schema <path>] [--model <model>] [--sub-model <model>]",
+        "Usage: az solo <question> (-f <path|-> | --repo <directory>) [--input-format <text|jsonl|csv>] [--receipt <absolute-path>] [--schema <path>] [--model <model>] [--sub-model <model>]",
     ),
     (
         "doctor",
@@ -7568,7 +7568,7 @@ fn execute_solo_reply(
         return Err(SoloProgramFailure {
             kind: SoloProgramFailureKind::RecordCoverage,
             error: anyhow!(
-                "solo receipt gate rejected FINAL: authoritative JSONL record coverage is incomplete"
+                "solo receipt gate rejected FINAL: authoritative record coverage is incomplete"
             ),
             code: Some(code),
             output: Some(result.output),
@@ -7730,7 +7730,7 @@ fn root_repair_prompt(failure: &SoloProgramFailure) -> String {
             "Labels are produced by classifying instances, never found by searching for label fields. Rebuild the complete program so every relevant source occurrence is classified through semantic_manifest exactly once, verify one returned label per occurrence, then reduce and call FINAL."
         }
         SoloProgramFailureKind::RecordCoverage => {
-            "This receipt-bound JSONL run requires host-verified coverage of every authoritative record. Rebuild the complete program from records in source order, pass exactly one two-key id/evidence item per record to semantic_manifest_records exactly once, verify the returned ID set and cardinality, reduce it, then call FINAL."
+            "This receipt-bound record run requires host-verified coverage of every authoritative record. Rebuild the complete program from records in source order, pass exactly one two-key id/evidence item per record to semantic_manifest_records exactly once, verify the returned ID set and cardinality, reduce it, then call FINAL."
         }
         SoloProgramFailureKind::LabelLiteralGrep => {
             "The program used a requested label literal in grep-shaped code. Rebuild the complete program so labels come from semantic_manifest classification, never from re/search/count/find/in tests over label strings; verify one semantic label per relevant occurrence before reducing and calling FINAL."
@@ -7831,6 +7831,7 @@ enum SoloInput {
 enum SoloInputFormat {
     Text,
     Jsonl,
+    Csv,
 }
 
 fn parse_solo_args(args: &[String]) -> Result<SoloArgs> {
@@ -7881,22 +7882,23 @@ fn parse_solo_args(args: &[String]) -> Result<SoloArgs> {
     let input_format = match input_format.as_deref() {
         None | Some("text") => SoloInputFormat::Text,
         Some("jsonl") => SoloInputFormat::Jsonl,
-        Some(_) => bail!("--input-format must be text or jsonl"),
+        Some("csv") => SoloInputFormat::Csv,
+        Some(_) => bail!("--input-format must be text, jsonl, or csv"),
     };
     let input = match (file, repository) {
         (Some(file), None) if file == "-" => SoloInput::Stdin,
         (Some(file), None) if !file.trim().is_empty() => SoloInput::File(PathBuf::from(file)),
         (None, Some(repository)) if !repository.trim().is_empty() => {
             if input_format != SoloInputFormat::Text {
-                bail!("--input-format jsonl cannot be used with --repo")
+                bail!("record input formats cannot be used with --repo")
             }
             SoloInput::Repository(PathBuf::from(repository))
         }
         _ => return Err(usage_error("solo")),
     };
     let receipt = match receipt {
-        Some(_) if input_format != SoloInputFormat::Jsonl => {
-            bail!("--receipt requires --input-format jsonl")
+        Some(_) if input_format == SoloInputFormat::Text => {
+            bail!("--receipt requires --input-format jsonl or csv")
         }
         Some(path) if path.trim().is_empty() => bail!("--receipt cannot be empty"),
         Some(path) => {
@@ -7965,6 +7967,7 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
             let metadata = match input_format {
                 SoloInputFormat::Text => session.load(path, "ctx", cfg)?,
                 SoloInputFormat::Jsonl => session.load_jsonl(path, "ctx", cfg)?,
+                SoloInputFormat::Csv => session.load_csv(path, "ctx", cfg)?,
             };
             (metadata, String::new(), None)
         }
@@ -7974,6 +7977,7 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
             let metadata = match input_format {
                 SoloInputFormat::Text => session.load_text(text, "ctx", cfg)?,
                 SoloInputFormat::Jsonl => session.load_jsonl_text(text, "ctx", cfg)?,
+                SoloInputFormat::Csv => session.load_csv_text(text, "ctx", cfg)?,
             };
             (
                 metadata,
@@ -7999,26 +8003,36 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
             (metadata, note, Some((included_files, raw_source_bytes)))
         }
     };
-    let (record_input_contract, record_name) = match session.authoritative_record_count() {
-        Some(count) => (
+    let (record_input_contract, record_name) = match (
+        session.authoritative_record_format(),
+        session.authoritative_record_count(),
+    ) {
+        (Some("jsonl"), Some(count)) => (
             format!(
                 "Record-aware JSONL contract. `records` is the host-validated source-order list of all {count} input records. Each record is an exact three-key dict: stable occurrence `id` (`R0`, `R1`, ...), byte-faithful JSON-line `evidence` without its line ending, and lowercase UTF-8 `sha256`. Use records rather than reconstructing boundaries from ctx; preserve every record and verify sha256(record[\"evidence\"]) == record[\"sha256\"] before reduction.\n"
             ),
             "records, ",
         ),
-        None => (String::new(), ""),
+        (Some("csv"), Some(count)) => (
+            format!(
+                "Record-aware CSV contract. `csv_header` is the host-validated source-order list of unique nonblank column names. `records` is the source-order list of all {count} data-record occurrences after the header. Each record is an exact five-key dict: stable occurrence `id` (`R0`, `R1`, ...), compact host-generated JSON `evidence` with parallel `columns` and decoded `values` arrays, lowercase UTF-8 `evidence_sha256`, exact raw logical CSV record `raw` without its terminating LF/CRLF boundary, and lowercase UTF-8 `raw_sha256`. Quoted commas, escaped quotes, and embedded quoted line breaks are decoded only in evidence; raw remains byte-faithful. Use evidence for semantic_manifest_records, preserve every occurrence, and verify both sha256(record[\"evidence\"]) == record[\"evidence_sha256\"] and sha256(record[\"raw\"]) == record[\"raw_sha256\"] before reduction.\n"
+            ),
+            "records, csv_header, ",
+        ),
+        (None, None) => (String::new(), ""),
+        _ => bail!("authoritative record input state is inconsistent"),
     };
     let receipt_source_sha256 = if record_coverage_required {
         Some(
             session
                 .authoritative_source_sha256()
-                .ok_or_else(|| anyhow!("receipt requires authoritative JSONL input"))?,
+                .ok_or_else(|| anyhow!("receipt requires authoritative record input"))?,
         )
     } else {
         None
     };
     let receipt_contract = if record_coverage_required {
-        "Receipt gate. This invocation succeeds only if semantic_manifest_records receives every authoritative record occurrence exactly once in source order with unchanged id and evidence, and returns exactly one string label for every ID. Omission, duplication, reordering, tampering, unknown IDs, direct semantic_manifest use, and FINAL without host-verified coverage are rejected.\n"
+        "Receipt gate. This invocation succeeds only if semantic_manifest_records receives every authoritative record occurrence exactly once in source order with unchanged id and host-bound evidence, and returns exactly one string label for every ID. Omission, duplication, reordering, tampering, unknown IDs, direct semantic_manifest use, and FINAL without host-verified coverage are rejected.\n"
     } else {
         ""
     };
@@ -8640,6 +8654,9 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
         let source_sha256 = receipt_source_sha256
             .as_deref()
             .ok_or_else(|| anyhow!("receipt-bound solo run has no authoritative source digest"))?;
+        let input_format = session
+            .authoritative_record_format()
+            .ok_or_else(|| anyhow!("receipt-bound solo run has no authoritative record format"))?;
         let completed_at_unix_ms = u64::try_from(
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -8654,12 +8671,12 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
             .as_ref()
             .map_or("none", TypedFinalSchema::source_sha256);
         let invocation_material = format!(
-            "azdaja-solo-record-receipt-v2\0{request_id_sha256}\0{completed_at_unix_ms}\0{source_sha256}\0{}\0{question_sha256}\0{program_sha256}\0{final_output_sha256}\0{final_schema_sha256}",
+            "azdaja-solo-record-receipt-v3\0{request_id_sha256}\0{completed_at_unix_ms}\0{source_sha256}\0{}\0{question_sha256}\0{program_sha256}\0{final_output_sha256}\0{final_schema_sha256}",
             coverage.coverage_sha256
         );
         let invocation_id = azdaja::sha256_hex(invocation_material.as_bytes());
         let record_receipt = SoloRecordReceipt {
-            schema_version: 2,
+            schema_version: 3,
             kind: "azdaja_solo_record_coverage",
             status: "complete",
             azdaja_version: VERSION,
@@ -8667,7 +8684,7 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
             request_id_sha256: &request_id_sha256,
             completed_at_unix_ms,
             input: SoloRecordReceiptInput {
-                format: "jsonl",
+                format: input_format,
                 source_sha256,
                 record_count: coverage.record_count,
             },
@@ -8756,6 +8773,18 @@ mod tests {
         assert!(matches!(parsed.input, SoloInput::Stdin));
         assert!(parsed.input_format == SoloInputFormat::Jsonl);
 
+        let parsed = parse_solo_args(&args(&[
+            "solo",
+            "classify every CSV record",
+            "-f",
+            "-",
+            "--input-format",
+            "csv",
+        ]))
+        .unwrap();
+        assert!(matches!(parsed.input, SoloInput::Stdin));
+        assert!(parsed.input_format == SoloInputFormat::Csv);
+
         let receipt_path = std::env::temp_dir().join("azdaja-record-receipt.json");
         let parsed = parse_solo_args(&args(&[
             "solo",
@@ -8796,7 +8825,7 @@ mod tests {
         ]))
         .err()
         .expect("unknown input format must fail");
-        assert!(error.to_string().contains("must be text or jsonl"));
+        assert!(error.to_string().contains("must be text, jsonl, or csv"));
 
         let error = parse_solo_args(&args(&[
             "solo",
@@ -8820,7 +8849,11 @@ mod tests {
         ]))
         .err()
         .expect("text receipt must fail");
-        assert!(error.to_string().contains("requires --input-format jsonl"));
+        assert!(
+            error
+                .to_string()
+                .contains("requires --input-format jsonl or csv")
+        );
 
         let error = parse_solo_args(&args(&[
             "solo",

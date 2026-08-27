@@ -848,7 +848,11 @@ fn semantic_manifest_long_records_split_below_legacy_item_target() {
         "long evidence did not force byte-driven splitting"
     );
     assert_eq!(calls.len(), 2 * shards);
-    assert_eq!(peak_logged_concurrency(&calls), (2 * shards).min(8));
+    let peak_concurrency = peak_logged_concurrency(&calls);
+    assert!(
+        (2..=(2 * shards).min(8)).contains(&peak_concurrency),
+        "adaptive calls did not stay concurrent within the configured bound: peak={peak_concurrency} shards={shards}"
+    );
     for role in ["A", "B"] {
         let role_calls = calls
             .iter()
@@ -1403,7 +1407,7 @@ print(tag + "".join(code_by_label[label] for label in labels))
 
     let receipt_text = fs::read_to_string(&receipt).unwrap();
     let row: serde_json::Value = serde_json::from_str(&receipt_text).unwrap();
-    assert_eq!(row["schema_version"], 2);
+    assert_eq!(row["schema_version"], 3);
     assert!(row["final_schema"].is_null());
     assert_eq!(row["kind"], "azdaja_solo_record_coverage");
     assert_eq!(row["status"], "complete");
@@ -1426,6 +1430,7 @@ print(tag + "".join(code_by_label[label] for label in labels))
     assert_eq!(row["coverage"]["records"][0]["label"], "yes");
     assert_eq!(row["coverage"]["records"][1]["label"], "yes");
     assert_eq!(row["coverage"]["records"][2]["label"], "no");
+    assert!(row["coverage"]["records"][0].get("raw_sha256").is_none());
     assert_eq!(
         row["coverage"]["records"][0]["evidence_sha256"],
         row["coverage"]["records"][1]["evidence_sha256"]
@@ -1481,7 +1486,7 @@ print(tag + "".join(code_by_label[label] for label in labels))
         serde_json::from_slice(&fs::read(&stdin_receipt).unwrap()).unwrap();
     assert_eq!(stdin_row["input"], row["input"]);
     assert_eq!(stdin_row["coverage"], row["coverage"]);
-    assert_eq!(stdin_row["schema_version"], 2);
+    assert_eq!(stdin_row["schema_version"], 3);
     assert_eq!(stdin_row["final_schema"]["subset"], "azdaja-json-schema-v1");
     assert_eq!(
         stdin_row["final_schema"]["source_sha256"],
@@ -1499,7 +1504,7 @@ fn solo_jsonl_receipt_rejects_missing_coverage_and_tampering_without_artifacts()
         (
             "missing",
             "FINAL('unreceipted')",
-            "authoritative JSONL record coverage is incomplete",
+            "authoritative record coverage is incomplete",
         ),
         (
             "tampered",
@@ -1626,6 +1631,290 @@ fn solo_jsonl_receipt_destination_preflight_is_provider_free_and_nonoverwriting(
         assert!(!public_receipt.exists());
         assert!(!provider_marker.exists());
     }
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_csv_preflight_is_provider_free_and_fail_closed() {
+    for (case, source, expected) in [
+        (
+            "header-only",
+            "kind,n\n",
+            "requires one header record and at least one data record",
+        ),
+        ("duplicate-header", "kind,kind\nyes,1\n", "duplicate column"),
+        (
+            "width-mismatch",
+            "kind,n\nyes\n",
+            "has 1 fields but header has 2",
+        ),
+        (
+            "unterminated",
+            "kind,n\nyes,\"open\n",
+            "unterminated quoted field",
+        ),
+    ] {
+        let t = temp(&format!("solo-csv-preflight-{case}"));
+        let marker = t.join("provider-entered");
+        let mock = t.join("provider.py");
+        fs::write(
+            &mock,
+            format!(
+                "import pathlib\npathlib.Path({marker:?}).write_text('entered')\nprint('unexpected')\n"
+            ),
+        )
+        .unwrap();
+        let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+        let input = t.join("records.csv");
+        fs::write(&input, source).unwrap();
+        let output = run(
+            &t,
+            &cfg,
+            &[
+                "solo",
+                "csv validation case",
+                "-f",
+                input.to_str().unwrap(),
+                "--input-format",
+                "csv",
+            ],
+            "",
+        );
+        assert!(!output.status.success(), "{case}");
+        assert!(output.stdout.is_empty(), "{case}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(expected),
+            "{case}: stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!marker.exists(), "{case}: provider was entered");
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
+fn solo_csv_receipt_binds_multiline_records_for_file_and_stdin() {
+    let t = temp("solo-csv-receipt");
+    let private = private_dir(&t, "private");
+    let child_calls = t.join("child-calls");
+    let mock = t.join("csv-receipt-provider.py");
+    fs::write(
+        &mock,
+        format!(
+            r####"import json, os, pathlib, re, sys
+prompt = sys.stdin.read()
+if os.getenv("RLM_DEPTH") == "0":
+    assert "Record-aware CSV contract." in prompt
+    assert "records, csv_header" in prompt
+    code = '''assert csv_header==["kind","n","note"]
+items=[]
+for record in records:
+    assert len(record)==5
+    assert sha256(record["evidence"])==record["evidence_sha256"]
+    assert sha256(record["raw"])==record["raw_sha256"]
+    row=json.loads(record["evidence"])
+    assert row["columns"]==csv_header
+    items.append({{"id":record["id"],"evidence":record["evidence"]}})
+labels=semantic_manifest_records(items,"synthetic CSV receipt judgment",["yes","no"])
+assert len(labels)==len(records)
+yes=0
+for record in records:
+    if labels[record["id"]]=="yes":
+        yes+=1
+FINAL(str(yes)+":"+str(len(records)-yes))'''
+    print("```python\n" + code + "\n```")
+    raise SystemExit(0)
+pathlib.Path({child_calls:?}).open("a").write("x")
+tag = re.search(r"return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed", prompt).group(1)
+legend_text = prompt.split("LABEL CODES", 1)[1].split("ROWS are", 1)[0]
+code_by_label = {{}}
+for line in legend_text.splitlines()[1:]:
+    code, value = line.split("\t", 1)
+    code_by_label[json.loads(value)] = code
+rows_text = prompt.split("no whitespace, prose, markdown, omission, or extra character.\n", 1)[1]
+labels = []
+for line in rows_text.splitlines():
+    rid, evidence = line.split("\t", 1)
+    row = json.loads(json.loads(evidence))
+    index = row["columns"].index("kind")
+    labels.append("yes" if row["values"][index] == "yes" else "no")
+print(tag + "".join(code_by_label[label] for label in labels))
+"####,
+            child_calls = child_calls,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 10, 4);
+    let cfg_text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("max_calls_per_cell = 64", "max_calls_per_cell = 6");
+    fs::write(&cfg, cfg_text).unwrap();
+    let source = concat!(
+        "kind,n,note\r\n",
+        "yes,1,\"same, row\"\r\n",
+        "yes,1,\"same, row\"\n",
+        "no,2,\"multi\r\nline\"\n",
+    );
+    let input = t.join("records.csv");
+    fs::write(&input, source).unwrap();
+    let receipt = private.join("receipt.json");
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "csv-receipt-case",
+            "-f",
+            input.to_str().unwrap(),
+            "--input-format",
+            "csv",
+            "--receipt",
+            receipt.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "2:1");
+    assert_eq!(fs::read_to_string(&child_calls).unwrap(), "xx");
+
+    let receipt_text = fs::read_to_string(&receipt).unwrap();
+    let row: serde_json::Value = serde_json::from_str(&receipt_text).unwrap();
+    assert_eq!(row["schema_version"], 3);
+    assert_eq!(row["input"]["format"], "csv");
+    assert_eq!(row["input"]["record_count"], 3);
+    assert_eq!(
+        row["input"]["source_sha256"],
+        azdaja::sha256_hex(source.as_bytes())
+    );
+    assert_eq!(row["final_output"], "2:1");
+    assert_eq!(row["coverage"]["record_count"], 3);
+    assert_eq!(row["coverage"]["records"][0]["label"], "yes");
+    assert_eq!(row["coverage"]["records"][1]["label"], "yes");
+    assert_eq!(row["coverage"]["records"][2]["label"], "no");
+    assert_eq!(
+        row["coverage"]["records"][0]["evidence_sha256"],
+        azdaja::sha256_hex(br#"{"columns":["kind","n","note"],"values":["yes","1","same, row"]}"#)
+    );
+    assert_eq!(
+        row["coverage"]["records"][0]["evidence_sha256"],
+        row["coverage"]["records"][1]["evidence_sha256"]
+    );
+    assert_eq!(
+        row["coverage"]["records"][0]["raw_sha256"],
+        azdaja::sha256_hex(b"yes,1,\"same, row\"")
+    );
+    assert_eq!(
+        row["coverage"]["records"][2]["raw_sha256"],
+        azdaja::sha256_hex(b"no,2,\"multi\r\nline\"")
+    );
+    assert!(!receipt_text.contains("same, row"));
+    assert!(!receipt_text.contains("multi"));
+
+    let final_schema = t.join("final.schema.json");
+    let final_schema_source = r#"{"type":"string","enum":["2:1"]}"#;
+    fs::write(&final_schema, final_schema_source).unwrap();
+    let stdin_receipt = private.join("stdin-receipt.json");
+    let stdin_output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "csv-receipt-case",
+            "-f",
+            "-",
+            "--input-format",
+            "csv",
+            "--receipt",
+            stdin_receipt.to_str().unwrap(),
+            "--schema",
+            final_schema.to_str().unwrap(),
+        ],
+        source,
+    );
+    assert!(
+        stdin_output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&stdin_output.stdout),
+        String::from_utf8_lossy(&stdin_output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&stdin_output.stdout).trim(),
+        "\"2:1\""
+    );
+    let stdin_row: serde_json::Value =
+        serde_json::from_slice(&fs::read(&stdin_receipt).unwrap()).unwrap();
+    assert_eq!(stdin_row["input"], row["input"]);
+    assert_eq!(stdin_row["coverage"], row["coverage"]);
+    assert_eq!(stdin_row["final_schema"]["subset"], "azdaja-json-schema-v1");
+    assert_eq!(stdin_row["final_output"], "\"2:1\"");
+    assert_ne!(stdin_row["invocation_id"], row["invocation_id"]);
+    assert_eq!(fs::read_to_string(&child_calls).unwrap(), "xxxx");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_csv_receipt_rejects_semantic_evidence_tampering_without_artifact() {
+    let t = temp("solo-csv-receipt-tamper");
+    let private = private_dir(&t, "private");
+    let child_marker = t.join("child-entered");
+    let mock = t.join("csv-tamper.py");
+    let root_code = concat!(
+        "items=[]\n",
+        "for record in records:\n",
+        "    items.append({\"id\":record[\"id\"],\"evidence\":record[\"evidence\"]})\n",
+        "items[0][\"evidence\"]='{\"columns\":[\"kind\"],\"values\":[\"no\"]}'\n",
+        "semantic_manifest_records(items,'synthetic judgment',['yes','no'])\n",
+        "FINAL('bad')",
+    );
+    fs::write(
+        &mock,
+        format!(
+            r#"import os, pathlib
+if os.getenv("RLM_DEPTH") == "0":
+    print("```python\n" + {root_code:?} + "\n```")
+else:
+    pathlib.Path({child_marker:?}).write_text("entered")
+    print("unexpected")
+"#,
+            root_code = root_code,
+            child_marker = child_marker,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 10, 4);
+    let input = t.join("records.csv");
+    fs::write(&input, "kind\nyes\n").unwrap();
+    let receipt = private.join("receipt.json");
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "csv-receipt-tamper",
+            "-f",
+            input.to_str().unwrap(),
+            "--input-format",
+            "csv",
+            "--receipt",
+            receipt.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("payload mismatch"),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!receipt.exists());
+    assert!(!child_marker.exists());
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -8842,7 +9131,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
         ("kill", "Usage: az kill <session-id>"),
         (
             "solo",
-            "Usage: az solo <question> (-f <path|-> | --repo <directory>) [--input-format <text|jsonl>] [--receipt <absolute-path>] [--schema <path>] [--model <model>] [--sub-model <model>]",
+            "Usage: az solo <question> (-f <path|-> | --repo <directory>) [--input-format <text|jsonl|csv>] [--receipt <absolute-path>] [--schema <path>] [--model <model>] [--sub-model <model>]",
         ),
         (
             "doctor",

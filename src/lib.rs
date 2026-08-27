@@ -4113,12 +4113,15 @@ const EXACT_LINE_RECORD_MAX_PREFIX_BYTES: usize = 1_024;
 const EXACT_LINE_LEDGER_TYPE_ID: u64 = 0x415a_4c45_4447_4552;
 const EXACT_LINE_LEDGER_NAME: &str = "AzdajaExactLineLedger";
 const EXACT_TARGET_MARKER_MAX_BYTES: usize = 1_024;
+const CSV_HEADER_REPEAT_MAX_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct AuthoritativeRecord {
     id: String,
     evidence: String,
-    sha256: String,
+    evidence_sha256: String,
+    raw: Option<String>,
+    raw_sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -4126,6 +4129,8 @@ pub struct RecordCoverageEntry {
     pub ordinal: usize,
     pub id: String,
     pub evidence_sha256: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_sha256: Option<String>,
     pub label: String,
 }
 
@@ -4138,7 +4143,7 @@ pub struct RecordCoverageProvenance {
 
 #[derive(Default)]
 struct RecordCoverageRegistry {
-    expected: Option<Vec<(String, String)>>,
+    expected: Option<Vec<(String, String, Option<String>)>>,
     completed: Option<RecordCoverageProvenance>,
 }
 
@@ -4194,7 +4199,11 @@ impl RecordCoverageRegistry {
             if evidence != Some(record.evidence.as_str()) {
                 bail!("authoritative record manifest payload mismatch at ordinal {ordinal}")
             }
-            expected.push((record.id.clone(), record.sha256.clone()));
+            expected.push((
+                record.id.clone(),
+                record.evidence_sha256.clone(),
+                record.raw_sha256.clone(),
+            ));
         }
         self.expected = Some(expected);
         Ok(MontyObject::List(items.clone()))
@@ -4223,7 +4232,7 @@ impl RecordCoverageRegistry {
             }
         }
         let mut records = Vec::with_capacity(expected.len());
-        for (ordinal, (id, evidence_sha256)) in expected.into_iter().enumerate() {
+        for (ordinal, (id, evidence_sha256, raw_sha256)) in expected.into_iter().enumerate() {
             let label = labels
                 .remove(id.as_str())
                 .ok_or_else(|| anyhow!("authoritative record manifest output coverage mismatch"))?;
@@ -4231,18 +4240,26 @@ impl RecordCoverageRegistry {
                 ordinal,
                 id,
                 evidence_sha256,
+                raw_sha256,
                 label: label.to_owned(),
             });
         }
         if !labels.is_empty() {
             bail!("authoritative record manifest output contains unknown IDs")
         }
-        let mut material = b"azdaja-record-coverage-v1\0".to_vec();
+        let mut material = b"azdaja-record-coverage-v2\0".to_vec();
         for record in &records {
             material.extend_from_slice(&(record.ordinal as u64).to_be_bytes());
             for field in [&record.id, &record.evidence_sha256, &record.label] {
                 material.extend_from_slice(&(field.len() as u64).to_be_bytes());
                 material.extend_from_slice(field.as_bytes());
+            }
+            if let Some(raw_sha256) = record.raw_sha256.as_ref() {
+                material.push(1);
+                material.extend_from_slice(&(raw_sha256.len() as u64).to_be_bytes());
+                material.extend_from_slice(raw_sha256.as_bytes());
+            } else {
+                material.push(0);
             }
         }
         self.completed = Some(RecordCoverageProvenance {
@@ -4284,7 +4301,9 @@ fn parse_jsonl_records(source: &str) -> Result<Vec<AuthoritativeRecord>> {
         records.push(AuthoritativeRecord {
             id: format!("R{}", records.len()),
             evidence: line.to_owned(),
-            sha256: sha256_hex(line.as_bytes()),
+            evidence_sha256: sha256_hex(line.as_bytes()),
+            raw: None,
+            raw_sha256: None,
         });
     }
     if records.is_empty() {
@@ -4293,28 +4312,350 @@ fn parse_jsonl_records(source: &str) -> Result<Vec<AuthoritativeRecord>> {
     Ok(records)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedCsvRecord {
+    raw: String,
+    fields: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CsvFieldState {
+    Start,
+    Unquoted,
+    Quoted,
+    AfterQuote,
+}
+
+fn push_csv_field(fields: &mut Vec<String>, field: &mut Vec<u8>) {
+    fields.push(
+        String::from_utf8(std::mem::take(field))
+            .expect("CSV fields remain valid slices of UTF-8 source"),
+    );
+}
+
+fn push_csv_record(
+    source: &str,
+    record_start: usize,
+    record_end: usize,
+    fields: &mut Vec<String>,
+    field: &mut Vec<u8>,
+    records: &mut Vec<ParsedCsvRecord>,
+) -> Result<()> {
+    push_csv_field(fields, field);
+    let logical_record = records.len() + 1;
+    let raw = &source[record_start..record_end];
+    if raw.is_empty() && fields.len() == 1 && fields[0].is_empty() {
+        bail!("CSV record {logical_record} is blank")
+    }
+    if records.len() >= EXACT_LINE_RECORD_MAX_ITEMS + 1 {
+        bail!("CSV record limit exceeded")
+    }
+    records.push(ParsedCsvRecord {
+        raw: raw.to_owned(),
+        fields: std::mem::take(fields),
+    });
+    Ok(())
+}
+
+fn parse_csv_logical_records(source: &str) -> Result<Vec<ParsedCsvRecord>> {
+    if source.is_empty() {
+        bail!("CSV input contains no records")
+    }
+    let bytes = source.as_bytes();
+    let mut records = Vec::new();
+    let mut fields = Vec::new();
+    let mut field = Vec::new();
+    let mut state = CsvFieldState::Start;
+    let mut record_start = 0usize;
+    let mut index = 0usize;
+    let mut ended_at_boundary = false;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        match state {
+            CsvFieldState::Start => match byte {
+                b'"' => {
+                    state = CsvFieldState::Quoted;
+                    ended_at_boundary = false;
+                    index += 1;
+                }
+                b',' => {
+                    push_csv_field(&mut fields, &mut field);
+                    ended_at_boundary = false;
+                    index += 1;
+                }
+                b'\n' => {
+                    push_csv_record(
+                        source,
+                        record_start,
+                        index,
+                        &mut fields,
+                        &mut field,
+                        &mut records,
+                    )?;
+                    index += 1;
+                    record_start = index;
+                    ended_at_boundary = true;
+                }
+                b'\r' => {
+                    if bytes.get(index + 1) != Some(&b'\n') {
+                        bail!(
+                            "CSV record {} rejects bare CR boundaries",
+                            records.len() + 1
+                        )
+                    }
+                    push_csv_record(
+                        source,
+                        record_start,
+                        index,
+                        &mut fields,
+                        &mut field,
+                        &mut records,
+                    )?;
+                    index += 2;
+                    record_start = index;
+                    ended_at_boundary = true;
+                }
+                _ => {
+                    field.push(byte);
+                    state = CsvFieldState::Unquoted;
+                    ended_at_boundary = false;
+                    index += 1;
+                }
+            },
+            CsvFieldState::Unquoted => match byte {
+                b',' => {
+                    push_csv_field(&mut fields, &mut field);
+                    state = CsvFieldState::Start;
+                    index += 1;
+                }
+                b'\n' => {
+                    push_csv_record(
+                        source,
+                        record_start,
+                        index,
+                        &mut fields,
+                        &mut field,
+                        &mut records,
+                    )?;
+                    state = CsvFieldState::Start;
+                    index += 1;
+                    record_start = index;
+                    ended_at_boundary = true;
+                }
+                b'\r' => {
+                    if bytes.get(index + 1) != Some(&b'\n') {
+                        bail!(
+                            "CSV record {} rejects bare CR boundaries",
+                            records.len() + 1
+                        )
+                    }
+                    push_csv_record(
+                        source,
+                        record_start,
+                        index,
+                        &mut fields,
+                        &mut field,
+                        &mut records,
+                    )?;
+                    state = CsvFieldState::Start;
+                    index += 2;
+                    record_start = index;
+                    ended_at_boundary = true;
+                }
+                b'"' => {
+                    bail!(
+                        "CSV record {} contains a quote inside an unquoted field",
+                        records.len() + 1
+                    )
+                }
+                _ => {
+                    field.push(byte);
+                    index += 1;
+                }
+            },
+            CsvFieldState::Quoted => {
+                if byte == b'"' {
+                    if bytes.get(index + 1) == Some(&b'"') {
+                        field.push(b'"');
+                        index += 2;
+                    } else {
+                        state = CsvFieldState::AfterQuote;
+                        index += 1;
+                    }
+                } else {
+                    field.push(byte);
+                    index += 1;
+                }
+            }
+            CsvFieldState::AfterQuote => match byte {
+                b',' => {
+                    push_csv_field(&mut fields, &mut field);
+                    state = CsvFieldState::Start;
+                    index += 1;
+                }
+                b'\n' => {
+                    push_csv_record(
+                        source,
+                        record_start,
+                        index,
+                        &mut fields,
+                        &mut field,
+                        &mut records,
+                    )?;
+                    state = CsvFieldState::Start;
+                    index += 1;
+                    record_start = index;
+                    ended_at_boundary = true;
+                }
+                b'\r' => {
+                    if bytes.get(index + 1) != Some(&b'\n') {
+                        bail!(
+                            "CSV record {} rejects bare CR boundaries",
+                            records.len() + 1
+                        )
+                    }
+                    push_csv_record(
+                        source,
+                        record_start,
+                        index,
+                        &mut fields,
+                        &mut field,
+                        &mut records,
+                    )?;
+                    state = CsvFieldState::Start;
+                    index += 2;
+                    record_start = index;
+                    ended_at_boundary = true;
+                }
+                _ => {
+                    bail!(
+                        "CSV record {} has characters after a closing quote",
+                        records.len() + 1
+                    )
+                }
+            },
+        }
+    }
+    if state == CsvFieldState::Quoted {
+        bail!(
+            "CSV record {} has an unterminated quoted field",
+            records.len() + 1
+        )
+    }
+    if !ended_at_boundary {
+        push_csv_record(
+            source,
+            record_start,
+            bytes.len(),
+            &mut fields,
+            &mut field,
+            &mut records,
+        )?;
+    }
+    Ok(records)
+}
+
+#[derive(Serialize)]
+struct CsvSemanticEvidence<'a> {
+    columns: &'a [String],
+    values: &'a [String],
+}
+
+fn parse_csv_records(source: &str) -> Result<(Vec<String>, Vec<AuthoritativeRecord>)> {
+    if source.starts_with('\u{feff}') {
+        bail!("CSV input rejects a UTF-8 BOM before the header")
+    }
+    let mut parsed = parse_csv_logical_records(source)?;
+    if parsed.len() < 2 {
+        bail!("CSV input requires one header record and at least one data record")
+    }
+    let header = parsed.remove(0).fields;
+    let mut names = HashSet::with_capacity(header.len());
+    for (column, name) in header.iter().enumerate() {
+        if name.trim().is_empty() {
+            bail!("CSV header column {} is blank", column + 1)
+        }
+        if !names.insert(name.as_str()) {
+            bail!("CSV header contains duplicate column {name:?}")
+        }
+    }
+    let serialized_header_bytes = serde_json::to_vec(&header)?.len();
+    let repeated_header_bytes = serialized_header_bytes
+        .checked_mul(parsed.len())
+        .ok_or_else(|| anyhow!("CSV header expansion size overflow"))?;
+    if repeated_header_bytes > CSV_HEADER_REPEAT_MAX_BYTES {
+        bail!(
+            "CSV header expansion exceeds {} bytes across data records",
+            CSV_HEADER_REPEAT_MAX_BYTES
+        )
+    }
+    let mut records = Vec::with_capacity(parsed.len());
+    for (ordinal, record) in parsed.into_iter().enumerate() {
+        if record.fields.len() != header.len() {
+            bail!(
+                "CSV record {} has {} fields but header has {}",
+                ordinal + 2,
+                record.fields.len(),
+                header.len()
+            )
+        }
+        let evidence = serde_json::to_string(&CsvSemanticEvidence {
+            columns: &header,
+            values: &record.fields,
+        })?;
+        let evidence_sha256 = sha256_hex(evidence.as_bytes());
+        let raw_sha256 = sha256_hex(record.raw.as_bytes());
+        records.push(AuthoritativeRecord {
+            id: format!("R{ordinal}"),
+            evidence,
+            evidence_sha256,
+            raw: Some(record.raw),
+            raw_sha256: Some(raw_sha256),
+        });
+    }
+    Ok((header, records))
+}
+
 fn authoritative_records_value(records: &[AuthoritativeRecord]) -> MontyObject {
     MontyObject::List(
         records
             .iter()
             .map(|record| {
-                MontyObject::Dict(
-                    vec![
-                        (
-                            MontyObject::String("id".into()),
-                            MontyObject::String(record.id.clone()),
+                let mut fields = vec![
+                    (
+                        MontyObject::String("id".into()),
+                        MontyObject::String(record.id.clone()),
+                    ),
+                    (
+                        MontyObject::String("evidence".into()),
+                        MontyObject::String(record.evidence.clone()),
+                    ),
+                ];
+                if let Some(raw) = record.raw.as_ref() {
+                    fields.push((
+                        MontyObject::String("evidence_sha256".into()),
+                        MontyObject::String(record.evidence_sha256.clone()),
+                    ));
+                    fields.push((
+                        MontyObject::String("raw".into()),
+                        MontyObject::String(raw.clone()),
+                    ));
+                    fields.push((
+                        MontyObject::String("raw_sha256".into()),
+                        MontyObject::String(
+                            record
+                                .raw_sha256
+                                .clone()
+                                .expect("CSV raw records have raw digests"),
                         ),
-                        (
-                            MontyObject::String("evidence".into()),
-                            MontyObject::String(record.evidence.clone()),
-                        ),
-                        (
-                            MontyObject::String("sha256".into()),
-                            MontyObject::String(record.sha256.clone()),
-                        ),
-                    ]
-                    .into(),
-                )
+                    ));
+                } else {
+                    fields.push((
+                        MontyObject::String("sha256".into()),
+                        MontyObject::String(record.evidence_sha256.clone()),
+                    ));
+                }
+                MontyObject::Dict(fields.into())
             })
             .collect(),
     )
@@ -6278,6 +6619,8 @@ pub struct SoloSession {
     structural_sample: Option<String>,
     authoritative_source: Option<String>,
     authoritative_records: Option<Vec<AuthoritativeRecord>>,
+    authoritative_record_format: Option<&'static str>,
+    authoritative_csv_header: Option<Vec<String>>,
     source_aggregate: Option<observability::SourceLocalAggregate>,
 }
 impl SoloSession {
@@ -6298,6 +6641,8 @@ impl SoloSession {
             structural_sample: None,
             authoritative_source: None,
             authoritative_records: None,
+            authoritative_record_format: None,
+            authoritative_csv_header: None,
             source_aggregate: None,
         })
     }
@@ -6323,10 +6668,22 @@ impl SoloSession {
         self.invalidate_loaded_source();
         self.load_jsonl_text_inner(text, var, cfg)
     }
+    pub fn load_csv(&mut self, path: &Path, var: &str, cfg: &Config) -> Result<String> {
+        self.invalidate_loaded_source();
+        let text = fs::read_to_string(path)
+            .with_context(|| format!("input is not UTF-8: {}", path.display()))?;
+        self.load_csv_text_inner(text, var, cfg)
+    }
+    pub fn load_csv_text(&mut self, text: String, var: &str, cfg: &Config) -> Result<String> {
+        self.invalidate_loaded_source();
+        self.load_csv_text_inner(text, var, cfg)
+    }
     fn invalidate_loaded_source(&mut self) {
         self.structural_sample = None;
         self.authoritative_source = None;
         self.authoritative_records = None;
+        self.authoritative_record_format = None;
+        self.authoritative_csv_header = None;
         self.source_aggregate = None;
     }
     fn load_jsonl_text_inner(&mut self, text: String, var: &str, cfg: &Config) -> Result<String> {
@@ -6346,8 +6703,39 @@ impl SoloSession {
             PrintWriter::Disabled,
         )?;
         self.authoritative_records = Some(records);
+        self.authoritative_record_format = Some("jsonl");
         Ok(format!(
             "{metadata}; {record_count} authoritative JSONL records in 'records'"
+        ))
+    }
+    fn load_csv_text_inner(&mut self, text: String, var: &str, cfg: &Config) -> Result<String> {
+        let (header, records) = parse_csv_records(&text)?;
+        let record_count = records.len();
+        let column_count = header.len();
+        let metadata = self.load_text_inner(text, var, cfg)?;
+        let repl = self
+            .repl
+            .as_mut()
+            .ok_or_else(|| anyhow!("solo session is busy"))?;
+        repl.feed_run(
+            "records = __azdaja_records\ncsv_header = __azdaja_csv_header",
+            vec![
+                (
+                    "__azdaja_records".into(),
+                    authoritative_records_value(&records),
+                ),
+                (
+                    "__azdaja_csv_header".into(),
+                    MontyObject::List(header.iter().cloned().map(MontyObject::String).collect()),
+                ),
+            ],
+            PrintWriter::Disabled,
+        )?;
+        self.authoritative_records = Some(records);
+        self.authoritative_record_format = Some("csv");
+        self.authoritative_csv_header = Some(header);
+        Ok(format!(
+            "{metadata}; {record_count} authoritative CSV records in 'records', {column_count} columns in 'csv_header'"
         ))
     }
     fn load_text_inner(&mut self, text: String, var: &str, cfg: &Config) -> Result<String> {
@@ -6387,6 +6775,12 @@ impl SoloSession {
     }
     pub fn authoritative_record_count(&self) -> Option<usize> {
         self.authoritative_records.as_ref().map(Vec::len)
+    }
+    pub fn authoritative_record_format(&self) -> Option<&'static str> {
+        self.authoritative_record_format
+    }
+    pub fn authoritative_csv_header(&self) -> Option<&[String]> {
+        self.authoritative_csv_header.as_deref()
     }
     pub fn authoritative_source_sha256(&self) -> Option<String> {
         self.authoritative_records
@@ -12880,12 +13274,12 @@ mod exact_line_record_tests {
         assert_eq!(records[1].evidence, records[0].evidence);
         assert_eq!(records[2].evidence, "{\"x\":\"é\"}");
         assert_eq!(
-            records[0].sha256,
+            records[0].evidence_sha256,
             sha256_hex(records[0].evidence.as_bytes())
         );
-        assert_eq!(records[0].sha256, records[1].sha256);
+        assert_eq!(records[0].evidence_sha256, records[1].evidence_sha256);
         assert_eq!(
-            records[2].sha256,
+            records[2].evidence_sha256,
             sha256_hex(records[2].evidence.as_bytes())
         );
 
@@ -12926,6 +13320,100 @@ mod exact_line_record_tests {
                 .to_string()
                 .contains("JSONL record limit exceeded")
         );
+    }
+
+    #[test]
+    fn authoritative_csv_records_preserve_multiline_rows_duplicates_and_raw_hashes() {
+        let source = concat!(
+            "name,note\r\n",
+            "alice,\"hello, \"\"world\"\"\"\r\n",
+            "bob,\"multi\r\nline\"\n",
+            "alice,\"hello, \"\"world\"\"\"\n",
+            "رنا,unicode",
+        );
+        let (header, records) = parse_csv_records(source).unwrap();
+        assert_eq!(header, vec!["name", "note"]);
+        assert_eq!(records.len(), 4);
+        assert_eq!(records[0].id, "R0");
+        assert_eq!(records[1].id, "R1");
+        assert_eq!(records[2].id, "R2");
+        assert_eq!(records[3].id, "R3");
+        assert_eq!(
+            records[0].raw.as_deref(),
+            Some("alice,\"hello, \"\"world\"\"\"")
+        );
+        assert_eq!(records[1].raw.as_deref(), Some("bob,\"multi\r\nline\""));
+        assert_eq!(records[0].raw, records[2].raw);
+        assert_eq!(records[0].raw_sha256, records[2].raw_sha256);
+        assert_eq!(records[0].evidence_sha256, records[2].evidence_sha256);
+        assert_eq!(
+            records[0].evidence,
+            r#"{"columns":["name","note"],"values":["alice","hello, \"world\""]}"#
+        );
+        assert_eq!(
+            records[1].evidence,
+            "{\"columns\":[\"name\",\"note\"],\"values\":[\"bob\",\"multi\\r\\nline\"]}"
+        );
+        for record in &records {
+            assert_eq!(
+                record.evidence_sha256,
+                sha256_hex(record.evidence.as_bytes())
+            );
+            assert_eq!(
+                record.raw_sha256.as_deref().unwrap(),
+                sha256_hex(record.raw.as_deref().unwrap().as_bytes())
+            );
+        }
+    }
+
+    #[test]
+    fn authoritative_csv_records_fail_closed_on_ambiguous_or_malformed_shapes() {
+        for (source, expected) in [
+            ("", "contains no records"),
+            (
+                "a,b\n",
+                "requires one header record and at least one data record",
+            ),
+            (",b\n1,2", "header column 1 is blank"),
+            ("a,a\n1,2", "duplicate column"),
+            ("a,b\n1", "has 1 fields but header has 2"),
+            ("a\n\n", "record 2 is blank"),
+            ("a\nx\ry", "rejects bare CR boundaries"),
+            ("a\nx\"y", "quote inside an unquoted field"),
+            ("a\n\"x\"z", "characters after a closing quote"),
+            ("a\n\"x", "unterminated quoted field"),
+            ("\u{feff}a\nx", "rejects a UTF-8 BOM"),
+        ] {
+            let error = parse_csv_records(source).unwrap_err().to_string();
+            assert!(
+                error.contains(expected),
+                "source={source:?} expected={expected:?} error={error}"
+            );
+        }
+    }
+
+    #[test]
+    fn authoritative_csv_records_enforce_the_semantic_occurrence_limit() {
+        let exact = format!("value\n{}", "x\n".repeat(EXACT_LINE_RECORD_MAX_ITEMS));
+        assert_eq!(
+            parse_csv_records(&exact).unwrap().1.len(),
+            EXACT_LINE_RECORD_MAX_ITEMS
+        );
+        let oversized = format!("{exact}x\n");
+        assert!(
+            parse_csv_records(&oversized)
+                .unwrap_err()
+                .to_string()
+                .contains("CSV record limit exceeded")
+        );
+    }
+
+    #[test]
+    fn authoritative_csv_records_bound_repeated_header_expansion() {
+        let header = "h".repeat(1_024);
+        let source = format!("{header}\n{}", "x\n".repeat(20_000));
+        let error = parse_csv_records(&source).unwrap_err().to_string();
+        assert!(error.contains("header expansion exceeds"), "{error}");
     }
 
     #[test]
