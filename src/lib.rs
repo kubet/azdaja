@@ -246,16 +246,12 @@ mod recent_scope_status_tests {
     #[cfg(unix)]
     #[test]
     fn persisted_scope_label_is_basename_only_and_keeps_scope_identity() {
-        static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _guard = CWD_LOCK.lock().unwrap();
-        let original = env::current_dir().unwrap();
         let state = root("label-state");
         let parent = root("label-parent");
         let project = parent.join("azdaja");
         fs::create_dir(&project).unwrap();
         let key = observability::scope_key_for_path(&project).unwrap();
 
-        env::set_current_dir(&project).unwrap();
         memory::append_at(
             &state,
             Some(&key),
@@ -265,7 +261,7 @@ mod recent_scope_status_tests {
             Vec::new(),
         )
         .unwrap();
-        env::set_current_dir(&original).unwrap();
+        persist_scope_label_for_key_at(&state, &key, &project).unwrap();
 
         let label_path = recent_scope_label_path(&state, &key).unwrap();
         let label_json = fs::read_to_string(&label_path).unwrap();
@@ -273,7 +269,8 @@ mod recent_scope_status_tests {
         assert!(!label_json.contains(parent.to_string_lossy().as_ref()));
 
         let mut degraded = false;
-        let statuses = optional_recent_scope_statuses(&state, &original, &mut degraded);
+        let statuses =
+            optional_recent_scope_statuses(&state, &env::current_dir().unwrap(), &mut degraded);
         assert!(!degraded);
         assert_eq!(statuses.len(), 1);
         assert_eq!(statuses[0].token, key[..8]);
@@ -1865,29 +1862,31 @@ fn recent_scope_label_path(root: &Path, scope_key: &str) -> Result<PathBuf> {
     Ok(recent_scope_label_directory(root).join(format!("{scope_key}.json")))
 }
 
+fn persist_scope_label_for_key_at(root: &Path, scope_key: &str, scope: &Path) -> Result<()> {
+    if !valid_recent_scope_key(scope_key) {
+        return Ok(());
+    }
+    if observability::scope_key_for_path(scope)? != scope_key {
+        return Ok(());
+    }
+    let Some(label) = sanitized_scope_basename_label(scope) else {
+        return Ok(());
+    };
+    let directory = recent_scope_label_directory(root);
+    secure_dir(&directory)?;
+    let metadata = RecentScopeLabelMetadata {
+        schema_version: RECENT_SCOPE_LABEL_SCHEMA_VERSION,
+        label,
+    };
+    atomic_write(
+        &recent_scope_label_path(root, scope_key)?,
+        serde_json::to_string_pretty(&metadata)?.as_bytes(),
+    )
+}
+
 pub(crate) fn persist_current_scope_label_for_key_at(root: &Path, scope_key: &str) {
-    let result = (|| -> Result<()> {
-        if !valid_recent_scope_key(scope_key) {
-            return Ok(());
-        }
-        let current = canonical_current_dir()?;
-        if observability::scope_key_for_path(&current)? != scope_key {
-            return Ok(());
-        }
-        let Some(label) = sanitized_scope_basename_label(&current) else {
-            return Ok(());
-        };
-        let directory = recent_scope_label_directory(root);
-        secure_dir(&directory)?;
-        let metadata = RecentScopeLabelMetadata {
-            schema_version: RECENT_SCOPE_LABEL_SCHEMA_VERSION,
-            label,
-        };
-        atomic_write(
-            &recent_scope_label_path(root, scope_key)?,
-            serde_json::to_string_pretty(&metadata)?.as_bytes(),
-        )
-    })();
+    let result = canonical_current_dir()
+        .and_then(|current| persist_scope_label_for_key_at(root, scope_key, &current));
     let _ = result;
 }
 
