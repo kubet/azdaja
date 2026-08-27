@@ -11078,6 +11078,7 @@ JSONL
         write_executable(
             &opencode,
             r#"#!/bin/sh
+cat >/dev/null
 cat <<'JSONL'
 {"type":"text","part":{"type":"text","text":"REMOVE final answer"}}
 {"type":"step_finish","part":{"type":"step-finish","reason":"stop","cost":0.01,"tokens":{"total":83,"input":31,"output":17,"reasoning":5,"cache":{"read":13,"write":7}}}}
@@ -11131,7 +11132,7 @@ JSONL
         let codex = root.join("codex");
         write_executable(
             &codex,
-            "#!/bin/sh\nsandbox_arg=''\nwhile [ \"$#\" -gt 0 ]; do\n    if [ \"$1\" = '-C' ]; then\n        shift\n        sandbox_arg=$1\n    fi\n    shift\ndone\ncwd=$(pwd)\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"%s|%s\"}}\\n' \"$cwd\" \"$sandbox_arg\"\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":1,\"reasoning_output_tokens\":0}}\\n'\n",
+            "#!/bin/sh\ncat >/dev/null\nsandbox_arg=''\nwhile [ \"$#\" -gt 0 ]; do\n    if [ \"$1\" = '-C' ]; then\n        shift\n        sandbox_arg=$1\n    fi\n    shift\ndone\ncwd=$(pwd)\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"%s|%s\"}}\\n' \"$cwd\" \"$sandbox_arg\"\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":1,\"reasoning_output_tokens\":0}}\\n'\n",
         );
         let cfg = Config {
             sub_llm_cmd: format!(
@@ -11178,7 +11179,7 @@ JSONL
         let codex = root.join("codex");
         write_executable(
             &codex,
-            "#!/bin/sh\nsecret=${AZDAJA_PROVIDER_SECRET-unset}\nauth=${OPENAI_API_KEY-unset}\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"%s|%s\"}}\\n' \"$secret\" \"$auth\"\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":1,\"reasoning_output_tokens\":0}}\\n'\n",
+            "#!/bin/sh\ncat >/dev/null\nsecret=${AZDAJA_PROVIDER_SECRET-unset}\nauth=${OPENAI_API_KEY-unset}\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"%s|%s\"}}\\n' \"$secret\" \"$auth\"\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":1,\"reasoning_output_tokens\":0}}\\n'\n",
         );
         let old_secret = env::var_os("AZDAJA_PROVIDER_SECRET");
         let old_key = env::var_os("OPENAI_API_KEY");
@@ -11223,7 +11224,7 @@ JSONL
         let codex = root.join("codex");
         write_executable(
             &codex,
-            "#!/bin/sh\nopenai=${OPENAI_API_KEY-unset}\ncodex_key=${CODEX_API_KEY-unset}\ncodex_token=${CODEX_ACCESS_TOKEN-unset}\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"%s|%s|%s|%s\"}}\\n' \"$openai\" \"$codex_key\" \"$codex_token\" \"$CODEX_HOME\"\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":1,\"reasoning_output_tokens\":0}}\\n'\n",
+            "#!/bin/sh\ncat >/dev/null\nopenai=${OPENAI_API_KEY-unset}\ncodex_key=${CODEX_API_KEY-unset}\ncodex_token=${CODEX_ACCESS_TOKEN-unset}\nprintf '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"%s|%s|%s|%s\"}}\\n' \"$openai\" \"$codex_key\" \"$codex_token\" \"$CODEX_HOME\"\nprintf '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"cache_write_input_tokens\":0,\"output_tokens\":1,\"reasoning_output_tokens\":0}}\\n'\n",
         );
         let values = [
             ("OPENAI_API_KEY", "openai-sentinel"),
