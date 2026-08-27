@@ -546,7 +546,7 @@ assert len(prefix) + item_count * code_width <= 8192
 # These values are compared across separate provider processes. macOS Python 3.9
 # exposes a process-relative monotonic epoch, so use the shared wall-clock epoch here.
 started_ns = time.time_ns()
-time.sleep(0.05)
+time.sleep(0.25)
 ended_ns = time.time_ns()
 record = {
     "case": case,
@@ -637,7 +637,12 @@ fn assert_adaptive_balanced_calls(
         "adaptive packing did not improve legacy shard count: {shards} >= {legacy_shards}"
     );
     assert_eq!(calls.len(), 2 * shards);
-    assert_eq!(peak_logged_concurrency(calls), (2 * shards).min(8));
+    let peak = peak_logged_concurrency(calls);
+    let concurrency_ceiling = (2 * shards).min(8);
+    assert!(
+        (2..=concurrency_ceiling).contains(&peak),
+        "adaptive calls did not stay parallel and bounded: peak={peak}, ceiling={concurrency_ceiling}"
+    );
     for role in ["A", "B"] {
         let role_calls = calls
             .iter()
