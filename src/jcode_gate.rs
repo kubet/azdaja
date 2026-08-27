@@ -1388,8 +1388,36 @@ fn classify_bounded_bash_read(command: &str, cwd: &Path) -> Option<u64> {
         "head" | "tail" => bounded_head_or_tail(program, arguments, cwd),
         "sed" => bounded_sed(arguments, cwd),
         "grep" => bounded_fixed_grep(arguments, cwd),
+        "gh" => bounded_gh_failed_log(arguments),
         _ => None,
     }
+}
+
+fn bounded_gh_failed_log(arguments: &[&str]) -> Option<u64> {
+    if arguments.len() != 8
+        || arguments[0] != "run"
+        || arguments[1] != "view"
+        || arguments[3] != "--repo"
+        || arguments[5] != "--job"
+        || arguments[7] != "--log-failed"
+        || arguments[2].is_empty()
+        || !arguments[2].bytes().all(|byte| byte.is_ascii_digit())
+        || arguments[6].is_empty()
+        || !arguments[6].bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let (owner, repository) = arguments[4].split_once('/')?;
+    let safe_component = |component: &str| {
+        !component.is_empty()
+            && component
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    };
+    if !safe_component(owner) || !safe_component(repository) || repository.contains('/') {
+        return None;
+    }
+    Some(1)
 }
 
 fn classify_bash(input: &Value, cwd: &Path) -> Requirement {
@@ -2443,6 +2471,7 @@ mod tests {
             "/usr/bin/tail -n 20 small.log",
             "/usr/bin/sed -n 10,29p small.log",
             "/usr/bin/grep -F -n -m 8 -- needle small.log",
+            "gh run view 123 --repo owner/repo --job 456 --log-failed",
         ] {
             assert_eq!(
                 call(
@@ -2455,6 +2484,39 @@ mod tests {
                 .unwrap(),
                 Decision::Allow,
                 "bounded scan was gated: {command}"
+            );
+        }
+    }
+
+    #[test]
+    fn github_failed_log_read_is_exact_and_fail_closed() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        for command in [
+            "gh run delete 123 --repo owner/repo --job 456 --log-failed",
+            "gh run view 123 --repo=owner/repo --job 456 --log-failed",
+            "gh run view 123 --repo owner/repo --job=456 --log-failed",
+            "gh run view 123 --repo owner/repo --job 456 --log-failed; id",
+            "gh run view 123 --repo owner/repo --job 456 --log-failed | head -n 1",
+            "gh run view 123 --repo owner/repo --job 456 --log-failed > failed.log",
+            "gh run view 123 --repo owner/repo --job 456 --log-failed &",
+            "gh run view $(id) --repo owner/repo --job 456 --log-failed",
+            "gh run view 123 --repo owner/repo --job 456 --log-failed --env X=Y",
+            "gh run view 123 --repo owner/repo --job 456 --log-failed --dangerously-bypass-approvals-and-sandbox",
+        ] {
+            assert!(
+                matches!(
+                    call(
+                        &state,
+                        &scratch.cwd,
+                        "bash",
+                        json!({"command":command}),
+                        NOW,
+                    )
+                    .unwrap(),
+                    Decision::Block(_)
+                ),
+                "unsafe GitHub log command was allowed: {command}"
             );
         }
     }
