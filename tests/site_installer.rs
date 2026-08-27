@@ -10,7 +10,7 @@ use std::{
     process::{Child, Command, Output, Stdio},
     sync::atomic::{AtomicU64, Ordering},
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 struct Scratch(PathBuf);
@@ -75,7 +75,8 @@ server.serve_forever()
             .stderr(Stdio::null())
             .spawn()
             .unwrap();
-        for _ in 0..200 {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
             if let Ok(port_text) = fs::read_to_string(&port_file)
                 && let Ok(port) = port_text.trim().parse::<u16>()
                 && port != 0
@@ -86,7 +87,11 @@ server.serve_forever()
                     log,
                 };
             }
-            thread::sleep(Duration::from_millis(10));
+            let now = Instant::now();
+            if now >= deadline {
+                break;
+            }
+            thread::sleep((deadline - now).min(Duration::from_millis(10)));
         }
         let _ = child.kill();
         let _ = child.wait();
