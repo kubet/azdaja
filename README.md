@@ -101,7 +101,7 @@ A fixed 199-row Oolong diagnostic under the RAH protocol ([arXiv:2606.13643](htt
 
 *Single-arm diagnostic under the paper's protocol; paper controls were not rerun.*
 
-Within this four-row ladder, Azdaja is **4.26 percentage points** above the paper's RLM reference and remains below the two agent configurations shown. How these numbers were earned — and everything that died along the way — is in the [launch saga](docs/launch-saga.md).
+Within this four-row ladder, Azdaja is **4.26 percentage points** above the paper's RLM reference and remains below the two agent configurations shown. How these numbers were earned — and everything that died along the way — is in the [launch saga](docs/launch-saga.md). The versioned [receipts leaderboard](BENCHMARKS.md) keeps the claim scope, hashes, costs, and provider-free reproduction commands in one citable place.
 
 ## Cost
 
