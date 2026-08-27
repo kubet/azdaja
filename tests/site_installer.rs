@@ -1536,19 +1536,19 @@ fn public_v020_binaries_expose_the_installer_config_staging_protocol() {
 #[test]
 fn public_v021_site_assets_match_the_bound_checksum_manifest() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let release = root.join("site/releases/v0.1.14");
+    let release = root.join("site/releases/v0.1.13");
     let sums = fs::read_to_string(release.join("SHA256SUMS")).unwrap();
     let expected = [
         (
-            "azdaja-v0.1.14-darwin-arm64",
+            "azdaja-v0.1.13-darwin-arm64",
             "888bb7654052862e3d3dcf13495ac2e05fa0e0c0c6779cd8bb27a6a6d4293e91",
         ),
         (
-            "azdaja-v0.1.14-darwin-x86_64",
+            "azdaja-v0.1.13-darwin-x86_64",
             "1e37f38c9c4b785cbd88e8cb18b484cb04aee0c623176aa5c28f846203b604ea",
         ),
         (
-            "azdaja-v0.1.14-linux-x86_64",
+            "azdaja-v0.1.13-linux-x86_64",
             "d59f3a2e90f13edb5bbca3960b29530012f1236cd9e91297b11e73bee45ebe42",
         ),
         (
@@ -1572,9 +1572,9 @@ fn public_v021_site_assets_match_the_bound_checksum_manifest() {
 
 #[test]
 fn public_v021_binary_headers_match_the_advertised_platforms() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.14");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.13");
 
-    let darwin_path = root.join("azdaja-v0.1.14-darwin-arm64");
+    let darwin_path = root.join("azdaja-v0.1.13-darwin-arm64");
     let darwin = fs::read(&darwin_path).unwrap();
     assert!(darwin.len() >= 8);
     assert_eq!(&darwin[..4], &[0xcf, 0xfa, 0xed, 0xfe]);
@@ -1588,7 +1588,7 @@ fn public_v021_binary_headers_match_the_advertised_platforms() {
         0
     );
 
-    let darwin_x86_64_path = root.join("azdaja-v0.1.14-darwin-x86_64");
+    let darwin_x86_64_path = root.join("azdaja-v0.1.13-darwin-x86_64");
     let darwin_x86_64 = fs::read(&darwin_x86_64_path).unwrap();
     assert!(darwin_x86_64.len() >= 8);
     assert_eq!(&darwin_x86_64[..4], &[0xcf, 0xfa, 0xed, 0xfe]);
@@ -1606,7 +1606,7 @@ fn public_v021_binary_headers_match_the_advertised_platforms() {
         0
     );
 
-    let linux_path = root.join("azdaja-v0.1.14-linux-x86_64");
+    let linux_path = root.join("azdaja-v0.1.13-linux-x86_64");
     let linux = fs::read(&linux_path).unwrap();
     assert!(linux.len() >= 20);
     assert_eq!(&linux[..4], b"\x7fELF");
@@ -1625,11 +1625,11 @@ fn public_v021_binary_headers_match_the_advertised_platforms() {
 
 #[test]
 fn public_v021_binaries_expose_the_installer_config_staging_protocol() {
-    let release = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.14");
+    let release = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/releases/v0.1.13");
     for name in [
-        "azdaja-v0.1.14-darwin-arm64",
-        "azdaja-v0.1.14-darwin-x86_64",
-        "azdaja-v0.1.14-linux-x86_64",
+        "azdaja-v0.1.13-darwin-arm64",
+        "azdaja-v0.1.13-darwin-x86_64",
+        "azdaja-v0.1.13-linux-x86_64",
     ] {
         let bytes = fs::read(release.join(name)).unwrap();
         assert!(
@@ -1645,7 +1645,7 @@ fn public_v021_binaries_expose_the_installer_config_staging_protocol() {
         let scratch = Scratch::new();
         let home = scratch.0.join("v021-print-config-home");
         fs::create_dir(&home).unwrap();
-        let output = Command::new(release.join("azdaja-v0.1.14-darwin-arm64"))
+        let output = Command::new(release.join("azdaja-v0.1.13-darwin-arm64"))
             .args(["install", "jcode", "--print-config"])
             .env("HOME", &home)
             .env("JCODE_HOME", home.join(".jcode"))
