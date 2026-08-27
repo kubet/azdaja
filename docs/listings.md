@@ -1,6 +1,6 @@
 # Visibility listings checklist
 
-Prepared state and submission copy. No third-party PR, directory form, email, invite request, or community post is authorized by this file.
+Verified preparation, public-install evidence, and submission receipts. This file does not authorize future third-party PRs, directory forms, email, invite requests, or community posts beyond the actions explicitly recorded below.
 
 ## Gemini CLI extension gallery
 
@@ -55,6 +55,8 @@ External directory action still gated:
 - Record the submitted URL and scan result.
 - Do not claim `claude.com/plugins` listing until the public page resolves.
 
+The official `https://clau.de/plugin-directory` shortlink currently resolves to an authenticated Claude surface and returns HTTP 403 without a browser session. No directory submission receipt exists.
+
 ## skills.sh
 
 Expected command:
@@ -93,7 +95,14 @@ Before opening each PR:
 - Link `BENCHMARKS.md` only when the list accepts secondary links.
 - Do not mention stars, launch timing, or an unmeasured benchmark win.
 
-Opening third-party PRs requires separate explicit authorization.
+Opening any additional third-party PR requires a fresh rules check.
+
+Submitted listing PRs:
+
+- [awesome-opencode/awesome-opencode#650](https://github.com/awesome-opencode/awesome-opencode/pull/650) adds `data/projects/azdaja.yaml`; all 230 repository YAML files passed `npm run validate` before submission.
+- [ccplugins/awesome-claude-code-plugins#404](https://github.com/ccplugins/awesome-claude-code-plugins/pull/404) adds Azdaja to the English and Chinese marketplace sections.
+
+The primary `hesreallyhim/awesome-claude-code` list explicitly forbids PR submissions and requires a human-created web UI issue form. Azdaja satisfies its 14-day active-development threshold, but no automated recommendation was filed.
 
 ## Console.dev beta note
 
@@ -115,7 +124,7 @@ Release:
 https://github.com/kubet/azdaja/releases/tag/v0.1.13
 ```
 
-Sending email requires separate explicit authorization.
+The current Console.dev criteria accept pre-1.0 developer-tool betas, so v0.1.13 is eligible for consideration. Sending remains blocked until an authorized mail account is connected; no email receipt exists.
 
 ## Lobsters
 
@@ -133,8 +142,8 @@ Do not submit to Homebrew core yet. The repository does not currently satisfy th
 | Surface | Repository-ready | External action | Public listing verified |
 |---|---:|---:|---:|
 | Gemini CLI | yes; official CLI link passed | topic added | no gallery claim |
-| Claude plugin | yes; public marketplace install passed | not submitted | no directory claim |
+| Claude plugin | yes; public marketplace install passed | directory form auth-gated | no directory claim |
 | skills.sh | yes; public install passed | automatic discovery | yes |
-| Awesome lists | copy ready | no PR opened | no |
-| Console.dev | email ready | not sent | no |
+| Awesome lists | two validated PRs open | [OpenCode #650](https://github.com/awesome-opencode/awesome-opencode/pull/650), [Claude plugins #404](https://github.com/ccplugins/awesome-claude-code-plugins/pull/404) | pending review |
+| Console.dev | eligible copy ready | sender connection required | no |
 | Lobsters | checklist ready | no invite requested | no |
