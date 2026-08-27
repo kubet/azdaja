@@ -430,6 +430,47 @@ jobs:
       - run: cargo build --release --locked
       - run: .\target\release\azdaja.exe --version
       - run: .\target\release\azdaja.exe doctor --caps
+      - name: Validate Windows installer and tamper refusal
+        shell: pwsh
+        run: |
+          $scratch = Join-Path $env:RUNNER_TEMP "azdaja-windows-installer-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $release = Join-Path $scratch "v0.1.13"
+          $install = Join-Path $scratch "installed"
+          $tamperedInstall = Join-Path $scratch "tampered-installed"
+          $asset = "azdaja-v0.1.13-windows-x86_64.exe"
+          try {
+            New-Item -ItemType Directory -Path $release -Force | Out-Null
+            Copy-Item .\target\release\azdaja.exe (Join-Path $release $asset)
+            $hash = (Get-FileHash (Join-Path $release $asset) -Algorithm SHA256).Hash.ToLowerInvariant()
+            [IO.File]::WriteAllText(
+              (Join-Path $release "SHA256SUMS"),
+              "$hash  $asset`n",
+              [Text.UTF8Encoding]::new($false)
+            )
+
+            & .\site\install.ps1 -ReleaseRoot $scratch -InstallDir $install -NoPathUpdate
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & (Join-Path $install "azdaja.exe") --version
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            [IO.File]::AppendAllText((Join-Path $release $asset), "tamper")
+            $refused = $false
+            try {
+              & .\site\install.ps1 `
+                -ReleaseRoot $scratch `
+                -InstallDir $tamperedInstall `
+                -NoPathUpdate
+            } catch {
+              if (-not $_.Exception.Message.Contains("checksum mismatch")) { throw }
+              $refused = $true
+            }
+            if (-not $refused) { throw "tampered Windows payload was accepted" }
+            if (Test-Path (Join-Path $tamperedInstall "azdaja.exe")) {
+              throw "tampered Windows install published an artifact"
+            }
+          } finally {
+            Remove-Item $scratch -Recurse -Force -ErrorAction SilentlyContinue
+          }
       - name: Stage Windows release candidate
         if: github.event_name == 'workflow_dispatch'
         shell: pwsh

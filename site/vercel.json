@@ -38,6 +38,19 @@
       ]
     },
     {
+      "source": "/install.ps1",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        }
+      ]
+    },
+    {
       "source": "/releases/(.*)",
       "headers": [
         {

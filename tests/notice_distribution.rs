@@ -258,16 +258,18 @@ fn ci_windows_safety_is_strict_and_retains_exact_commit_candidates() {
         .1;
 
     assert!(job.contains("runs-on: windows-latest"));
-    assert!(job.contains(
-        "cargo clippy --quiet --all-targets --all-features --locked -- -D warnings"
-    ));
+    assert!(
+        job.contains("cargo clippy --quiet --all-targets --all-features --locked -- -D warnings")
+    );
     assert!(job.contains("cargo test --lib --bin azdaja --locked -- --test-threads=1"));
     assert!(job.contains(".\\target\\release\\azdaja.exe --version"));
     assert!(job.contains(".\\target\\release\\azdaja.exe doctor --caps"));
     assert!(job.contains("azdaja-v0.1.13-windows-x86_64.exe"));
-    assert!(job.contains(
-        "azdaja-standalone-windows-x86_64-${{ github.sha }}-${{ github.run_attempt }}"
-    ));
+    assert!(
+        job.contains(
+            "azdaja-standalone-windows-x86_64-${{ github.sha }}-${{ github.run_attempt }}"
+        )
+    );
 }
 
 #[test]
