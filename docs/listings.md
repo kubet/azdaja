@@ -13,13 +13,15 @@ Repository preparation:
 
 Official discovery is automatic and crawls public tagged repositories daily. The manifest landed after tag `v0.1.13`, so gallery appearance must be checked after the next tag containing the manifest. Do not claim listing before the gallery resolves it.
 
-Install test to run when Gemini CLI is available:
+Provider-free load acceptance used the official Gemini CLI 0.57.0 through `npx` in an isolated `HOME`:
 
 ```bash
-HOME="$(mktemp -d)" gemini extensions link "$PWD"
+tmp="$(mktemp -d)"
+HOME="$tmp" npx -y @google/gemini-cli extensions link "$PWD" --consent
+HOME="$tmp" npx -y @google/gemini-cli extensions list
 ```
 
-Gemini CLI was not installed in the preparation environment, so real CLI loading remains an explicit acceptance check.
+The real CLI linked and enabled `azdaja (0.1.13)`, exposed the `azdaja` agent skill, and listed the repository path as a linked extension. No authentication or model inference was performed.
 
 ## Claude Code plugin
 
@@ -38,6 +40,15 @@ Local install acceptance:
 /plugin install azdaja@azdaja
 ```
 
+Public marketplace install acceptance also passed from an isolated `HOME`:
+
+```text
+claude plugin marketplace add kubet/azdaja
+claude plugin install azdaja@azdaja
+```
+
+Claude cloned the public repository, validated the marketplace, and installed `azdaja@azdaja` at user scope.
+
 External directory action still gated:
 
 - Submit the official Claude plugin-directory form only after explicit authorization.
@@ -52,6 +63,8 @@ Expected command:
 npx skills add kubet/azdaja
 ```
 
+The public directory page at <https://www.skills.sh/kubet/azdaja> returns HTTP 200. A clean public install completed and rendered the Azdaja skill for its supported targets with no unresolved `{{BIN}}` or `{{VERSION}}` tokens; the Claude target symlink resolved to the installed skill.
+
 Acceptance:
 
 - The installed skill name is `azdaja`.
@@ -60,7 +73,7 @@ Acceptance:
 - An identity-proven Azdaja `az` fallback is accepted.
 - No install hook, automatic download, telemetry, or publication action exists.
 
-Do not claim skills.sh listing until the public directory resolves the repository.
+The public skills.sh listing and install path are verified. Directory ranking or future crawler state is not treated as a product claim.
 
 ## Awesome-list PRs
 
@@ -119,9 +132,9 @@ Do not submit to Homebrew core yet. The repository does not currently satisfy th
 
 | Surface | Repository-ready | External action | Public listing verified |
 |---|---:|---:|---:|
-| Gemini CLI | yes | topic added | no |
-| Claude plugin | yes | not submitted | no |
-| skills.sh | yes | not submitted | no |
+| Gemini CLI | yes; official CLI link passed | topic added | no gallery claim |
+| Claude plugin | yes; public marketplace install passed | not submitted | no directory claim |
+| skills.sh | yes; public install passed | automatic discovery | yes |
 | Awesome lists | copy ready | no PR opened | no |
 | Console.dev | email ready | not sent | no |
 | Lobsters | checklist ready | no invite requested | no |
