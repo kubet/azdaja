@@ -15,6 +15,16 @@ fn temp(name: &str) -> PathBuf {
     fs::create_dir_all(&p).unwrap();
     p
 }
+fn private_dir(root: &Path, name: &str) -> PathBuf {
+    let path = root.join(name);
+    fs::create_dir(&path).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    path
+}
 fn fnv(bytes: &[u8]) -> u64 {
     let mut h = 0xcbf29ce484222325u64;
     for b in bytes {
@@ -1310,6 +1320,297 @@ fn solo_jsonl_rejects_invalid_records_before_provider_calls() {
         assert!(!marker.exists(), "{case}: provider was entered");
         fs::remove_dir_all(t).unwrap();
     }
+}
+
+#[test]
+fn solo_jsonl_receipt_binds_complete_semantic_coverage_before_stdout() {
+    let t = temp("solo-jsonl-receipt");
+    let private = private_dir(&t, "private");
+    let child_calls = t.join("child-calls");
+    let mock = t.join("receipt-provider.py");
+    fs::write(
+        &mock,
+        format!(
+            r####"import json, os, pathlib, re, sys
+prompt = sys.stdin.read()
+if os.getenv("RLM_DEPTH") == "0":
+    assert "Receipt gate." in prompt
+    code = '''items=[]
+for record in records:
+    items.append({{"id":record["id"],"evidence":record["evidence"]}})
+labels=semantic_manifest_records(items,"synthetic receipt judgment",["yes","no"])
+assert len(labels)==len(records)
+yes=0
+for record in records:
+    if labels[record["id"]]=="yes":
+        yes+=1
+FINAL(str(yes)+":"+str(len(records)-yes))'''
+    print("```python\n" + code + "\n```")
+    raise SystemExit(0)
+pathlib.Path({child_calls:?}).open("a").write("x")
+tag = re.search(r"return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed", prompt).group(1)
+legend_text = prompt.split("LABEL CODES", 1)[1].split("ROWS are", 1)[0]
+legend = []
+for line in legend_text.splitlines()[1:]:
+    code, value = line.split("\t", 1)
+    legend.append([code, json.loads(value)])
+code_by_label = {{label: code for code, label in legend}}
+rows_text = prompt.split("no whitespace, prose, markdown, omission, or extra character.\n", 1)[1]
+labels = []
+for line in rows_text.splitlines():
+    rid, evidence = line.split("\t", 1)
+    record = json.loads(json.loads(evidence))
+    labels.append("yes" if record["kind"] == "yes" else "no")
+print(tag + "".join(code_by_label[label] for label in labels))
+"####,
+            child_calls = child_calls,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 10, 4);
+    let cfg_text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("max_calls_per_cell = 64", "max_calls_per_cell = 6");
+    fs::write(&cfg, cfg_text).unwrap();
+    let source =
+        "{\"kind\":\"yes\",\"n\":1}\n{\"kind\":\"yes\",\"n\":1}\r\n{\"kind\":\"no\",\"n\":2}\n";
+    let input = t.join("records.jsonl");
+    fs::write(&input, source).unwrap();
+    let receipt = private.join("receipt.json");
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "receipt-case",
+            "-f",
+            input.to_str().unwrap(),
+            "--input-format",
+            "jsonl",
+            "--receipt",
+            receipt.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "2:1");
+    assert_eq!(fs::read_to_string(&child_calls).unwrap(), "xx");
+
+    let receipt_text = fs::read_to_string(&receipt).unwrap();
+    let row: serde_json::Value = serde_json::from_str(&receipt_text).unwrap();
+    assert_eq!(row["schema_version"], 1);
+    assert_eq!(row["kind"], "azdaja_solo_record_coverage");
+    assert_eq!(row["status"], "complete");
+    assert_eq!(row["input"]["format"], "jsonl");
+    assert_eq!(row["input"]["record_count"], 3);
+    assert_eq!(
+        row["input"]["source_sha256"],
+        azdaja::sha256_hex(source.as_bytes())
+    );
+    assert_eq!(row["final_output"], "2:1");
+    assert_eq!(row["final_output_sha256"], azdaja::sha256_hex(b"2:1"));
+    assert_eq!(row["program_sha256"].as_str().unwrap().len(), 64);
+    assert_eq!(row["coverage"]["record_count"], 3);
+    assert_eq!(row["coverage"]["records"][0]["id"], "R0");
+    assert_eq!(row["coverage"]["records"][1]["id"], "R1");
+    assert_eq!(row["coverage"]["records"][2]["id"], "R2");
+    assert_eq!(row["coverage"]["records"][0]["ordinal"], 0);
+    assert_eq!(row["coverage"]["records"][1]["ordinal"], 1);
+    assert_eq!(row["coverage"]["records"][2]["ordinal"], 2);
+    assert_eq!(row["coverage"]["records"][0]["label"], "yes");
+    assert_eq!(row["coverage"]["records"][1]["label"], "yes");
+    assert_eq!(row["coverage"]["records"][2]["label"], "no");
+    assert_eq!(
+        row["coverage"]["records"][0]["evidence_sha256"],
+        row["coverage"]["records"][1]["evidence_sha256"]
+    );
+    assert_eq!(row["calls"]["root_turns"], 1);
+    assert_eq!(row["calls"]["planner_probe_calls"], 0);
+    assert_eq!(row["calls"]["monty_sub_call_count"], 2);
+    assert_eq!(row["calls"]["semantic_child_call_count"], 2);
+    assert_eq!(row["invocation_id"].as_str().unwrap().len(), 64);
+    assert_eq!(row["request_id_sha256"].as_str().unwrap().len(), 64);
+    assert!(!receipt_text.contains("\\\"kind\\\""));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(&receipt).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+
+    let stdin_receipt = private.join("stdin-receipt.json");
+    let stdin_output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "receipt-case",
+            "-f",
+            "-",
+            "--input-format",
+            "jsonl",
+            "--receipt",
+            stdin_receipt.to_str().unwrap(),
+        ],
+        source,
+    );
+    assert!(
+        stdin_output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&stdin_output.stdout),
+        String::from_utf8_lossy(&stdin_output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&stdin_output.stdout).trim(), "2:1");
+    let stdin_row: serde_json::Value =
+        serde_json::from_slice(&fs::read(&stdin_receipt).unwrap()).unwrap();
+    assert_eq!(stdin_row["input"], row["input"]);
+    assert_eq!(stdin_row["coverage"], row["coverage"]);
+    assert_ne!(stdin_row["invocation_id"], row["invocation_id"]);
+    assert_eq!(fs::read_to_string(&child_calls).unwrap(), "xxxx");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_jsonl_receipt_rejects_missing_coverage_and_tampering_without_artifacts() {
+    for (case, root_code, expected) in [
+        (
+            "missing",
+            "FINAL('unreceipted')",
+            "authoritative JSONL record coverage is incomplete",
+        ),
+        (
+            "tampered",
+            "items=[]\nfor record in records:\n    items.append({\"id\":record[\"id\"],\"evidence\":record[\"evidence\"]})\nitems[0][\"evidence\"]='{\"x\":9}'\nsemantic_manifest_records(items,'synthetic judgment',['yes','no'])\nFINAL('bad')",
+            "payload mismatch",
+        ),
+    ] {
+        let t = temp(&format!("solo-jsonl-receipt-{case}"));
+        let private = private_dir(&t, "private");
+        let child_marker = t.join("child-entered");
+        let mock = t.join("receipt-failure.py");
+        fs::write(
+            &mock,
+            format!(
+                r#"import os, pathlib
+if os.getenv("RLM_DEPTH") == "0":
+    print("```python\n" + {root_code:?} + "\n```")
+else:
+    pathlib.Path({child_marker:?}).write_text("entered")
+    print("unexpected")
+"#,
+                root_code = root_code,
+                child_marker = child_marker,
+            ),
+        )
+        .unwrap();
+        let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 10, 4);
+        let input = t.join("records.jsonl");
+        fs::write(&input, "{\"x\":1}\n{\"x\":2}\n").unwrap();
+        let receipt = private.join("receipt.json");
+        let output = run(
+            &t,
+            &cfg,
+            &[
+                "solo",
+                "receipt-failure-case",
+                "-f",
+                input.to_str().unwrap(),
+                "--input-format",
+                "jsonl",
+                "--receipt",
+                receipt.to_str().unwrap(),
+            ],
+            "",
+        );
+        assert!(!output.status.success(), "{case}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(expected),
+            "{case}: stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!receipt.exists(), "{case}: receipt was published");
+        assert!(!child_marker.exists(), "{case}: semantic child was entered");
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
+fn solo_jsonl_receipt_destination_preflight_is_provider_free_and_nonoverwriting() {
+    let t = temp("solo-jsonl-receipt-destination");
+    let private = private_dir(&t, "private");
+    let provider_marker = t.join("provider-entered");
+    let mock = t.join("provider.py");
+    fs::write(
+        &mock,
+        format!(
+            "import pathlib\npathlib.Path({provider_marker:?}).write_text('entered')\nprint('unexpected')\n"
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 10, 4);
+    let input = t.join("records.jsonl");
+    fs::write(&input, "{}\n").unwrap();
+    let receipt = private.join("receipt.json");
+    fs::write(&receipt, "existing\n").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "receipt-destination-case",
+            "-f",
+            input.to_str().unwrap(),
+            "--input-format",
+            "jsonl",
+            "--receipt",
+            receipt.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("refusing to replace existing receipt"),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(&receipt).unwrap(), "existing\n");
+    assert!(!provider_marker.exists());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let public = t.join("public");
+        fs::create_dir(&public).unwrap();
+        fs::set_permissions(&public, fs::Permissions::from_mode(0o755)).unwrap();
+        let public_receipt = public.join("receipt.json");
+        let output = run(
+            &t,
+            &cfg,
+            &[
+                "solo",
+                "receipt-public-parent-case",
+                "-f",
+                input.to_str().unwrap(),
+                "--input-format",
+                "jsonl",
+                "--receipt",
+                public_receipt.to_str().unwrap(),
+            ],
+            "",
+        );
+        assert!(!output.status.success());
+        assert!(!public_receipt.exists());
+        assert!(!provider_marker.exists());
+    }
+    fs::remove_dir_all(t).unwrap();
 }
 
 #[test]
@@ -8335,7 +8636,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
         ("kill", "Usage: az kill <session-id>"),
         (
             "solo",
-            "Usage: az solo <question> (-f <path|-> | --repo <directory>) [--input-format <text|jsonl>] [--model <model>] [--sub-model <model>]",
+            "Usage: az solo <question> (-f <path|-> | --repo <directory>) [--input-format <text|jsonl>] [--receipt <absolute-path>] [--model <model>] [--sub-model <model>]",
         ),
         (
             "doctor",

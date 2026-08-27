@@ -9,7 +9,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     env,
     fs::{self, File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
@@ -1390,6 +1390,146 @@ pub(crate) fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
     }
     bail!("could not allocate private temporary file")
 }
+
+pub fn validate_private_receipt_destination(path: &Path) -> Result<()> {
+    if !path.is_absolute() || path.file_name().is_none() {
+        bail!("receipt path must be an absolute file path")
+    }
+    let parent_path = path
+        .parent()
+        .ok_or_else(|| anyhow!("receipt path has no parent directory"))?;
+    let parent = open_private_directory(parent_path)?;
+    validate_private_directory(&parent, parent_path)?;
+    match fs::symlink_metadata(path) {
+        Ok(_) => bail!("refusing to replace existing receipt: {}", path.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+    Ok(())
+}
+
+fn atomic_write_new(path: &Path, data: &[u8]) -> Result<()> {
+    validate_private_receipt_destination(path)?;
+    let parent_path = path.parent().expect("validated receipt parent");
+    let parent = open_private_directory(parent_path)?;
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    for salt in 0..100u8 {
+        let tmp = path.with_extension(format!("receipt-tmp-{}-{nonce}-{salt}", std::process::id()));
+        let mut file = match create_private_file(&tmp) {
+            Ok(file) => file,
+            Err(error)
+                if error
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists) =>
+            {
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        if let Err(error) = file.write_all(data).and_then(|()| file.sync_all()) {
+            remove_bound_file(&tmp, &file);
+            return Err(error.into());
+        }
+        if let Err(error) = validate_private_file(&file, &tmp) {
+            remove_bound_file(&tmp, &file);
+            return Err(error);
+        }
+        drop(file);
+        match fs::hard_link(&tmp, path) {
+            Ok(()) => {
+                if let Err(error) = fs::remove_file(&tmp) {
+                    let _ = fs::remove_file(path);
+                    return Err(error.into());
+                }
+                #[cfg(unix)]
+                if let Err(error) = parent.sync_all() {
+                    let _ = fs::remove_file(path);
+                    let _ = parent.sync_all();
+                    return Err(error.into());
+                }
+                return Ok(());
+            }
+            Err(error) => {
+                let _ = fs::remove_file(&tmp);
+                if error.kind() == std::io::ErrorKind::AlreadyExists {
+                    bail!("refusing to replace existing receipt: {}", path.display())
+                }
+                return Err(error.into());
+            }
+        }
+    }
+    bail!("could not allocate private receipt temporary file")
+}
+
+pub fn write_private_json_receipt<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+    let mut encoded = serde_json::to_vec_pretty(value)?;
+    encoded.push(b'\n');
+    atomic_write_new(path, &encoded)
+}
+
+#[cfg(test)]
+mod receipt_writer_tests {
+    use super::*;
+
+    #[test]
+    fn concurrent_receipt_publication_has_one_complete_nonoverwriting_winner() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = env::temp_dir().join(format!(
+            "azdaja-receipt-writer-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let path = Arc::new(root.join("receipt.json"));
+        let barrier = Arc::new(std::sync::Barrier::new(8));
+        let mut workers = Vec::new();
+        for writer in 0..8u8 {
+            let path = Arc::clone(&path);
+            let barrier = Arc::clone(&barrier);
+            workers.push(thread::spawn(move || {
+                barrier.wait();
+                write_private_json_receipt(&path, &serde_json::json!({ "writer": writer }))
+            }));
+        }
+        let results = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        for error in results.into_iter().filter_map(Result::err) {
+            assert!(
+                error
+                    .to_string()
+                    .contains("refusing to replace existing receipt"),
+                "{error:#}"
+            );
+        }
+        let value: serde_json::Value =
+            serde_json::from_slice(&fs::read(path.as_ref()).unwrap()).unwrap();
+        assert!(value["writer"].as_u64().is_some());
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(path.as_ref()).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
 fn valid_sid(s: &str) -> bool {
     s.len() == 16
         && s.bytes()
@@ -2206,7 +2346,7 @@ fn fnv1a(bytes: &[u8]) -> u64 {
     h
 }
 
-pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
+pub fn sha256_hex(bytes: &[u8]) -> String {
     const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
         0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
@@ -3575,6 +3715,7 @@ pub struct ExecResult {
     /// Gross monotonic wall spent inside logical model-call batches during this cell.
     pub sub_call_wall_ns: u128,
     pub semantic_projection: Option<SemanticProjectionProvenance>,
+    pub record_coverage: Option<RecordCoverageProvenance>,
     pub failure_kind: ExecFailureKind,
     pub failure_line: Option<String>,
 }
@@ -3975,6 +4116,139 @@ struct AuthoritativeRecord {
     sha256: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RecordCoverageEntry {
+    pub ordinal: usize,
+    pub id: String,
+    pub evidence_sha256: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RecordCoverageProvenance {
+    pub record_count: usize,
+    pub coverage_sha256: String,
+    pub records: Vec<RecordCoverageEntry>,
+}
+
+#[derive(Default)]
+struct RecordCoverageRegistry {
+    expected: Option<Vec<(String, String)>>,
+    completed: Option<RecordCoverageProvenance>,
+}
+
+impl RecordCoverageRegistry {
+    fn begin(
+        &mut self,
+        authoritative: Option<&[AuthoritativeRecord]>,
+        items: &MontyObject,
+    ) -> Result<MontyObject> {
+        let Some(authoritative) = authoritative else {
+            return Ok(items.clone());
+        };
+        if self.expected.is_some() || self.completed.is_some() {
+            bail!("authoritative record manifest may be called only once per cell")
+        }
+        let MontyObject::List(items) = items else {
+            bail!("authoritative record manifest items must be a list")
+        };
+        if items.len() != authoritative.len() {
+            bail!("authoritative record manifest exact cardinality mismatch")
+        }
+        let mut expected = Vec::with_capacity(authoritative.len());
+        for (ordinal, (item, record)) in items.iter().zip(authoritative).enumerate() {
+            let MontyObject::Dict(fields) = item else {
+                bail!("authoritative record manifest item {ordinal} must be a dictionary")
+            };
+            if fields.len() != 2 {
+                bail!(
+                    "authoritative record manifest item {ordinal} must have exactly id and evidence"
+                )
+            }
+            let mut id = None;
+            let mut evidence = None;
+            for (key, value) in fields {
+                let MontyObject::String(key) = key else {
+                    bail!("authoritative record manifest item {ordinal} keys must be strings")
+                };
+                let MontyObject::String(value) = value else {
+                    bail!("authoritative record manifest item {ordinal} values must be strings")
+                };
+                match key.as_str() {
+                    "id" if id.replace(value.as_str()).is_none() => {}
+                    "evidence" if evidence.replace(value.as_str()).is_none() => {}
+                    "id" | "evidence" => {
+                        bail!("authoritative record manifest item {ordinal} has duplicate fields")
+                    }
+                    _ => bail!("authoritative record manifest item {ordinal} has unknown fields"),
+                }
+            }
+            if id != Some(record.id.as_str()) {
+                bail!("authoritative record manifest identity mismatch at ordinal {ordinal}")
+            }
+            if evidence != Some(record.evidence.as_str()) {
+                bail!("authoritative record manifest payload mismatch at ordinal {ordinal}")
+            }
+            expected.push((record.id.clone(), record.sha256.clone()));
+        }
+        self.expected = Some(expected);
+        Ok(MontyObject::List(items.clone()))
+    }
+
+    fn complete(&mut self, manifest: &MontyObject) -> Result<MontyObject> {
+        let Some(expected) = self.expected.take() else {
+            return Ok(manifest.clone());
+        };
+        if self.completed.is_some() {
+            bail!("authoritative record manifest completion may be recorded only once")
+        }
+        let MontyObject::Dict(entries) = manifest else {
+            bail!("authoritative record manifest must return a dictionary")
+        };
+        if entries.len() != expected.len() {
+            bail!("authoritative record manifest output cardinality mismatch")
+        }
+        let mut labels = HashMap::with_capacity(entries.len());
+        for (key, value) in entries {
+            let (MontyObject::String(id), MontyObject::String(label)) = (key, value) else {
+                bail!("authoritative record manifest output entries must be string pairs")
+            };
+            if labels.insert(id.as_str(), label.as_str()).is_some() {
+                bail!("authoritative record manifest output contains duplicate IDs")
+            }
+        }
+        let mut records = Vec::with_capacity(expected.len());
+        for (ordinal, (id, evidence_sha256)) in expected.into_iter().enumerate() {
+            let label = labels
+                .remove(id.as_str())
+                .ok_or_else(|| anyhow!("authoritative record manifest output coverage mismatch"))?;
+            records.push(RecordCoverageEntry {
+                ordinal,
+                id,
+                evidence_sha256,
+                label: label.to_owned(),
+            });
+        }
+        if !labels.is_empty() {
+            bail!("authoritative record manifest output contains unknown IDs")
+        }
+        let mut material = b"azdaja-record-coverage-v1\0".to_vec();
+        for record in &records {
+            material.extend_from_slice(&(record.ordinal as u64).to_be_bytes());
+            for field in [&record.id, &record.evidence_sha256, &record.label] {
+                material.extend_from_slice(&(field.len() as u64).to_be_bytes());
+                material.extend_from_slice(field.as_bytes());
+            }
+        }
+        self.completed = Some(RecordCoverageProvenance {
+            record_count: records.len(),
+            coverage_sha256: sha256_hex(&material),
+            records,
+        });
+        Ok(manifest.clone())
+    }
+}
+
 fn parse_jsonl_records(source: &str) -> Result<Vec<AuthoritativeRecord>> {
     let bytes = source.as_bytes();
     for (index, byte) in bytes.iter().enumerate() {
@@ -4355,6 +4629,7 @@ struct CellCapabilities<'a> {
     default_model: &'a str,
     allow_relevance: bool,
     authoritative_source: Option<&'a str>,
+    authoritative_records: Option<&'a [AuthoritativeRecord]>,
 }
 
 struct ExternalState<'a> {
@@ -4368,6 +4643,7 @@ struct ExternalState<'a> {
     semantic_classification_call_count: &'a mut usize,
     semantic_adjudication_call_count: &'a mut usize,
     exact_line_ledgers: &'a mut ExactLineLedgerRegistry,
+    record_coverage: &'a mut RecordCoverageRegistry,
 }
 
 type RunCellOutcome = (
@@ -4381,6 +4657,7 @@ type RunCellOutcome = (
     Option<ExcType>,
     Option<String>,
     Option<SemanticProjectionProvenance>,
+    Option<RecordCoverageProvenance>,
 );
 
 fn model_call_entered_turn_limit(name: &str) -> u32 {
@@ -4535,6 +4812,20 @@ fn external(
                 bail!("private projected semantic completion requires one manifest")
             }
             state.exact_line_ledgers.complete(&args[0])
+        }
+        "_az_record_coverage_begin" if capabilities.allow_relevance => {
+            if args.len() != 1 || !kwargs.is_empty() {
+                bail!("private authoritative record coverage requires one item list")
+            }
+            state
+                .record_coverage
+                .begin(capabilities.authoritative_records, &args[0])
+        }
+        "_az_record_coverage_complete" if capabilities.allow_relevance => {
+            if args.len() != 1 || !kwargs.is_empty() {
+                bail!("private authoritative record completion requires one manifest")
+            }
+            state.record_coverage.complete(&args[0])
         }
         "exact_line_records" if capabilities.allow_relevance => {
             if args.len() != 2 || !kwargs.is_empty() {
@@ -4788,6 +5079,7 @@ fn run_cell(
     allow_relevance: bool,
     allow_projection_private: bool,
     authoritative_source: Option<&str>,
+    authoritative_records: Option<&[AuthoritativeRecord]>,
 ) -> RunCellOutcome {
     repl.tracker_mut()
         .set_max_duration(Duration::from_secs(cfg.cell_timeout));
@@ -4805,6 +5097,8 @@ fn run_cell(
         if allow_projection_private {
             input_names.push("_az_project_selected");
             input_names.push("_az_projection_complete");
+            input_names.push("_az_record_coverage_begin");
+            input_names.push("_az_record_coverage_complete");
         }
         input_names.push("lexical_relevance");
         input_names.push("_az_llm_batch_fresh_once");
@@ -4832,6 +5126,7 @@ fn run_cell(
     let mut semantic_classification_call_count = 0usize;
     let mut semantic_adjudication_call_count = 0usize;
     let mut exact_line_ledgers = ExactLineLedgerRegistry::default();
+    let mut record_coverage = RecordCoverageRegistry::default();
     let mut progress = match repl.feed_start(code, inputs, PrintWriter::Callback(&mut printed)) {
         Ok(p) => p,
         Err(e) => {
@@ -4849,6 +5144,7 @@ fn run_cell(
                 Some(exception),
                 failure_line,
                 exact_line_ledgers.projection,
+                record_coverage.completed,
             );
         }
     };
@@ -4877,6 +5173,7 @@ fn run_cell(
                     None,
                     None,
                     exact_line_ledgers.projection,
+                    record_coverage.completed,
                 );
             }
             ReplProgress::FunctionCall(call) => {
@@ -4889,6 +5186,7 @@ fn run_cell(
                         default_model,
                         allow_relevance,
                         authoritative_source,
+                        authoritative_records,
                     },
                     ExternalState {
                         final_out: &mut final_out,
@@ -4901,6 +5199,7 @@ fn run_cell(
                         semantic_classification_call_count: &mut semantic_classification_call_count,
                         semantic_adjudication_call_count: &mut semantic_adjudication_call_count,
                         exact_line_ledgers: &mut exact_line_ledgers,
+                        record_coverage: &mut record_coverage,
                     },
                 )
                 .map_err(MontyException::runtime_error);
@@ -4931,6 +5230,7 @@ fn run_cell(
                             Some(exception),
                             failure_line,
                             exact_line_ledgers.projection,
+                            record_coverage.completed,
                         );
                     }
                 }
@@ -4961,6 +5261,7 @@ fn run_cell(
                         Some(exception),
                         failure_line,
                         exact_line_ledgers.projection,
+                        record_coverage.completed,
                     );
                 }
             },
@@ -4990,6 +5291,7 @@ fn run_cell(
                         Some(exception),
                         failure_line,
                         exact_line_ledgers.projection,
+                        record_coverage.completed,
                     );
                 }
             },
@@ -5006,6 +5308,7 @@ fn run_cell(
                     None,
                     None,
                     exact_line_ledgers.projection,
+                    record_coverage.completed,
                 );
             }
         }
@@ -5452,6 +5755,12 @@ impl SoloSession {
     pub fn authoritative_record_count(&self) -> Option<usize> {
         self.authoritative_records.as_ref().map(Vec::len)
     }
+    pub fn authoritative_source_sha256(&self) -> Option<String> {
+        self.authoritative_records
+            .as_ref()
+            .zip(self.authoritative_source.as_ref())
+            .map(|(_, source)| sha256_hex(source.as_bytes()))
+    }
     pub fn structural_sample(&self) -> Result<&str> {
         self.structural_sample
             .as_deref()
@@ -5500,6 +5809,7 @@ impl SoloSession {
             mut exception,
             mut failure_line,
             semantic_projection,
+            record_coverage,
         ) = run_cell(
             repl,
             code,
@@ -5508,6 +5818,7 @@ impl SoloSession {
             true,
             allow_projection_private,
             self.authoritative_source.as_deref(),
+            self.authoritative_records.as_deref(),
         );
         if provider_interrupted() {
             self.repl = Some(repl);
@@ -5552,6 +5863,7 @@ impl SoloSession {
             semantic_calls,
             sub_call_wall_ns: sub_call_wall.as_nanos(),
             semantic_projection,
+            record_coverage,
             failure_kind: exec_failure_kind(exception),
             failure_line,
         })
@@ -5590,7 +5902,8 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         mut exception,
         mut failure_line,
         semantic_projection,
-    ) = run_cell(repl, code, cfg, model, false, false, None);
+        record_coverage,
+    ) = run_cell(repl, code, cfg, model, false, false, None, None);
     if provider_interrupted() {
         bail!("provider interrupted")
     }
@@ -5640,6 +5953,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         semantic_calls,
         sub_call_wall_ns: sub_call_wall.as_nanos(),
         semantic_projection,
+        record_coverage,
         failure_kind: exec_failure_kind(exception),
         failure_line,
     })
@@ -11718,13 +12032,14 @@ mod lexical_relevance_tests {
         let cfg = Config::default();
         let mut session = SoloSession::new(&cfg, None).unwrap();
         let repl = session.repl.take().unwrap();
-        let (_, _, success, _, calls, _, _, failure, _, _) = run_cell(
+        let (_, _, success, _, calls, _, _, failure, _, _, _) = run_cell(
             repl,
             "lexical_relevance('source', 'query', 4000)",
             &cfg,
             &cfg.default_model,
             false,
             false,
+            None,
             None,
         );
         assert!(!success);
@@ -11798,6 +12113,44 @@ mod exact_line_record_tests {
                 _ => panic!("exact_line_records returned a non-string"),
             })
             .collect()
+    }
+
+    fn record_manifest_items(records: &[AuthoritativeRecord]) -> MontyObject {
+        MontyObject::List(
+            records
+                .iter()
+                .map(|record| {
+                    MontyObject::Dict(
+                        vec![
+                            (
+                                MontyObject::String("id".into()),
+                                MontyObject::String(record.id.clone()),
+                            ),
+                            (
+                                MontyObject::String("evidence".into()),
+                                MontyObject::String(record.evidence.clone()),
+                            ),
+                        ]
+                        .into(),
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    fn record_manifest_output(entries: &[(&str, &str)]) -> MontyObject {
+        MontyObject::Dict(
+            entries
+                .iter()
+                .map(|(id, label)| {
+                    (
+                        MontyObject::String((*id).into()),
+                        MontyObject::String((*label).into()),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .into(),
+        )
     }
 
     #[test]
@@ -11910,6 +12263,146 @@ mod exact_line_record_tests {
                 .unwrap_err()
                 .to_string()
                 .contains("JSONL record limit exceeded")
+        );
+    }
+
+    #[test]
+    fn authoritative_record_coverage_binds_every_occurrence_and_label_in_source_order() {
+        let records = parse_jsonl_records("{\"x\":1}\n{\"x\":1}\n{\"x\":2}").unwrap();
+        let items = record_manifest_items(&records);
+        let mut registry = RecordCoverageRegistry::default();
+        assert_eq!(registry.begin(Some(&records), &items).unwrap(), items);
+
+        let manifest = record_manifest_output(&[("R2", "no"), ("R0", "yes"), ("R1", "yes")]);
+        assert_eq!(registry.complete(&manifest).unwrap(), manifest);
+        let coverage = registry.completed.unwrap();
+        assert_eq!(coverage.record_count, 3);
+        assert_eq!(
+            coverage
+                .records
+                .iter()
+                .map(|record| (record.id.as_str(), record.label.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("R0", "yes"), ("R1", "yes"), ("R2", "no")]
+        );
+        assert_eq!(
+            coverage.records[0].evidence_sha256,
+            coverage.records[1].evidence_sha256
+        );
+        assert_eq!(coverage.coverage_sha256.len(), 64);
+    }
+
+    #[test]
+    fn authoritative_record_coverage_rejects_omission_reorder_tampering_and_unknown_output() {
+        let records = parse_jsonl_records("{\"x\":1}\n{\"x\":2}").unwrap();
+        let MontyObject::List(items) = record_manifest_items(&records) else {
+            unreachable!()
+        };
+
+        let mut registry = RecordCoverageRegistry::default();
+        let omitted = MontyObject::List(vec![items[0].clone()]);
+        assert!(
+            registry
+                .begin(Some(&records), &omitted)
+                .unwrap_err()
+                .to_string()
+                .contains("cardinality mismatch")
+        );
+
+        let mut registry = RecordCoverageRegistry::default();
+        let reordered = MontyObject::List(vec![items[1].clone(), items[0].clone()]);
+        assert!(
+            registry
+                .begin(Some(&records), &reordered)
+                .unwrap_err()
+                .to_string()
+                .contains("identity mismatch")
+        );
+
+        let mut registry = RecordCoverageRegistry::default();
+        let duplicated = MontyObject::List(vec![items[0].clone(), items[0].clone()]);
+        assert!(
+            registry
+                .begin(Some(&records), &duplicated)
+                .unwrap_err()
+                .to_string()
+                .contains("identity mismatch")
+        );
+
+        let mut tampered = items.clone();
+        tampered[0] = MontyObject::Dict(
+            vec![
+                (
+                    MontyObject::String("id".into()),
+                    MontyObject::String("R0".into()),
+                ),
+                (
+                    MontyObject::String("evidence".into()),
+                    MontyObject::String("{\"x\":9}".into()),
+                ),
+            ]
+            .into(),
+        );
+        let mut registry = RecordCoverageRegistry::default();
+        assert!(
+            registry
+                .begin(Some(&records), &MontyObject::List(tampered))
+                .unwrap_err()
+                .to_string()
+                .contains("payload mismatch")
+        );
+
+        let mut registry = RecordCoverageRegistry::default();
+        registry
+            .begin(Some(&records), &MontyObject::List(items))
+            .unwrap();
+        assert!(
+            registry
+                .complete(&record_manifest_output(&[("R0", "yes"), ("RX", "no")]))
+                .unwrap_err()
+                .to_string()
+                .contains("coverage mismatch")
+        );
+
+        let exact_items = record_manifest_items(&records);
+        let mut registry = RecordCoverageRegistry::default();
+        registry.begin(Some(&records), &exact_items).unwrap();
+        assert!(
+            registry
+                .begin(Some(&records), &exact_items)
+                .unwrap_err()
+                .to_string()
+                .contains("only once")
+        );
+
+        let mut registry = RecordCoverageRegistry::default();
+        registry.begin(Some(&records), &exact_items).unwrap();
+        assert!(
+            registry
+                .complete(&record_manifest_output(&[("R0", "yes"), ("R0", "no")]))
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate IDs")
+        );
+
+        let mut registry = RecordCoverageRegistry::default();
+        registry.begin(Some(&records), &exact_items).unwrap();
+        let malformed = MontyObject::Dict(
+            vec![
+                (
+                    MontyObject::String("R0".into()),
+                    MontyObject::String("yes".into()),
+                ),
+                (MontyObject::String("R1".into()), MontyObject::Int(1)),
+            ]
+            .into(),
+        );
+        assert!(
+            registry
+                .complete(&malformed)
+                .unwrap_err()
+                .to_string()
+                .contains("string pairs")
         );
     }
 
@@ -12028,13 +12521,14 @@ FINAL(len(selected))"#;
         let cfg = Config::default();
         let mut session = SoloSession::new(&cfg, None).unwrap();
         let repl = session.repl.take().unwrap();
-        let (_, _, success, _, calls, _, _, failure, _, _) = run_cell(
+        let (_, _, success, _, calls, _, _, failure, _, _, _) = run_cell(
             repl,
             "exact_line_records('Row: x', 'Row: ')",
             &cfg,
             &cfg.default_model,
             false,
             false,
+            None,
             None,
         );
         assert!(!success);
@@ -12264,13 +12758,14 @@ mod exact_line_ledger_projection_tests {
         let mut repl = MontyRepl::new("ordinary", tracker, CompileOptions::default());
         repl.feed_run(PRELUDE, vec![], PrintWriter::Disabled)
             .unwrap();
-        let (_, _, success, _, calls, _, _, failure, _, provenance) = run_cell(
+        let (_, _, success, _, calls, _, _, failure, _, provenance, _) = run_cell(
             repl,
             "exact_line_ledger('Row: x', 'Row: ')",
             &cfg,
             &cfg.default_model,
             false,
             false,
+            None,
             None,
         );
         assert!(!success);
