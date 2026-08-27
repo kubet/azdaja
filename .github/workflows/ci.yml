@@ -16,7 +16,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-14]
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -95,8 +101,9 @@ jobs:
       - if: runner.os == 'Linux'
         run: python3 bench/perf.py --binary target/release/azdaja --sizes-mb 1 --repeats 3
 
-      # Manual runs validate and retain exact candidate bytes for later platform validation.
-      # These artifacts are not releases and may not be bound into site/install.
+      # Manual runs validate and retain exact candidate bytes for reviewed promotion.
+      # These artifacts are not releases and must never be bound directly into site/install.
+      # They may only be promoted by release/promote-standalone-assets.sh after review.
       - name: Validate release candidate install, plain help, and 50 MiB path
         if: github.event_name == 'workflow_dispatch'
         shell: bash
@@ -239,14 +246,13 @@ jobs:
           HOME="$home" PATH="$guard:$PATH" "$installed" uninstall claude
           test ! -e "$home/.claude/skills/azdaja"
 
-      - name: Package unvalidated candidate
+      - name: Package standalone candidate and receipt
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         env:
-          AZDAJA_COMMIT: ${{ github.sha }}
+          AZDAJA_SOURCE_SHA: ${{ github.sha }}
           AZDAJA_RUN_ID: ${{ github.run_id }}
           AZDAJA_RUN_ATTEMPT: ${{ github.run_attempt }}
-          AZDAJA_RUNNER_OS: ${{ runner.os }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -255,73 +261,62 @@ jobs:
           import os
           import pathlib
           import shutil
+          import struct
           import subprocess
-          import tarfile
 
           source = pathlib.Path("target/release/azdaja")
           host = subprocess.check_output(["rustc", "-vV"], text=True)
           host = next(line.split(": ", 1)[1] for line in host.splitlines() if line.startswith("host: "))
-          name = f"azdaja-{os.environ['AZDAJA_COMMIT']}-{host}"
+          assets = {
+              "aarch64-apple-darwin": "azdaja-v0.1.14-darwin-arm64",
+              "x86_64-apple-darwin": "azdaja-v0.1.14-darwin-x86_64",
+              "x86_64-unknown-linux-gnu": "azdaja-v0.1.14-linux-x86_64",
+          }
+          if host not in assets:
+              raise SystemExit(f"unsupported standalone target: {host}")
+          asset_name = assets[host]
           dist = pathlib.Path("dist")
-          payload = pathlib.Path("candidate-payload")
           dist.mkdir(exist_ok=False)
-          payload.mkdir(exist_ok=False)
-          target = payload / name
+          target = dist / asset_name
           shutil.copy2(source, target)
-          shutil.copy2("LICENSE", payload / "LICENSE")
-          shutil.copy2("THIRD-PARTY-NOTICES.md", payload / "THIRD-PARTY-NOTICES.md")
-          digest = hashlib.sha256(target.read_bytes()).hexdigest()
-          payload_names = [name, "LICENSE", "THIRD-PARTY-NOTICES.md"]
-          (payload / "SHA256SUMS").write_text("".join(
-              f"{hashlib.sha256((payload / payload_name).read_bytes()).hexdigest()}  {payload_name}\n"
-              for payload_name in payload_names
-          ))
+          data = target.read_bytes()
+          if host == "x86_64-unknown-linux-gnu":
+              architecture_valid = (
+                  len(data) >= 20 and data[:7] == b"\x7fELF\x02\x01\x01"
+                  and struct.unpack("<H", data[18:20])[0] == 0x3E
+              )
+          else:
+              expected_cpu = 0x0100000C if host == "aarch64-apple-darwin" else 0x01000007
+              architecture_valid = (
+                  len(data) >= 8 and data[:4] == b"\xcf\xfa\xed\xfe"
+                  and struct.unpack("<I", data[4:8])[0] == expected_cpu
+              )
+          if not architecture_valid:
+              raise SystemExit(f"binary architecture validation failed for {host}")
+          reported_version = subprocess.check_output([str(source), "--version"], text=True).strip()
+          if reported_version != "azdaja 0.1.14":
+              raise SystemExit(f"unexpected binary version: {reported_version}")
           receipt = {
               "schema_version": 1,
-              "record_type": "azdaja_unvalidated_release_candidate",
-              "status": "UNVALIDATED_NOT_FOR_PUBLICATION",
-              "commit": os.environ["AZDAJA_COMMIT"],
-              "host": host,
-              "runner_os": os.environ["AZDAJA_RUNNER_OS"],
-              "github_run_id": os.environ["AZDAJA_RUN_ID"],
-              "github_run_attempt": os.environ["AZDAJA_RUN_ATTEMPT"],
-              "binary": {"name": name, "bytes": target.stat().st_size, "sha256": digest},
-              "version": subprocess.check_output([str(target), "--version"], text=True).strip(),
-              "checks": [
-                  "fmt",
-                  "clippy",
-                  "locked-tests",
-                  "locked-release-build",
-                  "doctor-caps",
-                  "hash-bound-loopback-http-site-install",
-                  "alias-and-canonical-exact-five-line-plain-help",
-                  "NO_COLOR-exact-five-line-plain-help",
-                  "provider-command-guard-untouched",
-                  "installed-release-binary-three-file-50MiB",
-                  "custom-config-preserved-on-reinstall",
-                  "managed-uninstall-cleanup",
-              ],
+              "source_sha": os.environ["AZDAJA_SOURCE_SHA"],
+              "run_id": int(os.environ["AZDAJA_RUN_ID"]),
+              "run_attempt": int(os.environ["AZDAJA_RUN_ATTEMPT"]),
+              "target": host,
+              "asset_name": asset_name,
+              "bytes": len(data),
+              "sha256": hashlib.sha256(data).hexdigest(),
+              "version": "0.1.14",
+              "architecture_validation": True,
               "publication_authorized": False,
-              "limitations": [
-                  "no public installer receipt",
-                  "no live OAuth doctor",
-                  "scripted installed-binary cases do not prove live-model planning",
-              ],
           }
-          (payload / "candidate-receipt.json").write_text(
+          (dist / "candidate-receipt.json").write_text(
               json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n"
           )
-          archive = dist / f"{name}.tar.gz"
-          with tarfile.open(archive, "w:gz") as bundle:
-              for item in sorted(payload.iterdir()):
-                  bundle.add(item, arcname=item.name)
-          archive_digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-          (dist / "ARCHIVE_SHA256").write_text(f"{archive_digest}  {archive.name}\n")
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: github.event_name == 'workflow_dispatch'
         with:
-          name: azdaja-candidate-${{ runner.os }}-${{ github.sha }}-${{ github.run_attempt }}
+          name: azdaja-candidate-${{ matrix.target }}
           path: dist/
           if-no-files-found: error
           compression-level: 0

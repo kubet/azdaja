@@ -1,0 +1,194 @@
+name: Publish reviewed release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Reviewed semantic version without the v prefix
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+concurrency:
+  group: publish-release-v${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: v${{ inputs.version }}
+          fetch-depth: 0
+
+      - name: Validate immutable tag, exact-head CI, promotion receipt, and payloads
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version="$VERSION_INPUT"
+          printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+          tag="v$version"
+          release_dir="site/releases/$tag"
+          promotion="release/$tag-promotion.json"
+          note="release/$tag.md"
+          commit="$(git rev-parse HEAD^{commit})"
+          test "$(git rev-parse "$tag^{commit}")" = "$commit"
+          test "$(python3 - <<'PY'
+          import pathlib, tomllib
+          print(tomllib.loads(pathlib.Path('Cargo.toml').read_text())['package']['version'])
+          PY
+          )" = "$version"
+          test -d "$release_dir"
+          test -f "$promotion"
+          test -f "$note"
+          test -z "$(find "$release_dir" -type l -print -quit)"
+
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$commit" \
+            --event push --limit 20 \
+            --json databaseId,headBranch,headSha,status,conclusion > "$RUNNER_TEMP/ci-runs.json"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow source-install-integrity.yml \
+            --commit "$commit" --event push --limit 20 \
+            --json databaseId,headBranch,headSha,status,conclusion > "$RUNNER_TEMP/source-runs.json"
+
+          python3 - "$version" "$commit" "$promotion" "$release_dir" \
+            "$RUNNER_TEMP/ci-runs.json" "$RUNNER_TEMP/source-runs.json" <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import re
+          import sys
+
+          version, commit, promotion_path, release_dir, ci_path, source_path = sys.argv[1:]
+          tag = f"v{version}"
+          release = pathlib.Path(release_dir)
+          receipt = json.loads(pathlib.Path(promotion_path).read_text())
+          assert receipt["schema_version"] == 1
+          assert receipt["record_type"] == "azdaja_release_promotion"
+          assert receipt["version"] == version
+          assert receipt["github_workflow"] == "ci.yml"
+          assert receipt["workflow_event"] == "workflow_dispatch"
+          assert receipt["workflow_conclusion"] == "success"
+          assert receipt["publication_authorized"] is True
+          assert re.fullmatch(r"[0-9a-f]{40}", receipt["source_commit"])
+          assert receipt["source_commit"] != commit
+          assert receipt["github_run_id"] > 0
+          assert receipt["github_run_attempt"] > 0
+          expected_suffixes = ["darwin-arm64", "darwin-x86_64", "linux-x86_64"]
+          assert len(receipt["candidates"]) == len(expected_suffixes)
+          for candidate, suffix in zip(receipt["candidates"], expected_suffixes, strict=True):
+              asset = f"azdaja-v{version}-{suffix}"
+              path = release / asset
+              assert candidate["asset"] == asset
+              assert candidate["artifact"] == (
+                  f"azdaja-standalone-{suffix}-{receipt['source_commit']}-"
+                  f"{receipt['github_run_attempt']}"
+              )
+              assert path.is_file() and not path.is_symlink()
+              assert candidate["bytes"] == path.stat().st_size
+              assert candidate["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+
+          def successful_exact_runs(path):
+              runs = json.loads(pathlib.Path(path).read_text())
+              return {
+                  run["headBranch"]
+                  for run in runs
+                  if run["headSha"] == commit
+                  and run["status"] == "completed"
+                  and run["conclusion"] == "success"
+              }
+
+          for path in (ci_path, source_path):
+              branches = successful_exact_runs(path)
+              assert "main" in branches, (path, branches)
+              assert tag in branches, (path, branches)
+          PY
+
+          expected="$RUNNER_TEMP/expected-payloads"
+          cat > "$expected" <<EOF
+          azdaja-v$version-darwin-arm64
+          azdaja-v$version-darwin-x86_64
+          azdaja-v$version-linux-x86_64
+          LICENSE
+          THIRD-PARTY-NOTICES.md
+          EOF
+          awk 'NF { print $2 }' "$release_dir/SHA256SUMS" | sort > "$RUNNER_TEMP/manifest-names"
+          sort "$expected" > "$RUNNER_TEMP/expected-names"
+          cmp "$RUNNER_TEMP/expected-names" "$RUNNER_TEMP/manifest-names"
+          (cd "$release_dir" && sha256sum --check SHA256SUMS)
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "RELEASE_DIR=$release_dir" >> "$GITHUB_ENV"
+          echo "PROMOTION=$promotion" >> "$GITHUB_ENV"
+          echo "NOTE=$note" >> "$GITHUB_ENV"
+
+      - name: Attest every release asset
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: |
+            ${{ env.RELEASE_DIR }}/*
+            ${{ env.PROMOTION }}
+
+      - name: Verify attestations before publication
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for asset in "$RELEASE_DIR"/* "$PROMOTION"; do
+            gh attestation verify "$asset" --repo "$GITHUB_REPOSITORY"
+          done
+
+      - name: Create non-overwriting GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            printf 'release already exists: %s\n' "$TAG" >&2
+            exit 2
+          fi
+          gh release create "$TAG" \
+            "$RELEASE_DIR/azdaja-v$VERSION-darwin-arm64" \
+            "$RELEASE_DIR/azdaja-v$VERSION-darwin-x86_64" \
+            "$RELEASE_DIR/azdaja-v$VERSION-linux-x86_64" \
+            "$RELEASE_DIR/LICENSE" \
+            "$RELEASE_DIR/THIRD-PARTY-NOTICES.md" \
+            "$RELEASE_DIR/SHA256SUMS" \
+            "$PROMOTION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Azdaja $TAG" \
+            --notes-file "$NOTE"
+
+      - name: Verify uploaded bytes and published channels
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          published="$RUNNER_TEMP/published"
+          mkdir "$published"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$published"
+          for asset in "$RELEASE_DIR"/* "$PROMOTION"; do
+            cmp "$asset" "$published/$(basename "$asset")"
+          done
+          for attempt in $(seq 1 20); do
+            if release/verify-published-release.sh "$VERSION"; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              exit 1
+            fi
+            sleep 15
+          done

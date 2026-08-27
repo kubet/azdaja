@@ -222,6 +222,107 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads()
 }
 
 #[test]
+fn promoted_v0114_assets_are_bound_to_exact_workflow_receipt() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let release = root.join("site/releases/v0.1.14");
+    let receipt_path = root.join("release/v0.1.14-promotion.json");
+    assert_eq!(
+        release.exists(),
+        receipt_path.exists(),
+        "the promoted release directory and promotion receipt must appear atomically"
+    );
+    if !release.exists() {
+        return;
+    }
+    let receipt: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(receipt_path).unwrap()).unwrap();
+
+    assert_eq!(receipt["schema_version"], 1);
+    assert_eq!(receipt["record_type"], "azdaja_release_promotion");
+    assert_eq!(receipt["version"], "0.1.14");
+    assert_eq!(receipt["github_workflow"], "ci.yml");
+    assert_eq!(receipt["workflow_event"], "workflow_dispatch");
+    assert_eq!(receipt["workflow_conclusion"], "success");
+    assert_eq!(receipt["publication_authorized"], true);
+    assert_eq!(
+        receipt["distribution_binding"],
+        "immutable tag v0.1.14 must contain this receipt and the byte-identical site/releases/v0.1.14 payloads"
+    );
+    assert_eq!(
+        receipt["limitations"],
+        serde_json::json!([
+            "the distribution commit necessarily differs from source_commit because it adds reviewed release payloads and this receipt"
+        ])
+    );
+
+    let source_commit = receipt["source_commit"].as_str().unwrap();
+    assert_eq!(source_commit.len(), 40);
+    assert!(
+        source_commit
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    );
+    let run_id = receipt["github_run_id"].as_u64().unwrap();
+    let run_attempt = receipt["github_run_attempt"].as_u64().unwrap();
+    assert!(run_id > 0);
+    assert!(run_attempt > 0);
+
+    let sums = fs::read_to_string(release.join("SHA256SUMS")).unwrap();
+    let lines: Vec<_> = sums.lines().collect();
+    assert_eq!(lines.len(), 5);
+    let candidates = receipt["candidates"].as_array().unwrap();
+    assert_eq!(candidates.len(), 3);
+    for (candidate, suffix) in
+        candidates
+            .iter()
+            .zip(["darwin-arm64", "darwin-x86_64", "linux-x86_64"])
+    {
+        let asset = format!("azdaja-v0.1.14-{suffix}");
+        assert_eq!(candidate["asset"], asset);
+        assert_eq!(
+            candidate["artifact"],
+            format!("azdaja-standalone-{suffix}-{source_commit}-{run_attempt}")
+        );
+        let path = release.join(&asset);
+        let metadata = fs::symlink_metadata(&path).unwrap();
+        assert!(metadata.is_file());
+        assert!(!metadata.file_type().is_symlink());
+        assert_eq!(candidate["bytes"].as_u64().unwrap(), metadata.len());
+        let digest = sha256(&path);
+        assert_eq!(candidate["sha256"], digest);
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| **line == format!("{digest}  {asset}"))
+                .count(),
+            1
+        );
+    }
+
+    let arm = fs::read(release.join("azdaja-v0.1.14-darwin-arm64")).unwrap();
+    let intel = fs::read(release.join("azdaja-v0.1.14-darwin-x86_64")).unwrap();
+    let linux = fs::read(release.join("azdaja-v0.1.14-linux-x86_64")).unwrap();
+    assert_eq!(&arm[..8], b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01");
+    assert_eq!(&intel[..8], b"\xcf\xfa\xed\xfe\x07\x00\x00\x01");
+    assert_eq!(&linux[..4], b"\x7fELF");
+    assert_eq!(linux[5], 1);
+    assert_eq!(u16::from_le_bytes([linux[18], linux[19]]), 62);
+
+    for name in ["LICENSE", "THIRD-PARTY-NOTICES.md"] {
+        let path = release.join(name);
+        assert_eq!(fs::read(&path).unwrap(), fs::read(root.join(name)).unwrap());
+        let digest = sha256(&path);
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| **line == format!("{digest}  {name}"))
+                .count(),
+            1
+        );
+    }
+}
+
+#[test]
 fn ci_builds_every_documented_standalone_target_explicitly() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap();
@@ -270,6 +371,36 @@ fn ci_windows_safety_is_strict_and_retains_exact_commit_candidates() {
             "azdaja-standalone-windows-x86_64-${{ github.sha }}-${{ github.run_attempt }}"
         )
     );
+}
+
+#[test]
+fn release_publication_is_manual_exact_tag_nonoverwriting_and_attested() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workflow = fs::read_to_string(root.join(".github/workflows/release.yml")).unwrap();
+
+    assert!(workflow.contains("workflow_dispatch:"));
+    assert!(!workflow.contains("tags:"));
+    for permission in [
+        "contents: write",
+        "id-token: write",
+        "attestations: write",
+        "artifact-metadata: write",
+    ] {
+        assert!(workflow.contains(permission), "missing {permission}");
+    }
+    assert!(workflow.contains("ref: v${{ inputs.version }}"));
+    assert!(workflow.contains("source_commit\"] != commit"));
+    assert!(workflow.contains("assert \"main\" in branches"));
+    assert!(workflow.contains("assert tag in branches"));
+    assert!(workflow.contains("actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4"));
+    assert!(workflow.contains("gh attestation verify"));
+    assert!(workflow.contains("gh release view \"$TAG\""));
+    assert!(workflow.contains("release already exists"));
+    assert!(workflow.contains("gh release create \"$TAG\""));
+    assert!(workflow.contains("--verify-tag"));
+    assert!(workflow.contains("release/verify-published-release.sh \"$VERSION\""));
+    assert!(!workflow.contains("gh release upload"));
+    assert!(!workflow.contains("--clobber"));
 }
 
 #[test]
