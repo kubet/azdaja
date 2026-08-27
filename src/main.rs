@@ -7353,17 +7353,22 @@ fn normalize_answer_prefix(answer: &str, required: Option<&str>) -> String {
     answer.to_owned()
 }
 
+#[derive(Clone, Copy)]
+struct SoloExecutionContract<'a> {
+    question: &'a str,
+    classification_requires_semantic_calls: bool,
+    record_coverage_required: bool,
+    typed_final_schema: Option<&'a TypedFinalSchema>,
+    source_nonempty_lines: u64,
+    answer_prefix: Option<&'a str>,
+}
+
 fn execute_solo_reply(
     session: &mut SoloSession,
     reply: &str,
     cfg: &Config,
     runtime: &mut SoloRuntimeMetrics,
-    question: &str,
-    classification_requires_semantic_calls: bool,
-    record_coverage_required: bool,
-    typed_final_schema: Option<&TypedFinalSchema>,
-    source_nonempty_lines: u64,
-    answer_prefix: Option<&str>,
+    contract: SoloExecutionContract<'_>,
 ) -> std::result::Result<
     (
         String,
@@ -7373,6 +7378,14 @@ fn execute_solo_reply(
     ),
     SoloProgramFailure,
 > {
+    let SoloExecutionContract {
+        question,
+        classification_requires_semantic_calls,
+        record_coverage_required,
+        typed_final_schema,
+        source_nonempty_lines,
+        answer_prefix,
+    } = contract;
     let code = extract_solo_python(reply).map_err(|error| SoloProgramFailure {
         kind: classify_program_failure(&error.to_string(), SoloProgramFailureKind::Protocol),
         error,
@@ -8266,17 +8279,20 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
     let successful_answer: String;
     let successful_coverage: Option<azdaja::RecordCoverageProvenance>;
     let successful_program_sha256: String;
+    let execution_contract = SoloExecutionContract {
+        question: &question,
+        classification_requires_semantic_calls,
+        record_coverage_required,
+        typed_final_schema: typed_final_schema.as_ref(),
+        source_nonempty_lines,
+        answer_prefix,
+    };
     match execute_solo_reply(
         &mut session,
         &model_reply.text,
         cfg,
         &mut runtime.metrics,
-        &question,
-        classification_requires_semantic_calls,
-        record_coverage_required,
-        typed_final_schema.as_ref(),
-        source_nonempty_lines,
-        answer_prefix,
+        execution_contract,
     ) {
         Ok((answer, code, output, coverage)) => {
             record_solo_trace(
@@ -8376,12 +8392,7 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
                 &repair_reply.text,
                 cfg,
                 &mut runtime.metrics,
-                &question,
-                classification_requires_semantic_calls,
-                record_coverage_required,
-                typed_final_schema.as_ref(),
-                source_nonempty_lines,
-                answer_prefix,
+                execution_contract,
             ) {
                 Ok((answer, code, output, coverage)) => {
                     record_solo_trace(
@@ -8495,12 +8506,7 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
                         &second_reply.text,
                         cfg,
                         &mut runtime.metrics,
-                        &question,
-                        classification_requires_semantic_calls,
-                        record_coverage_required,
-                        typed_final_schema.as_ref(),
-                        source_nonempty_lines,
-                        answer_prefix,
+                        execution_contract,
                     ) {
                         Ok((answer, code, output, coverage)) => {
                             record_solo_trace(
@@ -8601,12 +8607,7 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
                                 &third_reply.text,
                                 cfg,
                                 &mut runtime.metrics,
-                                &question,
-                                classification_requires_semantic_calls,
-                                record_coverage_required,
-                                typed_final_schema.as_ref(),
-                                source_nonempty_lines,
-                                answer_prefix,
+                                execution_contract,
                             ) {
                                 Ok((answer, code, output, coverage)) => {
                                     record_solo_trace(
@@ -9805,12 +9806,14 @@ mod tests {
             &reply,
             &cfg,
             &mut SoloRuntimeMetrics::default(),
-            "typed output",
-            false,
-            false,
-            Some(&schema),
-            1,
-            None,
+            SoloExecutionContract {
+                question: "typed output",
+                classification_requires_semantic_calls: false,
+                record_coverage_required: false,
+                typed_final_schema: Some(&schema),
+                source_nonempty_lines: 1,
+                answer_prefix: None,
+            },
         )
         .unwrap_err();
         assert_eq!(failure.kind, SoloProgramFailureKind::TypedFinalSchema);

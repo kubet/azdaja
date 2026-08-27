@@ -1417,6 +1417,8 @@ fn atomic_write_new(path: &Path, data: &[u8]) -> Result<()> {
     validate_private_receipt_destination(path)?;
     let parent_path = path.parent().expect("validated receipt parent");
     let parent = open_private_directory(parent_path)?;
+    #[cfg(windows)]
+    let _ = &parent;
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -4347,7 +4349,7 @@ fn push_csv_record(
     if raw.is_empty() && fields.len() == 1 && fields[0].is_empty() {
         bail!("CSV record {logical_record} is blank")
     }
-    if records.len() >= EXACT_LINE_RECORD_MAX_ITEMS + 1 {
+    if records.len() > EXACT_LINE_RECORD_MAX_ITEMS {
         bail!("CSV record limit exceeded")
     }
     records.push(ParsedCsvRecord {
@@ -6039,16 +6041,28 @@ impl PrintWriterCallback for BoundedOutput {
         Ok(())
     }
 }
+
+#[derive(Default)]
+struct RunCellContext<'a> {
+    allow_relevance: bool,
+    allow_projection_private: bool,
+    authoritative_source: Option<&'a str>,
+    authoritative_records: Option<&'a [AuthoritativeRecord]>,
+}
+
 fn run_cell(
     mut repl: MontyRepl,
     code: &str,
     cfg: &Config,
     default_model: &str,
-    allow_relevance: bool,
-    allow_projection_private: bool,
-    authoritative_source: Option<&str>,
-    authoritative_records: Option<&[AuthoritativeRecord]>,
+    context: RunCellContext<'_>,
 ) -> RunCellOutcome {
+    let RunCellContext {
+        allow_relevance,
+        allow_projection_private,
+        authoritative_source,
+        authoritative_records,
+    } = context;
     repl.tracker_mut()
         .set_max_duration(Duration::from_secs(cfg.cell_timeout));
     let mut input_names = vec![
@@ -6849,10 +6863,12 @@ impl SoloSession {
             code,
             cfg,
             &self.sub_model,
-            true,
-            allow_projection_private,
-            self.authoritative_source.as_deref(),
-            self.authoritative_records.as_deref(),
+            RunCellContext {
+                allow_relevance: true,
+                allow_projection_private,
+                authoritative_source: self.authoritative_source.as_deref(),
+                authoritative_records: self.authoritative_records.as_deref(),
+            },
         );
         if provider_interrupted() {
             self.repl = Some(repl);
@@ -6959,7 +6975,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         mut failure_line,
         semantic_projection,
         record_coverage,
-    ) = run_cell(repl, code, cfg, model, false, false, None, None);
+    ) = run_cell(repl, code, cfg, model, RunCellContext::default());
     if provider_interrupted() {
         bail!("provider interrupted")
     }
@@ -13093,10 +13109,7 @@ mod lexical_relevance_tests {
             "lexical_relevance('source', 'query', 4000)",
             &cfg,
             &cfg.default_model,
-            false,
-            false,
-            None,
-            None,
+            RunCellContext::default(),
         );
         assert!(!success);
         assert_eq!(calls, 0);
@@ -13676,10 +13689,7 @@ FINAL(len(selected))"#;
             "exact_line_records('Row: x', 'Row: ')",
             &cfg,
             &cfg.default_model,
-            false,
-            false,
-            None,
-            None,
+            RunCellContext::default(),
         );
         assert!(!success);
         assert_eq!(calls, 0);
@@ -13913,10 +13923,7 @@ mod exact_line_ledger_projection_tests {
             "exact_line_ledger('Row: x', 'Row: ')",
             &cfg,
             &cfg.default_model,
-            false,
-            false,
-            None,
-            None,
+            RunCellContext::default(),
         );
         assert!(!success);
         assert_eq!(calls, 0);

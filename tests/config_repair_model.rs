@@ -11,8 +11,10 @@ fn explicit_jcode_repair_model_deserializes_and_validates() {
 #[test]
 fn blank_jcode_repair_model_is_rejected_when_present() {
     for value in ["", "   "] {
-        let mut config = Config::default();
-        config.jcode_repair_model = Some(value.to_owned());
+        let config = Config {
+            jcode_repair_model: Some(value.to_owned()),
+            ..Config::default()
+        };
         let error = config.validate().err().unwrap().to_string();
         assert!(error.contains("jcode_repair_model cannot be empty when present"));
     }
