@@ -7,17 +7,17 @@ Prepared copy and operator checklist. Nothing in this file authorizes posting, e
 ### Title
 
 ```text
-Show HN: Azdaja – LLMs analyze 50 MiB inputs via a local Python sandbox (Rust)
+Show HN: Azdaja – A local evaluator for language-model context
 ```
 
-The title leads with the independently reproducible product contract. It contains no benchmark score and no unmeasured adjective.
+The title states the product boundary directly. It contains no capacity headline, benchmark score, or unmeasured adjective.
 
 ### First comment
 
 ```text
 Azdaja is a Rust CLI that keeps a complete UTF-8 input in a persistent local Monty/Python evaluator while the model works through bounded prompts, computed projections, and explicit semantic subcalls.
 
-The release acceptance test runs three exact 52,428,800-byte inputs, one root turn each, zero child calls, and a root prompt below 65,536 bytes. Repro and receipt: https://github.com/kubet/azdaja/blob/main/BENCHMARKS.md
+The product contract is local source custody, bounded root exposure, explicit semantic subcalls, typed final values, and fail-closed record coverage. Receipts and reproduction commands: https://github.com/kubet/azdaja/blob/main/BENCHMARKS.md
 
 Honest limitation: this is not information-flow control. Model-authored code can select source material for a provider call, and evaluator memory has no configured ceiling. Use sanitized inputs or a separately trusted inference broker for stronger containment.
 
@@ -43,7 +43,7 @@ I will stay around to answer questions, reproduce failures, and correct anything
 
 ### “This is one single-arm benchmark.”
 
-Correct. The 68.64% fixed-199 result is explicitly a private, validation-derived, single-arm diagnostic. The product claim is the provider-free 50 MiB acceptance contract. The benchmark artifacts are published for audit and replication, not as a superiority claim.
+Correct. The 68.64% fixed-199 result is explicitly a private, validation-derived, single-arm diagnostic. The public product contract is the bounded local evaluator and its fail-closed receipt boundary. The benchmark artifacts are published for audit and replication, not as a superiority claim.
 
 ### “Why `curl | sh`?”
 
@@ -53,9 +53,9 @@ It is the shortest path, not the only path. The installer publishes named downlo
 
 No. The complete source remains in one persistent evaluator. Deterministic code performs exact parsing and reduction, and the model can request semantic work over selected complete records. The system fails closed on missing authoritative-record coverage rather than silently sampling its way to an answer.
 
-### “Why not use a 1M-token context window?”
+### “Why not use a long context window?”
 
-The 50 MiB acceptance input does not fit in a 1M-token window. The durable claim is not a provider price comparison. It is that the root prompt remains below 65,536 bytes while the full source stays locally available to the evaluator.
+Azdaja is for workflows that need local source custody, deterministic reduction, explicit semantic calls, and record-level receipts. It is not a claim that every task should avoid a long context window.
 
 ### “Monty is experimental.”
 
@@ -92,14 +92,14 @@ Do not cross-post identical copy. Each community gets its own framing and its ru
 
 ### Console.dev
 
-- Prepare a short beta note around the v0.1.14 release and reproducible 50 MiB contract.
+- Prepare a short beta note around the v0.1.14 release and its bounded local-evaluator contract.
 - Sending email requires a separate explicit authorization.
 
 ## Evidence links
 
 - [Receipts leaderboard](../BENCHMARKS.md)
 - [Release v0.1.14](https://github.com/kubet/azdaja/releases/tag/v0.1.14)
-- [50 MiB acceptance test](../tests/product_50mb.rs)
-- [50 MiB acceptance receipt](../bench/results/v0.1.2-product-acceptance-public.json)
+- [Provider-free product acceptance test](../tests/product_50mb.rs)
+- [Product acceptance receipt](../bench/results/v0.1.2-product-acceptance-public.json)
 - [Launch saga](launch-saga.md)
 - [Installer lifecycle documentation](install.md)

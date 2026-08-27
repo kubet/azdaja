@@ -7,20 +7,20 @@ html{background:var(--paper)}
 body{margin:0;color:var(--ink);background:radial-gradient(120% 100% at 50% 24%,#eee4cd 0%,var(--paper) 48%,#d8c8a3 100%) fixed;font-family:Cormorant,Georgia,serif;font-weight:300;-webkit-font-smoothing:antialiased}
 body::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.035;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 ::selection{background:var(--red);color:var(--paper)}
-main{width:min(100% - 40px,720px);min-height:100svh;margin:auto;padding:clamp(36px,6svh,72px) 0 clamp(36px,5svh,56px);display:flex;flex-direction:column;align-items:center;text-align:center}
-img{width:clamp(108px,16svh,150px);height:auto;margin-bottom:clamp(22px,3.5svh,34px);filter:saturate(.9) contrast(1.03)}
-h1{margin:0;color:var(--red);font-size:clamp(1.3rem,2.6vw,1.7rem);font-weight:300;line-height:1.42;letter-spacing:.2em;text-transform:uppercase}
-.copy{max-width:31rem;margin-top:clamp(22px,3.5svh,34px);text-align:left}
-.copy p{margin:0;font-size:clamp(1.06rem,1.3vw,1.17rem);line-height:1.52;text-wrap:pretty}
-.copy p+p{margin-top:.9em}
-.copy p:first-child::first-letter{float:left;color:var(--red);font-size:3.15em;line-height:.8;padding:.05em .08em 0 0}
-.copy p+p::first-letter{color:var(--red)}
-.install{width:100%;max-width:31rem;margin-top:clamp(30px,5svh,46px)}
+main{width:min(100% - 40px,620px);min-height:100svh;margin:auto;padding:clamp(30px,5svh,52px) 0 clamp(30px,5svh,48px);display:flex;flex-direction:column;align-items:center;text-align:center}
+img{width:clamp(82px,12svh,108px);height:auto;margin-bottom:clamp(16px,2.5svh,22px);filter:saturate(.9) contrast(1.03)}
+h1{margin:0;color:var(--red);font-size:clamp(1.65rem,3.5vw,2.1rem);font-weight:300;line-height:1.1;letter-spacing:.16em;text-transform:uppercase}
+.lede{max-width:30rem;min-width:0;margin:1rem 0 0;font-size:clamp(1rem,1.5vw,1.08rem);line-height:1.45;overflow-wrap:anywhere;text-wrap:balance}
+.copy{max-width:34rem;min-width:0;margin-top:.9rem;text-align:center}
+.copy p{margin:0;font-size:1rem;line-height:1.52;overflow-wrap:anywhere;text-wrap:pretty}
+.copy p+p{margin-top:.65rem}
+.copy .compatibility{color:rgba(36,28,18,.72);font-size:.92rem}
+.install{width:100%;max-width:31rem;margin-top:clamp(24px,4svh,34px)}
 .install-command{display:block;width:100%;padding:.3rem 0;color:rgba(36,28,18,.8);font:600 .67rem/1.4 "SFMono-Regular",Consolas,monospace;white-space:nowrap;overflow-x:auto;overscroll-behavior-inline:contain;text-align:center}
 .install-command::first-letter{color:var(--red)}
 footer{margin-top:14px;font-size:.72rem;letter-spacing:.08em}
 footer a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
-@media(max-width:520px){main{width:calc(100% - 34px);padding:36px 0 44px}img{width:108px;margin-bottom:24px}h1{font-size:1.18rem;letter-spacing:.17em}.copy{margin-top:24px}.copy p{font-size:1.05rem}.install{margin-top:36px}.install-command{font-size:.59rem}}
+@media(max-width:520px){main{width:calc(100% - 34px);padding:28px 0 36px}img{width:78px;margin-bottom:18px}h1{font-size:1.5rem;letter-spacing:.14em}.lede{margin-top:.85rem;font-size:1rem}.copy{margin-top:.75rem}.copy p{font-size:.96rem}.install{margin-top:28px}.install-command{font-size:.59rem}}
 .article-shell{width:min(100% - 40px,920px);align-items:stretch;text-align:left}
 .wordmark{align-self:center;color:var(--red);font-size:.78rem;letter-spacing:.24em;text-decoration:none;text-transform:uppercase}
 .saga{margin-top:clamp(34px,6svh,72px)}

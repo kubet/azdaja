@@ -1,12 +1,10 @@
-<p align="center"><img src="azdaja-logo.png" alt="Azdaja logo" width="160"></p>
+<p align="center"><img src="azdaja-logo.png" alt="Azdaja logo" width="120"></p>
 
 # Azdaja
 
-**Virtual memory for language models: analyze inputs beyond one context window through a bounded model-facing surface and a local evaluator that retains the complete UTF-8 source.**
+Azdaja keeps complete source material in a local evaluator and gives language models a bounded working surface for code, semantic calls, and one validated result.
 
-<p align="center"><img src="site/demo-50mb.gif" alt="Azdaja v0.1.14 release acceptance: three 50 MiB scenarios pass" width="900"></p>
-
-**52,428,800 bytes. One root turn. Zero child calls. Root prompt below 65,536 bytes.** [Reproduce the three-scenario proof](tests/product_50mb.rs) · [Inspect the acceptance receipt](bench/results/v0.1.2-product-acceptance-public.json) · [Download v0.1.14](https://github.com/kubet/azdaja/releases/tag/v0.1.14)
+[Install](#install) · [Use](#use) · [Receipts](BENCHMARKS.md) · [Releases](https://github.com/kubet/azdaja/releases)
 
 ## What it is
 
@@ -107,7 +105,6 @@ Within this four-row ladder, Azdaja is **4.26 percentage points** above the pape
 
 - **Same-model projection diagnostic:** on one frozen synthetic 1.3 MiB classification task, GPT-5.6 Luna through Azdaja returned the same exact answer as the native harness while using **66.7% fewer uncached tokens and 54.8% less wall time on Codex**, and **88.0% fewer uncached tokens and 63.7% less wall time on OpenCode**. This was a candidate-only follow-up against hash-bound native rows, not a concurrent or repeated benchmark ([plan, limits, and exact receipt](bench/delta/README.md)).
 - **Constant root economy:** across 198 measured RAH rows, the mean was **5,403 root tokens per item** while representative bucket medians spanned **78,842** to **9,927,812 input characters**; `load` returned only character and line metadata, never source content ([cost receipt](bench/results/cost-evidence-public.json)).
-- **50 MiB proof:** the [in-repo test](tests/product_50mb.rs) answered three exact **52,428,800-byte** inputs in one root turn each, with zero child calls, a root prompt below **65,536 bytes**, and a **90-second** watchdog ([acceptance receipt](bench/results/v0.1.2-product-acceptance-public.json)).
 - **Wall-clock shape:** across 123 sealed diagnostic rows in eight input-size buckets from **32,768 to 4,194,304 tokens**, bucket-median wall time was non-monotonic, with a descriptive slope of **-0.43 seconds per input doubling** ([cost receipt](bench/results/cost-evidence-public.json)).
 - **Zero exact-overlap hits:** across **649 distinct scans with surviving structured assertions**, checks for exact input substrings of at least **100 characters** produced **zero matches** ([scan receipt](bench/results/cost-evidence-public.json)).
 - **Measured subscription route:** the default Jcode/OpenAI path used subscription OAuth, requested no separate API key, and failed closed before a model turn when that route was unavailable ([cost receipt](bench/results/cost-evidence-public.json)).
