@@ -417,7 +417,7 @@ jobs:
         shell: pwsh
         run: |
           $log = Join-Path $env:RUNNER_TEMP "azdaja-windows-clippy.log"
-          cargo clippy --quiet --lib --bin azdaja --all-features --locked -- -D warnings 2>&1 |
+          cargo clippy --quiet --all-targets --all-features --locked -- -D warnings 2>&1 |
             Tee-Object -FilePath $log
           $status = $LASTEXITCODE
           if ($status -ne 0) {
@@ -428,3 +428,20 @@ jobs:
           }
       - run: cargo test --lib --bin azdaja --locked -- --test-threads=1
       - run: cargo build --release --locked
+      - run: .\target\release\azdaja.exe --version
+      - run: .\target\release\azdaja.exe doctor --caps
+      - name: Stage Windows release candidate
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release-candidate | Out-Null
+          Copy-Item .\target\release\azdaja.exe `
+            .\release-candidate\azdaja-v0.1.13-windows-x86_64.exe
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: azdaja-standalone-windows-x86_64-${{ github.sha }}-${{ github.run_attempt }}
+          path: release-candidate/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

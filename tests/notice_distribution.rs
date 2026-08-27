@@ -249,6 +249,28 @@ fn ci_builds_every_documented_standalone_target_explicitly() {
 }
 
 #[test]
+fn ci_windows_safety_is_strict_and_retains_exact_commit_candidates() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap();
+    let job = ci
+        .split_once("\n  windows-safety:\n")
+        .expect("Windows safety job must exist")
+        .1;
+
+    assert!(job.contains("runs-on: windows-latest"));
+    assert!(job.contains(
+        "cargo clippy --quiet --all-targets --all-features --locked -- -D warnings"
+    ));
+    assert!(job.contains("cargo test --lib --bin azdaja --locked -- --test-threads=1"));
+    assert!(job.contains(".\\target\\release\\azdaja.exe --version"));
+    assert!(job.contains(".\\target\\release\\azdaja.exe doctor --caps"));
+    assert!(job.contains("azdaja-v0.1.13-windows-x86_64.exe"));
+    assert!(job.contains(
+        "azdaja-standalone-windows-x86_64-${{ github.sha }}-${{ github.run_attempt }}"
+    ));
+}
+
+#[test]
 fn intel_darwin_dependency_delta_is_already_in_the_reviewed_notice_corpus() {
     if !cfg!(target_os = "macos") {
         return;
