@@ -348,6 +348,29 @@ fn ci_builds_every_documented_standalone_target_explicitly() {
 }
 
 #[test]
+fn candidate_fixture_server_avoids_reverse_dns_on_hosted_macos() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap();
+    let step = ci
+        .split_once(
+            "      - name: Validate release candidate install, plain help, and 50 MiB path\n",
+        )
+        .expect("candidate validation step must exist")
+        .1
+        .split_once("      - name: Package standalone candidate and receipt\n")
+        .expect("candidate validation step must remain independently scoped")
+        .0;
+
+    assert!(step.contains("          import socketserver\n"));
+    assert!(step.contains("          class Server(http.server.ThreadingHTTPServer):\n"));
+    assert!(step.contains("              socketserver.TCPServer.server_bind(self)\n"));
+    assert!(step.contains("          server = Server((\"127.0.0.1\", 0), handler)\n"));
+    assert!(!step.contains(
+        "          server = http.server.ThreadingHTTPServer((\"127.0.0.1\", 0), handler)\n"
+    ));
+}
+
+#[test]
 fn ci_windows_safety_is_strict_and_retains_exact_commit_candidates() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap();

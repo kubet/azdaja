@@ -169,11 +169,22 @@ jobs:
           import functools
           import http.server
           import pathlib
+          import socketserver
           import sys
 
           root, port_file = sys.argv[1:]
           handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=root)
-          server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+
+          class Server(http.server.ThreadingHTTPServer):
+              def server_bind(self):
+                  # HTTPServer.server_bind performs reverse DNS, which can stall on
+                  # hosted Intel macOS. Bind the loopback fixture without DNS.
+                  socketserver.TCPServer.server_bind(self)
+                  host, port = self.server_address[:2]
+                  self.server_name = host
+                  self.server_port = port
+
+          server = Server(("127.0.0.1", 0), handler)
           pathlib.Path(port_file).write_text(str(server.server_port))
           server.serve_forever()
           PY
