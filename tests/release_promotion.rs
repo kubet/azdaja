@@ -234,6 +234,34 @@ fn promotion_succeeds_with_exact_payloads_and_is_deterministic() {
 }
 
 #[test]
+fn promotion_accepts_a_logical_symlink_alias_of_the_source_repository() {
+    let (scratch, fixture) = fixture("source-alias");
+    let alias = scratch.0.join("repo-alias");
+    symlink(&fixture.root, &alias).unwrap();
+    let output_dir = scratch.0.join("out-alias");
+    let output = run({
+        let mut command = Command::new("sh");
+        command
+            .arg(alias.join("release/promote-standalone-assets.sh"))
+            .args([
+                &fixture.source_sha,
+                RUN_ID,
+                RUN_ATTEMPT,
+                fixture.candidates.to_str().unwrap(),
+                output_dir.to_str().unwrap(),
+            ])
+            .current_dir(&alias);
+        command
+    });
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output_dir.join("PROVENANCE.json").is_file());
+}
+
+#[test]
 fn promotion_rejects_omission_extra_symlink_and_tamper_atomically() {
     let (_scratch, fixture) = fixture("structural");
     let omitted = fixture

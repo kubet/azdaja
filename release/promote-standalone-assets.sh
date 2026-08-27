@@ -3,7 +3,7 @@
 # Usage: release/promote-standalone-assets.sh SOURCE_SHA RUN_ID RUN_ATTEMPT CANDIDATE_ROOT OUTPUT_DIR
 set -eu
 
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT=$(CDPATH= cd -P -- "$(dirname -- "$0")/.." && pwd -P)
 usage() {
   printf '%s\n' 'Usage: release/promote-standalone-assets.sh SOURCE_SHA RUN_ID RUN_ATTEMPT CANDIDATE_ROOT OUTPUT_DIR'
 }
@@ -32,7 +32,9 @@ case "$RUN_ATTEMPT" in *[!0-9]*|'') fail 'RUN_ATTEMPT must be decimal digits' 2 
 
 command -v git >/dev/null 2>&1 || fail 'git is required' 2
 command -v python3 >/dev/null 2>&1 || fail 'python3 is required' 2
-[ "$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null)" = "$ROOT" ] || fail 'script must run from its source repository' 2
+GIT_ROOT=$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null) || fail 'script must run from its source repository' 2
+GIT_ROOT=$(CDPATH= cd -P -- "$GIT_ROOT" && pwd -P) || fail 'script must run from its source repository' 2
+[ "$GIT_ROOT" = "$ROOT" ] || fail 'script must run from its source repository' 2
 HEAD_SHA=$(git -C "$ROOT" rev-parse HEAD)
 [ "$HEAD_SHA" = "$SOURCE_SHA" ] || fail "source checkout HEAD $HEAD_SHA does not equal SOURCE_SHA $SOURCE_SHA"
 [ -z "$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)" ] || fail 'source checkout is not clean'

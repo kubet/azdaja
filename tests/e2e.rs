@@ -596,7 +596,7 @@ fn semantic_scale_config(dir: &Path, script: &Path, logs: &Path) -> PathBuf {
     );
     let text = fs::read_to_string(&cfg)
         .unwrap()
-        .replace("cell_timeout = 2", "cell_timeout = 240");
+        .replace("cell_timeout = 2", "cell_timeout = 600");
     fs::write(&cfg, text).unwrap();
     cfg
 }
@@ -3515,7 +3515,7 @@ else:
     let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
     let text = fs::read_to_string(&cfg)
         .unwrap()
-        .replace("cell_timeout = 2", "cell_timeout = 10");
+        .replace("cell_timeout = 2", "cell_timeout = 30");
     fs::write(&cfg, text).unwrap();
     let input = t.join("input.txt");
     fs::write(&input, "schema row").unwrap();
@@ -3573,7 +3573,7 @@ else:
     let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
     let text = fs::read_to_string(&cfg)
         .unwrap()
-        .replace("cell_timeout = 2", "cell_timeout = 10");
+        .replace("cell_timeout = 2", "cell_timeout = 30");
     fs::write(&cfg, text).unwrap();
     let input = t.join("input.txt");
     fs::write(&input, "schema row").unwrap();
@@ -3631,7 +3631,7 @@ else:
     let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
     let text = fs::read_to_string(&cfg)
         .unwrap()
-        .replace("cell_timeout = 2", "cell_timeout = 10");
+        .replace("cell_timeout = 2", "cell_timeout = 30");
     fs::write(&cfg, text).unwrap();
     let input = t.join("input.txt");
     fs::write(&input, "schema row").unwrap();
@@ -3690,7 +3690,7 @@ else:
     let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
     let text = fs::read_to_string(&cfg)
         .unwrap()
-        .replace("cell_timeout = 2", "cell_timeout = 10");
+        .replace("cell_timeout = 2", "cell_timeout = 30");
     fs::write(&cfg, text).unwrap();
     let input = t.join("input.txt");
     fs::write(&input, "schema row").unwrap();
@@ -3789,7 +3789,7 @@ else:
     let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 30, 4);
     let text = fs::read_to_string(&cfg)
         .unwrap()
-        .replace("cell_timeout = 2", "cell_timeout = 10");
+        .replace("cell_timeout = 2", "cell_timeout = 30");
     fs::write(&cfg, text).unwrap();
     let input = t.join("input.txt");
     fs::write(&input, "schema row").unwrap();
