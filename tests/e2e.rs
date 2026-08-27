@@ -46,6 +46,49 @@ max_calls_per_cell = 64
     .unwrap();
     p
 }
+fn planner_config(
+    dir: &Path,
+    cmd: &str,
+    cap: usize,
+    depth: u32,
+    timeout: u64,
+    max: usize,
+) -> PathBuf {
+    let planner_calls = dir.join("planner-calls");
+    let wrapper = dir.join("planner-aware-provider.py");
+    fs::write(
+        &wrapper,
+        format!(
+            r#"import os, pathlib, shlex, sys, tempfile
+payload = sys.stdin.buffer.read()
+prompt = payload.decode("utf-8")
+if "Choose only the root strategy, never answer the task." in prompt:
+    calls = pathlib.Path({planner_calls:?})
+    calls.mkdir(exist_ok=True)
+    (calls / str(os.getpid())).write_text(prompt)
+    print("DELEGATE")
+else:
+    argv = shlex.split({cmd:?})
+    with tempfile.TemporaryFile() as provider_stdin:
+        provider_stdin.write(payload)
+        provider_stdin.seek(0)
+        os.dup2(provider_stdin.fileno(), 0)
+        os.execvp(argv[0], argv)
+"#,
+            planner_calls = planner_calls.to_string_lossy(),
+            cmd = cmd,
+        ),
+    )
+    .unwrap();
+    config(
+        dir,
+        &format!("python3 {}", wrapper.display()),
+        cap,
+        depth,
+        timeout,
+        max,
+    )
+}
 fn run(home: &Path, cfg: &Path, args: &[&str], input: &str) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_azdaja"));
     c.env_remove("RLM_DEPTH")
@@ -495,7 +538,7 @@ print(prefix + code_by_label[label] * item_count)
 }
 
 fn semantic_scale_config(dir: &Path, script: &Path, logs: &Path) -> PathBuf {
-    let cfg = config(
+    let cfg = planner_config(
         dir,
         &format!("python3 {} {}", script.display(), logs.display()),
         8192,
@@ -757,7 +800,7 @@ else:
         ),
     )
     .unwrap();
-    let cfg = config(&t, &format!("python3 {}", mock.display()), 8192, 1, 30, 4);
+    let cfg = planner_config(&t, &format!("python3 {}", mock.display()), 8192, 1, 30, 4);
     let text = fs::read_to_string(&cfg)
         .unwrap()
         .replace("cell_timeout = 2", "cell_timeout = 120")
@@ -2603,7 +2646,7 @@ else:
             ),
         )
         .unwrap();
-        let cfg = config(&t, &format!("python3 {}", mock.display()), 8192, 1, 10, 4);
+        let cfg = planner_config(&t, &format!("python3 {}", mock.display()), 8192, 1, 10, 4);
         let text = fs::read_to_string(&cfg)
             .unwrap()
             .replace("cell_timeout = 2", "cell_timeout = 30");
@@ -2742,7 +2785,7 @@ else:
         ),
     )
     .unwrap();
-    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let cfg = planner_config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
     let input = t.join("input.txt");
     fs::write(
         &input,
@@ -2999,7 +3042,7 @@ else:
         ),
     )
     .unwrap();
-    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let cfg = planner_config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
     let input = t.join("input.txt");
     fs::write(
         &input,
@@ -3087,7 +3130,7 @@ else:
         ),
     )
     .unwrap();
-    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let cfg = planner_config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
     let input = t.join("input.txt");
     fs::write(
         &input,
@@ -3126,7 +3169,7 @@ else:
     assert!(tags.contains("AZM1-A-0-3-1:"), "{tags}");
     assert!(tags.contains("AZM1-B-0-3-1:"), "{tags}");
     let trace = fs::read_to_string(trace_path).unwrap();
-    assert!(trace.contains("\"schema_version\":2"), "{trace}");
+    assert!(trace.contains("\"schema_version\":3"), "{trace}");
     assert!(trace.contains("\"projection_ledger_calls\":1"), "{trace}");
     assert!(trace.contains("\"projection_calls\":1"), "{trace}");
     assert!(
@@ -3196,7 +3239,7 @@ else:
         ),
     )
     .unwrap();
-    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let cfg = planner_config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
     let input = t.join("input.txt");
     fs::write(
         &input,
@@ -3235,7 +3278,7 @@ else:
     assert!(tags.contains("AZM1-A-0-3-1:"), "{tags}");
     assert!(tags.contains("AZM1-B-0-3-1:"), "{tags}");
     let trace = fs::read_to_string(trace_path).unwrap();
-    assert!(trace.contains("\"schema_version\":2"), "{trace}");
+    assert!(trace.contains("\"schema_version\":3"), "{trace}");
     assert!(trace.contains("\"projection_ledger_calls\":1"), "{trace}");
     assert!(trace.contains("\"projection_calls\":1"), "{trace}");
     assert!(
@@ -3318,7 +3361,7 @@ else:
         ),
     )
     .unwrap();
-    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let cfg = planner_config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
     let input = t.join("input.txt");
     fs::write(
         &input,
@@ -3387,7 +3430,7 @@ else:
         ),
     )
     .unwrap();
-    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let cfg = planner_config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
     let input = t.join("input.txt");
     fs::write(
         &input,
@@ -3581,6 +3624,7 @@ if os.getenv("RLM_DEPTH") == "0":
     calls.open("a").write("root\n")
     if count == 0:
         assert "Classification axiom: labels are produced by classifying instances" in prompt
+        assert "Planner vote: DELEGATE." in prompt
         print('```python\nFINAL("Label: spam")\n```')
     else:
         assert "Labels are produced by classifying instances, never found by searching for label fields." in prompt
@@ -3600,7 +3644,7 @@ else:
 "#,
     )
     .unwrap();
-    let cfg = config(
+    let cfg = planner_config(
         &t,
         &format!("python3 {} {}", mock.display(), calls.display()),
         4096,
@@ -3634,12 +3678,123 @@ else:
         "Label: spam"
     );
     assert_eq!(fs::read_to_string(&calls).unwrap().lines().count(), 2);
+    let planner_calls = t.join("planner-calls");
+    let planner_prompts = fs::read_dir(&planner_calls)
+        .unwrap()
+        .map(|entry| fs::read_to_string(entry.unwrap().path()).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(planner_prompts.len(), 3);
+    assert!(
+        planner_prompts
+            .iter()
+            .any(|prompt| prompt.contains("Neutral audit."))
+    );
+    assert!(
+        planner_prompts
+            .iter()
+            .any(|prompt| prompt.contains("Act as a delegation advocate,"))
+    );
+    assert!(
+        planner_prompts
+            .iter()
+            .any(|prompt| prompt.contains("Act as a deterministic-computation advocate,"))
+    );
     let retained = fs::read_to_string(&trace).unwrap();
     assert!(
         retained.contains("trigger=ClassificationWithoutSemanticCalls"),
         "{retained}"
     );
     assert!(retained.contains("sub_call_count\":2"), "{retained}");
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_repairs_label_literal_grep_after_one_incidental_call() {
+    let t = temp("solo-label-grep-repair-after-spend");
+    let root_calls = t.join("root.calls");
+    let incidental_calls = t.join("incidental.calls");
+    let trace = t.join("solo.trace");
+    let mock = t.join("label-grep-repair.py");
+    fs::write(
+        &mock,
+        format!(
+            r#"import json, os, pathlib, re, sys
+prompt = sys.stdin.read()
+if os.getenv("RLM_DEPTH") == "0":
+    calls = pathlib.Path({root_calls:?})
+    count = len(calls.read_text().splitlines()) if calls.exists() else 0
+    calls.open("a").write("root\n")
+    if count == 0:
+        print('''```python
+llm("Confirm semantic delegation is available.")
+count=ctx.count("ham")
+FINAL("Answer: "+str(count))
+```''')
+    else:
+        assert "requested label literal in grep-shaped code" in prompt
+        print('''```python
+items=[{{"id":"item-0","evidence":ctx}}]
+labels=semantic_manifest_records(items,"classify the complete synthetic message",["spam","ham"])
+assert len(labels)==1
+count=0
+if labels["item-0"]=="ham":
+    count=1
+FINAL("Answer: "+str(count))
+```''')
+elif "LABEL CODES" not in prompt:
+    pathlib.Path({incidental_calls:?}).open("a").write("incidental\n")
+    print("semantic delegation is available")
+else:
+    prefix=re.search(r"return only (AZM1-[ABJ]-[0-9]+-[0-9]+-[0-9]+:) followed",prompt).group(1)
+    legend=prompt.split("LABEL CODES",1)[1].split("ROWS are",1)[0].splitlines()[1:]
+    code=next(line.split("\t",1)[0] for line in legend if json.loads(line.split("\t",1)[1]) == "ham")
+    print(prefix+code)
+"#,
+            root_calls = root_calls,
+            incidental_calls = incidental_calls,
+        ),
+    )
+    .unwrap();
+    let cfg = planner_config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let input = t.join("input.txt");
+    fs::write(&input, "Date: Jan 01, 2025 || Instance: project meeting").unwrap();
+    let output = run_with_solo_trace(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "How many records should be classified as label 'ham'? Give your final answer in the form 'Answer: number'.",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+        &trace,
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "Answer: 1");
+    assert_eq!(fs::read_to_string(root_calls).unwrap().lines().count(), 2);
+    assert_eq!(
+        fs::read_to_string(incidental_calls)
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+    assert_eq!(fs::read_dir(t.join("planner-calls")).unwrap().count(), 3);
+    let retained = fs::read_to_string(trace).unwrap();
+    assert!(retained.contains("trigger=LabelLiteralGrep"), "{retained}");
+    let runtime: serde_json::Value = retained
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .next_back()
+        .unwrap();
+    assert_eq!(runtime["sub_call_count"], 3);
+    assert_eq!(runtime["semantic_call_count"], 2);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -3663,7 +3818,7 @@ print('```python\nFINAL("Answer: 0")\n```')
 "#,
     )
     .unwrap();
-    let cfg = config(
+    let cfg = planner_config(
         &t,
         &format!("python3 {} {}", mock.display(), calls.display()),
         4096,
@@ -7229,7 +7384,7 @@ fn solo_root_retries_explicit_typed_transient_errors_with_separate_budgets() {
     );
     let runtime: serde_json::Value =
         serde_json::from_str(solo_lines[solo_lines.len() - 2]).unwrap();
-    assert_eq!(runtime["schema_version"], 2);
+    assert_eq!(runtime["schema_version"], 3);
     assert_eq!(runtime["event"], "solo_runtime");
     assert_eq!(runtime["request_id"], traced_request_id);
     assert_eq!(runtime["outcome"], "succeeded");
@@ -8394,7 +8549,7 @@ else:
         ),
     )
     .unwrap();
-    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let cfg = planner_config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
     let input = t.join("input.txt");
     fs::write(
         &input,
