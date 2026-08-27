@@ -1,6 +1,6 @@
 [package]
 name = "azdaja"
-version = "0.1.13"
+version = "0.1.14"
 edition = "2024"
 license = "MIT"
 description = "Virtual memory for language models with a bounded model-facing surface"

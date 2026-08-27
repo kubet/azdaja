@@ -21,9 +21,10 @@
     <img src="/azdaja-mark.webp" width="360" height="540" alt="Azdaja dragon">
     <h1>Analyze 50 MiB<br>through one bounded root turn</h1>
     <div class="copy">
-      <p>Azdaja v0.1.13 ships a reproducible test over three exact 52,428,800-byte inputs: one root turn each, zero child calls, a root prompt below 65,536 bytes, and a 90-second watchdog.</p>
+      <p>Azdaja v0.1.14 ships a reproducible test over three exact 52,428,800-byte inputs: one root turn each, zero child calls, a root prompt below 65,536 bytes, and a 90-second watchdog.</p>
       <p>Aždaja (roughly azh-DAH-yah) is the many-headed Serbian dragon. Virtual memory is the metaphor: one persistent local source, bounded model-facing surfaces, and parallel model-call heads when semantic judgment is required.</p>
       <p>One binary, callable by any agent that can run a command. Model subcalls still route through a supported Jcode, Claude, Codex, Gemini, or OpenCode harness. It retains the full file locally in a persistent Python session; the root model sees metadata plus a fixed bounded, escaped structural sample, writes code to inspect the context inside the evaluator, and calls sub-models in parallel when needed. Exact work can scan the complete input; oversized semantic sources may use bounded lexical window selection. There is no prebuilt external index.</p>
+      <p>The standalone installer supports macOS 11+ on Apple Silicon and Intel, plus x86-64 Linux with glibc 2.35 or newer.</p>
       <p>Point it at the fifty-megabyte log, a textual repository dump, or the transcript that never fit. It reads what it needs, fans out heads where it must, and comes back with one answer.</p>
     </div>
     <section class="install" aria-label="Install Azdaja">

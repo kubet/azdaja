@@ -21,9 +21,9 @@ The release acceptance test runs three exact 52,428,800-byte inputs, one root tu
 
 Honest limitation: this is not information-flow control. Model-authored code can select source material for a provider call, and evaluator memory has no configured ceiling. Use sanitized inputs or a separately trusted inference broker for stronger containment.
 
-Release: https://github.com/kubet/azdaja/releases/tag/v0.1.13
+Release: https://github.com/kubet/azdaja/releases/tag/v0.1.14
 Install: curl -fsSL https://azdaja.dev/install | sh
-Cargo alternative: cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.13 --locked
+Cargo alternative: cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.14 --locked
 
 I will stay around to answer questions, reproduce failures, and correct anything the receipts do not support.
 ```
@@ -32,7 +32,7 @@ I will stay around to answer questions, reproduce failures, and correct anything
 
 - Post on a Tuesday or Wednesday between 13:00 and 18:00 UTC.
 - Confirm the release, installer, GIF, receipt links, and `BENCHMARKS.md` resolve from a signed-out browser.
-- Re-run `release/verify-published-release.sh 0.1.13` immediately before posting.
+- Re-run `release/verify-published-release.sh 0.1.14` immediately before posting.
 - Keep the first comment ready before submitting the story.
 - Stay available for at least 12 hours.
 - Concede valid critiques quickly and add corrections to the repository.
@@ -92,13 +92,13 @@ Do not cross-post identical copy. Each community gets its own framing and its ru
 
 ### Console.dev
 
-- Prepare a short beta note around the v0.1.13 release and reproducible 50 MiB contract.
+- Prepare a short beta note around the v0.1.14 release and reproducible 50 MiB contract.
 - Sending email requires a separate explicit authorization.
 
 ## Evidence links
 
 - [Receipts leaderboard](../BENCHMARKS.md)
-- [Release v0.1.13](https://github.com/kubet/azdaja/releases/tag/v0.1.13)
+- [Release v0.1.14](https://github.com/kubet/azdaja/releases/tag/v0.1.14)
 - [50 MiB acceptance test](../tests/product_50mb.rs)
 - [50 MiB acceptance receipt](../bench/results/v0.1.2-product-acceptance-public.json)
 - [Launch saga](launch-saga.md)

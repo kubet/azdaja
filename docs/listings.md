@@ -11,7 +11,7 @@ Repository preparation:
 - `skills/azdaja/SKILL.md` is the discoverable agent skill.
 - The GitHub topic `gemini-cli-extension` is live.
 
-Official discovery is automatic and crawls public tagged repositories daily. The manifest landed after tag `v0.1.13`, so gallery appearance must be checked after the next tag containing the manifest. Do not claim listing before the gallery resolves it.
+Official discovery is automatic and crawls public tagged repositories daily. Tag `v0.1.14` is the first release intended to contain the root manifest. Gallery appearance must still be checked after the crawler processes that tag; do not claim listing before the public gallery resolves it.
 
 Provider-free load acceptance used the official Gemini CLI 0.57.0 through `npx` in an isolated `HOME`:
 

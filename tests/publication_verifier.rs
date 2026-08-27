@@ -141,9 +141,9 @@ fn run_verifier(fixture: &Fixture) -> Output {
 #[test]
 fn release_note_requires_the_post_publication_verifier() {
     let release_note =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("release/v0.1.13.md"))
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("release/v0.1.14.md"))
             .unwrap();
-    assert!(release_note.contains("release/verify-published-release.sh 0.1.13"));
+    assert!(release_note.contains("release/verify-published-release.sh 0.1.14"));
     assert!(release_note.contains("downloads and verifies all five payloads"));
 }
 
@@ -157,7 +157,7 @@ fn workflow_dispatch_runs_the_read_only_publication_verifier() {
     assert!(workflow.contains("workflow_dispatch:"));
     assert!(workflow.contains("contents: read"));
     assert!(workflow.contains("release/verify-published-release.sh \"$VERSION\""));
-    assert!(!workflow.contains("default: 0.1.13"));
+    assert!(!workflow.contains("default: 0.1.14"));
     assert!(!workflow.contains("contents: write"));
     assert!(!workflow.contains("gh release upload"));
 }

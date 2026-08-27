@@ -5,14 +5,14 @@
     "url": "https://github.com/kubet"
   },
   "description": "Azdaja Claude Code plugin marketplace",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "plugins": [
     {
       "name": "azdaja",
       "source": "./",
       "displayName": "Azdaja",
       "description": "Virtual memory for language models with a bounded model-facing surface",
-      "version": "0.1.13",
+      "version": "0.1.14",
       "author": {
         "name": "kubet",
         "url": "https://github.com/kubet"

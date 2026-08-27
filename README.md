@@ -4,9 +4,9 @@
 
 **Virtual memory for language models: analyze inputs beyond one context window through a bounded model-facing surface and a local evaluator that retains the complete UTF-8 source.**
 
-<p align="center"><img src="site/demo-50mb.gif" alt="Azdaja v0.1.13 release acceptance: three 50 MiB scenarios pass" width="900"></p>
+<p align="center"><img src="site/demo-50mb.gif" alt="Azdaja v0.1.14 release acceptance: three 50 MiB scenarios pass" width="900"></p>
 
-**52,428,800 bytes. One root turn. Zero child calls. Root prompt below 65,536 bytes.** [Reproduce the three-scenario proof](tests/product_50mb.rs) · [Inspect the acceptance receipt](bench/results/v0.1.2-product-acceptance-public.json) · [Download v0.1.13](https://github.com/kubet/azdaja/releases/tag/v0.1.13)
+**52,428,800 bytes. One root turn. Zero child calls. Root prompt below 65,536 bytes.** [Reproduce the three-scenario proof](tests/product_50mb.rs) · [Inspect the acceptance receipt](bench/results/v0.1.2-product-acceptance-public.json) · [Download v0.1.14](https://github.com/kubet/azdaja/releases/tag/v0.1.14)
 
 ## What it is
 
@@ -37,7 +37,7 @@ The stable `azdaja.dev/install` URL serves the current published installer. Its 
 Alternatively, install from source with Rust 1.95:
 
 ```bash
-cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.13 --locked
+cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.14 --locked
 ```
 
 `azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.

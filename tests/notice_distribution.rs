@@ -170,9 +170,9 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads()
         std::process::id()
     ));
     fs::create_dir(&dist).unwrap();
-    let darwin = dist.join("azdaja-v0.1.13-darwin-arm64");
-    let darwin_x86_64 = dist.join("azdaja-v0.1.13-darwin-x86_64");
-    let linux = dist.join("azdaja-v0.1.13-linux-x86_64");
+    let darwin = dist.join("azdaja-v0.1.14-darwin-arm64");
+    let darwin_x86_64 = dist.join("azdaja-v0.1.14-darwin-x86_64");
+    let linux = dist.join("azdaja-v0.1.14-linux-x86_64");
     fs::write(&darwin, b"raw darwin binary").unwrap();
     fs::write(&darwin_x86_64, b"raw darwin x86-64 binary").unwrap();
     fs::write(&linux, b"raw linux binary").unwrap();
@@ -204,9 +204,9 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads()
     let lines: Vec<_> = sums.lines().collect();
     assert_eq!(lines.len(), 5);
     for name in [
-        "azdaja-v0.1.13-darwin-arm64",
-        "azdaja-v0.1.13-darwin-x86_64",
-        "azdaja-v0.1.13-linux-x86_64",
+        "azdaja-v0.1.14-darwin-arm64",
+        "azdaja-v0.1.14-darwin-x86_64",
+        "azdaja-v0.1.14-linux-x86_64",
         "LICENSE",
         "THIRD-PARTY-NOTICES.md",
     ] {
@@ -264,7 +264,7 @@ fn ci_windows_safety_is_strict_and_retains_exact_commit_candidates() {
     assert!(job.contains("cargo test --lib --bin azdaja --locked -- --test-threads=1"));
     assert!(job.contains(".\\target\\release\\azdaja.exe --version"));
     assert!(job.contains(".\\target\\release\\azdaja.exe doctor --caps"));
-    assert!(job.contains("azdaja-v0.1.13-windows-x86_64.exe"));
+    assert!(job.contains("azdaja-v0.1.14-windows-x86_64.exe"));
     assert!(
         job.contains(
             "azdaja-standalone-windows-x86_64-${{ github.sha }}-${{ github.run_attempt }}"

@@ -74,7 +74,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s bench/delta -p 'test_*
 Current-main release verification remains:
 
 ```bash
-release/verify-published-release.sh 0.1.13
+release/verify-published-release.sh 0.1.14
 ```
 
 The OOLONG runner performs subscription inference and therefore requires an explicit `--yes-run-inference` acknowledgement. See [the benchmark controller contract](bench/oolong/README.md). Do not infer authorization from this page.
