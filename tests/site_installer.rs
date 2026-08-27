@@ -72,7 +72,15 @@ server.serve_forever()
 "#,
         )
         .unwrap();
-        let mut child = Command::new("python3")
+        let python = [
+            "/usr/bin/python3",
+            "/opt/homebrew/bin/python3",
+            "/usr/local/bin/python3",
+        ]
+        .into_iter()
+        .find(|candidate| Path::new(candidate).is_file())
+        .unwrap_or("python3");
+        let mut child = Command::new(python)
             .arg(&script)
             .arg(root)
             .arg(&port_file)
