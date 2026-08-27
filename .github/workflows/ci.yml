@@ -128,9 +128,7 @@ jobs:
           marker="$scratch/provider-called"
           mkdir -p "$fixture" "$home" "$guard"
           case "$(uname -s)-$(uname -m)" in
-            Darwin-arm64) asset=azdaja-v0.1.13-darwin-arm64 ;;
-            Darwin-x86_64) asset=azdaja-v0.1.13-darwin-x86_64 ;;
-            Linux-x86_64) asset=azdaja-v0.1.13-linux-x86_64 ;;
+            Darwin-arm64|Darwin-x86_64|Linux-x86_64) ;;
             *) printf 'unsupported CI host: %s-%s\n' "$(uname -s)" "$(uname -m)" >&2; exit 1 ;;
           esac
           cp "$candidate" "$fixture/azdaja-v0.1.13-darwin-arm64"
