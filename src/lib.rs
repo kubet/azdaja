@@ -51,7 +51,7 @@ const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const MONTY_VERSION: &str = "0.0.21";
-pub const SKILL: &str = include_str!("../assets/SKILL.md");
+pub const SKILL: &str = include_str!("../assets/template/SKILL.md");
 pub const DEFAULT_CONFIG: &str = include_str!("../assets/config.toml");
 pub const SEMANTIC_MANIFEST_PROMPT_ENVELOPE_CHARS: usize = 360_000;
 pub const SEMANTIC_MANIFEST_RESPONSE_ENVELOPE_CHARS: usize = 8_192;

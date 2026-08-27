@@ -14,7 +14,7 @@ include = [
     "/THIRD-PARTY-NOTICES.md",
     "/README.md",
     "/src/**",
-    "/assets/SKILL.md",
+    "/assets/template/SKILL.md",
     "/assets/config.toml",
     "/assets/legacy/*.toml",
 ]

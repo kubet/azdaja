@@ -46,7 +46,7 @@ jobs:
               "LICENSE",
               "README.md",
               "THIRD-PARTY-NOTICES.md",
-              "assets/SKILL.md",
+              "assets/template/SKILL.md",
               "assets/config.toml",
               "assets/legacy/codex-config-41f19430.toml",
               "assets/legacy/codex-config-a9da6615.toml",

@@ -83,7 +83,7 @@ def validate(plan_path: Path, repo_root: Path | None = None) -> dict[str, Any]:
         )
     require(sha256(repo / "src/lib.rs") == source["src_lib_sha256"], "src/lib.rs hash")
     require(sha256(repo / "src/main.rs") == source["src_main_sha256"], "src/main.rs hash")
-    require(sha256(repo / "assets/SKILL.md") == source["skill_sha256"], "skill hash")
+    require(sha256(repo / "assets/template/SKILL.md") == source["skill_sha256"], "skill hash")
     require(sha256(repo / "assets/config.toml") == source["config_sha256"], "config hash")
     require(sha256(repo / "Cargo.lock") == source["cargo_lock_sha256"], "Cargo.lock hash")
     tree = subprocess.run(
