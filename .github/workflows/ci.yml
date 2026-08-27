@@ -294,7 +294,7 @@ jobs:
           if not architecture_valid:
               raise SystemExit(f"binary architecture validation failed for {host}")
           reported_version = subprocess.check_output([str(source), "--version"], text=True).strip()
-          if reported_version != "azdaja 0.1.14":
+          if reported_version != "azdaja 0.1.14 (monty 0.0.21)":
               raise SystemExit(f"unexpected binary version: {reported_version}")
           receipt = {
               "schema_version": 1,
