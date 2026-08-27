@@ -7,7 +7,7 @@ Verified preparation, public-install evidence, and submission receipts. This fil
 Repository preparation:
 
 - `gemini-extension.json` exists at the repository root.
-- Manifest name and version are `azdaja` and `0.1.13`.
+- Manifest name and version are `azdaja` and `0.1.14`.
 - `skills/azdaja/SKILL.md` is the discoverable agent skill.
 - The GitHub topic `gemini-cli-extension` is live.
 
@@ -21,7 +21,7 @@ HOME="$tmp" npx -y @google/gemini-cli extensions link "$PWD" --consent
 HOME="$tmp" npx -y @google/gemini-cli extensions list
 ```
 
-The real CLI linked and enabled `azdaja (0.1.13)`, exposed the `azdaja` agent skill, and listed the repository path as a linked extension. No authentication or model inference was performed.
+The real CLI linked and enabled `azdaja (0.1.14)`, exposed the `azdaja` agent skill, and listed the repository path as a linked extension. No authentication or model inference was performed.
 
 ## Claude Code plugin
 
@@ -109,7 +109,7 @@ The primary `hesreallyhim/awesome-claude-code` list explicitly forbids PR submis
 Draft subject:
 
 ```text
-Beta submission: Azdaja v0.1.13 — bounded LLM analysis over 50 MiB inputs
+Beta submission: Azdaja v0.1.14 — bounded LLM analysis over 50 MiB inputs
 ```
 
 Draft body:
@@ -117,14 +117,14 @@ Draft body:
 ```text
 Azdaja is an MIT-licensed Rust CLI that keeps complete large UTF-8 inputs in a local Monty/Python evaluator while exposing a bounded model-facing surface.
 
-The v0.1.13 release includes a reproducible provider-free acceptance test over three exact 52,428,800-byte inputs, one root turn each, zero child calls, and a root prompt below 65,536 bytes. Public receipts, limitations, and reproduction commands are collected at:
+The v0.1.14 release includes a reproducible provider-free acceptance test over three exact 52,428,800-byte inputs, one root turn each, zero child calls, and a root prompt below 65,536 bytes. Public receipts, limitations, and reproduction commands are collected at:
 https://github.com/kubet/azdaja/blob/main/BENCHMARKS.md
 
 Release:
-https://github.com/kubet/azdaja/releases/tag/v0.1.13
+https://github.com/kubet/azdaja/releases/tag/v0.1.14
 ```
 
-The current Console.dev criteria accept pre-1.0 developer-tool betas, so v0.1.13 is eligible for consideration. Sending remains blocked until an authorized mail account is connected; no email receipt exists.
+The current Console.dev criteria accept pre-1.0 developer-tool betas, so v0.1.14 is eligible for consideration. Sending remains blocked until an authorized mail account is connected; no email receipt exists.
 
 ## Lobsters
 
