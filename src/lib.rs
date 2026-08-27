@@ -6,11 +6,14 @@ use monty_types::{
     PrintWriterCallback, ResourceLimits, ResourceTracker,
 };
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{self, MapAccess, SeqAccess, Visitor},
+};
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
-    env,
+    env, fmt,
     fs::{self, File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -58,6 +61,8 @@ pub const SEMANTIC_MANIFEST_WORKERS: usize = 8;
 pub const SEMANTIC_PER_CALL_P95_SECONDS: u64 = 27;
 pub const SEMANTIC_WALL_SAFETY_SECONDS: u64 = 60;
 pub const SEMANTIC_MIN_WALL_SECONDS: u64 = 240;
+pub const TYPED_FINAL_SCHEMA_MAX_BYTES: usize = 16 * 1024;
+const TYPED_FINAL_SCHEMA_MAX_DEPTH: usize = 32;
 
 static PROVIDER_INTERRUPTED: AtomicBool = AtomicBool::new(false);
 #[cfg(unix)]
@@ -4689,6 +4694,623 @@ fn semantic_wall_budget(required_calls: usize) -> Result<Duration> {
     Ok(Duration::from_secs(seconds))
 }
 
+#[derive(Clone, Debug)]
+struct UniqueJsonValue(serde_json::Value);
+
+struct UniqueJsonVisitor;
+
+impl<'de> Visitor<'de> for UniqueJsonVisitor {
+    type Value = UniqueJsonValue;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a JSON value without duplicate object keys")
+    }
+
+    fn visit_unit<E>(self) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(UniqueJsonValue(serde_json::Value::Null))
+    }
+
+    fn visit_none<E>(self) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        self.visit_unit()
+    }
+
+    fn visit_bool<E>(self, value: bool) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(UniqueJsonValue(serde_json::Value::Bool(value)))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(UniqueJsonValue(serde_json::Value::Number(value.into())))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(UniqueJsonValue(serde_json::Value::Number(value.into())))
+    }
+
+    fn visit_f64<E>(self, value: f64) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        let number = serde_json::Number::from_f64(value)
+            .ok_or_else(|| E::custom("JSON number is not finite"))?;
+        Ok(UniqueJsonValue(serde_json::Value::Number(number)))
+    }
+
+    fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(UniqueJsonValue(serde_json::Value::String(value.to_owned())))
+    }
+
+    fn visit_string<E>(self, value: String) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(UniqueJsonValue(serde_json::Value::String(value)))
+    }
+
+    fn visit_seq<A>(self, mut sequence: A) -> std::result::Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut values = Vec::new();
+        while let Some(value) = sequence.next_element::<UniqueJsonValue>()? {
+            values.push(value.0);
+        }
+        Ok(UniqueJsonValue(serde_json::Value::Array(values)))
+    }
+
+    fn visit_map<A>(self, mut map: A) -> std::result::Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut values = serde_json::Map::new();
+        while let Some((key, value)) = map.next_entry::<String, UniqueJsonValue>()? {
+            if values.insert(key.clone(), value.0).is_some() {
+                return Err(de::Error::custom(format!(
+                    "duplicate JSON object key {key:?}"
+                )));
+            }
+        }
+        Ok(UniqueJsonValue(serde_json::Value::Object(values)))
+    }
+}
+
+impl<'de> Deserialize<'de> for UniqueJsonValue {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(UniqueJsonVisitor)
+    }
+}
+
+fn parse_unique_json(bytes: &[u8]) -> Result<serde_json::Value> {
+    let mut deserializer = serde_json::Deserializer::from_slice(bytes);
+    let value = UniqueJsonValue::deserialize(&mut deserializer)
+        .map_err(|error| anyhow!("typed FINAL schema is invalid JSON: {error}"))?;
+    deserializer
+        .end()
+        .map_err(|error| anyhow!("typed FINAL schema has trailing JSON data: {error}"))?;
+    Ok(value.0)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TypedFinalType {
+    Null,
+    Boolean,
+    Integer,
+    Number,
+    String,
+    Array,
+    Object,
+}
+
+impl TypedFinalType {
+    fn parse(value: &str) -> Result<Self> {
+        match value {
+            "null" => Ok(Self::Null),
+            "boolean" => Ok(Self::Boolean),
+            "integer" => Ok(Self::Integer),
+            "number" => Ok(Self::Number),
+            "string" => Ok(Self::String),
+            "array" => Ok(Self::Array),
+            "object" => Ok(Self::Object),
+            _ => bail!("typed FINAL schema has unsupported type {value:?}"),
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Null => "null",
+            Self::Boolean => "boolean",
+            Self::Integer => "integer",
+            Self::Number => "number",
+            Self::String => "string",
+            Self::Array => "array",
+            Self::Object => "object",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct TypedFinalSchemaNode {
+    value_type: Option<TypedFinalType>,
+    enum_values: Option<Vec<serde_json::Value>>,
+    properties: BTreeMap<String, TypedFinalSchemaNode>,
+    required: BTreeSet<String>,
+    additional_properties: bool,
+    items: Option<Box<TypedFinalSchemaNode>>,
+}
+
+impl TypedFinalSchemaNode {
+    fn prompt_value(&self) -> serde_json::Value {
+        let mut output = serde_json::Map::new();
+        if let Some(value_type) = self.value_type {
+            output.insert(
+                "type".into(),
+                serde_json::Value::String(value_type.name().into()),
+            );
+        }
+        if let Some(values) = self.enum_values.as_ref() {
+            output.insert("enum".into(), serde_json::Value::Array(values.clone()));
+        }
+        if self.value_type == Some(TypedFinalType::Object) {
+            let mut properties = serde_json::Map::new();
+            for (name, schema) in &self.properties {
+                properties.insert(name.clone(), schema.prompt_value());
+            }
+            output.insert("properties".into(), serde_json::Value::Object(properties));
+            output.insert(
+                "required".into(),
+                serde_json::Value::Array(
+                    self.required
+                        .iter()
+                        .cloned()
+                        .map(serde_json::Value::String)
+                        .collect(),
+                ),
+            );
+            output.insert(
+                "additionalProperties".into(),
+                serde_json::Value::Bool(self.additional_properties),
+            );
+        }
+        if self.value_type == Some(TypedFinalType::Array)
+            && let Some(items) = self.items.as_ref()
+        {
+            output.insert("items".into(), items.prompt_value());
+        }
+        serde_json::Value::Object(output)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TypedFinalSchema {
+    root: TypedFinalSchemaNode,
+    source_sha256: String,
+    prompt_json: String,
+}
+
+impl TypedFinalSchema {
+    pub fn load(path: &Path) -> Result<Self> {
+        let file = File::open(path)
+            .with_context(|| format!("open typed FINAL schema: {}", path.display()))?;
+        let metadata = file
+            .metadata()
+            .with_context(|| format!("read typed FINAL schema metadata: {}", path.display()))?;
+        if !metadata.is_file() {
+            bail!(
+                "typed FINAL schema is not a regular file: {}",
+                path.display()
+            )
+        }
+        if metadata.len() > TYPED_FINAL_SCHEMA_MAX_BYTES as u64 {
+            bail!(
+                "typed FINAL schema exceeds {} bytes",
+                TYPED_FINAL_SCHEMA_MAX_BYTES
+            )
+        }
+        let mut bytes = Vec::with_capacity(
+            usize::try_from(metadata.len())
+                .unwrap_or(TYPED_FINAL_SCHEMA_MAX_BYTES)
+                .min(TYPED_FINAL_SCHEMA_MAX_BYTES),
+        );
+        file.take((TYPED_FINAL_SCHEMA_MAX_BYTES + 1) as u64)
+            .read_to_end(&mut bytes)
+            .with_context(|| format!("read typed FINAL schema: {}", path.display()))?;
+        Self::from_bytes(&bytes)
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.is_empty() {
+            bail!("typed FINAL schema is empty")
+        }
+        if bytes.len() > TYPED_FINAL_SCHEMA_MAX_BYTES {
+            bail!(
+                "typed FINAL schema exceeds {} bytes",
+                TYPED_FINAL_SCHEMA_MAX_BYTES
+            )
+        }
+        let document = parse_unique_json(bytes)?;
+        let root = compile_typed_final_schema(&document, "$", 0)?;
+        let prompt_json = serde_json::to_string(&root.prompt_value())?;
+        Ok(Self {
+            root,
+            source_sha256: sha256_hex(bytes),
+            prompt_json,
+        })
+    }
+
+    pub fn source_sha256(&self) -> &str {
+        &self.source_sha256
+    }
+
+    pub fn prompt_json(&self) -> &str {
+        &self.prompt_json
+    }
+
+    pub fn validate(&self, value: &serde_json::Value) -> Result<()> {
+        validate_typed_final_value(&self.root, value, "$")
+    }
+}
+
+fn schema_object<'a>(
+    value: &'a serde_json::Value,
+    path: &str,
+) -> Result<&'a serde_json::Map<String, serde_json::Value>> {
+    value
+        .as_object()
+        .ok_or_else(|| anyhow!("typed FINAL schema at {path} must be an object"))
+}
+
+fn compile_typed_final_schema(
+    value: &serde_json::Value,
+    path: &str,
+    depth: usize,
+) -> Result<TypedFinalSchemaNode> {
+    if depth > TYPED_FINAL_SCHEMA_MAX_DEPTH {
+        bail!(
+            "typed FINAL schema exceeds nesting depth {}",
+            TYPED_FINAL_SCHEMA_MAX_DEPTH
+        )
+    }
+    let object = schema_object(value, path)?;
+    let supported = [
+        "$schema",
+        "$id",
+        "title",
+        "description",
+        "type",
+        "enum",
+        "properties",
+        "required",
+        "additionalProperties",
+        "items",
+    ];
+    for key in object.keys() {
+        if !supported.contains(&key.as_str()) {
+            bail!("typed FINAL schema at {path} uses unsupported keyword {key:?}")
+        }
+    }
+    for annotation in ["$schema", "$id", "title", "description"] {
+        if let Some(value) = object.get(annotation)
+            && !value.is_string()
+        {
+            bail!("typed FINAL schema annotation {annotation:?} at {path} must be a string")
+        }
+    }
+    let value_type = object
+        .get("type")
+        .map(|value| {
+            value
+                .as_str()
+                .ok_or_else(|| anyhow!("typed FINAL schema type at {path} must be one string"))
+                .and_then(TypedFinalType::parse)
+        })
+        .transpose()?;
+    let enum_values = object
+        .get("enum")
+        .map(|value| {
+            let values = value
+                .as_array()
+                .ok_or_else(|| anyhow!("typed FINAL schema enum at {path} must be an array"))?;
+            if values.is_empty() {
+                bail!("typed FINAL schema enum at {path} cannot be empty")
+            }
+            let mut unique = Vec::new();
+            for value in values {
+                if unique.contains(value) {
+                    bail!("typed FINAL schema enum at {path} contains a duplicate value")
+                }
+                unique.push(value.clone());
+            }
+            Ok(unique)
+        })
+        .transpose()?;
+    if value_type.is_none() && enum_values.is_none() {
+        bail!("typed FINAL schema at {path} must declare type or enum")
+    }
+
+    let has_object_keywords = object.contains_key("properties")
+        || object.contains_key("required")
+        || object.contains_key("additionalProperties");
+    if has_object_keywords && value_type != Some(TypedFinalType::Object) {
+        bail!("typed FINAL schema object keywords at {path} require type \"object\"")
+    }
+    if object.contains_key("items") && value_type != Some(TypedFinalType::Array) {
+        bail!("typed FINAL schema items at {path} requires type \"array\"")
+    }
+
+    let mut properties = BTreeMap::new();
+    if let Some(value) = object.get("properties") {
+        let values = value
+            .as_object()
+            .ok_or_else(|| anyhow!("typed FINAL schema properties at {path} must be an object"))?;
+        for (name, value) in values {
+            let child_path = typed_final_pointer(path, name);
+            properties.insert(
+                name.clone(),
+                compile_typed_final_schema(value, &child_path, depth + 1)?,
+            );
+        }
+    }
+    let mut required = BTreeSet::new();
+    if let Some(value) = object.get("required") {
+        let values = value
+            .as_array()
+            .ok_or_else(|| anyhow!("typed FINAL schema required at {path} must be an array"))?;
+        for value in values {
+            let name = value.as_str().ok_or_else(|| {
+                anyhow!("typed FINAL schema required at {path} must contain only strings")
+            })?;
+            if !required.insert(name.to_owned()) {
+                bail!("typed FINAL schema required at {path} contains duplicate {name:?}")
+            }
+        }
+    }
+    let additional_properties = object
+        .get("additionalProperties")
+        .map(|value| {
+            value.as_bool().ok_or_else(|| {
+                anyhow!("typed FINAL schema additionalProperties at {path} must be a boolean")
+            })
+        })
+        .transpose()?
+        .unwrap_or(true);
+    let items = object
+        .get("items")
+        .map(|value| {
+            compile_typed_final_schema(value, &format!("{path}/*"), depth + 1).map(Box::new)
+        })
+        .transpose()?;
+    let node = TypedFinalSchemaNode {
+        value_type,
+        enum_values,
+        properties,
+        required,
+        additional_properties,
+        items,
+    };
+    if let (Some(value_type), Some(values)) = (node.value_type, node.enum_values.as_ref()) {
+        for value in values {
+            if !typed_final_type_matches(value_type, value) {
+                bail!(
+                    "typed FINAL schema enum at {path} contains a value outside type {:?}",
+                    value_type.name()
+                )
+            }
+        }
+    }
+    Ok(node)
+}
+
+fn typed_final_pointer(path: &str, name: &str) -> String {
+    let escaped = name.replace('~', "~0").replace('/', "~1");
+    format!("{path}/{escaped}")
+}
+
+fn typed_final_type_matches(value_type: TypedFinalType, value: &serde_json::Value) -> bool {
+    match value_type {
+        TypedFinalType::Null => value.is_null(),
+        TypedFinalType::Boolean => value.is_boolean(),
+        TypedFinalType::Integer => {
+            value.as_i64().is_some()
+                || value.as_u64().is_some()
+                || value
+                    .as_f64()
+                    .is_some_and(|number| number.is_finite() && number.fract() == 0.0)
+        }
+        TypedFinalType::Number => value.is_number(),
+        TypedFinalType::String => value.is_string(),
+        TypedFinalType::Array => value.is_array(),
+        TypedFinalType::Object => value.is_object(),
+    }
+}
+
+fn validate_typed_final_value(
+    schema: &TypedFinalSchemaNode,
+    value: &serde_json::Value,
+    path: &str,
+) -> Result<()> {
+    if let Some(value_type) = schema.value_type
+        && !typed_final_type_matches(value_type, value)
+    {
+        bail!(
+            "typed FINAL schema mismatch at {path}: expected {}",
+            value_type.name()
+        )
+    }
+    if let Some(values) = schema.enum_values.as_ref()
+        && !values.contains(value)
+    {
+        bail!("typed FINAL schema mismatch at {path}: value is outside enum")
+    }
+    if schema.value_type == Some(TypedFinalType::Object) {
+        let object = value
+            .as_object()
+            .expect("typed FINAL object type was validated");
+        for required in &schema.required {
+            if !object.contains_key(required) {
+                bail!(
+                    "typed FINAL schema mismatch at {path}: missing required property {required:?}"
+                )
+            }
+        }
+        for (name, value) in object {
+            if let Some(child) = schema.properties.get(name) {
+                validate_typed_final_value(child, value, &typed_final_pointer(path, name))?;
+            } else if !schema.additional_properties {
+                bail!(
+                    "typed FINAL schema mismatch at {}: additional property is forbidden",
+                    typed_final_pointer(path, name)
+                )
+            }
+        }
+    }
+    if schema.value_type == Some(TypedFinalType::Array)
+        && let Some(items) = schema.items.as_ref()
+    {
+        let values = value
+            .as_array()
+            .expect("typed FINAL array type was validated");
+        for (index, value) in values.iter().enumerate() {
+            validate_typed_final_value(items, value, &format!("{path}/{index}"))?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod typed_final_schema_tests {
+    use super::*;
+
+    #[test]
+    fn typed_final_schema_validates_nested_required_enum_and_array_shapes() {
+        let schema = TypedFinalSchema::from_bytes(
+            br#"{
+                "$schema":"https://json-schema.org/draft/2020-12/schema",
+                "title":"ignored prompt annotation",
+                "type":"object",
+                "required":["issues"],
+                "additionalProperties":false,
+                "properties":{
+                    "issues":{
+                        "type":"array",
+                        "items":{
+                            "type":"object",
+                            "required":["file","severity"],
+                            "additionalProperties":false,
+                            "properties":{
+                                "file":{"type":"string"},
+                                "severity":{"type":"string","enum":["low","high"]}
+                            }
+                        }
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(schema.source_sha256().len(), 64);
+        assert!(!schema.prompt_json().contains("ignored prompt annotation"));
+        schema
+            .validate(&serde_json::json!({
+                "issues": [{"file":"src/lib.rs","severity":"high"}]
+            }))
+            .unwrap();
+
+        for (value, expected) in [
+            (serde_json::json!({}), "missing required property"),
+            (
+                serde_json::json!({"issues":[{"file":"x","severity":"medium"}]}),
+                "outside enum",
+            ),
+            (
+                serde_json::json!({"issues":[{"file":"x","severity":"low","extra":1}]}),
+                "additional property is forbidden",
+            ),
+            (
+                serde_json::json!({"issues":[{"file":7,"severity":"low"}]}),
+                "expected string",
+            ),
+        ] {
+            let error = schema.validate(&value).unwrap_err().to_string();
+            assert!(error.contains(expected), "{error}");
+        }
+    }
+
+    #[test]
+    fn typed_final_schema_rejects_ambiguous_or_unsupported_documents() {
+        for (source, expected) in [
+            (
+                r#"{"type":"string","type":"number"}"#,
+                "duplicate JSON object key",
+            ),
+            (r#"{"type":"string","minLength":1}"#, "unsupported keyword"),
+            (r#"{}"#, "must declare type or enum"),
+            (
+                r#"{"type":"string","properties":{}}"#,
+                "require type \"object\"",
+            ),
+            (r#"{"type":"string","enum":["ok",1]}"#, "outside type"),
+            (r#"{"type":"string"}{}"#, "trailing"),
+        ] {
+            let error = TypedFinalSchema::from_bytes(source.as_bytes())
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(expected), "source={source} error={error}");
+        }
+        let oversized = vec![b' '; TYPED_FINAL_SCHEMA_MAX_BYTES + 1];
+        let error = TypedFinalSchema::from_bytes(&oversized)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("exceeds"), "{error}");
+    }
+
+    #[test]
+    fn typed_final_integer_accepts_integral_json_numbers_only() {
+        let schema = TypedFinalSchema::from_bytes(br#"{"type":"integer"}"#).unwrap();
+        schema.validate(&serde_json::json!(4)).unwrap();
+        schema.validate(&serde_json::json!(4.0)).unwrap();
+        let error = schema
+            .validate(&serde_json::json!(4.5))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("expected integer"), "{error}");
+    }
+
+    #[test]
+    fn typed_final_schema_file_load_enforces_the_byte_cap() {
+        let path = env::temp_dir().join(format!(
+            "azdaja-typed-schema-cap-{}-{}.json",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::write(&path, vec![b' '; TYPED_FINAL_SCHEMA_MAX_BYTES + 1]).unwrap();
+        let error = TypedFinalSchema::load(&path).unwrap_err().to_string();
+        fs::remove_file(path).unwrap();
+        assert!(error.contains("exceeds"), "{error}");
+    }
+}
+
 fn monty_json_value(value: &MontyObject) -> Result<serde_json::Value> {
     Ok(match value {
         MontyObject::None => serde_json::Value::Null,
@@ -4713,7 +5335,12 @@ fn monty_json_value(value: &MontyObject) -> Result<serde_json::Value> {
                 let MontyObject::String(key) = key else {
                     bail!("FINAL JSON object keys must be strings")
                 };
-                output.insert(key.clone(), monty_json_value(value)?);
+                if output
+                    .insert(key.clone(), monty_json_value(value)?)
+                    .is_some()
+                {
+                    bail!("FINAL JSON object contains duplicate key {key:?}")
+                }
             }
             serde_json::Value::Object(output)
         }
@@ -5645,6 +6272,9 @@ pub struct SoloSession {
     repl: Option<MontyRepl>,
     sub_model: String,
     answer: Option<String>,
+    answer_error: Option<String>,
+    answer_json: Option<serde_json::Value>,
+    answer_json_error: Option<String>,
     structural_sample: Option<String>,
     authoritative_source: Option<String>,
     authoritative_records: Option<Vec<AuthoritativeRecord>>,
@@ -5662,6 +6292,9 @@ impl SoloSession {
             repl: Some(repl),
             sub_model: sub_model.unwrap_or_else(|| cfg.default_model.clone()),
             answer: None,
+            answer_error: None,
+            answer_json: None,
+            answer_json_error: None,
             structural_sample: None,
             authoritative_source: None,
             authoritative_records: None,
@@ -5780,6 +6413,9 @@ impl SoloSession {
             _ => bail!("solo checkpoint is suspended"),
         });
         self.answer = None;
+        self.answer_error = None;
+        self.answer_json = None;
+        self.answer_json_error = None;
         Ok(())
     }
     pub fn exec(&mut self, code: &str, cfg: &Config) -> Result<ExecResult> {
@@ -5794,6 +6430,10 @@ impl SoloSession {
         cfg: &Config,
         allow_projection_private: bool,
     ) -> Result<ExecResult> {
+        self.answer = None;
+        self.answer_error = None;
+        self.answer_json = None;
+        self.answer_json_error = None;
         let repl = self
             .repl
             .take()
@@ -5850,7 +6490,14 @@ impl SoloSession {
                 },
             };
             if let Some(v) = value {
-                self.answer = Some(final_output_text(&v)?);
+                match monty_json_value(&v) {
+                    Ok(value) => self.answer_json = Some(value),
+                    Err(error) => self.answer_json_error = Some(format!("{error:#}")),
+                }
+                match final_output_text(&v) {
+                    Ok(value) => self.answer = Some(value),
+                    Err(error) => self.answer_error = Some(format!("{error:#}")),
+                }
                 finalized = true
             }
         }
@@ -5869,6 +6516,9 @@ impl SoloSession {
         })
     }
     pub fn final_answer_is_blank(&self) -> Result<bool> {
+        if let Some(error) = self.answer_error.as_deref() {
+            bail!("{error}")
+        }
         self.answer
             .as_deref()
             .map(|answer| answer.trim().is_empty())
@@ -5876,10 +6526,22 @@ impl SoloSession {
     }
 
     pub fn final_answer(&self, cfg: &Config) -> Result<String> {
+        if let Some(error) = self.answer_error.as_deref() {
+            bail!("{error}")
+        }
         self.answer
             .as_deref()
             .map(|s| cap(s, cfg.output_cap))
             .ok_or_else(|| anyhow!("session has no final answer"))
+    }
+
+    pub fn final_answer_json(&self) -> Result<&serde_json::Value> {
+        if let Some(error) = self.answer_json_error.as_deref() {
+            bail!("{error}")
+        }
+        self.answer_json
+            .as_ref()
+            .ok_or_else(|| anyhow!("FINAL value is not JSON representable"))
     }
 }
 
