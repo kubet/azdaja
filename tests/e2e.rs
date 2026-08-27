@@ -447,13 +447,37 @@ logs = pathlib.Path(sys.argv[1])
 prompt = sys.stdin.read()
 cases = (
     "semantic-scale/102158", "semantic-scale/100000",
+    "semantic-scale/long-100",
+    "semantic-scale/adjudication-100",
+    "semantic-scale/unicode-100",
+    "semantic-scale/oversized-1",
+    "semantic-scale/response-8176", "semantic-scale/response-8177",
     "semantic-projection/102158",
 )
 matched = [value for value in cases if value in prompt]
 assert len(matched) == 1, matched
 case = matched[0]
-count = 102158 if case.endswith("102158") else 100000
+if case.endswith("102158"):
+    count = 102158
+elif case.endswith("long-100"):
+    count = 100
+elif case.endswith("adjudication-100"):
+    count = 100
+elif case.endswith("unicode-100"):
+    count = 100
+elif case.endswith("oversized-1"):
+    count = 1
+elif case.endswith("response-8176"):
+    count = 8176
+elif case.endswith("response-8177"):
+    count = 8177
+else:
+    count = 100000
 projected = case.startswith("semantic-projection/")
+adjudication = case.endswith("adjudication-100")
+long_records = case.endswith("long-100") or adjudication
+oversized_record = case.endswith("oversized-1")
+compact_records = "/response-" in case
 
 if os.getenv("RLM_DEPTH") == "0":
     if projected:
@@ -467,11 +491,23 @@ if os.getenv("RLM_DEPTH") == "0":
             "FINAL(str(len(labels))+\":\"+labels[\"O0\"]+\":\"+labels[\"O" + str(count - 1) + "\"])"
         )
     else:
+        padding = 90000 if oversized_record else (4000 if long_records else 55)
+        compact_setup = (
+            "alphabet=[]\n"
+            "j=33\n"
+            "while j<=126:\n"
+            "    if j!=34 and j!=92:\n"
+            "        alphabet.append(chr(j))\n"
+            "    j+=1\n"
+            "alphabet=\"\".join(alphabet)\n"
+        ) if compact_records else ""
+        evidence = 'alphabet[i//92]+alphabet[i%92]' if compact_records else '"Instance: synthetic semantic row "+str(i)+" "+("x"*' + str(padding) + ')'
         root = (
-            "items=[]\n"
+            compact_setup
+            + "items=[]\n"
             "i=0\n"
             "while i<" + str(count) + ":\n"
-            "    items.append({\"id\":\"i\"+str(i),\"evidence\":\"Instance: synthetic semantic row \"+str(i)+\" \"+(\"x\"*55)})\n"
+            "    items.append({\"id\":\"i\"+str(i),\"evidence\":" + evidence + "})\n"
             "    i+=1\n"
             "labels=semantic_manifest_records(items,\"classify every synthetic instance under the two-label ontology\",[\"class-a\",\"class-b\"])\n"
             "FINAL(str(len(labels))+\":\"+labels[\"i0\"]+\":\"+labels[\"i\"+str(" + str(count - 1) + ")])"
@@ -508,6 +544,8 @@ record = {
     "shard": int(shard),
     "item_count": item_count,
     "prompt_chars": len(prompt),
+    "prompt_bytes": len(prompt.encode("utf-8")),
+    "response_chars": len(prefix) + item_count * code_width,
     "first_local": rows[0][0],
     "last_local": rows[-1][0],
     "first_evidence": rows[0][1],
@@ -529,7 +567,7 @@ os.close(fd)
 if malformed:
     print("malformed")
     raise SystemExit(0)
-label = "class-a"
+label = "class-b" if adjudication and role == "B" else "class-a"
 print(prefix + code_by_label[label] * item_count)
 "####,
     )
@@ -548,7 +586,7 @@ fn semantic_scale_config(dir: &Path, script: &Path, logs: &Path) -> PathBuf {
     );
     let text = fs::read_to_string(&cfg)
         .unwrap()
-        .replace("cell_timeout = 2", "cell_timeout = 120");
+        .replace("cell_timeout = 2", "cell_timeout = 240");
     fs::write(&cfg, text).unwrap();
     cfg
 }
@@ -577,8 +615,62 @@ fn peak_logged_concurrency(calls: &[serde_json::Value]) -> usize {
     usize::try_from(peak).unwrap()
 }
 
+fn assert_adaptive_balanced_calls(
+    calls: &[serde_json::Value],
+    item_count: u64,
+    legacy_shards: usize,
+) -> usize {
+    let shards = calls.iter().filter(|value| value["role"] == "A").count();
+    assert!(shards > 0);
+    assert!(
+        shards < legacy_shards,
+        "adaptive packing did not improve legacy shard count: {shards} >= {legacy_shards}"
+    );
+    assert_eq!(calls.len(), 2 * shards);
+    assert_eq!(peak_logged_concurrency(calls), (2 * shards).min(8));
+    for role in ["A", "B"] {
+        let role_calls = calls
+            .iter()
+            .filter(|value| value["role"] == role)
+            .collect::<Vec<_>>();
+        assert_eq!(role_calls.len(), shards);
+        assert_eq!(
+            role_calls
+                .iter()
+                .map(|value| value["shard"].as_u64().unwrap())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            shards
+        );
+        assert_eq!(
+            role_calls
+                .iter()
+                .map(|value| value["item_count"].as_u64().unwrap())
+                .sum::<u64>(),
+            item_count
+        );
+        let smallest = role_calls
+            .iter()
+            .map(|value| value["item_count"].as_u64().unwrap())
+            .min()
+            .unwrap();
+        let largest = role_calls
+            .iter()
+            .map(|value| value["item_count"].as_u64().unwrap())
+            .max()
+            .unwrap();
+        assert!(largest - smallest <= 1, "unbalanced adaptive shards");
+    }
+    assert_eq!(calls.iter().filter(|value| value["role"] == "J").count(), 0);
+    assert!(calls.iter().all(|value| {
+        value["prompt_bytes"].as_u64().unwrap() + 128 <= 81_920
+            && value["item_count"].as_u64().unwrap() > 39
+    }));
+    shards
+}
+
 #[test]
-fn semantic_manifest_102158_rows_uses_fixed_39_item_shards() {
+fn semantic_manifest_102158_rows_uses_adaptive_byte_shards() {
     let t = temp("semantic-scale-102158");
     let (script, logs) = write_semantic_scale_oracle(&t);
     let cfg = semantic_scale_config(&t, &script, &logs);
@@ -606,29 +698,7 @@ fn semantic_manifest_102158_rows_uses_fixed_39_item_shards() {
         "102158:class-a:class-a"
     );
     let calls = read_json_lines(&logs.join("102158.jsonl"));
-    let shards = 2_620;
-    assert_eq!(calls.len(), 2 * shards);
-    assert_eq!(peak_logged_concurrency(&calls), 8);
-    for role in ["A", "B"] {
-        let role_calls = calls
-            .iter()
-            .filter(|value| value["role"] == role)
-            .collect::<Vec<_>>();
-        assert_eq!(role_calls.len(), shards);
-        assert_eq!(
-            role_calls
-                .iter()
-                .map(|value| value["shard"].as_u64().unwrap())
-                .collect::<std::collections::BTreeSet<_>>()
-                .len(),
-            shards
-        );
-    }
-    assert_eq!(calls.iter().filter(|value| value["role"] == "J").count(), 0);
-    assert!(calls.iter().all(
-        |value| matches!(value["item_count"].as_u64(), Some(38 | 39))
-            && value["prompt_chars"].as_u64().unwrap() + 128 <= 81_920
-    ));
+    assert_adaptive_balanced_calls(&calls, 102_158, 2_620);
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -673,36 +743,7 @@ fn semantic_manifest_exact_target_projection_preserves_102158_occurrences() {
     );
     let calls = read_json_lines(&logs.join("102158.jsonl"));
     let unique_targets = 4_151_u64;
-    let shards = 107;
-    assert_eq!(calls.len(), 2 * shards);
-    assert_eq!(peak_logged_concurrency(&calls), 8);
-    for role in ["A", "B"] {
-        let role_calls = calls
-            .iter()
-            .filter(|value| value["role"] == role)
-            .collect::<Vec<_>>();
-        assert_eq!(role_calls.len(), shards);
-        assert_eq!(
-            role_calls
-                .iter()
-                .map(|value| value["item_count"].as_u64().unwrap())
-                .sum::<u64>(),
-            unique_targets
-        );
-        assert_eq!(
-            role_calls
-                .iter()
-                .map(|value| value["shard"].as_u64().unwrap())
-                .collect::<std::collections::BTreeSet<_>>()
-                .len(),
-            shards
-        );
-    }
-    assert_eq!(calls.iter().filter(|value| value["role"] == "J").count(), 0);
-    assert!(calls.iter().all(
-        |value| matches!(value["item_count"].as_u64(), Some(38 | 39))
-            && value["prompt_chars"].as_u64().unwrap() + 128 <= 81_920
-    ));
+    assert_adaptive_balanced_calls(&calls, unique_targets, 107);
     let trace = fs::read_to_string(trace_path).unwrap();
     let runtime: serde_json::Value = trace
         .lines()
@@ -720,7 +761,7 @@ fn semantic_manifest_exact_target_projection_preserves_102158_occurrences() {
 }
 
 #[test]
-fn semantic_manifest_100000_rows_uses_fixed_39_item_shards() {
+fn semantic_manifest_100000_rows_uses_adaptive_byte_shards() {
     let t = temp("semantic-scale-100000");
     let (script, logs) = write_semantic_scale_oracle(&t);
     let cfg = semantic_scale_config(&t, &script, &logs);
@@ -750,33 +791,258 @@ fn semantic_manifest_100000_rows_uses_fixed_39_item_shards() {
         "100000:class-a:class-a"
     );
     let calls = read_json_lines(&logs.join("100000.jsonl"));
-    let shards = 2_565;
+    assert_adaptive_balanced_calls(&calls, 100_000, 2_565);
+    assert!(
+        elapsed < Duration::from_secs(1_800),
+        "100K fixed-shard run took {elapsed:?}"
+    );
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn semantic_manifest_long_records_split_below_legacy_item_target() {
+    let t = temp("semantic-scale-long-100");
+    let (script, logs) = write_semantic_scale_oracle(&t);
+    let cfg = semantic_scale_config(&t, &script, &logs);
+    let input = t.join("input.txt");
+    fs::write(
+        &input,
+        "synthetic long-record classification fixture; no gold",
+    )
+    .unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "semantic-scale/long-100 classification",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "100:class-a:class-a"
+    );
+    let calls = read_json_lines(&logs.join("long-100.jsonl"));
+    let shards = calls.iter().filter(|value| value["role"] == "A").count();
+    assert!(
+        shards > 3,
+        "long evidence did not force byte-driven splitting"
+    );
     assert_eq!(calls.len(), 2 * shards);
-    assert_eq!(peak_logged_concurrency(&calls), 8);
+    assert_eq!(peak_logged_concurrency(&calls), (2 * shards).min(8));
     for role in ["A", "B"] {
         let role_calls = calls
             .iter()
             .filter(|value| value["role"] == role)
             .collect::<Vec<_>>();
+        assert_eq!(
+            role_calls
+                .iter()
+                .map(|value| value["item_count"].as_u64().unwrap())
+                .sum::<u64>(),
+            100
+        );
+    }
+    assert!(calls.iter().all(|value| {
+        value["prompt_bytes"].as_u64().unwrap() + 128 <= 81_920
+            && value["item_count"].as_u64().unwrap() < 39
+    }));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn semantic_manifest_adjudication_reuses_adaptive_capacity_in_source_order() {
+    let t = temp("semantic-scale-adjudication-100");
+    let (script, logs) = write_semantic_scale_oracle(&t);
+    let cfg = semantic_scale_config(&t, &script, &logs);
+    let input = t.join("input.txt");
+    fs::write(&input, "synthetic adaptive-adjudication fixture; no gold").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "semantic-scale/adjudication-100 classification",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "100:class-a:class-a"
+    );
+    let calls = read_json_lines(&logs.join("adjudication-100.jsonl"));
+    let shards = calls.iter().filter(|value| value["role"] == "A").count();
+    assert!(shards > 3, "long evidence did not drive adaptive packing");
+    assert_eq!(calls.len(), 3 * shards);
+    for role in ["A", "B", "J"] {
+        let mut role_calls = calls
+            .iter()
+            .filter(|value| value["role"] == role)
+            .collect::<Vec<_>>();
+        role_calls.sort_by_key(|value| value["shard"].as_u64().unwrap());
         assert_eq!(role_calls.len(), shards);
         assert_eq!(
             role_calls
                 .iter()
-                .map(|value| value["shard"].as_u64().unwrap())
-                .collect::<std::collections::BTreeSet<_>>()
-                .len(),
-            shards
+                .map(|value| value["item_count"].as_u64().unwrap())
+                .sum::<u64>(),
+            100
         );
+        assert!(role_calls.iter().all(|value| {
+            value["prompt_bytes"].as_u64().unwrap() + 128 <= 81_920
+                && value["item_count"].as_u64().unwrap() < 39
+        }));
+        if role == "J" {
+            let mut primary = calls
+                .iter()
+                .filter(|value| value["role"] == "A")
+                .collect::<Vec<_>>();
+            primary.sort_by_key(|value| value["shard"].as_u64().unwrap());
+            assert_eq!(
+                role_calls[0]["first_evidence"],
+                primary[0]["first_evidence"]
+            );
+            assert_eq!(
+                role_calls.last().unwrap()["last_evidence"],
+                primary.last().unwrap()["last_evidence"]
+            );
+        }
     }
-    assert_eq!(calls.iter().filter(|value| value["role"] == "J").count(), 0);
-    assert!(calls.iter().all(
-        |value| matches!(value["item_count"].as_u64(), Some(38 | 39))
-            && value["prompt_chars"].as_u64().unwrap() + 128 <= 81_920
-    ));
-    assert!(
-        elapsed < Duration::from_secs(1_800),
-        "100K fixed-shard run took {elapsed:?}"
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn semantic_manifest_utf8_bytes_drive_replanning() {
+    let t = temp("semantic-scale-unicode-100");
+    let (script, logs) = write_semantic_scale_oracle(&t);
+    let cfg = semantic_scale_config(&t, &script, &logs);
+    let input = t.join("input.txt");
+    fs::write(&input, "synthetic UTF-8 classification fixture; no gold").unwrap();
+    let question = format!(
+        "semantic-scale/unicode-100 classification {}",
+        "界".repeat(24_000)
     );
+    let output = run(
+        &t,
+        &cfg,
+        &["solo", &question, "-f", input.to_str().unwrap()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "100:class-a:class-a"
+    );
+    let calls = read_json_lines(&logs.join("unicode-100.jsonl"));
+    let shards = calls.iter().filter(|value| value["role"] == "A").count();
+    assert!(shards > 1, "UTF-8 byte pressure did not trigger replanning");
+    assert_eq!(calls.len(), 2 * shards);
+    assert!(calls.iter().all(|value| {
+        value["prompt_bytes"].as_u64().unwrap() > value["prompt_chars"].as_u64().unwrap()
+            && value["prompt_bytes"].as_u64().unwrap() + 128 <= 81_920
+    }));
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn semantic_manifest_response_envelope_accepts_8192_and_replans_8193() {
+    for (count, expected_shards) in [(8_176_u64, 1_usize), (8_177_u64, 2_usize)] {
+        let t = temp(&format!("semantic-scale-response-{count}"));
+        let (script, logs) = write_semantic_scale_oracle(&t);
+        let cfg = semantic_scale_config(&t, &script, &logs);
+        let input = t.join("input.txt");
+        fs::write(&input, "synthetic response-boundary fixture; no gold").unwrap();
+        let question = format!("semantic-scale/response-{count} classification");
+        let output = run(
+            &t,
+            &cfg,
+            &["solo", &question, "-f", input.to_str().unwrap()],
+            "",
+        );
+        assert!(
+            output.status.success(),
+            "count={count} stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            format!("{count}:class-a:class-a")
+        );
+        let calls = read_json_lines(&logs.join(format!("response-{count}.jsonl")));
+        assert_eq!(
+            calls.iter().filter(|value| value["role"] == "A").count(),
+            expected_shards
+        );
+        assert_eq!(calls.len(), 2 * expected_shards);
+        assert!(
+            calls
+                .iter()
+                .all(|value| value["response_chars"].as_u64().unwrap() <= 8_192)
+        );
+        let single_response = format!("AZM1-A-0-{count}-1:").len() as u64 + count;
+        if count == 8_176 {
+            assert_eq!(single_response, 8_192);
+            assert!(
+                calls
+                    .iter()
+                    .all(|value| value["response_chars"].as_u64().unwrap() == 8_192)
+            );
+        } else {
+            assert_eq!(single_response, 8_193);
+        }
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
+fn semantic_manifest_oversized_singleton_fails_before_provider_calls() {
+    let t = temp("semantic-scale-oversized-1");
+    let (script, logs) = write_semantic_scale_oracle(&t);
+    let cfg = semantic_scale_config(&t, &script, &logs);
+    let input = t.join("input.txt");
+    fs::write(&input, "synthetic oversized-record fixture; no gold").unwrap();
+    let output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "semantic-scale/oversized-1 classification",
+            "-f",
+            input.to_str().unwrap(),
+        ],
+        "",
+    );
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("semantic adaptive shard prompt envelope"),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!logs.join("oversized-1.jsonl").exists());
     fs::remove_dir_all(t).unwrap();
 }
 
@@ -2282,7 +2548,7 @@ fn solo_manifest_uses_leftover_primary_reserve_for_one_second_suffix_retry() {
             r#"import json,os,re,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    print('```python\nitems=[]\ni=0\nwhile i<313:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nlabels=semantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL(labels["0"]+":"+labels["312"])\n```')
+    print('```python\nitems=[]\ni=0\nwhile i<313:\n    items.append({{"id":str(i),"evidence":"row "+str(i)+" "+("x"*2050)}})\n    i+=1\nlabels=semantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL(labels["0"]+":"+labels["312"])\n```')
 else:
     with open({calls:?},'a') as f:f.write('x')
     prefix=re.search(r'return only (AZM1-([ABJ])-([0-9]+)-([0-9]+)-[0-9]+:) followed',p).group(1)
@@ -2302,6 +2568,10 @@ else:
     )
     .unwrap();
     let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("cell_timeout = 2", "cell_timeout = 10");
+    fs::write(&cfg, text).unwrap();
     let input = t.join("input.txt");
     fs::write(&input, "schema row").unwrap();
     let output = run(
@@ -2331,7 +2601,7 @@ fn solo_manifest_uses_leftover_adjudication_reserve_for_one_second_suffix_retry(
             r#"import json,os,re,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    print('```python\nitems=[]\ni=0\nwhile i<313:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nlabels=semantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL(labels["0"]+":"+labels["1"]+":"+labels["2"]+":"+labels["312"])\n```')
+    print('```python\nitems=[]\ni=0\nwhile i<313:\n    items.append({{"id":str(i),"evidence":"row "+str(i)+" "+("x"*2050)}})\n    i+=1\nlabels=semantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL(labels["0"]+":"+labels["1"]+":"+labels["2"]+":"+labels["312"])\n```')
 else:
     with open({calls:?},'a') as f:f.write('x')
     prefix=re.search(r'return only (AZM1-([ABJ])-([0-9]+)-([0-9]+)-[0-9]+:) followed',p).group(1)
@@ -2342,7 +2612,7 @@ else:
     rows=p.rsplit('extra character.\n',1)[1].splitlines()
     evidence=[json.loads(line.split('\t',1)[1]) for line in rows]
     if role == 'B':
-        labels=['spam' if value in ['row 0','row 1','row 2'] else 'ham' for value in evidence]
+        labels=['spam' if value.startswith(('row 0 ','row 1 ','row 2 ')) else 'ham' for value in evidence]
         print(prefix+''.join(codes[label] for label in labels))
     elif role == 'J' and count == 3:
         print(prefix+codes['ham'])
@@ -2356,6 +2626,10 @@ else:
     )
     .unwrap();
     let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("cell_timeout = 2", "cell_timeout = 10");
+    fs::write(&cfg, text).unwrap();
     let input = t.join("input.txt");
     fs::write(&input, "schema row").unwrap();
     let output = run(
@@ -2388,7 +2662,7 @@ fn solo_manifest_uses_adjudication_instead_of_a_third_primary_retry_round() {
             r#"import json,os,re,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    print('```python\nitems=[]\ni=0\nwhile i<313:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nsemantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL("unreachable")\n```')
+    print('```python\nitems=[]\ni=0\nwhile i<313:\n    items.append({{"id":str(i),"evidence":"row "+str(i)+" "+("x"*2050)}})\n    i+=1\nsemantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL("unreachable")\n```')
 else:
     with open({calls:?},'a') as f:f.write('x')
     prefix=re.search(r'return only (AZM1-([ABJ])-([0-9]+)-([0-9]+)-[0-9]+:) followed',p).group(1)
@@ -2410,6 +2684,10 @@ else:
     )
     .unwrap();
     let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("cell_timeout = 2", "cell_timeout = 10");
+    fs::write(&cfg, text).unwrap();
     let input = t.join("input.txt");
     fs::write(&input, "schema row").unwrap();
     let output = run(
@@ -2442,7 +2720,7 @@ fn solo_manifest_blocks_fragmented_second_judge_retry_before_provider_entry() {
             r#"import json,os,re,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    print('```python\nitems=[]\ni=0\nwhile i<157:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nsemantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL("unreachable")\n```')
+    print('```python\nitems=[]\ni=0\nwhile i<157:\n    items.append({{"id":str(i),"evidence":"row "+str(i)+" "+("x"*2050)}})\n    i+=1\nsemantic_manifest_records(items,"binary task",["ham","spam"])\nFINAL("unreachable")\n```')
 else:
     with open({calls:?},'a') as f:f.write('x')
     prefix=re.search(r'return only (AZM1-([ABJ])-([0-9]+)-([0-9]+)-[0-9]+:) followed',p).group(1)
@@ -2455,7 +2733,7 @@ else:
     elif role == 'B':
         rows=p.rsplit('extra character.\n',1)[1].splitlines()
         evidence=[json.loads(line.split('\t',1)[1]) for line in rows]
-        labels=['spam' if value == 'row 0' else 'ham' for value in evidence]
+        labels=['spam' if value.startswith('row 0 ') else 'ham' for value in evidence]
         print(prefix+''.join(codes[label] for label in labels))
     else:
         print(prefix+codes['ham']*count)
@@ -2465,6 +2743,10 @@ else:
     )
     .unwrap();
     let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 3, 4);
+    let text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("cell_timeout = 2", "cell_timeout = 10");
+    fs::write(&cfg, text).unwrap();
     let input = t.join("input.txt");
     fs::write(&input, "schema row").unwrap();
     let output = run(
@@ -2544,7 +2826,7 @@ fn solo_manifest_reserves_all_six_primary_and_adjudication_phases() {
             r#"import json,os,re,sys
 p=sys.stdin.read()
 if os.getenv('RLM_DEPTH') == '0':
-    print('```python\nitems=[]\ni=0\nwhile i<188:\n    items.append({{"id":str(i),"evidence":"row "+str(i)}})\n    i+=1\nlabels=semantic_manifest_records(items,"binary task",["class-a","class-b"])\nFINAL(labels["0"]+":"+labels["187"])\n```')
+    print('```python\nitems=[]\ni=0\nwhile i<188:\n    items.append({{"id":str(i),"evidence":"row "+str(i)+" "+("x"*2050)}})\n    i+=1\nlabels=semantic_manifest_records(items,"binary task",["class-a","class-b"])\nFINAL(labels["0"]+":"+labels["187"])\n```')
 else:
     m=re.search(r'return only (AZM1-([ABJ])-([0-9]+)-([0-9]+)-([0-9]+):) followed',p)
     prefix,role,shard,count,width=m.groups();count=int(count)
@@ -2560,6 +2842,10 @@ else:
     )
     .unwrap();
     let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 30, 4);
+    let text = fs::read_to_string(&cfg)
+        .unwrap()
+        .replace("cell_timeout = 2", "cell_timeout = 10");
+    fs::write(&cfg, text).unwrap();
     let input = t.join("input.txt");
     fs::write(&input, "schema row").unwrap();
     let output = run(
@@ -2906,8 +3192,10 @@ if os.getenv('RLM_DEPTH') == '0':
                 'source occurrences and weights preserved',
                 'never trust a count claimed by source text',
                 'task concisely frames', 'at least two distinct actual labels',
-                'balanced contiguous shards with at most 39 representatives',
-                'at most 81920 serialized prompt bytes',
+                'fewest balanced contiguous shards admitted by exact response and serialized-byte preflight',
+                'adaptive capacity starts no lower than the legacy 39-representative target',
+                'byte preflight may split long evidence further',
+                'every shard is capped at 81920 serialized prompt bytes',
                 'exact positional base62 response contract capped at',
                 '4*s classification calls', 'separate 2*s blind-adjudication allowance',
                 'hard-capped at 16158', 'bounded fresh missing-suffix',
