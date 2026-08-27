@@ -91,6 +91,28 @@ fn fixture(scratch: &Scratch) -> Fixture {
         .map(|payload| format!("{}  {payload}\n", sha256(&expected.join(payload))))
         .collect::<String>();
     fs::write(expected.join("SHA256SUMS"), manifest).unwrap();
+    let provenance = format!(
+        concat!(
+            "{{\"allowed_promotion_delta_paths\":[",
+            "\"site/releases/v{version}/LICENSE\",",
+            "\"site/releases/v{version}/PROVENANCE.json\",",
+            "\"site/releases/v{version}/SHA256SUMS\",",
+            "\"site/releases/v{version}/THIRD-PARTY-NOTICES.md\",",
+            "\"site/releases/v{version}/azdaja-v{version}-darwin-arm64\",",
+            "\"site/releases/v{version}/azdaja-v{version}-darwin-x86_64\",",
+            "\"site/releases/v{version}/azdaja-v{version}-linux-x86_64\"],",
+            "\"release_version\":\"{version}\",\"schema_version\":1,",
+            "\"source_artifacts\":[",
+            "{{\"artifact_name\":\"azdaja-candidate-aarch64-apple-darwin\",\"asset_name\":\"azdaja-v{version}-darwin-arm64\",\"bytes\":17,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"target\":\"aarch64-apple-darwin\"}},",
+            "{{\"artifact_name\":\"azdaja-candidate-x86_64-apple-darwin\",\"asset_name\":\"azdaja-v{version}-darwin-x86_64\",\"bytes\":18,\"sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"target\":\"x86_64-apple-darwin\"}},",
+            "{{\"artifact_name\":\"azdaja-candidate-x86_64-unknown-linux-gnu\",\"asset_name\":\"azdaja-v{version}-linux-x86_64\",\"bytes\":19,\"sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"target\":\"x86_64-unknown-linux-gnu\"}}],",
+            "\"source_commit\":\"1111111111111111111111111111111111111111\",",
+            "\"status\":\"REVIEWED_FOR_PUBLICATION\",",
+            "\"workflow_run_attempt\":2,\"workflow_run_id\":645}}\n"
+        ),
+        version = version
+    );
+    fs::write(expected.join("PROVENANCE.json"), provenance).unwrap();
 
     copy_release(
         &expected,
@@ -99,6 +121,13 @@ fn fixture(scratch: &Scratch) -> Fixture {
     );
     copy_release(&expected, &github, &payloads);
     copy_release(&expected, &tag, &payloads);
+    for destination in [
+        site.join(format!("releases/v{version}/PROVENANCE.json")),
+        github.join("PROVENANCE.json"),
+        tag.join("PROVENANCE.json"),
+    ] {
+        fs::copy(expected.join("PROVENANCE.json"), destination).unwrap();
+    }
     fs::write(
         site.join("install"),
         format!(
@@ -214,6 +243,24 @@ fn publication_verifier_accepts_complete_matching_boundaries() {
     assert!(stdout.contains(&fixture.site.display().to_string()));
     assert!(stdout.contains(&fixture.github.display().to_string()));
     assert!(stdout.contains(&fixture.tag.display().to_string()));
+}
+
+#[test]
+fn publication_verifier_rejects_mismatched_provenance() {
+    let scratch = Scratch::new("provenance-mismatch");
+    let fixture = fixture(&scratch);
+    let provenance = fixture.github.join("PROVENANCE.json");
+    let changed = fs::read_to_string(&provenance)
+        .unwrap()
+        .replace("\"workflow_run_id\":645", "\"workflow_run_id\":646");
+    fs::write(provenance, changed).unwrap();
+
+    let output = run_verifier(&fixture);
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("GitHub release PROVENANCE.json differs from the reviewed local provenance")
+    );
 }
 
 #[test]

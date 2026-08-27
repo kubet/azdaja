@@ -39,7 +39,7 @@ jobs:
           printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
           tag="v$version"
           release_dir="site/releases/$tag"
-          promotion="release/$tag-promotion.json"
+          promotion="$release_dir/PROVENANCE.json"
           note="release/$tag.md"
           commit="$(git rev-parse HEAD^{commit})"
           test "$(git rev-parse "$tag^{commit}")" = "$commit"
@@ -60,42 +60,76 @@ jobs:
             --commit "$commit" --event push --limit 20 \
             --json databaseId,headBranch,headSha,status,conclusion > "$RUNNER_TEMP/source-runs.json"
 
+          source_run_id="$(python3 - "$promotion" <<'PY'
+          import json, pathlib, sys
+          print(json.loads(pathlib.Path(sys.argv[1]).read_text())["workflow_run_id"])
+          PY
+          )"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id" \
+            > "$RUNNER_TEMP/promotion-source-run.json"
+
           python3 - "$version" "$commit" "$promotion" "$release_dir" \
-            "$RUNNER_TEMP/ci-runs.json" "$RUNNER_TEMP/source-runs.json" <<'PY'
+            "$RUNNER_TEMP/ci-runs.json" "$RUNNER_TEMP/source-runs.json" \
+            "$RUNNER_TEMP/promotion-source-run.json" <<'PY'
           import hashlib
           import json
           import pathlib
           import re
           import sys
 
-          version, commit, promotion_path, release_dir, ci_path, source_path = sys.argv[1:]
+          version, commit, promotion_path, release_dir, ci_path, source_path, source_run_path = sys.argv[1:]
           tag = f"v{version}"
           release = pathlib.Path(release_dir)
           receipt = json.loads(pathlib.Path(promotion_path).read_text())
+          required = {
+              "schema_version", "release_version", "source_commit", "workflow_run_id",
+              "workflow_run_attempt", "source_artifacts", "status",
+              "allowed_promotion_delta_paths",
+          }
+          assert set(receipt) == required
           assert receipt["schema_version"] == 1
-          assert receipt["record_type"] == "azdaja_release_promotion"
-          assert receipt["version"] == version
-          assert receipt["github_workflow"] == "ci.yml"
-          assert receipt["workflow_event"] == "workflow_dispatch"
-          assert receipt["workflow_conclusion"] == "success"
-          assert receipt["publication_authorized"] is True
+          assert receipt["release_version"] == version
+          assert receipt["status"] == "REVIEWED_FOR_PUBLICATION"
           assert re.fullmatch(r"[0-9a-f]{40}", receipt["source_commit"])
           assert receipt["source_commit"] != commit
-          assert receipt["github_run_id"] > 0
-          assert receipt["github_run_attempt"] > 0
-          expected_suffixes = ["darwin-arm64", "darwin-x86_64", "linux-x86_64"]
-          assert len(receipt["candidates"]) == len(expected_suffixes)
-          for candidate, suffix in zip(receipt["candidates"], expected_suffixes, strict=True):
+          assert type(receipt["workflow_run_id"]) is int and receipt["workflow_run_id"] > 0
+          assert type(receipt["workflow_run_attempt"]) is int and receipt["workflow_run_attempt"] > 0
+          expected = [
+              ("aarch64-apple-darwin", "darwin-arm64"),
+              ("x86_64-apple-darwin", "darwin-x86_64"),
+              ("x86_64-unknown-linux-gnu", "linux-x86_64"),
+          ]
+          assert len(receipt["source_artifacts"]) == len(expected)
+          for candidate, (target, suffix) in zip(receipt["source_artifacts"], expected, strict=True):
               asset = f"azdaja-v{version}-{suffix}"
               path = release / asset
-              assert candidate["asset"] == asset
-              assert candidate["artifact"] == (
-                  f"azdaja-standalone-{suffix}-{receipt['source_commit']}-"
-                  f"{receipt['github_run_attempt']}"
-              )
+              assert set(candidate) == {"artifact_name", "asset_name", "bytes", "sha256", "target"}
+              assert candidate["artifact_name"] == f"azdaja-candidate-{target}"
+              assert candidate["asset_name"] == asset
+              assert candidate["target"] == target
               assert path.is_file() and not path.is_symlink()
               assert candidate["bytes"] == path.stat().st_size
               assert candidate["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+
+          expected_delta = [
+              f"site/releases/v{version}/LICENSE",
+              f"site/releases/v{version}/PROVENANCE.json",
+              f"site/releases/v{version}/SHA256SUMS",
+              f"site/releases/v{version}/THIRD-PARTY-NOTICES.md",
+              f"site/releases/v{version}/azdaja-v{version}-darwin-arm64",
+              f"site/releases/v{version}/azdaja-v{version}-darwin-x86_64",
+              f"site/releases/v{version}/azdaja-v{version}-linux-x86_64",
+          ]
+          assert receipt["allowed_promotion_delta_paths"] == expected_delta
+
+          source_run = json.loads(pathlib.Path(source_run_path).read_text())
+          assert source_run["id"] == receipt["workflow_run_id"]
+          assert source_run["run_attempt"] == receipt["workflow_run_attempt"]
+          assert source_run["event"] == "workflow_dispatch"
+          assert source_run["head_sha"] == receipt["source_commit"]
+          assert source_run["path"] == ".github/workflows/ci.yml"
+          assert source_run["status"] == "completed"
+          assert source_run["conclusion"] == "success"
 
           def successful_exact_runs(path):
               runs = json.loads(pathlib.Path(path).read_text())
@@ -134,9 +168,7 @@ jobs:
       - name: Attest every release asset
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
-          subject-path: |
-            ${{ env.RELEASE_DIR }}/*
-            ${{ env.PROMOTION }}
+          subject-path: ${{ env.RELEASE_DIR }}/*
 
       - name: Verify attestations before publication
         shell: bash
@@ -144,7 +176,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          for asset in "$RELEASE_DIR"/* "$PROMOTION"; do
+          for asset in "$RELEASE_DIR"/*; do
             gh attestation verify "$asset" --repo "$GITHUB_REPOSITORY"
           done
 
@@ -180,7 +212,7 @@ jobs:
           published="$RUNNER_TEMP/published"
           mkdir "$published"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$published"
-          for asset in "$RELEASE_DIR"/* "$PROMOTION"; do
+          for asset in "$RELEASE_DIR"/*; do
             cmp "$asset" "$published/$(basename "$asset")"
           done
           for attempt in $(seq 1 20); do
