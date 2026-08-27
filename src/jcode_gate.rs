@@ -2428,6 +2428,73 @@ mod tests {
     }
 
     #[test]
+    fn bounded_bash_scans_reject_oversized_external_and_shell_controlled_inputs() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        fs::write(
+            scratch.cwd.join("oversized.log"),
+            vec![b'x'; MAX_NARROW_READ_BYTES as usize + 1],
+        )
+        .unwrap();
+        fs::write(scratch.other.join("outside.log"), b"needle\n").unwrap();
+        let outside = scratch.other.join("outside.log").display().to_string();
+        for command in [
+            "/usr/bin/head -n 1 oversized.log".to_owned(),
+            "/usr/bin/tail -n 1 oversized.log".to_owned(),
+            "/usr/bin/sed -n 1p oversized.log".to_owned(),
+            "/usr/bin/grep -F needle oversized.log".to_owned(),
+            format!("/usr/bin/head -n 1 {outside}"),
+            "/usr/bin/grep -F needle small.log | /usr/bin/head -n 1".to_owned(),
+            "/usr/bin/sed -n 1,999p src/lib.rs".to_owned(),
+        ] {
+            assert!(
+                matches!(
+                    call(
+                        &state,
+                        &scratch.cwd,
+                        "bash",
+                        json!({"command":command}),
+                        NOW,
+                    )
+                    .unwrap(),
+                    Decision::Block(_)
+                ),
+                "unsafe bounded-scan form was allowed: {command}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bounded_bash_scans_reject_symlink_operands() {
+        let scratch = Scratch::new();
+        let state = scratch.state();
+        fs::write(scratch.cwd.join("target.log"), b"needle\n").unwrap();
+        std::os::unix::fs::symlink("target.log", scratch.cwd.join("linked.log")).unwrap();
+        for command in [
+            "/usr/bin/head -n 1 linked.log",
+            "/usr/bin/tail -n 1 linked.log",
+            "/usr/bin/sed -n 1p linked.log",
+            "/usr/bin/grep -F needle linked.log",
+        ] {
+            assert!(
+                matches!(
+                    call(
+                        &state,
+                        &scratch.cwd,
+                        "bash",
+                        json!({"command":command}),
+                        NOW,
+                    )
+                    .unwrap(),
+                    Decision::Block(_)
+                ),
+                "symlink scan was allowed: {command}"
+            );
+        }
+    }
+
+    #[test]
     fn successful_repository_pass_resets_the_narrow_followup_budget() {
         let scratch = Scratch::new();
         let state = scratch.state();
