@@ -3968,6 +3968,79 @@ const EXACT_LINE_LEDGER_TYPE_ID: u64 = 0x415a_4c45_4447_4552;
 const EXACT_LINE_LEDGER_NAME: &str = "AzdajaExactLineLedger";
 const EXACT_TARGET_MARKER_MAX_BYTES: usize = 1_024;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AuthoritativeRecord {
+    id: String,
+    evidence: String,
+    sha256: String,
+}
+
+fn parse_jsonl_records(source: &str) -> Result<Vec<AuthoritativeRecord>> {
+    let bytes = source.as_bytes();
+    for (index, byte) in bytes.iter().enumerate() {
+        if *byte == b'\r' && bytes.get(index + 1) != Some(&b'\n') {
+            bail!("JSONL input rejects bare CR record boundaries")
+        }
+    }
+    let mut records = Vec::new();
+    let mut lines = source.split('\n').peekable();
+    let mut physical_line = 0usize;
+    while let Some(raw) = lines.next() {
+        physical_line += 1;
+        if raw.is_empty() && lines.peek().is_none() {
+            break;
+        }
+        let line = raw.strip_suffix('\r').unwrap_or(raw);
+        if line.trim().is_empty() {
+            bail!("JSONL record {physical_line} is blank")
+        }
+        if records.len() >= EXACT_LINE_RECORD_MAX_ITEMS {
+            bail!("JSONL record limit exceeded")
+        }
+        let value: serde_json::Value = serde_json::from_str(line)
+            .with_context(|| format!("JSONL record {physical_line} is invalid JSON"))?;
+        if !value.is_object() {
+            bail!("JSONL record {physical_line} must be a JSON object")
+        }
+        records.push(AuthoritativeRecord {
+            id: format!("R{}", records.len()),
+            evidence: line.to_owned(),
+            sha256: sha256_hex(line.as_bytes()),
+        });
+    }
+    if records.is_empty() {
+        bail!("JSONL input contains no records")
+    }
+    Ok(records)
+}
+
+fn authoritative_records_value(records: &[AuthoritativeRecord]) -> MontyObject {
+    MontyObject::List(
+        records
+            .iter()
+            .map(|record| {
+                MontyObject::Dict(
+                    vec![
+                        (
+                            MontyObject::String("id".into()),
+                            MontyObject::String(record.id.clone()),
+                        ),
+                        (
+                            MontyObject::String("evidence".into()),
+                            MontyObject::String(record.evidence.clone()),
+                        ),
+                        (
+                            MontyObject::String("sha256".into()),
+                            MontyObject::String(record.sha256.clone()),
+                        ),
+                    ]
+                    .into(),
+                )
+            })
+            .collect(),
+    )
+}
+
 fn exact_line_record_strings(source: &str, prefix: &str) -> Result<Vec<String>> {
     if prefix.is_empty()
         || prefix.len() > EXACT_LINE_RECORD_MAX_PREFIX_BYTES
@@ -5271,6 +5344,7 @@ pub struct SoloSession {
     answer: Option<String>,
     structural_sample: Option<String>,
     authoritative_source: Option<String>,
+    authoritative_records: Option<Vec<AuthoritativeRecord>>,
     source_aggregate: Option<observability::SourceLocalAggregate>,
 }
 impl SoloSession {
@@ -5287,6 +5361,7 @@ impl SoloSession {
             answer: None,
             structural_sample: None,
             authoritative_source: None,
+            authoritative_records: None,
             source_aggregate: None,
         })
     }
@@ -5302,10 +5377,42 @@ impl SoloSession {
         self.invalidate_loaded_source();
         self.load_text_inner(text, var, cfg)
     }
+    pub fn load_jsonl(&mut self, path: &Path, var: &str, cfg: &Config) -> Result<String> {
+        self.invalidate_loaded_source();
+        let text = fs::read_to_string(path)
+            .with_context(|| format!("input is not UTF-8: {}", path.display()))?;
+        self.load_jsonl_text_inner(text, var, cfg)
+    }
+    pub fn load_jsonl_text(&mut self, text: String, var: &str, cfg: &Config) -> Result<String> {
+        self.invalidate_loaded_source();
+        self.load_jsonl_text_inner(text, var, cfg)
+    }
     fn invalidate_loaded_source(&mut self) {
         self.structural_sample = None;
         self.authoritative_source = None;
+        self.authoritative_records = None;
         self.source_aggregate = None;
+    }
+    fn load_jsonl_text_inner(&mut self, text: String, var: &str, cfg: &Config) -> Result<String> {
+        let records = parse_jsonl_records(&text)?;
+        let record_count = records.len();
+        let metadata = self.load_text_inner(text, var, cfg)?;
+        let repl = self
+            .repl
+            .as_mut()
+            .ok_or_else(|| anyhow!("solo session is busy"))?;
+        repl.feed_run(
+            "records = __azdaja_records",
+            vec![(
+                "__azdaja_records".into(),
+                authoritative_records_value(&records),
+            )],
+            PrintWriter::Disabled,
+        )?;
+        self.authoritative_records = Some(records);
+        Ok(format!(
+            "{metadata}; {record_count} authoritative JSONL records in 'records'"
+        ))
     }
     fn load_text_inner(&mut self, text: String, var: &str, cfg: &Config) -> Result<String> {
         if !Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -5341,6 +5448,9 @@ impl SoloSession {
         self.source_aggregate
             .as_ref()
             .ok_or_else(|| anyhow!("solo session has no source aggregate"))
+    }
+    pub fn authoritative_record_count(&self) -> Option<usize> {
+        self.authoritative_records.as_ref().map(Vec::len)
     }
     pub fn structural_sample(&self) -> Result<&str> {
         self.structural_sample
@@ -11741,6 +11851,66 @@ mod exact_line_record_tests {
                 "{source:?}: {error}"
             );
         }
+    }
+
+    #[test]
+    fn authoritative_jsonl_records_preserve_order_occurrences_and_bytes() {
+        let source = "{\"b\":2, \"a\":1}\r\n{\"b\":2, \"a\":1}\n{\"x\":\"é\"}\n";
+        let records = parse_jsonl_records(source).unwrap();
+        assert_eq!(records.len(), 3);
+        assert_eq!(records[0].id, "R0");
+        assert_eq!(records[1].id, "R1");
+        assert_eq!(records[2].id, "R2");
+        assert_eq!(records[0].evidence, "{\"b\":2, \"a\":1}");
+        assert_eq!(records[1].evidence, records[0].evidence);
+        assert_eq!(records[2].evidence, "{\"x\":\"é\"}");
+        assert_eq!(
+            records[0].sha256,
+            sha256_hex(records[0].evidence.as_bytes())
+        );
+        assert_eq!(records[0].sha256, records[1].sha256);
+        assert_eq!(
+            records[2].sha256,
+            sha256_hex(records[2].evidence.as_bytes())
+        );
+
+        let terminal = parse_jsonl_records("{\"terminal\":true}").unwrap();
+        assert_eq!(terminal.len(), 1);
+        assert_eq!(terminal[0].evidence, "{\"terminal\":true}");
+    }
+
+    #[test]
+    fn authoritative_jsonl_records_fail_closed_on_invalid_boundaries_and_shapes() {
+        for (source, expected) in [
+            ("", "contains no records"),
+            ("\n", "record 1 is blank"),
+            ("{}\n\n{}", "record 2 is blank"),
+            ("[]", "record 1 must be a JSON object"),
+            ("{bad}", "record 1 is invalid JSON"),
+            ("{}\r{}", "rejects bare CR record boundaries"),
+        ] {
+            let error = parse_jsonl_records(source).unwrap_err();
+            assert!(
+                error.to_string().contains(expected),
+                "{source:?}: {error:#}"
+            );
+        }
+    }
+
+    #[test]
+    fn authoritative_jsonl_records_enforce_the_semantic_occurrence_limit() {
+        let exact = "{}\n".repeat(EXACT_LINE_RECORD_MAX_ITEMS);
+        assert_eq!(
+            parse_jsonl_records(&exact).unwrap().len(),
+            EXACT_LINE_RECORD_MAX_ITEMS
+        );
+        let oversized = format!("{exact}{{}}\n");
+        assert!(
+            parse_jsonl_records(&oversized)
+                .unwrap_err()
+                .to_string()
+                .contains("JSONL record limit exceeded")
+        );
     }
 
     #[test]

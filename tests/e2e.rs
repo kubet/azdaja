@@ -1169,6 +1169,150 @@ else:
 }
 
 #[test]
+fn solo_jsonl_file_and_stdin_expose_authoritative_records() {
+    let t = temp("solo-jsonl-records");
+    let calls = t.join("root-calls");
+    let mock = t.join("jsonl.py");
+    fs::write(
+        &mock,
+        format!(
+            r####"import os, pathlib, sys
+prompt=sys.stdin.read()
+if os.getenv("RLM_DEPTH") == "0":
+    assert "Record-aware JSONL contract." in prompt
+    assert "Available names: ctx, records, os" in prompt
+    if "jsonl-file-case" in prompt:
+        code='''assert len(records)==3
+assert records[0]["id"]=="R0" and records[2]["id"]=="R2"
+assert records[0]["evidence"]=='{{"name":"alpha"}}'
+assert records[0]["sha256"]==records[1]["sha256"]
+assert sha256(records[2]["evidence"])==records[2]["sha256"]
+assert json.loads(records[2]["evidence"])["name"]=="é"
+FINAL(str(len(records))+":"+records[0]["id"]+":"+records[2]["id"])'''
+    else:
+        assert "Input source: standard input consumed exactly once" in prompt
+        code='''assert len(records)==2
+assert records[0]["id"]=="R0" and records[1]["id"]=="R1"
+assert json.loads(records[0]["evidence"])["n"]==1
+assert json.loads(records[1]["evidence"])["n"]==2
+assert sha256(records[0]["evidence"])==records[0]["sha256"]
+FINAL("stdin:"+str(len(records)))'''
+    with open({calls:?},"a") as handle: handle.write("x")
+    print("```python\n"+code+"\n```")
+else:
+    raise SystemExit("unexpected child call")
+"####,
+            calls = calls,
+        ),
+    )
+    .unwrap();
+    let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 10, 4);
+
+    let input = t.join("records.jsonl");
+    fs::write(
+        &input,
+        "{\"name\":\"alpha\"}\n{\"name\":\"alpha\"}\r\n{\"name\":\"é\"}\n",
+    )
+    .unwrap();
+    let file_output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "jsonl-file-case",
+            "-f",
+            input.to_str().unwrap(),
+            "--input-format",
+            "jsonl",
+        ],
+        "",
+    );
+    assert!(
+        file_output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&file_output.stdout),
+        String::from_utf8_lossy(&file_output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&file_output.stdout).trim(),
+        "3:R0:R2"
+    );
+
+    let stdin_output = run(
+        &t,
+        &cfg,
+        &[
+            "solo",
+            "jsonl-stdin-case",
+            "-f",
+            "-",
+            "--input-format",
+            "jsonl",
+        ],
+        "{\"n\":1}\n{\"n\":2}\n",
+    );
+    assert!(
+        stdin_output.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&stdin_output.stdout),
+        String::from_utf8_lossy(&stdin_output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&stdin_output.stdout).trim(),
+        "stdin:2"
+    );
+    assert_eq!(fs::read_to_string(&calls).unwrap().len(), 2);
+    fs::remove_dir_all(t).unwrap();
+}
+
+#[test]
+fn solo_jsonl_rejects_invalid_records_before_provider_calls() {
+    for (case, source, expected) in [
+        ("empty", "", "JSONL input contains no records"),
+        ("blank", "{}\n\n{}", "JSONL record 2 is blank"),
+        ("scalar", "[]", "JSONL record 1 must be a JSON object"),
+        ("invalid", "{bad}", "JSONL record 1 is invalid JSON"),
+        ("bare-cr", "{}\r{}", "JSONL input rejects bare CR"),
+    ] {
+        let t = temp(&format!("solo-jsonl-reject-{case}"));
+        let marker = t.join("provider-entered");
+        let mock = t.join("provider.py");
+        fs::write(
+            &mock,
+            format!(
+                "import pathlib\npathlib.Path({marker:?}).write_text('entered')\nprint('unexpected')\n"
+            ),
+        )
+        .unwrap();
+        let cfg = config(&t, &format!("python3 {}", mock.display()), 4096, 1, 10, 4);
+        let input = t.join("records.jsonl");
+        fs::write(&input, source).unwrap();
+        let output = run(
+            &t,
+            &cfg,
+            &[
+                "solo",
+                "jsonl validation case",
+                "-f",
+                input.to_str().unwrap(),
+                "--input-format",
+                "jsonl",
+            ],
+            "",
+        );
+        assert!(!output.status.success(), "{case}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(expected),
+            "{case}: stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!marker.exists(), "{case}: provider was entered");
+        fs::remove_dir_all(t).unwrap();
+    }
+}
+
+#[test]
 fn semantic_manifest_oversized_evidence_rejects_before_child_calls() {
     run_semantic_zero_call_rejection(
         "semantic-over-prompt",
@@ -8191,7 +8335,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
         ("kill", "Usage: az kill <session-id>"),
         (
             "solo",
-            "Usage: az solo <question> (-f <path> | --repo <directory>) [--model <model>] [--sub-model <model>]",
+            "Usage: az solo <question> (-f <path|-> | --repo <directory>) [--input-format <text|jsonl>] [--model <model>] [--sub-model <model>]",
         ),
         (
             "doctor",
