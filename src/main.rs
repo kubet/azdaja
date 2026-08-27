@@ -12,7 +12,7 @@ use azdaja::{
     SoloSession, VERSION, call_model, capability_check, claude_hook, config_error_report,
     dashboard_snapshot, dashboard_snapshot_global, exec, final_answer, kill, load,
     model_trace_request_id, model_transport_error_category, model_transport_error_is_transient,
-    provider_interrupt_exit_status, provider_interrupted, start,
+    planner_probe, provider_interrupt_exit_status, provider_interrupted, start,
 };
 use fs2::FileExt;
 use monty::MontyRun;
@@ -6839,6 +6839,8 @@ enum SoloProgramFailureKind {
     MissingFinal,
     EmptyFinal,
     ClassificationWithoutSemanticCalls,
+    LabelLiteralGrep,
+    DegenerateZeroAggregate,
     OntologyMismatch,
     HelperContract,
     ProjectionBoundary,
@@ -7044,6 +7046,197 @@ fn classification_worded_task(question: &str) -> bool {
             || asks_label_aggregation)
 }
 
+fn quoted_spans(text: &str) -> Vec<String> {
+    let mut spans = Vec::new();
+    let mut quote = None;
+    let mut escaped = false;
+    let mut current = String::new();
+    for character in text.chars() {
+        if let Some(delimiter) = quote {
+            if escaped {
+                current.push(character);
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == delimiter {
+                spans.push(std::mem::take(&mut current));
+                quote = None;
+            } else {
+                current.push(character);
+            }
+        } else if character == '\'' || character == '"' {
+            quote = Some(character);
+        } else if character == '#' {
+            break;
+        }
+    }
+    spans
+}
+
+fn question_quoted_labels(question: &str) -> Vec<String> {
+    let mut labels = quoted_spans(question)
+        .into_iter()
+        .map(|label| label.trim().to_ascii_lowercase())
+        .filter(|label| !label.is_empty() && label.chars().count() <= 40 && !label.contains(':'))
+        .collect::<Vec<_>>();
+    let words = question
+        .split(|character: char| {
+            !(character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
+        })
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>();
+    for pair in words.windows(2) {
+        if pair[0].eq_ignore_ascii_case("label") || pair[0].eq_ignore_ascii_case("labels") {
+            let label = pair[1].to_ascii_lowercase();
+            if label.chars().count() <= 40 {
+                labels.push(label);
+            }
+        }
+    }
+    labels.sort();
+    labels.dedup();
+    labels
+}
+
+fn code_calls_semantic_manifest(code: &str) -> bool {
+    code.lines().any(|line| {
+        let compact = redact_quoted_literals(line)
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>();
+        compact.contains("semantic_manifest(")
+            || compact.contains("semantic_manifest_records(")
+            || compact.contains("semantic_manifest_projected(")
+    })
+}
+
+fn grep_shaped_scan(scan: &str) -> bool {
+    scan.contains("re.")
+        || scan.contains(".count(")
+        || scan.contains(".find(")
+        || scan.contains(".startswith(")
+        || scan.contains(" in ")
+}
+
+fn scan_mentions_identifier(scan: &str, identifier: &str) -> bool {
+    scan.split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+        .any(|token| token == identifier)
+}
+
+fn quoted_literal_matches_label(literal: &str, labels: &[String], regex_shaped: bool) -> bool {
+    let literal = literal.trim().to_ascii_lowercase();
+    labels
+        .iter()
+        .any(|label| literal == *label || (regex_shaped && literal.contains(label)))
+}
+
+fn code_greps_label_literals(question: &str, code: &str) -> bool {
+    if code_calls_semantic_manifest(code) {
+        return false;
+    }
+    let labels = question_quoted_labels(question);
+    if labels.is_empty() {
+        return false;
+    }
+    let mut bound_labels = std::collections::BTreeSet::<String>::new();
+    for line in code.lines() {
+        let scan = redact_quoted_literals(line).to_ascii_lowercase();
+        let grep_shaped = grep_shaped_scan(&scan);
+        let direct_label = quoted_spans(line)
+            .iter()
+            .any(|literal| quoted_literal_matches_label(literal, &labels, scan.contains("re.")));
+        let bound_label = bound_labels
+            .iter()
+            .any(|identifier| scan_mentions_identifier(&scan, identifier));
+        if grep_shaped && (direct_label || bound_label) {
+            return true;
+        }
+        if let Some((left, _)) = line.split_once('=') {
+            let identifier = left.trim().to_ascii_lowercase();
+            if !identifier.is_empty()
+                && identifier
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric() || character == '_')
+                && quoted_spans(line)
+                    .iter()
+                    .any(|literal| quoted_literal_matches_label(literal, &labels, false))
+            {
+                bound_labels.insert(identifier);
+            }
+        }
+    }
+    false
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlannerStrategy {
+    Delegate,
+    Deterministic,
+}
+
+fn planner_strategy(response: &str) -> Option<PlannerStrategy> {
+    match response.trim().to_ascii_uppercase().as_str() {
+        "DELEGATE" => Some(PlannerStrategy::Delegate),
+        "DETERMINISTIC" => Some(PlannerStrategy::Deterministic),
+        _ => None,
+    }
+}
+
+fn planner_vote_constraint(responses: &[String]) -> Result<&'static str> {
+    if responses.len() != 3 {
+        bail!("planner vote requires exactly three responses")
+    }
+    let strategies = responses
+        .iter()
+        .map(|response| {
+            planner_strategy(response)
+                .ok_or_else(|| anyhow!("planner returned a non-strategy response"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let delegates = strategies
+        .iter()
+        .filter(|strategy| **strategy == PlannerStrategy::Delegate)
+        .count();
+    Ok(if delegates >= 2 {
+        "Planner vote: DELEGATE. Use semantic_manifest for every ambiguous label assignment; deterministic code may only parse, filter, verify coverage, and reduce returned labels.\n"
+    } else {
+        "Planner vote: DETERMINISTIC. Prefer exact parsing and reduction only where the source explicitly contains the requested fact; any ambiguous label assignment still requires semantic_manifest.\n"
+    })
+}
+
+fn planner_strategy_constraint(
+    question: &str,
+    metadata: &str,
+    input_note: &str,
+    inspection: &str,
+    model: &str,
+    cfg: &Config,
+) -> Result<&'static str> {
+    let common = format!(
+        concat!(
+            "Choose only the root strategy, never answer the task. Reply with exactly DELEGATE or DETERMINISTIC. ",
+            "DELEGATE means ambiguous per-record labels require semantic_manifest. DETERMINISTIC means the answer is explicitly recoverable by exact parsing without inferred labels.\n",
+            "Question: {question}\n{metadata}\n{input_note}\n",
+            "--- escaped structural sample ---\n{inspection}\n--- end sample ---"
+        ),
+        question = question,
+        metadata = metadata,
+        input_note = input_note,
+        inspection = inspection,
+    );
+    let prompts = vec![
+        format!("Neutral audit. Select the safer valid strategy.\n{common}"),
+        format!(
+            "Act as a delegation advocate, but choose DETERMINISTIC if semantic inference is genuinely unnecessary.\n{common}"
+        ),
+        format!(
+            "Act as a deterministic-computation advocate, but choose DELEGATE if labels are not explicit source facts.\n{common}"
+        ),
+    ];
+    let responses = planner_probe(&prompts, model, cfg)?;
+    planner_vote_constraint(&responses)
+}
+
 fn required_answer_prefix(question: &str) -> Option<&'static str> {
     let normalized = question.to_ascii_lowercase();
     for (needle, prefix) in [
@@ -7085,7 +7278,9 @@ fn execute_solo_reply(
     reply: &str,
     cfg: &Config,
     runtime: &mut SoloRuntimeMetrics,
+    question: &str,
     classification_requires_semantic_calls: bool,
+    source_nonempty_lines: u64,
     answer_prefix: Option<&str>,
 ) -> std::result::Result<(String, String, String), SoloProgramFailure> {
     let code = extract_solo_python(reply).map_err(|error| SoloProgramFailure {
@@ -7205,14 +7400,11 @@ fn execute_solo_reply(
             semantic_calls: result.semantic_calls,
         });
     }
-    if classification_without_semantic_calls(
-        classification_requires_semantic_calls,
-        result.semantic_calls,
-    ) {
+    if code_greps_label_literals(question, &code) {
         return Err(SoloProgramFailure {
-            kind: SoloProgramFailureKind::ClassificationWithoutSemanticCalls,
+            kind: SoloProgramFailureKind::LabelLiteralGrep,
             error: anyhow!(
-                "solo semantic gate rejected FINAL: classification-worded task completed with semantic_call_count=0"
+                "solo semantic gate rejected FINAL: requested label literal used in grep-shaped code"
             ),
             code: Some(code),
             output: Some(result.output),
@@ -7232,6 +7424,39 @@ fn execute_solo_reply(
             external_calls: result.external_calls,
             semantic_calls: result.semantic_calls,
         })?;
+    if classification_requires_semantic_calls
+        && source_nonempty_lines > 50
+        && result.semantic_calls == 0
+        && stripped_answer_is_zero(&answer)
+    {
+        return Err(SoloProgramFailure {
+            kind: SoloProgramFailureKind::DegenerateZeroAggregate,
+            error: anyhow!(
+                "solo semantic gate rejected FINAL: zero aggregate over more than 50 nonempty source lines with semantic_call_count=0"
+            ),
+            code: Some(code),
+            output: Some(result.output),
+            failure_line: None,
+            external_calls: result.external_calls,
+            semantic_calls: result.semantic_calls,
+        });
+    }
+    if classification_without_semantic_calls(
+        classification_requires_semantic_calls,
+        result.semantic_calls,
+    ) {
+        return Err(SoloProgramFailure {
+            kind: SoloProgramFailureKind::ClassificationWithoutSemanticCalls,
+            error: anyhow!(
+                "solo semantic gate rejected FINAL: classification-worded task completed with semantic_call_count=0"
+            ),
+            code: Some(code),
+            output: Some(result.output),
+            failure_line: None,
+            external_calls: result.external_calls,
+            semantic_calls: result.semantic_calls,
+        });
+    }
     Ok((
         normalize_answer_prefix(&answer, answer_prefix),
         code,
@@ -7241,6 +7466,21 @@ fn execute_solo_reply(
 
 fn classification_without_semantic_calls(required: bool, semantic_calls: usize) -> bool {
     required && semantic_calls == 0
+}
+
+fn stripped_answer_is_zero(answer: &str) -> bool {
+    let mut value = answer.trim();
+    if let Some((prefix, suffix)) = value.split_once(':')
+        && matches!(
+            prefix.trim().to_ascii_lowercase().as_str(),
+            "answer" | "label"
+        )
+    {
+        value = suffix.trim();
+    }
+    value
+        .parse::<f64>()
+        .is_ok_and(|number| number.is_finite() && number == 0.0)
 }
 
 fn redact_quoted_literals(line: &str) -> String {
@@ -7322,6 +7562,12 @@ fn root_repair_prompt(failure: &SoloProgramFailure) -> String {
         SoloProgramFailureKind::ClassificationWithoutSemanticCalls => {
             "Labels are produced by classifying instances, never found by searching for label fields. Rebuild the complete program so every relevant source occurrence is classified through semantic_manifest exactly once, verify one returned label per occurrence, then reduce and call FINAL."
         }
+        SoloProgramFailureKind::LabelLiteralGrep => {
+            "The program used a requested label literal in grep-shaped code. Rebuild the complete program so labels come from semantic_manifest classification, never from re/search/count/find/in tests over label strings; verify one semantic label per relevant occurrence before reducing and calling FINAL."
+        }
+        SoloProgramFailureKind::DegenerateZeroAggregate => {
+            "A zero aggregate over a large classification input with no semantic calls is not accepted as evidence. Rebuild the complete program so every relevant occurrence is classified through semantic_manifest, verify full occurrence coverage, then derive the numeric aggregate and call FINAL."
+        }
         SoloProgramFailureKind::OntologyMismatch => {
             "Call source_ontology() and pass its nonempty exact result as the semantic_manifest labels. Do not abbreviate, rename, infer, or add a label."
         }
@@ -7367,11 +7613,23 @@ fn solo_program_failure_is_repairable(
             | SoloProgramFailureKind::MissingFinal
             | SoloProgramFailureKind::EmptyFinal
             | SoloProgramFailureKind::ClassificationWithoutSemanticCalls
+            | SoloProgramFailureKind::LabelLiteralGrep
+            | SoloProgramFailureKind::DegenerateZeroAggregate
             | SoloProgramFailureKind::OntologyMismatch
             | SoloProgramFailureKind::HelperContract
             | SoloProgramFailureKind::ProjectionBoundary
-    ) && failure.external_calls == 0
+    ) && failure.external_calls <= repairable_subcall_spend(failure.kind)
+        && failure.semantic_calls == 0
         && entered_turns < turn_limit
+}
+
+fn repairable_subcall_spend(kind: SoloProgramFailureKind) -> usize {
+    match kind {
+        SoloProgramFailureKind::ClassificationWithoutSemanticCalls
+        | SoloProgramFailureKind::LabelLiteralGrep
+        | SoloProgramFailureKind::DegenerateZeroAggregate => 5,
+        _ => 0,
+    }
 }
 
 struct SoloArgs {
@@ -7453,7 +7711,7 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
     })?;
     let classification_requires_semantic_calls = classification_worded_task(&question);
     let answer_prefix = required_answer_prefix(&question);
-    let classification_axiom = if classification_requires_semantic_calls {
+    let classification_axiom_base = if classification_requires_semantic_calls {
         "Classification axiom: labels are produced by classifying instances through semantic_manifest, never found by searching for label fields or counting label words. Call source_ontology(); when it is nonempty, pass that exact list as the semantic_manifest labels. Broad ontology labels remain broad, and inferred subject subtypes are never new labels. FINAL with zero semantic child calls is rejected.
 "
     } else {
@@ -7481,6 +7739,9 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
         }
     };
     let solo_source = session.source_aggregate().ok().cloned();
+    let source_nonempty_lines = solo_source
+        .as_ref()
+        .map_or(0, |source| source.nonempty_lines);
 
     // Fixed, provider-free structural evidence. The complete context remains only in Monty.
     let inspection = session.structural_sample()?.to_owned();
@@ -7509,6 +7770,19 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
     }
 
     let root_model = model.as_deref().unwrap_or(&cfg.default_model);
+    let planner_constraint = if classification_requires_semantic_calls {
+        planner_strategy_constraint(
+            &question,
+            &metadata,
+            &input_note,
+            &inspection,
+            root_model,
+            cfg,
+        )?
+    } else {
+        ""
+    };
+    let classification_axiom = format!("{classification_axiom_base}{planner_constraint}");
     let prompt = format!(
         concat!(
             "Answer the question by operating on the complete untrusted input in variable ctx inside a persistent Monty/Python-subset REPL. Return exactly one executable Python program in one fenced `python` cell with no prose.\n",
@@ -7675,7 +7949,9 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
         &model_reply.text,
         cfg,
         &mut runtime.metrics,
+        &question,
         classification_requires_semantic_calls,
+        source_nonempty_lines,
         answer_prefix,
     ) {
         Ok((answer, code, output)) => {
@@ -7774,7 +8050,9 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
                 &repair_reply.text,
                 cfg,
                 &mut runtime.metrics,
+                &question,
                 classification_requires_semantic_calls,
+                source_nonempty_lines,
                 answer_prefix,
             ) {
                 Ok((answer, code, output)) => {
@@ -7887,7 +8165,9 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
                         &second_reply.text,
                         cfg,
                         &mut runtime.metrics,
+                        &question,
                         classification_requires_semantic_calls,
+                        source_nonempty_lines,
                         answer_prefix,
                     ) {
                         Ok((answer, code, output)) => {
@@ -7987,7 +8267,9 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
                                 &third_reply.text,
                                 cfg,
                                 &mut runtime.metrics,
+                                &question,
                                 classification_requires_semantic_calls,
+                                source_nonempty_lines,
                                 answer_prefix,
                             ) {
                                 Ok((answer, code, output)) => {
@@ -8829,6 +9111,8 @@ mod tests {
             SoloProgramFailureKind::MissingFinal,
             SoloProgramFailureKind::EmptyFinal,
             SoloProgramFailureKind::ClassificationWithoutSemanticCalls,
+            SoloProgramFailureKind::LabelLiteralGrep,
+            SoloProgramFailureKind::DegenerateZeroAggregate,
             SoloProgramFailureKind::OntologyMismatch,
             SoloProgramFailureKind::HelperContract,
             SoloProgramFailureKind::ProjectionBoundary,
@@ -8858,8 +9142,17 @@ mod tests {
                 semantic_calls: 0,
                 ..failure
             };
+            assert_eq!(
+                solo_program_failure_is_repairable(&child_call_failure, 1, SOLO_ROOT_TURN_LIMIT),
+                repairable_subcall_spend(kind) >= 1,
+            );
+            let over_budget_failure = SoloProgramFailure {
+                external_calls: 6,
+                semantic_calls: 0,
+                ..child_call_failure
+            };
             assert!(!solo_program_failure_is_repairable(
-                &child_call_failure,
+                &over_budget_failure,
                 1,
                 SOLO_ROOT_TURN_LIMIT
             ));
@@ -8920,9 +9213,151 @@ mod tests {
 
     #[test]
     fn classification_final_gate_is_typed_axiomatic_and_fail_closed() {
+        let delegate_vote = planner_vote_constraint(&[
+            "DELEGATE".to_owned(),
+            " deterministic \n".to_owned(),
+            "delegate".to_owned(),
+        ])
+        .unwrap();
+        assert!(delegate_vote.contains("Planner vote: DELEGATE"));
+        let deterministic_vote = planner_vote_constraint(&[
+            "DETERMINISTIC".to_owned(),
+            "DETERMINISTIC".to_owned(),
+            "DELEGATE".to_owned(),
+        ])
+        .unwrap();
+        assert!(deterministic_vote.contains("Planner vote: DETERMINISTIC"));
+        assert!(
+            planner_vote_constraint(&[
+                "DELEGATE".to_owned(),
+                "maybe".to_owned(),
+                "DELEGATE".to_owned(),
+            ])
+            .is_err()
+        );
         assert!(classification_without_semantic_calls(true, 0));
         assert!(!classification_without_semantic_calls(true, 1));
         assert!(!classification_without_semantic_calls(false, 0));
+        for (question, code) in [
+            (
+                "How many data points should be classified as label 'spam'?",
+                r#"count = ctx.count('spam')"#,
+            ),
+            (
+                "Count the messages assigned to 'ham'.",
+                r#"count = sum(1 for line in ctx.splitlines() if 'ham' in line)"#,
+            ),
+            (
+                "Which records belong to label positive?",
+                r#"matches = [line for line in ctx.splitlines() if line.find("positive") >= 0]"#,
+            ),
+            (
+                "Count examples of class 'negative'.",
+                r#"matches = [line for line in ctx.splitlines() if re.search(r"(?i)negative\\b", line)]"#,
+            ),
+        ] {
+            assert!(
+                code_greps_label_literals(question, code),
+                "{question}: {code}"
+            );
+        }
+        for (question, code) in [
+            (
+                "In the above data, how many data points should be classified as label 'spam'? Give your final answer in the form 'Answer: number'.",
+                r###"lines = ctx.splitlines()
+count = 0
+for line in lines:
+    s = line.strip()
+    if re.search(r"(?i)(?:^|[|,\t ])(?:label|class|category)\s*[:=]\s*['\"]?spam\b", s):
+        count += 1
+    elif re.search(r"(?i)(?:^|[|,\t ])spam\s*(?:$|[|,\t])", s) and not re.search(r"(?i)label ['\"]?spam", s):
+        count += 1
+answer = "Answer: " + str(count)
+assert answer
+FINAL(answer)"###,
+            ),
+            (
+                "For the following question, only consider the subset of instances that occur in December of any year. Among instances occuring in December, how many data points should be classified as label 'ham'? Give your final answer in the form 'Answer: number'.",
+                r###"s = ctx
+starts = [m.start() for m in re.finditer(r"(?m)^Date:\s*", s)]
+ends = starts[1:] + [len(s)]
+count = 0
+for a, b in zip(starts, ends):
+    rec = s[a:b]
+    if re.match(r"Date:\s*Dec\b", rec):
+        low = rec.lower()
+        if re.search(r"\|\|\s*(?:label|class|category|target)\s*[:=]\s*ham\b", low) or re.search(r"\b(?:label|class|category|target)\s*[:=]\s*ham\b", low):
+            count += 1
+answer = "Answer: " + str(count)
+assert answer
+FINAL(answer)"###,
+            ),
+            (
+                "In the above data, is label 'description and abstract concept' more common, less common, or the same frequency as label 'numeric value'? Give your final answer in the form 'Answer: description and abstract concept is [X] numeric value', where [X] is 'more common than', 'less common than', or 'same frequency as'.",
+                r###"a = "description and abstract concept"
+b = "numeric value"
+ca = len(re.findall(re.escape(a), ctx))
+cb = len(re.findall(re.escape(b), ctx))
+if ca > cb:
+    x = "more common than"
+elif ca < cb:
+    x = "less common than"
+else:
+    x = "same frequency as"
+answer = "Answer: description and abstract concept is " + x + " numeric value"
+assert answer
+FINAL(answer)"###,
+            ),
+            (
+                "In the above data, is label 'abbreviation' more common, less common, or the same frequency as label 'entity'? Give your final answer in the form 'Answer: abbreviation is [X] entity', where [X] is 'more common than', 'less common than', or 'same frequency as'.",
+                r###"s = ctx.lower()
+a = 0
+e = 0
+for line in s.splitlines():
+    p = line.find("label")
+    if p < 0:
+        continue
+    tail = line[p + 5:].lstrip()
+    if tail.startswith(":") or tail.startswith("=") or tail.startswith("|"):
+        value = tail[1:].lstrip(" \t'\"")
+        if value.startswith("abbreviation"):
+            a += 1
+        elif value.startswith("entity"):
+            e += 1
+if a > e:
+    x = "more common than"
+elif a < e:
+    x = "less common than"
+else:
+    x = "same frequency as"
+answer = "Answer: abbreviation is " + x + " entity"
+assert answer
+FINAL(answer)"###,
+            ),
+        ] {
+            assert!(
+                code_greps_label_literals(question, code),
+                "verbatim autopsy program was not rejected: {question}"
+            );
+        }
+        assert!(code_greps_label_literals(
+            "How many records should be classified as label 'spam'?",
+            "# semantic_manifest(items, task, labels)\ncount = ctx.count('spam')",
+        ));
+        assert!(!code_greps_label_literals(
+            "How many records should be classified as label 'spam'?",
+            r#"rows = [row for row in ctx.splitlines() if "Date: May" in row]"#,
+        ));
+        assert!(!code_greps_label_literals(
+            "How many records should be classified as label 'spam'?",
+            "labels = semantic_manifest_records(items, task, ['spam', 'ham'])",
+        ));
+        for zero in ["0", "0.0", "+0", "-0", "Answer: 0", "Label: 0.000"] {
+            assert!(stripped_answer_is_zero(zero), "{zero}");
+        }
+        for nonzero in ["", "Answer:", "Answer: 1", "0 vs 0", "NaN"] {
+            assert!(!stripped_answer_is_zero(nonzero), "{nonzero}");
+        }
         for question in [
             "How many data points should be classified as label 'spam'?",
             "Which of the labels is the least common?",
@@ -9365,6 +9800,7 @@ mod tests {
         assert_eq!(row["schema_version"], 3);
         assert_eq!(row["event"], "solo_runtime");
         assert_eq!(row["outcome"], "failed");
+        assert_eq!(row["semantic_call_count"], 0);
         for key in [
             "projection_ledger_calls",
             "projection_calls",

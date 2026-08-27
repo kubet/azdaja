@@ -5930,6 +5930,25 @@ pub fn call_many(
     .collect())
 }
 
+fn planner_probe_policy() -> CallManyPolicy {
+    CallManyPolicy {
+        call_limit: 3,
+        batch: true,
+        use_shared: false,
+        max_entered_turns: 2,
+    }
+}
+
+pub fn planner_probe(prompts: &[String], model: &str, cfg: &Config) -> Result<Vec<String>> {
+    if prompts.len() != 3 {
+        bail!("planner probe requires exactly three prompts")
+    }
+    call_many_items(prompts, model, 3, cfg, planner_probe_policy())?
+        .into_iter()
+        .map(|result| result.map_err(anyhow::Error::msg))
+        .collect()
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ModelUsage {
     pub input: u64,
@@ -10878,6 +10897,15 @@ JSONL
     }
 
     #[test]
+    fn planner_probe_policy_is_three_bounded_independent_calls() {
+        let policy = planner_probe_policy();
+        assert_eq!(policy.call_limit, 3);
+        assert!(policy.batch);
+        assert!(!policy.use_shared);
+        assert_eq!(policy.max_entered_turns, 2);
+    }
+
+    #[test]
     fn semantic_wall_budget_scales_with_phase_waves_at_eight_workers() {
         assert_eq!(SEMANTIC_MANIFEST_WORKERS, 8);
         assert_eq!(semantic_wall_budget(6).unwrap(), Duration::from_secs(240));
@@ -11572,6 +11600,7 @@ mod lexical_relevance_tests {
         assert!(result.success);
         assert!(result.finalized);
         assert_eq!(result.external_calls, 0);
+        assert_eq!(result.semantic_calls, 0);
         assert_eq!(session.final_answer(&cfg).unwrap(), "ok");
     }
 
