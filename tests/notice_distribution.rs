@@ -403,6 +403,7 @@ fn release_publication_is_manual_exact_tag_nonoverwriting_and_attested() {
     assert!(!workflow.contains("tags:"));
     for permission in [
         "contents: write",
+        "actions: read",
         "id-token: write",
         "attestations: write",
         "artifact-metadata: write",
@@ -413,6 +414,9 @@ fn release_publication_is_manual_exact_tag_nonoverwriting_and_attested() {
     assert!(workflow.contains("promotion=\"$release_dir/PROVENANCE.json\""));
     assert!(workflow.contains("source_commit\"] != commit"));
     assert!(workflow.contains("actions/runs/$source_run_id"));
+    assert!(workflow.contains("--workflow ci.yml"));
+    assert!(workflow.contains("--workflow source-install-integrity.yml"));
+    assert_eq!(workflow.matches("\n  actions: read\n").count(), 1);
     assert!(workflow.contains("source_run[\"event\"] == \"workflow_dispatch\""));
     assert!(workflow.contains("source_run[\"conclusion\"] == \"success\""));
     assert!(workflow.contains("assert \"main\" in branches"));
@@ -426,6 +430,8 @@ fn release_publication_is_manual_exact_tag_nonoverwriting_and_attested() {
     assert!(workflow.contains("release/verify-published-release.sh \"$VERSION\""));
     assert!(!workflow.contains("gh release upload"));
     assert!(!workflow.contains("--clobber"));
+    assert!(workflow.contains("\npermissions:\n  contents: write\n  actions: read\n"));
+    assert_eq!(workflow.matches("\n  actions: read\n").count(), 1);
 }
 
 #[test]
