@@ -44,11 +44,7 @@ jobs:
           note="release/$tag.md"
           commit="$(git rev-parse HEAD^{commit})"
           test "$(git rev-parse "$tag^{commit}")" = "$commit"
-          test "$(python3 - <<'PY'
-          import pathlib, tomllib
-          print(tomllib.loads(pathlib.Path('Cargo.toml').read_text())['package']['version'])
-          PY
-          )" = "$version"
+          test "$(sed -n '/^\[package\]$/,/^\[/ s/^version = "\(.*\)"$/\1/p' Cargo.toml)" = "$version"
           test -d "$release_dir"
           test -f "$promotion"
           test -f "$note"
