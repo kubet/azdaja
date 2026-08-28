@@ -1,0 +1,93 @@
+# Five ways our own scorer tried to lie to us
+
+*A postmortem on benchmark measurement infrastructure, grounded in Azdaja's hash-pinned tracked public evidence.*
+
+Azdaja is an open-source Rust CLI that lets a language model analyze inputs larger than one context window. The complete input stays in a local Monty/Python evaluator, the model works through a bounded surface and explicit subcalls, and record-oriented workflows verify coverage before returning `FINAL`. To learn whether that design works, we ran benchmark campaigns. This piece is not about the campaigns' headline number. It is about the machinery that produces such numbers, and the five times ours failed before we trusted it.
+
+By "scorer" we mean the entire measurement path: the terminal validator that decides a run is complete and untampered, the scoring program that turns retained outputs into a number, and the score custodian that ensures the number is produced exactly once from frozen evidence (`docs/launch-saga.md`, "Five scorer kills, all ours").
+
+One thing should be stated plainly before the list: **the repository attributes all five failures to our own integration and control-plane defects. It does not attribute misconduct to a benchmark author, provider, or model team** (`docs/launch-saga.md`). Each would-be lie was of our own manufacture.
+
+## Why paranoia about the measurement path
+
+The campaign that eventually closed produced **68.64164968987583% over a fixed 199-row long-context slice: 185 valid predictions and 14 failures retained as zeros**, with a frozen score sum of 136.5968828828529 (`bench/results/gpt-rah199-mortality-v3-terminal-public.json`). The receipt records the claim scope in its own words: a private, single-arm, validation-derived diagnostic, not an official leaderboard result, a paired comparison, or a superiority claim. Every one of the 199 fixture records is pinned in `bench/results/rah199-public-manifest.json` by two digests, a `row_sha256` and a `context_sha256`; the manifest carries 199 distinct row hashes over 50 distinct context hashes, so any substitution would change the pinned digest.
+
+Two definitions carry everything that follows. A **fixed denominator** means a row that dies during execution is not dropped from the average. It remains in the calculation and scores zero, so the number cannot quietly improve by losing its failures. The same receipt makes the stakes of that choice concrete: averaged over completed rows only, the identical evidence reads 73.83615290965021%; held to the fixed denominator of 199, it reads 68.64%. The 5.19-percentage-point gap between those two numbers is the honesty the denominator buys, and the tracked account states the principle directly: a dead row is not quietly removed from the average (`docs/launch-saga.md`). **Fail-closed** means that when any link in the validator, scorer, or custodian chain meets a state it does not fully understand, it halts and preserves the evidence instead of improvising a result.
+
+Why does this belong in a product story at all? Because for a tool whose core promise is fail-closed behavior over complete records, the benchmark pipeline is the first customer of the product's own philosophy. Scorer integrity is product integrity because both depend on the same habit: refusing to convert an incomplete state into a confident answer.
+
+A scorer needs no intent to lie. It only needs to hand you a number whose provenance differs from what you believe: a score over fewer rows than you think, a validation that never completed, or a code path that was never exercised in production shape. All five failures attempted, in that sense, to give us a number we would have described incorrectly.
+
+## Kill 1: The missing handoff
+
+A completed LongBench job reached its terminal path. The validator needed the already-captured public payload bytes to recompute its exact public-context leak assertion over the retained root trace. The bytes existed. The validator never received them, because the handoff between capture and validation was wired incorrectly (`docs/launch-saga.md`).
+
+The lie on offer would have been a "validated" cohort without a completed leak check. Fail-closed behavior froze the cohort instead, and the control code was repaired forward. The affected run was not retroactively blessed.
+
+**Control derived:** a check must fail when its inputs are missing, not only when its inputs are bad. "The check passed" and "the check could not complete" must be impossible to confuse.
+
+## Kill 2: The byte-order assumption
+
+A 189-row LongBench run was rejected because our validator demanded one particular JSON key order, while the product had emitted a valid, duplicate-free ordering of the same fields (`docs/launch-saga.md`). This was the mirror image of kill 1: not a check that silently skipped, but a check stricter than the real contract, rejecting valid evidence. That run remained terminal-invalid and unscored. The defect belonged to the validator, and the verdict stood anyway.
+
+**Control derived:** validators encode the interchange contract, not incidental byte layout. A frozen validator's verdict must stand even when the defect turns out to belong to the validator itself.
+
+## Kill 3: The nullable-telemetry trap
+
+A RULER effort sweep completed all 60 of its fixed inference rows. The one-shot scorer then assumed every retained row, including failed rows, carried usage telemetry. One retained failure did not. The scorer stopped without producing a report (`docs/launch-saga.md`).
+
+Here the one-shot design showed its teeth. The failed scorer record was itself immutable, so we could not quietly patch and rerun it. Producing an aggregate required an explicitly authorized, separately rehearsed retained-evidence scorer (`docs/launch-saga.md`).
+
+That sounds bureaucratic until one asks what the alternative means. If a failed row is part of the fixed denominator but the scorer cannot represent it, then the scorer's type system is narrower than the experiment it claims to measure. Dropping the row would improve the apparent result. Manufacturing telemetry would invent evidence. Reusing the consumed scoring boundary after changing code would erase the first failure.
+
+**Control derived:** failed rows are first-class scorer inputs, not exceptions. A fixed-denominator scorer must be total over every retained-evidence shape.
+
+## Kill 4: The unsupported value type
+
+A 199-row RAH campaign passed its no-score validation. The frozen scorer then encountered a released gold answer whose value type was valid under the benchmark's contract but unsupported by our scoring code. It halted (`docs/launch-saga.md`).
+
+Every shortcut at that moment was forbidden. There was no improvised score, no replacement row, and no silent parser change to the frozen scorer. A separately authorized repair had to reproduce the exact input shapes synthetically and prove the repaired scorer's behavior before it could touch retained evidence, and the retained evidence was then scored once (`docs/launch-saga.md`).
+
+**Control derived:** when a frozen scorer meets an unknown but valid value, it halts and preserves. A repair must prove itself on synthetic reproductions before it handles real retained evidence.
+
+## Kill 5: The ceremony that never exercised the ceremony
+
+A later full exam completed. Then the score custodian and diagnostic calculator disagreed about an output filename and one field of the report envelope. Identity checks had passed. The exact production layout had never been executed end to end: frozen filenames, directory shape, report envelope, sentinel behavior, and refusal path (`docs/launch-saga.md`).
+
+This kill produced the campaign's most transferable sentence: **a scoring test that merely imports the scorer is not a scoring rehearsal.** The mechanical attempt was retained, the custody rule was clarified, and the repaired path had to demonstrate both a first successful scoring invocation and refusal of a second.
+
+**Control derived:** rehearse the production ceremony itself, or accept that "exactly once" can mean "exactly once, incorrectly."
+
+## What the surviving receipt promises
+
+The controls purchased by those failures appear as machine-checkable fields in the closed public receipt (`bench/results/gpt-rah199-mortality-v3-terminal-public.json`):
+
+- `terminal_status: TERMINAL_COMPLETED_SCORED_ONCE_CLOSED`: completed, scored exactly once, closed.
+- `scorer_invocations_successful: 1` with `second_scoring_invocation_performed: false`: the public receipt records one successful scoring invocation and no second invocation.
+- `source_gold_opened_only_after_exclusive_sentinel: true`: source gold was opened only after an exclusive sentinel established that inference was over.
+- `score_frozen: true`, `historical_run_rerun_resumed_or_rescored: false`, `successor_fixed_199_authorized: false`: the receipt records a frozen score, no historical rerun or rescore, and no authorized fixed-199 successor.
+- 199 fixed rows, 185 execution successes, and 14 retained failure zeros, bound to the hash-pinned manifest (`bench/results/rah199-public-manifest.json`).
+
+None of this makes the number impressive. It makes the number describable: what was measured, over which rows, how failures were treated, and how many times scoring succeeded.
+
+If you build evaluation infrastructure, five controls transfer directly: checks that fail on missing inputs; validators that encode contracts rather than byte accidents; scorers total over failure shapes; halt-and-preserve behavior for valid but unsupported values; and a rehearsed, refusal-tested scoring ceremony.
+
+If you read evaluation results, including ours, the transferable habit is one question: not "is the score high?" but "what would this pipeline have done on the day something surprising happened?"
+
+Across the LongBench, RULER, and RAH paths, each incident stopped or invalidated the affected measurement and forced a control-plane repair before any affected result could be trusted. Only the RAH path has a cited public numerical receipt here; the 189-row LongBench run remained terminal-invalid and unscored. The score is part of the result. The kills are part of it too.
+
+## Evidence table
+
+| Tier | Evidence and verified result | Path and SHA-256 |
+|---|---|---|
+| **Frozen public, tracked and clean** | Five scorer incidents, including the 189-row LongBench rejection and 60-row RULER sweep, with all five attributed to Azdaja's own integration and control plane | `docs/launch-saga.md`<br>`7661000e2f19bc26c883d7c0cc266ec2fd145bbca8235d6b12e91017f8e0fea7` |
+| **Frozen public, tracked and clean** | 68.64164968987583%; score sum 136.5968828828529; denominator 199; 185 execution successes; 185 valid predictions; 14 retained zeros; completed-row mean 73.83615290965021%; exactly one successful scorer invocation; no second invocation; gold-sentinel, terminal, and custody fields as quoted in the article | `bench/results/gpt-rah199-mortality-v3-terminal-public.json`<br>`842475dcc8d3868af782e52716cd11ff4db7709e134b54c7980f00e5c8c26f8b` |
+| **Frozen public, tracked and clean** | 199 fixtures; all 199 carry lowercase 64-hex `row_sha256` and `context_sha256` values; 199 distinct row hashes; 50 distinct context hashes | `bench/results/rah199-public-manifest.json`<br>`4ecb211aecea8cd1cdf86e3bb78b52ef1788d5bb2b0f9d640c0c9c137fcd547c` |
+
+## Claims intentionally omitted as unsupported
+
+1. **Gate-645 and row-651 outcomes, causes, comparisons, and accuracy claims.** Diagnostic-only artifacts are excluded from the public evidence base.
+2. **Primary-receipt detail for scorer kills 1 and 2.** No tracked LongBench receipt is present under `bench/results/`; those incidents rely on the hash-pinned `docs/launch-saga.md` account.
+3. **Public-evidence status or campaign comparability for local scorer-repair artifacts.** Untracked or ignored files are excluded from the public evidence base.
+4. **`docs/visibility-ops.md` as evidence.** It is untracked and was excluded as a factual source.
+5. **External blame.** The tracked narrative attributes the five incidents to Azdaja's own integration and control plane, not to misconduct by a benchmark author, provider, or model team.
