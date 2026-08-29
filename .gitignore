@@ -56,3 +56,5 @@ __pycache__/
 /release/v0.1.1/
 /tests/release_v011.rs
 /tools/check_docs.py
+# Private outreach drafts are operator-local.
+docs/outreach/*draft*.md

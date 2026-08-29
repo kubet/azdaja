@@ -15,36 +15,15 @@ Consequence: agent effort goes to (1) amplifiers, (2) the recurring receipt, (3)
 
 ---
 
-## OP-1 · Amplifier outreach
+## OP-1 · Opt-in technical outreach
 
-**Goal:** one technical acknowledgment (reply, citation, repost, or issue comment) from a person who owns the RLM/long-context conversation. This is the highest-expected-value operation in this file.
+**Goal:** make accurate technical evidence available when an external researcher, maintainer, or community explicitly invites relevant submissions or asks a question that Azdaja can answer.
 
-**Targets, hooks, and verified routes:** see the routes table at the end of this section. The hook is always the same shape: *Azdaja is a production, fail-closed implementation of the idea this person owns, measured under a protocol they know, with hash-bound receipts they can audit or attack.*
+**Policy:** use only current, publicly documented opt-in submission mechanisms. Do not maintain person-target lists, direct addresses, individualized pitch dossiers, private send logs, or message drafts in the repository. Respond to the technical topic rather than profiling a recipient, and prefer public, auditable project channels when the venue permits them.
 
+**Guardrails:** claims must match `BENCHMARKS.md` verbatim framing ("private, single-arm, validation-derived"); never imply endorsement without written permission; criticism is handled through repository evidence or correction, not a rebuttal campaign. Every external post, reply, email, form submission, or other contact requires separate explicit operator approval immediately before acting.
 
-**Guardrails:** claims must match `BENCHMARKS.md` verbatim framing ("private, single-arm, validation-derived"); never imply endorsement afterward without written permission; if a target publishes criticism, the response is a repository correction, not a rebuttal thread.
-
-**Acceptance:** five notes sent by the operator; each logged below with date and route; any reply answered within 24 h with evidence, not marketing.
-
-
-<!-- ROUTES:BEGIN -->
-
-| Target | Verified route(s) | Priority + note |
-|---|---|---|
-| **Oolong authors** (Bertsch et al., the benchmark Azdaja is measured on) | Leaderboard site <https://oolongbench.github.io/> Contact section carries a standing invitation — "Have a model you'd like us to evaluate? Reach out" — with the contact email printed there; repo <https://github.com/abertsch72/oolong> has issues enabled, results-submission issue appropriate | **1st** — the only target with an explicit standing invitation, and the deliverable is results, not a pitch |
-| **Alex L. Zhang** (RLM paper first author) | Bio at <https://alexzhang13.github.io> explicitly invites email ("reach out to talk about anything"), address printed obfuscated in the bio; X `@a1zhang`; author emails also on page 1 of <https://arxiv.org/pdf/2512.24601> | **2nd** — a direct implementation of his paper; a warm reply compounds every other channel |
-| **Latent Space / swyx** | Published pitch route `tips@latent.space` (<https://www.latent.space/about>; do not use the sponsorship address); ~1 month lead-time guidance; secondary: LLM Paper Club (lu.ma/llm-paper-club) — the RLM paper is exactly their material | **3rd** — purpose-built pitch route, widest payoff if it lands |
-| **RAH authors** (Lumer, Sen, Paul, Subbiah — PwC) | Author emails printed under each name on page 1 of <https://arxiv.org/html/2606.13643v1> (Lumer corresponding; GitHub `EliasLumer`) | Their RAH code is announced but unreleased — an independent open implementation is citable validation and a natural comparison point when it ships |
-| **Prime Intellect** | Discord `discord.gg/primeintellect` (site footer) — the right venue; the contact form at primeintellect.ai/contact is sales-qualified, don't use it; X `@PrimeIntellect` | Post in the community as a technical project, not a pitch |
-| **Simon Willison** | No pitch route exists (verified: about page, link-blog post, contact tag). Most active on Mastodon `@simon@simonwillison.net` and Bluesky; a concise public @-mention with the runnable 50 MiB demo is the only defensible route | Pitch the reproducible demo, never the benchmark |
-| **Andrej Karpathy** | X `@karpathy` only; no pitch policy | Public @-mention at most; expect nothing |
-
-<!-- ROUTES:END -->
-
-**Send log:** (append-only)
-
-| Date | Target | Route | Sent by | Reply |
-|---|---|---|---|---|
+**Acceptance:** any approved outreach follows a documented opt-in policy, contains only evidence-backed technical claims, and leaves no private targeting material or contact instructions in the public tree.
 
 ---
 
@@ -140,7 +119,7 @@ python3 tools/visibility_sweep.py
 
 | Operation | Rhythm | Agent share | Operator share |
 |---|---|---|---|
-| OP-1 outreach | once, then per-reply | research, drafts, log | sends, relationship |
+| OP-1 opt-in technical outreach | only after an explicit invitation or relevant question | evidence preparation | approval and any external action |
 | OP-2 receipt cycle | per model release | trigger watch, run prep, receipt row, post draft | inference authorization, posting |
 | OP-3 surfacing | weekly | sweep, shortlist, drafts | rule check, posting |
 | OP-4 content | one piece per 1–2 weeks | full drafts from evidence | review, publish |
