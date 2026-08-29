@@ -147,9 +147,6 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if not args.dry_run and os.path.exists(args.out) and not args.force:
-        parser.error(f"refusing to overwrite existing queue: {args.out}; pass --force")
-
     seen = set() if args.include_seen else prior_queue_urls(args.out)
 
     cutoff_date = (today - dt.timedelta(days=RECENT_DAYS)).isoformat()
@@ -191,8 +188,10 @@ def main() -> int:
         print(rendered, end="")
         return 0
 
-    if not args.dry_run:
-        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    if os.path.exists(out_path) and not args.force:
+        parser.error(f"refusing to overwrite existing queue: {out_path}; pass --force")
+
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as handle:
         handle.write(rendered)
     print(f"wrote {out_path}")

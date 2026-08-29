@@ -105,7 +105,7 @@ python3 tools/visibility_sweep.py
 
 ## OP-4 · Content production
 
-
+**OP-4 accepted-artifact:** `docs/outreach/op4-scorer-postmortem.md`; article SHA-256 `02d0c2426f4173c110b5d7708a494f8b41b5d7baad27404ffcbd6baeae91c9df`; acceptance report SHA-256 `d99b6f4bfa7342aadbaffb1d32686e831e558f24ef11b8662e04bc6a55308687`.
 
 **Goal:** the three deep pieces behind the saga, written by an agent from frozen repository evidence, reviewed and published by the operator on `azdaja.dev` (saga page pattern: `site/saga.html`).
 
