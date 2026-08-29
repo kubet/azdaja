@@ -58,3 +58,6 @@ __pycache__/
 /tools/check_docs.py
 # Private outreach drafts are operator-local.
 docs/outreach/*draft*.md
+
+# Agent-generated media scratch files stay local.
+/.jcode/generated-images/
