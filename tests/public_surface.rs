@@ -84,6 +84,26 @@ fn public_site_exposes_machine_readable_search_metadata() {
         assert!(site.contains(field), "site metadata is missing {field}");
     }
 
+    for (relative, headline, url) in [
+        (
+            "site/saga.html",
+            "The zero that changed Azdaja",
+            "https://azdaja.dev/saga.html",
+        ),
+        (
+            "site/op-4.html",
+            "Five ways our own scorer tried to lie to us",
+            "https://azdaja.dev/op-4.html",
+        ),
+    ] {
+        let article = read_public_surface(root, relative);
+        assert_eq!(article.matches("application/ld+json").count(), 1);
+        assert!(article.contains("\"@type\": \"TechArticle\""));
+        assert!(article.contains(&format!("\"headline\": \"{headline}\"")));
+        assert!(article.contains(&format!("\"url\": \"{url}\"")));
+        assert!(article.contains("\"isPartOf\": {"));
+    }
+
     let sitemap = read_public_surface(root, "site/sitemap.xml");
     assert!(sitemap.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"));
     assert!(sitemap.contains("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"));
