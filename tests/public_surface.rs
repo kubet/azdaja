@@ -59,3 +59,37 @@ fn public_surface_leads_with_the_product_contract_not_capacity_marketing() {
     let launch = read_public_surface(root, "docs/launch-package.md");
     assert!(launch.contains("Show HN: Azdaja – A local evaluator for language-model context"));
 }
+
+#[test]
+fn public_site_exposes_machine_readable_search_metadata() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    let site = read_public_surface(root, "site/index.html");
+    assert_eq!(site.matches("application/ld+json").count(), 1);
+    for field in [
+        "\"@type\": \"SoftwareApplication\"",
+        "\"url\": \"https://azdaja.dev/\"",
+        "\"softwareVersion\": \"0.1.14\"",
+        "\"downloadUrl\": \"https://github.com/kubet/azdaja/releases/tag/v0.1.14\"",
+        "\"codeRepository\": \"https://github.com/kubet/azdaja\"",
+    ] {
+        assert!(site.contains(field), "site metadata is missing {field}");
+    }
+
+    let sitemap = read_public_surface(root, "site/sitemap.xml");
+    assert!(sitemap.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"));
+    assert!(sitemap.contains("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"));
+    assert_eq!(sitemap.matches("<url>").count(), 3);
+    assert_eq!(sitemap.matches("<loc>").count(), 3);
+    for url in [
+        "https://azdaja.dev/",
+        "https://azdaja.dev/saga.html",
+        "https://azdaja.dev/op-4.html",
+    ] {
+        assert_eq!(sitemap.matches(&format!("<loc>{url}</loc>")).count(), 1);
+    }
+    assert!(sitemap.trim_end().ends_with("</urlset>"));
+
+    let robots = read_public_surface(root, "site/robots.txt");
+    assert!(robots.contains("Sitemap: https://azdaja.dev/sitemap.xml"));
+}
