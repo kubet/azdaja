@@ -17,6 +17,7 @@ fn public_surface_leads_with_the_product_contract_not_capacity_marketing() {
         "docs/launch-package.md",
         "docs/launch-saga.md",
         "release/show-hn-v0.1.13.md",
+        "release/show-hn-v0.1.14.md",
         "release/v0.1.14.md",
     ];
     let rejected = [
@@ -58,6 +59,13 @@ fn public_surface_leads_with_the_product_contract_not_capacity_marketing() {
 
     let launch = read_public_surface(root, "docs/launch-package.md");
     assert!(launch.contains("Show HN: Azdaja – A local evaluator for language-model context"));
+
+    let show_hn = read_public_surface(root, "release/show-hn-v0.1.14.md");
+    assert!(show_hn.contains("Status: prepared only."));
+    assert!(show_hn.contains("## Human-only drafting boundary"));
+    assert!(show_hn.contains("Never ask for votes, comments, reposts, or coordinated engagement."));
+    assert!(show_hn.contains("https://github.com/kubet/azdaja/releases/tag/v0.1.14"));
+    assert!(show_hn.contains("https://azdaja.dev/op-4.html"));
 }
 
 #[test]
