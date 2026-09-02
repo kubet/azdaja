@@ -4,7 +4,7 @@
 
 Azdaja keeps complete source material in a local evaluator and gives language models a bounded working surface for code, semantic calls, and one validated result.
 
-[Install](#install) · [Use](#use) · [Receipts](BENCHMARKS.md) · [Releases](https://github.com/kubet/azdaja/releases)
+[Install](#install) · [Use](#use) · [Live proof](https://azdaja.dev/proof.html) · [Receipts](BENCHMARKS.md) · [Releases](https://github.com/kubet/azdaja/releases)
 
 ## What it is
 
@@ -88,6 +88,20 @@ See the [CLI reference](docs/cli.md) for signatures, process custody, signal beh
 
 ## Results
 
+### Live model product suite
+
+The opt-in [three-scenario Claude Fable suite](bench/results/live-fable-suite.md) exercises duplicate-sensitive aggregation, repository evidence extraction, and final-match catalog extraction. Fable synthesized a generic program for each bounded root prompt. Azdaja executed every program locally against its complete input and returned **3/3 exact results** after one provider call and one Monty execution per scenario, with zero recursive or semantic subcalls.
+
+All three model-authored programs are published in the [source-bound receipt](bench/results/live-fable-suite.json). None contains its expected answer or answer-specific constant. Exact scanners found no 100-byte source span in any provider prompt, and the prompts contain no repository, input, or scratch host path. The [opt-in harness and fail-closed verifier](bench/live_fable_suite/README.md) document the exact command and limits. This is one synthetic run per task on one model and route, not a benchmark or superiority claim.
+
+### Current-source product acceptance
+
+The provider-free [current-source acceptance capsule](bench/results/product-50mb-current-source.md) exercises the release `azdaja solo` path over a duplicate-sensitive build log, a repository dump with one release blocker, and a transcript query anchored to the final escalation. Each case returned its exact expected answer after one root transport call, one local Monty execution, and zero recursive subcalls.
+
+The scripted transport returned programs, not answer constants. The test also requires a bounded model-facing prompt, no exact 100-byte source span or host input path in that prompt, a successful runtime trace, and zero surviving sessions after cleanup. The [source-bound receipt](bench/results/product-50mb-current-source.json), [captured log](bench/results/product-50mb-current-source.txt), and [reproduction instructions](bench/product_50mb/README.md) are checked in. This proves product-path plumbing on deterministic synthetic inputs, not live-model synthesis or superiority. Detailed input and prompt measurements live in the receipt rather than the product overview.
+
+### Historical research diagnostic
+
 A fixed 199-row Oolong diagnostic under the RAH protocol ([arXiv:2606.13643](https://arxiv.org/abs/2606.13643)) produced 185 valid predictions; the 14 failures stayed in the denominator as zeros. The [terminal receipt](bench/results/gpt-rah199-mortality-v3-terminal-public.json) records the frozen accounting, and the [public manifest](bench/results/rah199-public-manifest.json) pins every fixture by hash.
 
 | Source | System | Class | Score |
@@ -132,3 +146,10 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 ## License
 
 Azdaja is [MIT licensed](LICENSE). Licenses and attributions for dependencies reachable on the supported targets are reproduced in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and the bundled Cormorant Light font retains its [OFL](site/fonts/Cormorant-Garamond-OFL.txt). Release packaging and managed-file invariants are documented in [Internals](docs/internals.md).
+## Optional Azdaja activation
+
+Azdaja is optional. Mentioning its name does not activate it, and installation of a hook does not activate it. Choose the narrowest scope explicitly for the current request, session, or repository by setting `AZDAJA_JCODE_ACTIVATION` to `request`, `session`, or `repository`. Unset or ambiguous activation leaves ordinary host-native behavior available.
+
+Activation is reversible and user-controlled. If an internal Azdaja route or memory handoff fails, the failure is reported as a failure and the host-native path remains available. Native `Read`, `Grep`, `Bash`, and equivalent tools retain their ambient host permissions. Azdaja is a cooperative workflow helper, not an OS sandbox or security boundary.
+
+For vulnerability reports, use a [private GitHub security advisory](https://github.com/1jehuang/jcode/security/advisories/new) and do not publish sensitive details in a public issue. See [SECURITY.md](SECURITY.md).

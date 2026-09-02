@@ -1,0 +1,237 @@
+{
+  "artifact": "live_fable_repo_smoke",
+  "binary": {
+    "bytes": 9608816,
+    "path": "target/release/azdaja",
+    "sha256": "3111c880bcf2cbf738282bf826bd5649e175fa5a0efc0b3ace5b077425f0921a"
+  },
+  "checks": {
+    "model_response_has_no_answer_constant": true,
+    "no_exact_100_byte_source_span_in_prompt": true,
+    "no_input_or_scratch_path_in_prompt": true,
+    "one_provider_call": true,
+    "root_prompt_below_64_kib": true
+  },
+  "commands": {
+    "build": {
+      "argv": [
+        "cargo",
+        "build",
+        "--release",
+        "--locked"
+      ],
+      "elapsed_seconds": 0.32163,
+      "env": {},
+      "exit_code": 0,
+      "output_sha256": "5089e1c94f049189c2882fc87c84f7dc7b10bacee71a9d1d0a37f5d69d73d594"
+    },
+    "overlap_check": {
+      "argv": [
+        "<scratch>/overlap",
+        "<fixture>",
+        "<model-facing-prompt>"
+      ],
+      "elapsed_seconds": 0.470752,
+      "env": {},
+      "exit_code": 0,
+      "output_sha256": "46867e87bcf1a345dcd7215ec7abd3314beffb5f932e33c0f19bb2419de8669d"
+    },
+    "overlap_compile": {
+      "argv": [
+        "rustc",
+        "-O",
+        "<scratch>/overlap.rs",
+        "-o",
+        "<scratch>/overlap"
+      ],
+      "elapsed_seconds": 0.799836,
+      "env": {},
+      "exit_code": 0,
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "solo": {
+      "argv": [
+        "target/release/azdaja",
+        "solo",
+        "PRODUCT_REPO_DUMP_LIVE: Return path|ticket for the unique AZDAJA_RELEASE_BLOCKER in the complete repository dump.",
+        "-f",
+        "<fixture>"
+      ],
+      "elapsed_seconds": 26.990134,
+      "env": {
+        "AZDAJA_CONFIG": "<scratch>/config.toml",
+        "AZDAJA_HOME": "<scratch>/state",
+        "AZDAJA_SOLO_TRACE": "<scratch>/trace.txt"
+      },
+      "exit_code": 0,
+      "output_sha256": "06cffef52c96f4bdc433ba6ac3ae1b32f118a23fecdf8cc42bd956193ec6bc84"
+    }
+  },
+  "environment": {
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "claude": "2.1.258 (Claude Code)",
+    "machine": "arm64",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "python": "3.14.5",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "fixture": {
+    "bytes": 52428800,
+    "expected": "src/module_07777.rs|AZD-7777",
+    "record_bytes": 4096,
+    "sha256": "79386056b41fd62c533cb0f9b22473f07cf3d87c70b221e2cbe22eaa611318df",
+    "unique_blocker_occurrences": 1
+  },
+  "generated_at_utc": "2026-09-02T21:32:17Z",
+  "limits": [
+    "single synthetic live smoke",
+    "one model and one provider route",
+    "no baseline arm",
+    "no repeated trials",
+    "subscription token usage unavailable in text mode",
+    "not a benchmark or superiority result"
+  ],
+  "model": "claude-fable-5",
+  "model_response": {
+    "contains_answer_constant": false,
+    "sha256": "eb4d3ea090ef3cb96ce8c04d27e3899e97cefe911ff0b9d7e57d3fde3e03a3c8",
+    "text": "```python\nmarker = \"AZDAJA_RELEASE_BLOCKER\"\nidxs = []\np = ctx.find(marker)\nwhile p != -1:\n    idxs.append(p)\n    p = ctx.find(marker, p + 1)\nassert len(idxs) == 1\ni = idxs[0]\nls = ctx.rfind(\"\\n\", 0, i) + 1\nle = ctx.find(\"\\n\", i)\nif le == -1:\n    le = len(ctx)\nline = ctx[ls:le]\nhdr = \"===== BEGIN FILE \"\nh = ctx.rfind(hdr, 0, i)\nassert h != -1\nhe = ctx.find(\" =====\", h + len(hdr))\nassert he != -1 and he > h\npath = ctx[h + len(hdr):he]\nassert path != \"\" and \"\\n\" not in path\ncands = re.findall(r\"[A-Za-z][A-Za-z0-9]*-[0-9]+\", line)\ntickets = []\nfor t in cands:\n    if t != marker:\n        tickets.append(t)\nif len(tickets) == 0:\n    after = line[line.find(marker) + len(marker):]\n    after = after.strip(\" \\t:=->#/*!.,;'\\\"()[]\")\n    parts = after.split()\n    assert len(parts) > 0\n    tickets.append(parts[0].strip(\" \\t:=.,;'\\\"()[]\"))\nticket = tickets[0]\nassert ticket != \"\" and \"\\n\" not in ticket and \"|\" not in ticket\nanswer = path + \"|\" + ticket\nFINAL(answer)\n```\n"
+  },
+  "prompt": {
+    "bytes": 12460,
+    "input_to_prompt_ratio": 4207.76886035313,
+    "sha256": "accd1be5a8beae775fc61e57364e1da830551243635953016fcd71fdd014cfa5"
+  },
+  "result": {
+    "actual": "src/module_07777.rs|AZD-7777",
+    "exact": true,
+    "expected": "src/module_07777.rs|AZD-7777"
+  },
+  "route": "local claude CLI authenticated subscription",
+  "runtime": {
+    "exec_invocation_count": 1,
+    "outcome": "succeeded",
+    "semantic_call_count": 0,
+    "snapshot_load_count": 0,
+    "snapshot_save_count": 1,
+    "sub_call_count": 0
+  },
+  "schema": "azdaja.live_fable_repo.v2",
+  "source": {
+    "commit": "30f27f5a9ec916c72b66ea58d879df6cfe634a11",
+    "files": [
+      {
+        "bytes": 60236,
+        "path": "Cargo.lock",
+        "sha256": "f2ff24a523f718f12c7a3a40fbf412cc91346bf7acbb517ae23b98a3d7c1bfb3"
+      },
+      {
+        "bytes": 1192,
+        "path": "Cargo.toml",
+        "sha256": "82334ddca88ac5fbeeb3371f68acd790f1366f7a8bbb10476aaa8292c05a6560"
+      },
+      {
+        "bytes": 20542,
+        "path": "bench/live_fable_repo/run.py",
+        "sha256": "1e8cab0033a25085da216ca545d45973d4574580518e176d83c4fbf2feca23c7"
+      },
+      {
+        "bytes": 11380,
+        "path": "bench/live_fable_repo/verify.py",
+        "sha256": "9b06ac1af79b838914dc719cdac7eed7a4ed1fda2f1bdf1d57be05d83f45aac2"
+      },
+      {
+        "bytes": 13927,
+        "path": "bench/product_50mb/reproduce.py",
+        "sha256": "7080c6d5806751441759850149122d3810ee76c2fe2936db5209779e1117bc94"
+      },
+      {
+        "bytes": 9668,
+        "path": "bench/product_50mb/verify.py",
+        "sha256": "16cb0f57bb029bd4f0c256a7e172f820f831b5da9683d6231db51290e125c7bb"
+      },
+      {
+        "bytes": 3910,
+        "path": "src/banner.rs",
+        "sha256": "7c652db138238cfafe2a016b05158bf19a0ec1c8bd2862dc6005505d946e731d"
+      },
+      {
+        "bytes": 30082,
+        "path": "src/dashboard.rs",
+        "sha256": "c97b693c33a1ae09060fe3624f4affb54b1021f7c5e1fb11215cf841c750df9d"
+      },
+      {
+        "bytes": 37044,
+        "path": "src/jcode_config.rs",
+        "sha256": "d42178d59b6a281cd9750a2c07cce918ddd58ef5b89e8e80ab73ace9b2ccbbb6"
+      },
+      {
+        "bytes": 114025,
+        "path": "src/jcode_gate.rs",
+        "sha256": "82bb4e0787aff4e8ae6501e671f3c0da4b0fc3be1a6d92e241951747bd0e3727"
+      },
+      {
+        "bytes": 510623,
+        "path": "src/lib.rs",
+        "sha256": "d68b762071846b49efe1ffc666c6b09f3965c7ebfbe5d43781aab909d67ea500"
+      },
+      {
+        "bytes": 427273,
+        "path": "src/main.rs",
+        "sha256": "71b3e3838474f1e6102661068e91bc8e0f0f147f3d49fc3cdb49e4e5754da382"
+      },
+      {
+        "bytes": 23063,
+        "path": "src/memory.rs",
+        "sha256": "8d6971ddf8ff7b69d089349eac8b12f310f2f6145a588bb44f88c5bdcfe630d4"
+      },
+      {
+        "bytes": 32812,
+        "path": "src/observability.rs",
+        "sha256": "0abf690534b694a22ba0179ecefd726bbfdc3b6363995de136540c9849d5366e"
+      },
+      {
+        "bytes": 37435,
+        "path": "src/repo_source.rs",
+        "sha256": "2fdedc94984413ca47a57a6e5379a97eae18b04df2fda02f516e2e253b871742"
+      },
+      {
+        "bytes": 45485,
+        "path": "src/tui.rs",
+        "sha256": "9b622ef6a9f3c60d65142b969bc83658de2a84170fea9f96cb36f6eda7484aeb"
+      },
+      {
+        "bytes": 15751,
+        "path": "tests/product_50mb.rs",
+        "sha256": "f7eff7e5796ede0e5353c745b1c8a8a3e48c68046394084efa361cfdfd530b2c"
+      }
+    ],
+    "tracked_clean": true
+  },
+  "timings": {
+    "solo_seconds": 26.990134,
+    "total_seconds": 28.721256
+  },
+  "transport": {
+    "call": 1,
+    "command_template": [
+      "claude",
+      "-p",
+      "<model-facing prompt>",
+      "--model",
+      "claude-fable-5",
+      "--output-format",
+      "text",
+      "--max-turns",
+      "1",
+      "--tools",
+      ""
+    ],
+    "elapsed_seconds": 25.789462,
+    "exit_code": 0,
+    "prompt_bytes": 12460,
+    "prompt_sha256": "accd1be5a8beae775fc61e57364e1da830551243635953016fcd71fdd014cfa5",
+    "response_sha256": "eb4d3ea090ef3cb96ce8c04d27e3899e97cefe911ff0b9d7e57d3fde3e03a3c8",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

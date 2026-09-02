@@ -37,3 +37,10 @@ Cargo installs the canonical binary but no short alias or tool integration. Comp
 Every multi-target removal validates all selected paths before deletion. Changed managed binaries or skills, unknown files, symlinks, hardlinks, incomplete ownership state, and foreign documents cause refusal before selected mutation. A user-edited integration `config.toml`, foreign `az`, and unrelated neighboring files remain untouched.
 
 Selected files move to same-filesystem quarantine before commit. A late failure restores them; concurrent lifecycle operations serialize or fail closed. Standalone modes refuse an unmanaged Cargo executable and direct the user to the Cargo removal sequence.
+## Optional activation and safe removal
+
+Installation only makes the optional integration available. It does not activate Azdaja based on a mention, repository text, or the mere presence of a hook. Choose the narrowest explicit scope for the current request, session, or repository with `AZDAJA_JCODE_ACTIVATION=request`, `session`, or `repository`; unset or ambiguous values leave normal host-native behavior available.
+
+The integration is cooperative and reversible. If internal routing or a memory handoff fails, Jcode reports the actual failure and does not remove access to the host's native tools. Native `Read`, `Grep`, `Bash`, and equivalent tools retain ambient permissions, and Azdaja is not an OS sandbox. `doctor` should be used to inspect managed state before changes. `uninstall` removes only Jcode-owned entries and preserves foreign hooks and user-owned configuration.
+
+Security issues belong in a [private GitHub security advisory](https://github.com/1jehuang/jcode/security/advisories/new), not a public issue containing sensitive details. See [SECURITY.md](../SECURITY.md).

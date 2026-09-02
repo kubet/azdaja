@@ -22,6 +22,12 @@ use std::os::unix::fs::{DirBuilderExt, FileTypeExt, MetadataExt, OpenOptionsExt,
 
 /// Environment variable passed to a successful Azdaja `solo` process.
 pub const CHALLENGE_ENV: &str = "AZDAJA_JCODE_CHALLENGE";
+/// Explicit opt-in required before the cooperative hook gate can route or restrict a tool call.
+///
+/// Accepted values are `request`, `session`, and `repository`. Any other value, including an
+/// unset variable, leaves the host-native tool path available. This is a workflow preference,
+/// not a security boundary.
+pub const ACTIVATION_ENV: &str = "AZDAJA_JCODE_ACTIVATION";
 /// A challenge may be completed for ten minutes after it is issued.
 pub const CHALLENGE_TTL_SECONDS: u64 = 10 * 60;
 /// Aggregate allowance for bounded reads in one Jcode session.
@@ -430,6 +436,9 @@ fn validate_challenge_record(challenge_hash: &str, record: &ChallengeRecord) -> 
 /// [`Decision::Block`] to stderr plus exit 2.
 pub fn handle_current_hook(state_root: &Path, tool_input: &[u8]) -> GateResult<Decision> {
     let invocation = HookInvocation::from_env()?;
+    if !explicit_activation_requested(&invocation) {
+        return Ok(Decision::Allow);
+    }
     let binary = if invocation.event == "pre_tool" {
         managed_binary_path()?
     } else {
@@ -442,6 +451,31 @@ pub fn handle_current_hook(state_root: &Path, tool_input: &[u8]) -> GateResult<D
         unix_time_seconds()?,
         &binary,
     )
+}
+
+fn explicit_activation_requested(invocation: &HookInvocation) -> bool {
+    let Some(scope) = env::var(ACTIVATION_ENV).ok() else {
+        return false;
+    };
+    match scope.trim().to_ascii_lowercase().as_str() {
+        "request" => invocation.event != "pre_tool" || invocation.tool_name.is_some(),
+        "session" => {
+            invocation.event != "pre_tool"
+                || invocation
+                    .session_id
+                    .as_deref()
+                    .is_some_and(|id| !id.is_empty())
+        }
+        "repository" => {
+            invocation.event != "pre_tool"
+                || (invocation
+                    .session_id
+                    .as_deref()
+                    .is_some_and(|id| !id.is_empty())
+                    && invocation.cwd.is_some())
+        }
+        _ => false,
+    }
 }
 
 /// Read complete tool input from stdin and handle the current hook event.
@@ -3251,5 +3285,87 @@ mod tests {
             sha256_hex(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+}
+#[cfg(test)]
+mod activation_contract_tests {
+    use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    static ACTIVATION_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    struct ActivationEnvRestore(Option<String>);
+
+    impl ActivationEnvRestore {
+        fn set(value: Option<&str>) -> Self {
+            let previous = env::var(ACTIVATION_ENV).ok();
+            match value {
+                Some(value) => unsafe { env::set_var(ACTIVATION_ENV, value) },
+                None => unsafe { env::remove_var(ACTIVATION_ENV) },
+            }
+            Self(previous)
+        }
+    }
+
+    impl Drop for ActivationEnvRestore {
+        fn drop(&mut self) {
+            match self.0.as_deref() {
+                Some(value) => unsafe { env::set_var(ACTIVATION_ENV, value) },
+                None => unsafe { env::remove_var(ACTIVATION_ENV) },
+            }
+        }
+    }
+
+    fn invocation() -> HookInvocation {
+        HookInvocation {
+            event: "pre_tool".to_owned(),
+            session_id: Some("test-session".to_owned()),
+            cwd: Some(PathBuf::from("/tmp/test-repository")),
+            tool_name: Some("Read".to_owned()),
+        }
+    }
+
+    #[test]
+    fn activation_is_explicit_bounded_and_restored_between_cases() {
+        let _lock = ACTIVATION_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap();
+        let original = env::var(ACTIVATION_ENV).ok();
+        for (value, expected) in [
+            (None, false),
+            (Some(""), false),
+            (Some("invalid"), false),
+            (Some("request"), true),
+            (Some("session"), true),
+            (Some("repository"), true),
+        ] {
+            let _restore = ActivationEnvRestore::set(value);
+            assert_eq!(explicit_activation_requested(&invocation()), expected);
+        }
+        assert_eq!(env::var(ACTIVATION_ENV).ok(), original);
+    }
+
+    #[test]
+    fn activation_scopes_require_their_current_context() {
+        let _lock = ACTIVATION_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap();
+        let mut current = invocation();
+
+        let _restore = ActivationEnvRestore::set(Some("request"));
+        current.tool_name = None;
+        assert!(!explicit_activation_requested(&current));
+
+        let _restore = ActivationEnvRestore::set(Some("session"));
+        current.tool_name = Some("Read".to_owned());
+        current.session_id = None;
+        assert!(!explicit_activation_requested(&current));
+
+        let _restore = ActivationEnvRestore::set(Some("repository"));
+        current.session_id = Some("test-session".to_owned());
+        current.cwd = None;
+        assert!(!explicit_activation_requested(&current));
     }
 }

@@ -500,10 +500,10 @@ fn mark_provider_interrupted() {
 
 #[cfg(test)]
 mod managed_skill_tests {
-    use super::{SKILL, VERSION};
+    use super::SKILL;
 
     #[test]
-    fn frontmatter_and_rendering_preserve_awareness_and_binary_path_custody() {
+    fn frontmatter_and_rendering_preserve_explicit_opt_in_contract() {
         let source = SKILL
             .strip_prefix("---\n")
             .expect("skill starts with YAML frontmatter");
@@ -515,55 +515,24 @@ mod managed_skill_tests {
             .lines()
             .find_map(|line| line.strip_prefix("description: "))
             .expect("skill frontmatter description");
-        for trigger in [
-            "complete semantic classification",
-            "large file",
-            "over 1 MiB",
-            "over 200 records",
-            "too large for one Read",
-            "Azdaja",
-            "az virtual-memory tool",
-            "installed",
-            "available",
-            "Invoke before reading or solving natively",
-        ] {
-            assert!(description.contains(trigger), "missing trigger {trigger:?}");
-        }
-
-        let embedded_binary = "'/managed harness/skills/azdaja/azdaja'";
-        let rendered = SKILL
-            .replace("{{VERSION}}", VERSION)
-            .replace("{{BIN}}", embedded_binary);
-        assert!(rendered.contains(&format!("# Azdaja {VERSION}")));
-        assert!(rendered.contains("## Managed-skill awareness"));
-        assert!(rendered.contains("answer **yes**"));
-        assert!(rendered.contains("local `az` virtual-memory tool"));
-        assert!(rendered.contains("A matching task means invoke this skill now"));
-        assert!(rendered.contains("OpenCode must not solve a matching task natively"));
-        assert!(rendered.contains("Never claim ignorance of Azdaja"));
-        assert!(!rendered.contains("{{VERSION}}"));
-        assert!(!rendered.contains("{{BIN}}"));
-
-        let internal_commands = rendered
-            .split_once("```bash\n")
-            .and_then(|(_, rest)| rest.split_once("\n```").map(|(block, _)| block))
-            .expect("skill includes its internal command block");
-        assert!(
-            !internal_commands
-                .lines()
-                .any(|line| line.trim_start().starts_with("az "))
+        assert_eq!(
+            description,
+            "Use only when the user explicitly chooses Azdaja for the current request, session, or repository."
         );
-        for command in ["start", "load", "exec", "final", "kill"] {
+
+        assert!(SKILL.contains("# Azdaja"));
+        for prohibited in [
+            "Mandatory",
+            "invoke this skill now",
+            "must not solve a matching task natively",
+            "If asked, answer **yes**",
+            "A matching task means invoke this skill now",
+            "OpenCode must not solve a matching task natively",
+            "installed and available as the local",
+        ] {
             assert!(
-                internal_commands.lines().any(|line| {
-                    line.contains(embedded_binary)
-                        && line
-                            .split(|character: char| {
-                                !character.is_ascii_alphanumeric() && character != '-'
-                            })
-                            .any(|word| word == command)
-                }),
-                "internal {command} command did not retain the embedded binary path"
+                !SKILL.contains(prohibited),
+                "managed skill retained coercive text {prohibited:?}"
             );
         }
     }

@@ -387,9 +387,26 @@ print("```python\n" + program + "\n```")
             "{name} unexpectedly repaired or called a child"
         );
         assert_runtime_trace(&trace);
+        println!(
+            "{}",
+            serde_json::json!({
+                "kind": "scenario",
+                "scenario": scenario,
+                "answer": expected,
+                "input_bytes": FIFTY_MIB,
+                "root_prompt_bytes": root_prompt.len(),
+                "root_calls": 1,
+                "exec_invocation_count": 1,
+                "sub_call_count": 0,
+                "exact_answer": true,
+                "no_raw_source_span_bytes": RAW_OVERLAP_BYTES,
+                "reaped_children_high_water_bytes": rss,
+            })
+        );
         fs::remove_file(input).unwrap();
     }
 
+    let peak_rss = rss_high_water.iter().map(|(_, bytes)| *bytes).max();
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         assert_eq!(
@@ -397,12 +414,10 @@ print("```python\n" + program + "\n```")
             3,
             "every product case must report the process-lifetime reaped-child RSS high-water mark"
         );
-        let peak = rss_high_water
-            .iter()
-            .map(|(_, bytes)| *bytes)
-            .max()
-            .unwrap();
-        eprintln!("product_50mb_rss maximum_reaped_child_high_water_bytes={peak}");
+        eprintln!(
+            "product_50mb_rss maximum_reaped_child_high_water_bytes={}",
+            peak_rss.unwrap()
+        );
     }
 
     let surviving_sessions = fs::read_dir(scratch.0.join("state"))
@@ -416,4 +431,15 @@ print("```python\n" + program + "\n```")
         })
         .count();
     assert_eq!(surviving_sessions, 0, "solo left a persistent session");
+    println!(
+        "{}",
+        serde_json::json!({
+            "kind": "summary",
+            "scenarios": 3,
+            "cleanup": "passed",
+            "surviving_sessions": surviving_sessions,
+            "rss_available": !rss_high_water.is_empty(),
+            "peak_reaped_children_high_water_bytes": peak_rss,
+        })
+    );
 }
