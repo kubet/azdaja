@@ -2,7 +2,48 @@
 
 Versioned, hash-bound evidence for claims made by this repository. This page separates product acceptance, single-arm diagnostics, and efficiency follow-ups so a reader can see exactly what was measured and what was not.
 
-> **Single-task efficiency headline:** at the same exact answer on one frozen synthetic 1.3 MiB classification task, Azdaja used **66.7% fewer uncached tokens on Codex** and **88.0% fewer on OpenCode**. This is a candidate-only diagnostic against hash-bound native rows, not a general benchmark or superiority claim.
+> **Live three-scenario product suite:** Claude Fable synthesized three generic programs from bounded root prompts. Azdaja executed them locally against three complete deterministic inputs and returned **3/3 exact results**: a duplicate-sensitive build-log count, a repository blocker with its path, and the color attached to the final matching catalog record. The run used **three provider calls, three Monty executions, and zero recursive or semantic subcalls**. This is a synthetic live product-path suite with no baseline or repetitions, not a benchmark or superiority claim.
+
+## Live Claude Fable product suite
+
+At source commit `2514d26a245a5d1c9f6bb1f351391b69a616c3b1`, the opt-in harness invoked the authenticated local Claude CLI once per scenario as:
+
+```text
+claude -p <model-facing prompt> --model claude-fable-5 --output-format text --max-turns 1 --tools ""
+```
+
+| Scenario | Exact result | Complete input | Root prompt | Input / prompt | Provider time |
+|---|---|---:|---:|---:|---:|
+| Build-log aggregation | `Answer: 13` | 52,428,800 B | 12,739 B | 4,116x | 17.570 s |
+| Repository blocker | `src/module_07777.rs\|AZD-7777` | 52,428,800 B | 12,460 B | 4,208x | 22.054 s |
+| Final matching catalog record | `Color: cerulean` | 52,428,800 B | 12,770 B | 4,106x | 23.872 s |
+
+Across the suite, the complete local inputs totaled `157,286,400` bytes while the three root prompts totaled `37,969` bytes. Every model-authored program is published in the receipt and contains neither its expected answer nor its answer-specific constant. Exact scanners found zero 100-byte source spans in all provider prompts, and no prompt contained a repository, input, or scratch host path. Runtime traces recorded one execution per scenario, zero recursive calls, zero semantic calls, one snapshot save, and success.
+
+- [Human-readable three-scenario result](bench/results/live-fable-suite.md)
+- [Source-bound receipt and all three model-authored programs](bench/results/live-fable-suite.json)
+- [Opt-in reproduction and fail-closed verification](bench/live_fable_suite/README.md)
+- [Public proof page](https://azdaja.dev/proof.html)
+
+The live result covers one model, one route, three deterministic synthetic tasks, and one run per task. It does not establish general model quality, arbitrary-input support, comparative performance, or cost efficiency. The earlier [single-scenario receipt](bench/results/live-fable-repo-smoke.json) remains available as historical evidence.
+
+## Current-source product acceptance
+
+| Scenario | Exact answer | Input | Root prompt | Input / prompt |
+|---|---|---:|---:|---:|
+| Duplicate-sensitive build-log count | `Answer: 13` | 50 MiB | 12,737 B | 4,116x |
+| Unique blocker in a repository dump | `src/module_07777.rs\|AZD-7777` | 50 MiB | 12,451 B | 4,211x |
+| Decision after the final escalation | `ship-v0.1-after-doctor` | 50 MiB | 12,743 B | 4,114x |
+
+All three cases exercised the release `azdaja solo` path. The scripted transport returned a program rather than an answer constant. The acceptance assertions require one root transport call, one Monty execution, zero recursive subcalls, no exact 100-byte source span or host input path in the model-facing prompt, a successful runtime trace, and no persistent session after cleanup.
+
+- [Human-readable acceptance report](bench/results/product-50mb-current-source.md)
+- [Source-bound machine-readable receipt](bench/results/product-50mb-current-source.json)
+- [Captured build and test log](bench/results/product-50mb-current-source.txt)
+- [Reproduction and fail-closed verification instructions](bench/product_50mb/README.md)
+- [Acceptance test source](tests/product_50mb.rs)
+
+The capsule does not demonstrate live-model program synthesis, semantic quality on natural data, arbitrary-input support, comparison superiority, official benchmark status, or operating-system sandbox guarantees.
 
 ## Accuracy ladder
 
@@ -27,7 +68,7 @@ Azdaja's figure is a **private, single-arm, validation-derived fixed-199 diagnos
 
 The historical score is frozen. It was not rerun, resumed, or rescored, and a successor fixed-199 campaign is not authorized.
 
-## Same-answer efficiency diagnostic
+## Historical same-answer efficiency diagnostic
 
 Frozen r10 follow-up on a deterministic `1,306,163`-byte context with 306 records. Both native baselines and both Azdaja candidates returned the exact frozen answer, `42` ham messages.
 
@@ -41,26 +82,27 @@ Each candidate used exactly one successful GPT-5.6 Luna inner call with complete
 - [Method, failed predecessors, limits, and exact validation commands](bench/delta/README.md)
 - [Frozen r10 result](bench/delta/results/r10-result.json)
 
-## Product acceptance
-
-| Contract | Observed result | Evidence |
-|---|---|---|
-| Three real-world-shaped 50 MiB inputs | `52,428,800` bytes each, one root turn each, zero child calls, root prompt below `65,536` bytes | [test](tests/product_50mb.rs), [receipt](bench/results/v0.1.2-product-acceptance-public.json), [demo](site/demo-50mb.gif) |
-| Authoritative record coverage | JSONL and CSV preserve source order, duplicate occurrences, multiline CSV rows, raw hashes, and exact cardinality; omissions and tampering fail closed | public `solo` end-to-end tests |
-| Typed final values | Supported JSON Schema subset validates before stdout; invalid shapes get one bounded repair only before semantic evidence spend | public `solo` end-to-end tests |
-| Published v0.1.13 | tag `v0.1.13` at commit `50a4baaffbc8d4ee745d7324b8dbb052d247f9e0`; six release assets; all public channels verified | [GitHub Release](https://github.com/kubet/azdaja/releases/tag/v0.1.13) |
-
 ## Provider-free reproduction
 
 These commands do not perform model inference:
 
 ```bash
+python3 bench/product_50mb/reproduce.py \
+  --receipt bench/results/product-50mb-current-source.json \
+  --summary bench/results/product-50mb-current-source.md \
+  --log bench/results/product-50mb-current-source.txt
+python3 bench/product_50mb/verify.py \
+  bench/results/product-50mb-current-source.json \
+  --binary target/release/azdaja \
+  --log bench/results/product-50mb-current-source.txt \
+  --require-binary --require-log
+
 cargo test --all --locked -- --test-threads=1
 cargo build --release --locked
 AZDAJA_PRODUCT_BINARY=target/release/azdaja \
   cargo test --release --locked --test product_50mb \
   offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death \
-  -- --ignored --exact --test-threads=1
+  -- --ignored --exact --test-threads=1 --nocapture
 ```
 
 The frozen delta verifier is intentionally source-bound to candidate commit `a642db83d54b5c80901aba1e1e183e7178481a0e`. Run these commands from that exact commit. The verifier must block when source, skill, config, fixture, prompt, runner, or runtime hashes differ.

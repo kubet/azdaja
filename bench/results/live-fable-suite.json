@@ -1,0 +1,428 @@
+{
+  "artifact": "live_fable_three_scenario_suite",
+  "binary": {
+    "bytes": 9608816,
+    "path": "target/release/azdaja",
+    "sha256": "3111c880bcf2cbf738282bf826bd5649e175fa5a0efc0b3ace5b077425f0921a"
+  },
+  "commands": {
+    "build": {
+      "argv": [
+        "cargo",
+        "build",
+        "--release",
+        "--locked"
+      ],
+      "elapsed_seconds": 0.388449,
+      "env": {},
+      "exit_code": 0,
+      "output_sha256": "bc91a3ed6ff9b29145787c6d9882965f4f24899753f0d8be62d8adc772989545"
+    },
+    "overlap_compile": {
+      "argv": [
+        "rustc",
+        "-O",
+        "<scratch>/overlap.rs",
+        "-o",
+        "<scratch>/overlap"
+      ],
+      "elapsed_seconds": 0.964846,
+      "env": {},
+      "exit_code": 0,
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "environment": {
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "claude": "2.1.259 (Claude Code)",
+    "machine": "arm64",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "python": "3.14.5",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "generated_at_utc": "2026-09-02T22:51:03Z",
+  "limits": [
+    "three deterministic synthetic live smokes",
+    "one model and one provider route",
+    "one provider call per scenario",
+    "no baseline arm",
+    "no repeated trials",
+    "subscription token usage unavailable in text mode",
+    "not a benchmark or superiority result"
+  ],
+  "model": "claude-fable-5",
+  "route": "local claude CLI authenticated subscription",
+  "scenarios": [
+    {
+      "checks": {
+        "model_response_has_no_answer_constant": true,
+        "no_exact_100_byte_source_span_in_prompt": true,
+        "no_input_or_scratch_path_in_prompt": true,
+        "one_provider_call": true,
+        "root_prompt_below_64_kib": true
+      },
+      "commands": {
+        "overlap_check": {
+          "argv": [
+            "<scratch>/overlap",
+            "<build-fixture>",
+            "<build-prompt>"
+          ],
+          "elapsed_seconds": 0.399305,
+          "env": {},
+          "exit_code": 0,
+          "output_sha256": "46867e87bcf1a345dcd7215ec7abd3314beffb5f932e33c0f19bb2419de8669d"
+        },
+        "solo": {
+          "argv": [
+            "target/release/azdaja",
+            "solo",
+            "PRODUCT_BUILD_LOG_LIVE: How many ERROR records target payments::retry? Reply as Answer: N.",
+            "-f",
+            "<build-fixture>"
+          ],
+          "elapsed_seconds": 18.639544,
+          "env": {
+            "AZDAJA_CONFIG": "<scratch>/build/config.toml",
+            "AZDAJA_HOME": "<scratch>/build/state",
+            "AZDAJA_SOLO_TRACE": "<scratch>/build/trace.txt"
+          },
+          "exit_code": 0,
+          "output_sha256": "26321025d8eb81b9c6c8551bc19f45325abb92b7dc5f5faf809cff4367441a1e"
+        }
+      },
+      "fixture": {
+        "bytes": 52428800,
+        "record_bytes": 4096,
+        "sha256": "0588a895de12cacffd88d2c6a5de1ac65968d78c9b8779d088ae36ffae0bfed0"
+      },
+      "model_response": {
+        "contains_answer_constant": false,
+        "sha256": "b3123f025e69db7f004cf296f989b3d21f32d325f7ed63aa9089978d2a74789b",
+        "text": "```python\nlines = ctx.split(\"\\n\")\ntotal_records = 0\nerror_count = 0\nhit_count = 0\nfor line in lines:\n    s = line.strip()\n    if s == \"\":\n        continue\n    assert s[0] == \"[\", \"unexpected non-record line\"\n    m_lvl = re.search(r\"level=(\\S+)\", s)\n    m_tgt = re.search(r\"target=(\\S+)\", s)\n    assert m_lvl is not None and m_tgt is not None, \"record missing level/target\"\n    total_records += 1\n    if m_lvl.group(1) == \"ERROR\":\n        error_count += 1\n        if m_tgt.group(1) == \"payments::retry\":\n            hit_count += 1\nassert total_records > 0\nassert 0 <= hit_count <= error_count <= total_records\nanswer = \"Answer: \" + str(hit_count)\nassert answer.startswith(\"Answer: \") and len(answer) > len(\"Answer: \")\nFINAL(answer)\n```\n"
+      },
+      "name": "build",
+      "prompt": {
+        "bytes": 12739,
+        "input_to_prompt_ratio": 4115.61347044509,
+        "sha256": "6b23336e812359245d7558ec9f3453e8c044f447fc43abfa07ef90c4ba60dfd8"
+      },
+      "question": "PRODUCT_BUILD_LOG_LIVE: How many ERROR records target payments::retry? Reply as Answer: N.",
+      "result": {
+        "actual": "Answer: 13",
+        "exact": true,
+        "expected": "Answer: 13"
+      },
+      "runtime": {
+        "exec_invocation_count": 1,
+        "outcome": "succeeded",
+        "semantic_call_count": 0,
+        "snapshot_load_count": 0,
+        "snapshot_save_count": 1,
+        "sub_call_count": 0
+      },
+      "transport": {
+        "call": 1,
+        "command_template": [
+          "claude",
+          "-p",
+          "<model-facing prompt>",
+          "--model",
+          "claude-fable-5",
+          "--output-format",
+          "text",
+          "--max-turns",
+          "1",
+          "--tools",
+          ""
+        ],
+        "elapsed_seconds": 17.570339,
+        "exit_code": 0,
+        "prompt_bytes": 12739,
+        "prompt_sha256": "6b23336e812359245d7558ec9f3453e8c044f447fc43abfa07ef90c4ba60dfd8",
+        "response_sha256": "b3123f025e69db7f004cf296f989b3d21f32d325f7ed63aa9089978d2a74789b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "checks": {
+        "model_response_has_no_answer_constant": true,
+        "no_exact_100_byte_source_span_in_prompt": true,
+        "no_input_or_scratch_path_in_prompt": true,
+        "one_provider_call": true,
+        "root_prompt_below_64_kib": true
+      },
+      "commands": {
+        "overlap_check": {
+          "argv": [
+            "<scratch>/overlap",
+            "<repo-fixture>",
+            "<repo-prompt>"
+          ],
+          "elapsed_seconds": 0.405074,
+          "env": {},
+          "exit_code": 0,
+          "output_sha256": "46867e87bcf1a345dcd7215ec7abd3314beffb5f932e33c0f19bb2419de8669d"
+        },
+        "solo": {
+          "argv": [
+            "target/release/azdaja",
+            "solo",
+            "PRODUCT_REPO_DUMP_LIVE: Return path|ticket for the unique AZDAJA_RELEASE_BLOCKER in the complete repository dump.",
+            "-f",
+            "<repo-fixture>"
+          ],
+          "elapsed_seconds": 23.157903,
+          "env": {
+            "AZDAJA_CONFIG": "<scratch>/repo/config.toml",
+            "AZDAJA_HOME": "<scratch>/repo/state",
+            "AZDAJA_SOLO_TRACE": "<scratch>/repo/trace.txt"
+          },
+          "exit_code": 0,
+          "output_sha256": "06cffef52c96f4bdc433ba6ac3ae1b32f118a23fecdf8cc42bd956193ec6bc84"
+        }
+      },
+      "fixture": {
+        "bytes": 52428800,
+        "record_bytes": 4096,
+        "sha256": "79386056b41fd62c533cb0f9b22473f07cf3d87c70b221e2cbe22eaa611318df"
+      },
+      "model_response": {
+        "contains_answer_constant": false,
+        "sha256": "d53d6f94e7f856ce4f8254dc80cac9d2bc5f74dab6f9688bf1add9fd6bad64bb",
+        "text": "```python\nmk = \"AZDAJA_RELEASE_BLOCKER\"\nhits = []\ni = ctx.find(mk)\nwhile i != -1:\n    hits.append(i)\n    i = ctx.find(mk, i + 1)\nassert len(hits) == 1\npos = hits[0]\nbf = \"===== BEGIN FILE \"\nb = ctx.rfind(bf, 0, pos)\nassert b != -1\ne = ctx.find(\" =====\", b)\nassert e != -1\npath = ctx[b + len(bf):e]\nassert len(path) > 0 and \"\\n\" not in path\nle = ctx.find(\"\\n\", pos)\nif le == -1:\n    le = len(ctx)\nafter = ctx[pos + len(mk):le]\ntickets = re.findall(r\"[A-Z][A-Z0-9]*-[0-9]+\", after)\nif len(tickets) == 0:\n    tickets = re.findall(r\"[A-Z][A-Z0-9]*-[0-9]+\", ctx[pos + len(mk):pos + len(mk) + 500])\nassert len(tickets) >= 1\nticket = tickets[0]\nans = path + \"|\" + ticket\nassert re.match(r\"^[^|\\s]+\\|[^|\\s]+$\", ans)\nFINAL(ans)\n```\n"
+      },
+      "name": "repo",
+      "prompt": {
+        "bytes": 12460,
+        "input_to_prompt_ratio": 4207.76886035313,
+        "sha256": "accd1be5a8beae775fc61e57364e1da830551243635953016fcd71fdd014cfa5"
+      },
+      "question": "PRODUCT_REPO_DUMP_LIVE: Return path|ticket for the unique AZDAJA_RELEASE_BLOCKER in the complete repository dump.",
+      "result": {
+        "actual": "src/module_07777.rs|AZD-7777",
+        "exact": true,
+        "expected": "src/module_07777.rs|AZD-7777"
+      },
+      "runtime": {
+        "exec_invocation_count": 1,
+        "outcome": "succeeded",
+        "semantic_call_count": 0,
+        "snapshot_load_count": 0,
+        "snapshot_save_count": 1,
+        "sub_call_count": 0
+      },
+      "transport": {
+        "call": 1,
+        "command_template": [
+          "claude",
+          "-p",
+          "<model-facing prompt>",
+          "--model",
+          "claude-fable-5",
+          "--output-format",
+          "text",
+          "--max-turns",
+          "1",
+          "--tools",
+          ""
+        ],
+        "elapsed_seconds": 22.053831,
+        "exit_code": 0,
+        "prompt_bytes": 12460,
+        "prompt_sha256": "accd1be5a8beae775fc61e57364e1da830551243635953016fcd71fdd014cfa5",
+        "response_sha256": "d53d6f94e7f856ce4f8254dc80cac9d2bc5f74dab6f9688bf1add9fd6bad64bb",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "checks": {
+        "model_response_has_no_answer_constant": true,
+        "no_exact_100_byte_source_span_in_prompt": true,
+        "no_input_or_scratch_path_in_prompt": true,
+        "one_provider_call": true,
+        "root_prompt_below_64_kib": true
+      },
+      "commands": {
+        "overlap_check": {
+          "argv": [
+            "<scratch>/overlap",
+            "<catalog-fixture>",
+            "<catalog-prompt>"
+          ],
+          "elapsed_seconds": 0.406066,
+          "env": {},
+          "exit_code": 0,
+          "output_sha256": "46867e87bcf1a345dcd7215ec7abd3314beffb5f932e33c0f19bb2419de8669d"
+        },
+        "solo": {
+          "argv": [
+            "target/release/azdaja",
+            "solo",
+            "PRODUCT_CATALOG_LIVE: Find the final record whose item field is SKU-4821 and return its color field. Reply exactly as Color: VALUE.",
+            "-f",
+            "<catalog-fixture>"
+          ],
+          "elapsed_seconds": 24.988104,
+          "env": {
+            "AZDAJA_CONFIG": "<scratch>/catalog/config.toml",
+            "AZDAJA_HOME": "<scratch>/catalog/state",
+            "AZDAJA_SOLO_TRACE": "<scratch>/catalog/trace.txt"
+          },
+          "exit_code": 0,
+          "output_sha256": "ea223c065481f6dc1bde002bbcf0ac8e57e591984c977800b3162a0048be8e10"
+        }
+      },
+      "fixture": {
+        "bytes": 52428800,
+        "record_bytes": 4096,
+        "sha256": "b81cb7c0bd65f613fe129fc4a9d897934632b285c76921cdc0cb4d6b642b542d"
+      },
+      "model_response": {
+        "contains_answer_constant": false,
+        "sha256": "8bce145e4562bb5bb58936ed44d5071ad5a106a84eaba3fdd8ad376007d4b48f",
+        "text": "```python\ncolor_val = \"\"\nfound = False\nfor ln in ctx.split(\"\\n\"):\n    s = ln.strip()\n    if not s.startswith(\"catalog_record=\"):\n        continue\n    fields = {}\n    for tk in s.split(\" \"):\n        if \"=\" in tk and tk != \"\":\n            k = tk.split(\"=\")[0]\n            fields[k] = tk[len(k) + 1:]\n    if \"item\" in fields and fields[\"item\"] == \"SKU-4821\" and \"color\" in fields:\n        color_val = fields[\"color\"]\n        found = True\nassert found\nassert color_val != \"\" and \"\\n\" not in color_val and \" \" not in color_val\nFINAL(\"Color: \" + color_val)\n```\n"
+      },
+      "name": "catalog",
+      "prompt": {
+        "bytes": 12770,
+        "input_to_prompt_ratio": 4105.622552858262,
+        "sha256": "083e9729ed27ea746328351a90624a92e89292cc4328ae84a65e65c88f2e522a"
+      },
+      "question": "PRODUCT_CATALOG_LIVE: Find the final record whose item field is SKU-4821 and return its color field. Reply exactly as Color: VALUE.",
+      "result": {
+        "actual": "Color: cerulean",
+        "exact": true,
+        "expected": "Color: cerulean"
+      },
+      "runtime": {
+        "exec_invocation_count": 1,
+        "outcome": "succeeded",
+        "semantic_call_count": 0,
+        "snapshot_load_count": 0,
+        "snapshot_save_count": 1,
+        "sub_call_count": 0
+      },
+      "transport": {
+        "call": 1,
+        "command_template": [
+          "claude",
+          "-p",
+          "<model-facing prompt>",
+          "--model",
+          "claude-fable-5",
+          "--output-format",
+          "text",
+          "--max-turns",
+          "1",
+          "--tools",
+          ""
+        ],
+        "elapsed_seconds": 23.871765,
+        "exit_code": 0,
+        "prompt_bytes": 12770,
+        "prompt_sha256": "083e9729ed27ea746328351a90624a92e89292cc4328ae84a65e65c88f2e522a",
+        "response_sha256": "8bce145e4562bb5bb58936ed44d5071ad5a106a84eaba3fdd8ad376007d4b48f",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "schema": "azdaja.live_fable_suite.v1",
+  "source": {
+    "commit": "2514d26a245a5d1c9f6bb1f351391b69a616c3b1",
+    "files": [
+      {
+        "bytes": 60236,
+        "path": "Cargo.lock",
+        "sha256": "f2ff24a523f718f12c7a3a40fbf412cc91346bf7acbb517ae23b98a3d7c1bfb3"
+      },
+      {
+        "bytes": 1192,
+        "path": "Cargo.toml",
+        "sha256": "82334ddca88ac5fbeeb3371f68acd790f1366f7a8bbb10476aaa8292c05a6560"
+      },
+      {
+        "bytes": 20426,
+        "path": "bench/live_fable_repo/run.py",
+        "sha256": "28d2619a4d3208ad7b2f6c97461e55b56559a7078791541c492669f8f5bad22c"
+      },
+      {
+        "bytes": 11624,
+        "path": "bench/live_fable_repo/verify.py",
+        "sha256": "0d0db01ae79e1cef59c9d6cf902ba2bdc9e80240bf0e1b0bc96ca390f648284b"
+      },
+      {
+        "bytes": 17256,
+        "path": "bench/live_fable_suite/run.py",
+        "sha256": "4254b9b047b72b3611539be53e79919ceaf8a7e8ffa01a070aa66807f7abcdb5"
+      },
+      {
+        "bytes": 13648,
+        "path": "bench/live_fable_suite/verify.py",
+        "sha256": "ca12d74b6ae44362d2767529dbae6886a6db6d96f448c484943cb2b7e3a580f8"
+      },
+      {
+        "bytes": 3910,
+        "path": "src/banner.rs",
+        "sha256": "7c652db138238cfafe2a016b05158bf19a0ec1c8bd2862dc6005505d946e731d"
+      },
+      {
+        "bytes": 30082,
+        "path": "src/dashboard.rs",
+        "sha256": "c97b693c33a1ae09060fe3624f4affb54b1021f7c5e1fb11215cf841c750df9d"
+      },
+      {
+        "bytes": 37044,
+        "path": "src/jcode_config.rs",
+        "sha256": "d42178d59b6a281cd9750a2c07cce918ddd58ef5b89e8e80ab73ace9b2ccbbb6"
+      },
+      {
+        "bytes": 114025,
+        "path": "src/jcode_gate.rs",
+        "sha256": "82bb4e0787aff4e8ae6501e671f3c0da4b0fc3be1a6d92e241951747bd0e3727"
+      },
+      {
+        "bytes": 510623,
+        "path": "src/lib.rs",
+        "sha256": "d68b762071846b49efe1ffc666c6b09f3965c7ebfbe5d43781aab909d67ea500"
+      },
+      {
+        "bytes": 427273,
+        "path": "src/main.rs",
+        "sha256": "71b3e3838474f1e6102661068e91bc8e0f0f147f3d49fc3cdb49e4e5754da382"
+      },
+      {
+        "bytes": 23063,
+        "path": "src/memory.rs",
+        "sha256": "8d6971ddf8ff7b69d089349eac8b12f310f2f6145a588bb44f88c5bdcfe630d4"
+      },
+      {
+        "bytes": 32812,
+        "path": "src/observability.rs",
+        "sha256": "0abf690534b694a22ba0179ecefd726bbfdc3b6363995de136540c9849d5366e"
+      },
+      {
+        "bytes": 37435,
+        "path": "src/repo_source.rs",
+        "sha256": "2fdedc94984413ca47a57a6e5379a97eae18b04df2fda02f516e2e253b871742"
+      },
+      {
+        "bytes": 45485,
+        "path": "src/tui.rs",
+        "sha256": "9b622ef6a9f3c60d65142b969bc83658de2a84170fea9f96cb36f6eda7484aeb"
+      }
+    ],
+    "tracked_clean": true
+  },
+  "totals": {
+    "exact_results": 3,
+    "input_bytes": 157286400,
+    "monty_executions": 3,
+    "provider_calls": 3,
+    "provider_seconds": 63.495935,
+    "recursive_or_semantic_subcalls": 0,
+    "root_prompt_bytes": 37969,
+    "scenarios": 3,
+    "total_seconds": 79.891259
+  }
+}
