@@ -1,0 +1,20 @@
+===== cargo build --release --locked =====
+    Finished `release` profile [optimized] target(s) in 0.41s
+
+===== product_50mb exact ignored test =====
+    Finished `release` profile [optimized] target(s) in 0.07s
+     Running tests/product_50mb.rs (target/release/deps/product_50mb-cfbc7ef9c9157b20)
+
+running 1 test
+test offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death ... product_50mb_rss scenario=build reaped_child_high_water_bytes=223477760
+{"answer":"Answer: 13","exact_answer":true,"exec_invocation_count":1,"input_bytes":52428800,"kind":"scenario","no_raw_source_span_bytes":100,"reaped_children_high_water_bytes":223477760,"root_calls":1,"root_prompt_bytes":12737,"scenario":"build","sub_call_count":0}
+product_50mb_rss scenario=repo reaped_child_high_water_bytes=223592448
+{"answer":"src/module_07777.rs|AZD-7777","exact_answer":true,"exec_invocation_count":1,"input_bytes":52428800,"kind":"scenario","no_raw_source_span_bytes":100,"reaped_children_high_water_bytes":223592448,"root_calls":1,"root_prompt_bytes":12451,"scenario":"repo","sub_call_count":0}
+product_50mb_rss scenario=transcript reaped_child_high_water_bytes=223592448
+{"answer":"ship-v0.1-after-doctor","exact_answer":true,"exec_invocation_count":1,"input_bytes":52428800,"kind":"scenario","no_raw_source_span_bytes":100,"reaped_children_high_water_bytes":223592448,"root_calls":1,"root_prompt_bytes":12743,"scenario":"transcript","sub_call_count":0}
+product_50mb_rss maximum_reaped_child_high_water_bytes=223592448
+{"cleanup":"passed","kind":"summary","peak_reaped_children_high_water_bytes":223592448,"rss_available":true,"scenarios":3,"surviving_sessions":0}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.64s
+

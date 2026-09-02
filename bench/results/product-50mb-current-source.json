@@ -1,0 +1,205 @@
+{
+  "artifact": "product_50mb_current_source_acceptance",
+  "binary": {
+    "bytes": 9608816,
+    "path": "target/release/azdaja",
+    "sha256": "3111c880bcf2cbf738282bf826bd5649e175fa5a0efc0b3ace5b077425f0921a"
+  },
+  "claim_boundary": {
+    "demonstrates": [
+      "three deterministic 50 MiB inputs traverse the release solo CLI path",
+      "each scripted answer is exact after one Monty execution and zero recursive subcalls",
+      "each model-facing root prompt is below 64 KiB and below one-fiftieth of its input",
+      "no exact 100-byte source span or host input path reaches the scripted transport prompt",
+      "runtime traces report success and cleanup leaves no persistent session"
+    ],
+    "does_not_demonstrate": [
+      "live-model program synthesis",
+      "semantic quality on natural data",
+      "arbitrary-input support",
+      "comparison superiority",
+      "official benchmark status",
+      "operating-system sandbox guarantees"
+    ]
+  },
+  "commands": [
+    {
+      "argv": [
+        "cargo",
+        "build",
+        "--release",
+        "--locked"
+      ],
+      "elapsed_seconds": 0.47534,
+      "env": {},
+      "exit_code": 0,
+      "output_sha256": "a40c1884a95654da1e9ce0b9042cc3b906a7c879f74bfc6527def185ef03cdb2"
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "--test",
+        "product_50mb",
+        "offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "elapsed_seconds": 4.743136,
+      "env": {
+        "AZDAJA_PRODUCT_BINARY": "target/release/azdaja"
+      },
+      "exit_code": 0,
+      "output_sha256": "47d9ba0ba7f62d31130eacc3d1122bf26e0d7bace8c2babffcf85a84f24cae5c"
+    }
+  ],
+  "environment": {
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "machine": "arm64",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "python": "3.14.5",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "generated_at_utc": "2026-09-02T22:48:52Z",
+  "log": {
+    "bytes": 1765,
+    "path": "bench/results/product-50mb-current-source.txt",
+    "sha256": "2384ea97107b73000a0acdb21bf1a907995f26694fb6c46ff162da1cb560eba4"
+  },
+  "scenarios": [
+    {
+      "answer": "Answer: 13",
+      "exact_answer": true,
+      "exec_invocation_count": 1,
+      "input_bytes": 52428800,
+      "kind": "scenario",
+      "no_raw_source_span_bytes": 100,
+      "reaped_children_high_water_bytes": 223477760,
+      "root_calls": 1,
+      "root_prompt_bytes": 12737,
+      "scenario": "build",
+      "sub_call_count": 0
+    },
+    {
+      "answer": "src/module_07777.rs|AZD-7777",
+      "exact_answer": true,
+      "exec_invocation_count": 1,
+      "input_bytes": 52428800,
+      "kind": "scenario",
+      "no_raw_source_span_bytes": 100,
+      "reaped_children_high_water_bytes": 223592448,
+      "root_calls": 1,
+      "root_prompt_bytes": 12451,
+      "scenario": "repo",
+      "sub_call_count": 0
+    },
+    {
+      "answer": "ship-v0.1-after-doctor",
+      "exact_answer": true,
+      "exec_invocation_count": 1,
+      "input_bytes": 52428800,
+      "kind": "scenario",
+      "no_raw_source_span_bytes": 100,
+      "reaped_children_high_water_bytes": 223592448,
+      "root_calls": 1,
+      "root_prompt_bytes": 12743,
+      "scenario": "transcript",
+      "sub_call_count": 0
+    }
+  ],
+  "schema": "azdaja.product_50mb.acceptance.v2",
+  "source": {
+    "commit": "fe91f98d4c49d5aca59c4911c12869c9a05d22ea",
+    "files": [
+      {
+        "bytes": 60236,
+        "path": "Cargo.lock",
+        "sha256": "f2ff24a523f718f12c7a3a40fbf412cc91346bf7acbb517ae23b98a3d7c1bfb3"
+      },
+      {
+        "bytes": 1192,
+        "path": "Cargo.toml",
+        "sha256": "82334ddca88ac5fbeeb3371f68acd790f1366f7a8bbb10476aaa8292c05a6560"
+      },
+      {
+        "bytes": 14212,
+        "path": "bench/product_50mb/reproduce.py",
+        "sha256": "3ce0e7713d9ce9930ca3a813ec190e64d93ff5cf95d21229184d86008655708f"
+      },
+      {
+        "bytes": 9810,
+        "path": "bench/product_50mb/verify.py",
+        "sha256": "eea7cc3af73664b0531ac7c04a6a7bc68b97e99ae02bf47b2810017fd0592b87"
+      },
+      {
+        "bytes": 3910,
+        "path": "src/banner.rs",
+        "sha256": "7c652db138238cfafe2a016b05158bf19a0ec1c8bd2862dc6005505d946e731d"
+      },
+      {
+        "bytes": 30082,
+        "path": "src/dashboard.rs",
+        "sha256": "c97b693c33a1ae09060fe3624f4affb54b1021f7c5e1fb11215cf841c750df9d"
+      },
+      {
+        "bytes": 37044,
+        "path": "src/jcode_config.rs",
+        "sha256": "d42178d59b6a281cd9750a2c07cce918ddd58ef5b89e8e80ab73ace9b2ccbbb6"
+      },
+      {
+        "bytes": 114025,
+        "path": "src/jcode_gate.rs",
+        "sha256": "82bb4e0787aff4e8ae6501e671f3c0da4b0fc3be1a6d92e241951747bd0e3727"
+      },
+      {
+        "bytes": 510623,
+        "path": "src/lib.rs",
+        "sha256": "d68b762071846b49efe1ffc666c6b09f3965c7ebfbe5d43781aab909d67ea500"
+      },
+      {
+        "bytes": 427273,
+        "path": "src/main.rs",
+        "sha256": "71b3e3838474f1e6102661068e91bc8e0f0f147f3d49fc3cdb49e4e5754da382"
+      },
+      {
+        "bytes": 23063,
+        "path": "src/memory.rs",
+        "sha256": "8d6971ddf8ff7b69d089349eac8b12f310f2f6145a588bb44f88c5bdcfe630d4"
+      },
+      {
+        "bytes": 32812,
+        "path": "src/observability.rs",
+        "sha256": "0abf690534b694a22ba0179ecefd726bbfdc3b6363995de136540c9849d5366e"
+      },
+      {
+        "bytes": 37435,
+        "path": "src/repo_source.rs",
+        "sha256": "2fdedc94984413ca47a57a6e5379a97eae18b04df2fda02f516e2e253b871742"
+      },
+      {
+        "bytes": 45485,
+        "path": "src/tui.rs",
+        "sha256": "9b622ef6a9f3c60d65142b969bc83658de2a84170fea9f96cb36f6eda7484aeb"
+      },
+      {
+        "bytes": 15751,
+        "path": "tests/product_50mb.rs",
+        "sha256": "f7eff7e5796ede0e5353c745b1c8a8a3e48c68046394084efa361cfdfd530b2c"
+      }
+    ],
+    "tracked_diff_clean": true
+  },
+  "summary": {
+    "cleanup": "passed",
+    "kind": "summary",
+    "peak_reaped_children_high_water_bytes": 223592448,
+    "rss_available": true,
+    "scenarios": 3,
+    "surviving_sessions": 0
+  }
+}
