@@ -165,6 +165,7 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
     assert!(opencode_skill.contains("Run this exact wrapper as one Bash call"));
     assert!(opencode_skill.contains("Run exactly one lifecycle with exactly one literal `start`, `load`, `exec`, `final`, and `kill`"));
     assert!(opencode_skill.contains("explicit user activation"));
+    assert!(opencode_skill.contains("Optional; use only after explicit user choice."));
     assert!(opencode_skill.contains("Its source load is the only `load`"));
     assert!(opencode_skill.contains("trap cleanup EXIT"));
     assert!(opencode_skill.contains("Use exactly one inline heredoc cell"));
@@ -579,7 +580,7 @@ const DOCUMENT_OWNER_V1: &[u8] = b"azdaja-installer-owned-docs-v1\n";
 const DOCUMENT_OWNER_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
-THIRD-PARTY-NOTICES.md.sha256=0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3\n";
+THIRD-PARTY-NOTICES.md.sha256=393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2\n";
 const DOCUMENT_OWNER_PREVIOUS_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\

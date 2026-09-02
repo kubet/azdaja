@@ -14,6 +14,8 @@ h1{margin:0;color:var(--red);font-size:clamp(1.65rem,3.5vw,2.1rem);font-weight:3
 .copy{max-width:34rem;min-width:0;margin-top:.9rem;text-align:center}
 .copy p{margin:0;font-size:1rem;line-height:1.52;overflow-wrap:anywhere;text-wrap:pretty}
 .copy p+p{margin-top:.65rem}
+.copy .proof{padding:.8rem 1rem;border:1px solid rgba(158,44,31,.28);background:rgba(255,255,255,.16);font-size:.94rem}
+.copy .proof a{color:var(--red);text-underline-offset:2px}
 .copy .compatibility{color:rgba(36,28,18,.72);font-size:.92rem}
 .install{width:100%;max-width:31rem;margin-top:clamp(24px,4svh,34px)}
 .install-command{display:block;width:100%;padding:.3rem 0;color:rgba(36,28,18,.8);font:600 .67rem/1.4 "SFMono-Regular",Consolas,monospace;white-space:nowrap;overflow-x:auto;overscroll-behavior-inline:contain;text-align:center}
@@ -43,6 +45,21 @@ footer a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
 .architecture .edge{fill:none;stroke:var(--red);stroke-width:2;marker-end:url(#arrow)}
 .architecture marker path{fill:var(--red)}
 .architecture figcaption{margin-top:.9rem;font-size:.92rem;line-height:1.45}
+.proof-grid{max-width:46rem;margin:2.2rem auto 0;display:grid;grid-template-columns:repeat(4,1fr);border:1px solid rgba(36,28,18,.22);background:rgba(255,255,255,.12)}
+.proof-grid div{min-width:0;padding:1rem .7rem;text-align:center}
+.proof-grid div+div{border-left:1px solid rgba(36,28,18,.18)}
+.proof-grid strong{display:block;color:var(--red);font:600 1.35rem/1.15 "SFMono-Regular",Consolas,monospace}
+.proof-grid span{display:block;margin-top:.35rem;font-size:.84rem;line-height:1.3}
+.proof-table-wrap{overflow-x:auto;border:1px solid rgba(36,28,18,.22)}
+.proof-table{width:100%;min-width:660px;border-collapse:collapse;background:rgba(255,255,255,.1)}
+.proof-table th,.proof-table td{padding:.72rem .8rem;border-bottom:1px solid rgba(36,28,18,.14);font-size:.95rem;line-height:1.4;text-align:left;vertical-align:top}
+.proof-table th{color:var(--red);font:600 .72rem/1.3 "SFMono-Regular",Consolas,monospace;letter-spacing:.08em;text-transform:uppercase}
+.proof-table tr:last-child td{border-bottom:0}
+.proof-list{padding-left:1.25rem}
+.proof-list li{margin-top:.65rem;font-size:clamp(1.02rem,1.4vw,1.14rem);line-height:1.5}
+.proof-actions{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:1.4rem!important}
+.proof-actions a{padding:.55rem .75rem;border:1px solid rgba(158,44,31,.35);text-decoration:none}
+.proof-command{margin:1.2rem 0 0;padding:1rem;overflow-x:auto;border:1px solid rgba(36,28,18,.2);background:rgba(36,28,18,.06);font:600 .76rem/1.55 "SFMono-Regular",Consolas,monospace}
 .article-shell footer{text-align:center}
-@media(max-width:680px){.article-shell{width:calc(100% - 28px)}.saga{margin-top:34px}.saga h1{font-size:2.15rem}.saga .standfirst{font-size:1.15rem}.architecture{margin-inline:-4px;padding:.45rem;overflow-x:auto}.architecture svg{min-width:720px}.saga section{margin-top:2.8rem}}
+@media(max-width:680px){.article-shell{width:calc(100% - 28px)}.saga{margin-top:34px}.saga h1{font-size:2.15rem}.saga .standfirst{font-size:1.15rem}.architecture{margin-inline:-4px;padding:.45rem;overflow-x:auto}.architecture svg{min-width:720px}.saga section{margin-top:2.8rem}.proof-grid{grid-template-columns:repeat(2,1fr)}.proof-grid div+div{border-left:0}.proof-grid div:nth-child(even){border-left:1px solid rgba(36,28,18,.18)}.proof-grid div:nth-child(n+3){border-top:1px solid rgba(36,28,18,.18)}.proof-actions{display:grid}.proof-actions a{text-align:center}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}

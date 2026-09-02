@@ -39,13 +39,14 @@
     <p class="lede">A local evaluator for language-model context.</p>
     <div class="copy">
       <p>Keep complete source material outside the root prompt. Use code for exact work, request bounded semantic calls when judgment is needed, and return one validated result.</p>
+      <p class="proof"><strong>Live Claude Fable result:</strong> Fable synthesized one generic program per bounded prompt, and Azdaja executed each locally against the complete input. The suite returned <strong>3/3 exact</strong> across build-log aggregation, repository evidence, and final-match catalog extraction, with three provider calls, three local Monty executions, and zero recursive or semantic subcalls. <a href="/proof.html">See the proof</a> · <a href="https://github.com/kubet/azdaja/blob/main/bench/results/live-fable-suite.json">inspect the receipt</a>.</p>
       <p class="compatibility">Jcode · Claude · Codex · Gemini · OpenCode</p>
       <p class="compatibility">macOS 11+ on Apple Silicon and Intel · x86-64 Linux with glibc 2.35+</p>
     </div>
     <section class="install" aria-label="Install Azdaja">
       <code class="install-command">$ curl -fsSL https://azdaja.dev/install | sh</code>
     </section>
-    <footer><a href="https://github.com/kubet/azdaja#what-it-is">docs</a> · <a href="https://github.com/kubet/azdaja/blob/main/BENCHMARKS.md">receipts</a> · <a href="/saga.html">saga</a> · <a href="/op-4.html">scorer postmortem</a> · <a href="https://github.com/kubet/azdaja">github</a> · <a href="https://github.com/kubet/azdaja/blob/main/LICENSE">license</a> · <a href="https://github.com/kubet/azdaja/blob/main/THIRD-PARTY-NOTICES.md">third-party notices</a></footer>
+    <footer><a href="https://github.com/kubet/azdaja#what-it-is">docs</a> · <a href="/proof.html">proof</a> · <a href="https://github.com/kubet/azdaja/blob/main/BENCHMARKS.md">receipts</a> · <a href="/saga.html">saga</a> · <a href="/op-4.html">scorer postmortem</a> · <a href="https://github.com/kubet/azdaja">github</a> · <a href="https://github.com/kubet/azdaja/blob/main/LICENSE">license</a> · <a href="https://github.com/kubet/azdaja/blob/main/THIRD-PARTY-NOTICES.md">third-party notices</a></footer>
   </main>
 </body>
 </html>

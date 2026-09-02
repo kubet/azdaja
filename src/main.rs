@@ -4897,7 +4897,7 @@ const DOCUMENT_OWNER_V1_MAGIC: &[u8] = b"azdaja-installer-owned-docs-v1\n";
 const DOCUMENT_OWNER_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
-THIRD-PARTY-NOTICES.md.sha256=0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3\n";
+THIRD-PARTY-NOTICES.md.sha256=393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2\n";
 const DOCUMENT_OWNER_PREVIOUS_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
@@ -9588,19 +9588,19 @@ mod tests {
         let expected = [
             (
                 "default",
-                "2f1cc42a2a491e9e2dff3b1d495b866c630ea5e56974cc64092abe23fa8a4120",
+                "d9ee0d026fa503511d46507dd86d2216a2cc95e5e9a20cdca4aba3ed7726cf2e",
             ),
             (
                 "jcode",
-                "607a020aabce57c06b8505d63373ea0b82d6db71f5cfe78ceb176e1aa6a29e15",
+                "e5684cb7ce09b737beda051a6bd0befd52ab50c0b733379a555cefbe5df87482",
             ),
             (
                 "codex",
-                "6370ad62775223906c856766f73096273069aef678b3ce241d654989049d347e",
+                "e2fc28e23191bc4da2bedaad89678e54ac27dbeacdd2f708027d6039de54cca4",
             ),
             (
                 "gemini",
-                "0e71ffe7f9e0c93fb9e9cc2eac067d8fd569f2dbb69135776232bcab6eb44bb6",
+                "e38f3ff3bfa39a08d68687436a1a5aa54cd0f186249e073a926ee185d2dbee92",
             ),
         ];
         let actual = expected

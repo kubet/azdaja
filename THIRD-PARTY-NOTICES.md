@@ -1,7 +1,7 @@
 # Azdaja third-party notices
 
-**Candidate:** Azdaja v0.1.2 public content snapshot
-**Supported release targets:** `aarch64-apple-darwin`, `x86_64-unknown-linux-gnu`  
+**Candidate:** Azdaja v0.1.14 public content snapshot
+**Supported release targets:** `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`
 **Generated:** `2026-08-20T03:44:21Z` by a strictly local/offline audit  
 **Engineering disposition:** supported-target dependency/font notice gate **PASS only when this file accompanies every applicable release artifact**; see obligations and limits below. This is not legal advice.
 

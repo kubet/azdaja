@@ -22,6 +22,10 @@ fn sha256(path: &Path) -> String {
     panic!("no SHA-256 utility available");
 }
 
+const V0114_NOTICES: &[u8] = include_bytes!("../site/releases/v0.1.14/THIRD-PARTY-NOTICES.md");
+const V0114_NOTICES_SHA256: &str =
+    "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3";
+
 fn cargo_tree_packages(root: &Path, target: &str) -> BTreeSet<String> {
     let output = Command::new(env!("CARGO"))
         .args([
@@ -57,7 +61,7 @@ fn reviewed_notice_license_and_font_ofl_bytes_are_preserved() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     assert_eq!(
         sha256(&root.join("THIRD-PARTY-NOTICES.md")),
-        "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+        "393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2"
     );
     assert_eq!(
         sha256(&root.join("LICENSE")),
@@ -67,6 +71,51 @@ fn reviewed_notice_license_and_font_ofl_bytes_are_preserved() {
         sha256(&root.join("site/fonts/Cormorant-Garamond-OFL.txt")),
         "60700d351cac4650c51f3f9db318d2a420f8b45052dba2715eb5fec41f0f6956"
     );
+}
+
+#[test]
+fn current_notice_front_matter_tracks_canonical_version_targets_and_table_membership() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest: toml::Value =
+        toml::from_str(&fs::read_to_string(root.join("Cargo.toml")).unwrap()).unwrap();
+    let version = manifest["package"]["version"].as_str().unwrap();
+    let workflow = fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap();
+    let targets: Vec<_> = workflow
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("rust_target: "))
+        .collect();
+    assert_eq!(targets.len(), 3);
+    assert_eq!(targets.iter().collect::<BTreeSet<_>>().len(), targets.len());
+
+    let notice = fs::read_to_string(root.join("THIRD-PARTY-NOTICES.md")).unwrap();
+    let mut front_matter = notice.lines();
+    assert_eq!(front_matter.next(), Some("# Azdaja third-party notices"));
+    assert_eq!(front_matter.next(), Some(""));
+    let expected_candidate = format!("**Candidate:** Azdaja v{version} public content snapshot");
+    assert_eq!(front_matter.next(), Some(expected_candidate.as_str()));
+    let actual_targets: Vec<_> = front_matter
+        .next()
+        .unwrap()
+        .strip_prefix("**Supported release targets:** ")
+        .unwrap()
+        .trim()
+        .split(", ")
+        .map(|target| target.trim_matches('`'))
+        .collect();
+    assert_eq!(actual_targets, targets);
+
+    let table = notice
+        .split_once("## Exact supported-target third-party union (root excluded)\n\n")
+        .unwrap()
+        .1
+        .split_once("\n## Lock records outside both supported closures")
+        .unwrap()
+        .0;
+    let linux_target = targets
+        .iter()
+        .find(|target| target.ends_with("unknown-linux-gnu"))
+        .unwrap();
+    assert!(table.contains(&format!("| `spin` | `0.9.9` | `MIT` | `{linux_target}` |")));
 }
 
 #[test]
@@ -306,18 +355,30 @@ fn promoted_v0114_assets_are_bound_to_exact_workflow_receipt() {
     assert_eq!(linux[5], 1);
     assert_eq!(u16::from_le_bytes([linux[18], linux[19]]), 62);
 
-    for name in ["LICENSE", "THIRD-PARTY-NOTICES.md"] {
-        let path = release.join(name);
-        assert_eq!(fs::read(&path).unwrap(), fs::read(root.join(name)).unwrap());
-        let digest = sha256(&path);
-        assert_eq!(
-            lines
-                .iter()
-                .filter(|line| **line == format!("{digest}  {name}"))
-                .count(),
-            1
-        );
-    }
+    let license = release.join("LICENSE");
+    assert_eq!(
+        fs::read(&license).unwrap(),
+        fs::read(root.join("LICENSE")).unwrap()
+    );
+    let license_digest = sha256(&license);
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|line| **line == format!("{license_digest}  LICENSE"))
+            .count(),
+        1
+    );
+
+    let notices = release.join("THIRD-PARTY-NOTICES.md");
+    assert_eq!(fs::read(&notices).unwrap(), V0114_NOTICES);
+    assert_eq!(sha256(&notices), V0114_NOTICES_SHA256);
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|line| **line == format!("{V0114_NOTICES_SHA256}  THIRD-PARTY-NOTICES.md"))
+            .count(),
+        1
+    );
 }
 
 #[test]

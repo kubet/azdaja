@@ -4,7 +4,7 @@ This document records distribution invariants for packagers and downstream audit
 
 ## Standalone payload
 
-A standalone release contains two raw platform binaries, `LICENSE`, `THIRD-PARTY-NOTICES.md`, and `SHA256SUMS`. The checksum manifest covers the two binaries and both legal documents. The installer downloads and verifies all selected bytes before changing installation state, then publishes staged files atomically.
+A standalone release contains three raw platform binaries, `LICENSE`, `THIRD-PARTY-NOTICES.md`, and `SHA256SUMS`. The checksum manifest covers the three binaries and both legal documents. The installer downloads and verifies all selected bytes before changing installation state, then publishes staged files atomically.
 
 A bare platform binary is not the complete standalone distribution. Keep the matching license and supported-target notices co-located with it.
 
