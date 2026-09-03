@@ -1,0 +1,20 @@
+{
+  "schema": "azdaja.first_party_receipt_index.v1",
+  "kind": "provider_free",
+  "receipt": {
+    "path": "bench/results/product-50mb-current-source.json",
+    "bytes": 6256,
+    "sha256": "ebcc0632ef458a90b90eb0b95ed3343df85e66d9ed22633173e2ce3fdb1ec08b"
+  },
+  "summary": {
+    "path": "bench/results/product-50mb-current-source.md",
+    "bytes": 1284,
+    "sha256": "3f8fa809e4378d580d704bfb5ec807005d4d95101ba4a233a05c204d6a381843"
+  },
+  "log": {
+    "path": "bench/results/product-50mb-current-source.txt",
+    "bytes": 1765,
+    "sha256": "2384ea97107b73000a0acdb21bf1a907995f26694fb6c46ff162da1cb560eba4"
+  },
+  "observation_boundary": "Deterministic first-party provider-free acceptance evidence. The v2 receipt does not retain generated-input SHA-256 values."
+}

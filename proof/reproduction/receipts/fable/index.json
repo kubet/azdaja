@@ -1,0 +1,15 @@
+{
+  "schema": "azdaja.first_party_receipt_index.v1",
+  "kind": "live_fable",
+  "receipt": {
+    "path": "bench/results/live-fable-suite.json",
+    "bytes": 16013,
+    "sha256": "966b92bd3153c519bd3e4e9d62152a590ab848b77a2c84729d0c38cbaa86b508"
+  },
+  "summary": {
+    "path": "bench/results/live-fable-suite.md",
+    "bytes": 1212,
+    "sha256": "f7ff036922a0fafb308913bceb3f376362d9942c45dffe793fc08bdb18a7c498"
+  },
+  "observation_boundary": "Timestamped first-party observation from one model, one route, and one run per synthetic task. Not a future provider guarantee or comparative benchmark."
+}

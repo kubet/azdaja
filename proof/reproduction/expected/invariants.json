@@ -1,0 +1,87 @@
+{
+  "schema": "azdaja.first_party_expected_invariants.v1",
+  "live_fable": {
+    "receipt": "bench/results/live-fable-suite.json",
+    "receipt_schema": "azdaja.live_fable_suite.v1",
+    "totals": {
+      "scenarios": 3,
+      "input_bytes": 157286400,
+      "root_prompt_bytes": 37969,
+      "provider_calls": 3,
+      "monty_executions": 3,
+      "recursive_or_semantic_subcalls": 0,
+      "exact_results": 3
+    },
+    "scenarios": [
+      {
+        "name": "build",
+        "expected": "Answer: 13",
+        "input_bytes": 52428800,
+        "input_sha256": "0588a895de12cacffd88d2c6a5de1ac65968d78c9b8779d088ae36ffae0bfed0",
+        "root_prompt_bytes": 12739
+      },
+      {
+        "name": "repo",
+        "expected": "src/module_07777.rs|AZD-7777",
+        "input_bytes": 52428800,
+        "input_sha256": "79386056b41fd62c533cb0f9b22473f07cf3d87c70b221e2cbe22eaa611318df",
+        "root_prompt_bytes": 12460
+      },
+      {
+        "name": "catalog",
+        "expected": "Color: cerulean",
+        "input_bytes": 52428800,
+        "input_sha256": "b81cb7c0bd65f613fe129fc4a9d897934632b285c76921cdc0cb4d6b642b542d",
+        "root_prompt_bytes": 12770
+      }
+    ]
+  },
+  "provider_free": {
+    "receipt": "bench/results/product-50mb-current-source.json",
+    "log": "bench/results/product-50mb-current-source.txt",
+    "receipt_schema": "azdaja.product_50mb.acceptance.v2",
+    "summary": {
+      "scenarios": 3,
+      "surviving_sessions": 0,
+      "cleanup": "passed"
+    },
+    "scenarios": [
+      {
+        "name": "build",
+        "answer": "Answer: 13",
+        "input_bytes": 52428800,
+        "root_prompt_bytes": 12737,
+        "root_calls": 1,
+        "exec_invocation_count": 1,
+        "sub_call_count": 0
+      },
+      {
+        "name": "repo",
+        "answer": "src/module_07777.rs|AZD-7777",
+        "input_bytes": 52428800,
+        "root_prompt_bytes": 12451,
+        "root_calls": 1,
+        "exec_invocation_count": 1,
+        "sub_call_count": 0
+      },
+      {
+        "name": "transcript",
+        "answer": "ship-v0.1-after-doctor",
+        "input_bytes": 52428800,
+        "root_prompt_bytes": 12743,
+        "root_calls": 1,
+        "exec_invocation_count": 1,
+        "sub_call_count": 0
+      }
+    ]
+  },
+  "not_demonstrated": [
+    "independent third-party replication",
+    "future provider behavior or byte-identical live reruns",
+    "provider-free generated-input SHA-256 values under the v2 receipt",
+    "general model quality or arbitrary-input support",
+    "comparative superiority or statistical significance",
+    "production readiness, operating-system sandboxing, or legal compliance",
+    "a complete third-party verification capsule"
+  ]
+}

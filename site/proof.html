@@ -78,7 +78,15 @@
       </section>
 
       <section>
-        <h2>Inspect or reproduce it</h2>
+        <h2>Verify both proof paths offline</h2>
+        <p>The first-party proof bundle binds both receipts, the provider-free raw log, fixture specifications, deterministic invariants, verifier sources, and this public page into one SHA-256 manifest. The command performs no provider call, downloads nothing, and fails closed on changed files, claims, answers, totals, paths, or source bindings.</p>
+        <pre class="proof-command"><code>./proof/reproduction/run.sh</code></pre>
+        <p class="proof-actions"><a href="https://github.com/kubet/azdaja/blob/main/proof/reproduction/manifest.json">Inspect the manifest</a><a href="https://github.com/kubet/azdaja/blob/main/proof/reproduction/verify.py">Read the verifier</a><a href="https://github.com/kubet/azdaja/blob/main/proof/reproduction/README.md">Reproduction guide</a></p>
+        <p>This is narrow first-party reproducible evidence, not an independent replication or complete third-party verification capsule. Exact deterministic checks are separated from timestamped live observations, and the provider-free v2 input-digest limitation is explicit.</p>
+      </section>
+
+      <section>
+        <h2>Inspect or replay it</h2>
         <p>The machine-readable receipt was generated on 2 September 2026 and binds source commit <a href="https://github.com/kubet/azdaja/commit/2514d26a245a5d1c9f6bb1f351391b69a616c3b1"><code>2514d26</code></a> plus the release binary hash. It includes all three model-authored programs, command templates, prompt and response hashes, runtime counters, exact outputs, environment versions, source hashes, and explicit claim limits.</p>
         <p class="proof-actions"><a href="https://github.com/kubet/azdaja/blob/main/bench/results/live-fable-suite.md">Read the result</a><a href="https://github.com/kubet/azdaja/blob/main/bench/results/live-fable-suite.json">Inspect the receipt</a><a href="https://github.com/kubet/azdaja/blob/main/bench/live_fable_suite/README.md">Run the harness</a></p>
         <pre class="proof-command"><code>python3 bench/live_fable_suite/verify.py \

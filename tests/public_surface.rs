@@ -62,6 +62,15 @@ fn public_surface_leads_with_the_product_contract_not_capacity_marketing() {
     );
     assert!(proof.contains("rejects altered totals"));
     assert!(proof.contains("not a benchmark, leaderboard result, or superiority claim"));
+    assert!(proof.contains("./proof/reproduction/run.sh"));
+    assert!(proof.contains("proof/reproduction/manifest.json"));
+    assert!(proof.contains("proof/reproduction/verify.py"));
+    assert!(proof.contains("narrow first-party reproducible evidence"));
+    assert!(
+        proof.contains(
+            "not an independent replication or complete third-party verification capsule"
+        )
+    );
     assert!(
         proof.contains(
             "https://github.com/kubet/azdaja/blob/main/bench/results/live-fable-suite.json"
@@ -98,7 +107,14 @@ fn public_surface_leads_with_the_product_contract_not_capacity_marketing() {
         "Azdaja keeps complete source material in a local evaluator and gives language models a bounded working surface"
     ));
     assert!(readme.contains("[Live proof](https://azdaja.dev/proof.html)"));
+    assert!(readme.contains("./proof/reproduction/run.sh"));
+    assert!(readme.contains("proof/reproduction/manifest.json"));
+    assert!(readme.contains("proof/reproduction/verify.py"));
     assert!(!readme.contains("site/demo-50mb.gif"));
+
+    assert!(benchmarks.contains("## One-command first-party verification"));
+    assert!(benchmarks.contains("./proof/reproduction/run.sh"));
+    assert!(benchmarks.contains("proof/reproduction/manifest.json"));
 
     let launch = read_public_surface(root, "docs/launch-package.md");
     assert!(launch.contains("- Repository: <https://github.com/kubet/azdaja>\n- Release: <https://github.com/kubet/azdaja/releases/tag/v0.1.14>\n- Receipts and reproduction material: <https://github.com/kubet/azdaja/blob/main/BENCHMARKS.md>\n- Installer documentation: [install.md](install.md)\n- Historical launch record: [launch-saga.md](launch-saga.md)"));

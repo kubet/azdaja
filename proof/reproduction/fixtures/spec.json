@@ -1,0 +1,49 @@
+{
+  "schema": "azdaja.first_party_fixture_spec.v1",
+  "live_fable": {
+    "generator": "bench/live_fable_suite/run.py",
+    "receipt_source_commit": "2514d26a245a5d1c9f6bb1f351391b69a616c3b1",
+    "inputs": [
+      {
+        "name": "build",
+        "bytes": 52428800,
+        "record_bytes": 4096,
+        "sha256": "0588a895de12cacffd88d2c6a5de1ac65968d78c9b8779d088ae36ffae0bfed0"
+      },
+      {
+        "name": "repo",
+        "bytes": 52428800,
+        "record_bytes": 4096,
+        "sha256": "79386056b41fd62c533cb0f9b22473f07cf3d87c70b221e2cbe22eaa611318df"
+      },
+      {
+        "name": "catalog",
+        "bytes": 52428800,
+        "record_bytes": 4096,
+        "sha256": "b81cb7c0bd65f613fe129fc4a9d897934632b285c76921cdc0cb4d6b642b542d"
+      }
+    ]
+  },
+  "provider_free": {
+    "generator": "tests/product_50mb.rs",
+    "receipt_source_commit": "fe91f98d4c49d5aca59c4911c12869c9a05d22ea",
+    "digest_status": "The v2 provider-free receipt retains generator provenance and exact byte counts, but not generated-input SHA-256 values.",
+    "inputs": [
+      {
+        "name": "build",
+        "bytes": 52428800,
+        "sha256": null
+      },
+      {
+        "name": "repo",
+        "bytes": 52428800,
+        "sha256": null
+      },
+      {
+        "name": "transcript",
+        "bytes": 52428800,
+        "sha256": null
+      }
+    ]
+  }
+}

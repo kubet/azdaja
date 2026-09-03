@@ -1,0 +1,53 @@
+name: Verify first-party proof bundle
+
+on:
+  push:
+    paths:
+      - "proof/reproduction/**"
+      - "bench/results/live-fable-suite.*"
+      - "bench/results/product-50mb-current-source.*"
+      - "bench/live_fable_suite/**"
+      - "bench/product_50mb/**"
+      - "tests/product_50mb.rs"
+      - "README.md"
+      - "BENCHMARKS.md"
+      - "site/proof.html"
+      - ".github/workflows/verify-proof.yml"
+  pull_request:
+    paths:
+      - "proof/reproduction/**"
+      - "bench/results/live-fable-suite.*"
+      - "bench/results/product-50mb-current-source.*"
+      - "bench/live_fable_suite/**"
+      - "bench/product_50mb/**"
+      - "tests/product_50mb.rs"
+      - "README.md"
+      - "BENCHMARKS.md"
+      - "site/proof.html"
+      - ".github/workflows/verify-proof.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Unit tests
+        run: python3 -m unittest proof/reproduction/test_verify.py
+      - name: Offline proof verification
+        run: ./proof/reproduction/run.sh | tee "$RUNNER_TEMP/proof-verification.json"
+      - name: Retain verifier output
+        uses: actions/upload-artifact@v4
+        with:
+          name: first-party-proof-verification
+          path: ${{ runner.temp }}/proof-verification.json
+          if-no-files-found: error
+          retention-days: 30

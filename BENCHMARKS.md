@@ -45,6 +45,18 @@ All three cases exercised the release `azdaja solo` path. The scripted transport
 
 The capsule does not demonstrate live-model program synthesis, semantic quality on natural data, arbitrary-input support, comparison superiority, official benchmark status, or operating-system sandbox guarantees.
 
+## One-command first-party verification
+
+The [source-bound manifest](proof/reproduction/manifest.json) joins the live receipt, provider-free receipt and raw log, fixture specifications, deterministic invariants, verifier sources, and public claim surfaces into one hash-checked inventory. Verify it without provider access or network calls:
+
+```sh
+./proof/reproduction/run.sh
+```
+
+The [stdlib verifier](proof/reproduction/verify.py) fails closed on source drift, missing or reordered artifacts, byte-count or SHA-256 changes, unsafe paths, schema changes, receipt-verifier failures, altered totals or answers, fixture mismatches, public timing drift, and weakened claim boundaries. Exact live fixture SHA-256 values are retained. The provider-free v2 receipt retains generator provenance and exact input sizes but not generated-input SHA-256 values.
+
+This is narrow first-party reproducible evidence. It is not independent replication, a complete third-party verification capsule, or evidence of general quality, superiority, statistical significance, production readiness, sandboxing, or legal compliance. See the [bundle documentation](proof/reproduction/README.md) for optional provider-free and live replays.
+
 ## Accuracy ladder
 
 | Source | System | Class | Score |

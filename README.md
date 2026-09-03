@@ -100,6 +100,16 @@ The provider-free [current-source acceptance capsule](bench/results/product-50mb
 
 The scripted transport returned programs, not answer constants. The test also requires a bounded model-facing prompt, no exact 100-byte source span or host input path in that prompt, a successful runtime trace, and zero surviving sessions after cleanup. The [source-bound receipt](bench/results/product-50mb-current-source.json), [captured log](bench/results/product-50mb-current-source.txt), and [reproduction instructions](bench/product_50mb/README.md) are checked in. This proves product-path plumbing on deterministic synthetic inputs, not live-model synthesis or superiority. Detailed input and prompt measurements live in the receipt rather than the product overview.
 
+### Verify both proof paths offline
+
+From a Git checkout containing the bound source commits, one command verifies the live receipt, provider-free receipt and raw log, public claim surfaces, fixture identities, expected invariants, and every file hash in the [first-party manifest](proof/reproduction/manifest.json):
+
+```sh
+./proof/reproduction/run.sh
+```
+
+The [stdlib verifier](proof/reproduction/verify.py) performs no provider call and downloads nothing. The [proof-bundle documentation](proof/reproduction/README.md) separates exact deterministic checks from timestamped live observations and lists what the evidence does not demonstrate. This is narrow first-party reproducible evidence, not an independent replication or complete third-party verification capsule.
+
 ### Historical research diagnostic
 
 A fixed 199-row Oolong diagnostic under the RAH protocol ([arXiv:2606.13643](https://arxiv.org/abs/2606.13643)) produced 185 valid predictions; the 14 failures stayed in the denominator as zeros. The [terminal receipt](bench/results/gpt-rah199-mortality-v3-terminal-public.json) records the frozen accounting, and the [public manifest](bench/results/rah199-public-manifest.json) pins every fixture by hash.
