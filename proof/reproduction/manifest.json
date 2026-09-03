@@ -1,0 +1,170 @@
+{
+  "schema": "azdaja.first_party_proof_bundle.v1",
+  "bundle": "azdaja-first-party-proof",
+  "source_commit": "f5ba4e0e41b4a3f70d610f63ae93379ae803abc0",
+  "hash_algorithm": "sha256",
+  "artifacts": [
+    {
+      "path": ".github/workflows/verify-proof.yml",
+      "role": "ci_verifier",
+      "bytes": 1521,
+      "sha256": "875f9ea0efe3b7d649559f5554557e639ea5ae46e432b1c197437d6bf6eb9549"
+    },
+    {
+      "path": "BENCHMARKS.md",
+      "role": "public_claim_surface",
+      "bytes": 10033,
+      "sha256": "ac27d01a19a18e10e6e60c9ef67bb78e3ad3b1152d9275111ea2d5c868364d54"
+    },
+    {
+      "path": "README.md",
+      "role": "public_claim_surface",
+      "bytes": 14622,
+      "sha256": "34337d59ebda384890753cbc0d96a8077d388023e89ca007f4b1559e618d374e"
+    },
+    {
+      "path": "bench/live_fable_suite/run.py",
+      "role": "live_fixture_generator",
+      "bytes": 17256,
+      "sha256": "4254b9b047b72b3611539be53e79919ceaf8a7e8ffa01a070aa66807f7abcdb5"
+    },
+    {
+      "path": "bench/live_fable_suite/verify.py",
+      "role": "live_receipt_verifier",
+      "bytes": 13648,
+      "sha256": "ca12d74b6ae44362d2767529dbae6886a6db6d96f448c484943cb2b7e3a580f8"
+    },
+    {
+      "path": "bench/product_50mb/reproduce.py",
+      "role": "provider_free_reproducer",
+      "bytes": 14212,
+      "sha256": "3ce0e7713d9ce9930ca3a813ec190e64d93ff5cf95d21229184d86008655708f"
+    },
+    {
+      "path": "bench/product_50mb/verify.py",
+      "role": "provider_free_receipt_verifier",
+      "bytes": 9810,
+      "sha256": "eea7cc3af73664b0531ac7c04a6a7bc68b97e99ae02bf47b2810017fd0592b87"
+    },
+    {
+      "path": "bench/results/live-fable-suite.json",
+      "role": "live_receipt",
+      "bytes": 16013,
+      "sha256": "966b92bd3153c519bd3e4e9d62152a590ab848b77a2c84729d0c38cbaa86b508"
+    },
+    {
+      "path": "bench/results/live-fable-suite.md",
+      "role": "live_summary",
+      "bytes": 1212,
+      "sha256": "f7ff036922a0fafb308913bceb3f376362d9942c45dffe793fc08bdb18a7c498"
+    },
+    {
+      "path": "bench/results/product-50mb-current-source.json",
+      "role": "provider_free_receipt",
+      "bytes": 6256,
+      "sha256": "ebcc0632ef458a90b90eb0b95ed3343df85e66d9ed22633173e2ce3fdb1ec08b"
+    },
+    {
+      "path": "bench/results/product-50mb-current-source.md",
+      "role": "provider_free_summary",
+      "bytes": 1284,
+      "sha256": "3f8fa809e4378d580d704bfb5ec807005d4d95101ba4a233a05c204d6a381843"
+    },
+    {
+      "path": "bench/results/product-50mb-current-source.txt",
+      "role": "provider_free_log",
+      "bytes": 1765,
+      "sha256": "2384ea97107b73000a0acdb21bf1a907995f26694fb6c46ff162da1cb560eba4"
+    },
+    {
+      "path": "proof/reproduction/README.md",
+      "role": "bundle_documentation",
+      "bytes": 3461,
+      "sha256": "e043162aea2bd0c8459e0dccaf2acde75881d9ccd683f0d4543b6f9942622def"
+    },
+    {
+      "path": "proof/reproduction/build_manifest.py",
+      "role": "manifest_builder",
+      "bytes": 4353,
+      "sha256": "e8a9a243adec2c0569cea7f816a0e1d280475e09af1e4f2e31aa6c3762e22a97"
+    },
+    {
+      "path": "proof/reproduction/expected/invariants.json",
+      "role": "expected_invariants",
+      "bytes": 2697,
+      "sha256": "f44e52996a79e609eda1baf7a256edc33e2b8291281ba844952c5f1b01f4aef6"
+    },
+    {
+      "path": "proof/reproduction/fixtures/spec.json",
+      "role": "fixture_specification",
+      "bytes": 1360,
+      "sha256": "db8d3f7ac63623e000ee3352a196f8deff35b751aad4b9ce89443f995bbf08aa"
+    },
+    {
+      "path": "proof/reproduction/receipts/fable/index.json",
+      "role": "live_receipt_index",
+      "bytes": 601,
+      "sha256": "3a00803a7c2d4259a3eb8bba058703da3606955ee6efa0873ace4dc8a13ed505"
+    },
+    {
+      "path": "proof/reproduction/receipts/provider-free/index.json",
+      "role": "provider_free_receipt_index",
+      "bytes": 773,
+      "sha256": "ca94b39cb42da7e4aba65fac61af88d18aeca96fd1b3723344898c57a5489c6c"
+    },
+    {
+      "path": "proof/reproduction/run.sh",
+      "role": "one_command_verifier",
+      "bytes": 182,
+      "sha256": "e4166ad50eba986148ddd6d4c200e94a312c8524923318bba9d5c7347e828bbf"
+    },
+    {
+      "path": "proof/reproduction/test_verify.py",
+      "role": "bundle_tests",
+      "bytes": 3658,
+      "sha256": "77204eb917e19f9363a6ec897fbae7728e1621e295141d9b76140578bd035e58"
+    },
+    {
+      "path": "proof/reproduction/verify.py",
+      "role": "bundle_verifier",
+      "bytes": 15963,
+      "sha256": "514ab0833e5ea6277974bdb6b1dbecfe8a678fc0d9b4a5e1c9b4ce23378e0562"
+    },
+    {
+      "path": "site/proof.html",
+      "role": "public_claim_surface",
+      "bytes": 7176,
+      "sha256": "8e1eb5513c166843f8133d9e574582118f1b1ab2c6f2237e22856e0a785e39b2"
+    },
+    {
+      "path": "tests/product_50mb.rs",
+      "role": "provider_free_fixture_generator",
+      "bytes": 15751,
+      "sha256": "f7eff7e5796ede0e5353c745b1c8a8a3e48c68046394084efa361cfdfd530b2c"
+    },
+    {
+      "path": "tests/public_surface.rs",
+      "role": "public_claim_tests",
+      "bytes": 8709,
+      "sha256": "b72312116ccd47c17b7fa903a31f2606029123b2acb9093a9704a90e792e868b"
+    }
+  ],
+  "fixture_spec": "proof/reproduction/fixtures/spec.json",
+  "expected": "proof/reproduction/expected/invariants.json",
+  "indexes": {
+    "live_fable": "proof/reproduction/receipts/fable/index.json",
+    "provider_free": "proof/reproduction/receipts/provider-free/index.json"
+  },
+  "claim_boundary": {
+    "classification": "narrow first-party reproducible evidence",
+    "does_not_demonstrate": [
+      "independent third-party replication",
+      "future provider behavior or byte-identical live reruns",
+      "provider-free generated-input SHA-256 values under the v2 receipt",
+      "general model quality or arbitrary-input support",
+      "comparative superiority or statistical significance",
+      "production readiness, operating-system sandboxing, or legal compliance",
+      "a complete third-party verification capsule"
+    ]
+  }
+}
