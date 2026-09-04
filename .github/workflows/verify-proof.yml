@@ -17,6 +17,9 @@ on:
       - "docs/release/notice-audit-2026-09-04.md"
       - "release/verify-third-party-notices.py"
       - "release/test_verify_third_party_notices.py"
+      - "release/audit-third-party-notice-inputs.py"
+      - "release/test_audit_third_party_notice_inputs.py"
+      - "release/third-party-notice-inputs.json"
       - ".github/workflows/ci.yml"
       - ".github/workflows/release.yml"
       - ".github/workflows/verify-proof.yml"
@@ -36,6 +39,9 @@ on:
       - "docs/release/notice-audit-2026-09-04.md"
       - "release/verify-third-party-notices.py"
       - "release/test_verify_third_party_notices.py"
+      - "release/audit-third-party-notice-inputs.py"
+      - "release/test_audit_third_party_notice_inputs.py"
+      - "release/third-party-notice-inputs.json"
       - ".github/workflows/ci.yml"
       - ".github/workflows/release.yml"
       - ".github/workflows/verify-proof.yml"
@@ -59,6 +65,7 @@ jobs:
           python3 -m unittest
           proof/reproduction/test_verify.py
           release/test_verify_third_party_notices.py
+          release/test_audit_third_party_notice_inputs.py
       - name: Offline proof verification
         run: ./proof/reproduction/run.sh | tee "$RUNNER_TEMP/proof-verification.json"
       - name: Retain verifier output
