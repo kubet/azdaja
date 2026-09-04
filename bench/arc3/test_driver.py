@@ -65,6 +65,65 @@ class DriverUnitTests(unittest.TestCase):
             with self.assertRaisesRegex(DRIVER.GateError, "action cap"):
                 DRIVER.verify_manifest(path)
 
+    def test_arc_v2_source_manifest_and_identity_mutations_fail_closed(self) -> None:
+        source_manifest = HERE / "arc-v2-local-custody-manifest.json"
+        source_sidecar = source_manifest.with_suffix(".sha256")
+        DRIVER.verify_manifest(source_manifest)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path = root / source_manifest.name
+            sidecar_path = manifest_path.with_suffix(".sha256")
+            original_manifest = source_manifest.read_bytes()
+            manifest_path.write_bytes(original_manifest)
+            sidecar_path.write_bytes(source_sidecar.read_bytes())
+
+            mutated_manifest = bytearray(original_manifest)
+            mutation_offset = mutated_manifest.index(b'"model": "sonnet"')
+            mutated_manifest[mutation_offset] ^= 1
+            manifest_path.write_bytes(mutated_manifest)
+            with self.assertRaises(DRIVER.GateError):
+                DRIVER.verify_manifest(manifest_path)
+
+            changed_identity = json.loads(original_manifest)
+            changed_identity["owner_only_evidence"]["source_commit"] = "0" * 40
+            changed_identity_bytes = (
+                json.dumps(changed_identity, indent=2, sort_keys=False) + "\n"
+            ).encode()
+            manifest_path.write_bytes(changed_identity_bytes)
+            sidecar_path.write_text(
+                f"{DRIVER.sha256_bytes(changed_identity_bytes)}  {manifest_path.name}\n",
+                encoding="ascii",
+            )
+            with self.assertRaises(DRIVER.GateError):
+                DRIVER.verify_manifest(manifest_path)
+
+            manifest_path.write_bytes(original_manifest)
+            sidecar_path.write_bytes(source_sidecar.read_bytes())
+            driver_source = (HERE / "driver.py").read_bytes()
+            mutated_driver_source = driver_source.replace(
+                b"Fail-closed", b"Fail.closed", 1
+            )
+            self.assertEqual(len(mutated_driver_source), len(driver_source))
+            self.assertEqual(
+                sum(left != right for left, right in zip(driver_source, mutated_driver_source)),
+                1,
+            )
+            copied_driver = root / "driver.py"
+            copied_driver.write_bytes(mutated_driver_source)
+            (root / "claude_lane.py").write_bytes((HERE / "claude_lane.py").read_bytes())
+            module_name = "arc3_driver_mutated_source"
+            spec = importlib.util.spec_from_file_location(module_name, copied_driver)
+            assert spec and spec.loader
+            mutated_driver = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = mutated_driver
+            try:
+                spec.loader.exec_module(mutated_driver)
+                with self.assertRaises(mutated_driver.GateError):
+                    mutated_driver.verify_manifest(manifest_path)
+            finally:
+                sys.modules.pop(module_name, None)
+
     def test_shadow_rhae_uses_weighting_square_and_cap(self) -> None:
         self.assertAlmostEqual(DRIVER.shadow_rhae([10, 20], [10]), 1.0 / 3.0)
         self.assertAlmostEqual(DRIVER.shadow_rhae([10, 20], [1]), 1.15 / 3.0)
