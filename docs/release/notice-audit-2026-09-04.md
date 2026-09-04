@@ -34,6 +34,21 @@ python3 release/audit-third-party-notice-inputs.py --check
 
 The current machine has all 191 required archives cached. Normal CI runs the cache-independent unit tests. It does not run the exact cross-target manifest check because the workflow does not yet explicitly fetch the complete three-target archive set before offline validation.
 
+## Mechanical reconciliation evidence
+
+`release/reconcile-third-party-notice.py` now compares the retained notice corpus with the current input manifest without editing either one. It proves that the historical 156-row inventory plus the 35-row additive inventory contain exactly the current 191 package identities and license declarations. It also checks all 314 current named legal-file input records, reduces them to 126 unique digests, and requires an exact reviewed-text heading for every digest in the notice corpus. All 13 manifest-only MIT exceptions must remain explicit, and the input manifest must be bound to the current `Cargo.lock`.
+
+The tracked `release/third-party-notice-reconciliation.json` is intentionally statused `inputs_compared_notice_binding_blocked`. It records the current and notice-bound lock hashes separately and states that it **does not authorize a notice binding or publication change**. The exact current-input legal-record commitment is SHA-256 `bcb504f2d382f9ca492e3f338ba04923d7961e26428bed5d04fe0f6f9eacd1e0`.
+
+Reproduce the mechanical reconciliation with:
+
+```sh
+python3 -m unittest release/test_reconcile_third_party_notice.py
+python3 release/reconcile-third-party-notice.py --check
+```
+
+The tests reject inventory, legal hash, target count, archive checksum, claim-boundary, path, and symlink tampering. This closes the package-identity comparison gap and makes the named-legal-file input set explicit. It does not recompute retained legal-text body hashes from the Markdown corpus, prove package/path occurrence mapping for every historical row, reconcile every historical header or supplemental source occurrence, establish legal sufficiency, or authorize replacing the stale notice binding.
+
 ## Evidence audit
 
 - `Cargo.toml` is version `0.1.14`, declares `crossterm = "0.29"` and Ratatui `0.30` with the `crossterm` feature, and its package `include` allowlist contains `Cargo.toml`, `Cargo.lock`, `LICENSE`, `THIRD-PARTY-NOTICES.md`, README, source, and packaged assets.
@@ -41,7 +56,7 @@ The current machine has all 191 required archives cached. Normal CI runs the cac
 - `release/assemble-standalone-assets.sh` is version-pinned to `0.1.14`, requires three raw non-symlink binaries, byte-compares the copied `LICENSE` and notice, and emits `SHA256SUMS` for the three binaries plus `LICENSE` and the notice.
 - `cargo test --test notice_distribution --locked` previously passed all 12 tests. The suite covers notice front matter and target membership, reviewed license/font preservation, Cargo package allowlist parity, assembly and five-payload checksums, release provenance, public installer-target claims, and the Intel Darwin dependency delta. These tests verify notice identity and packaging gates, but they do not make the stale lockfile hash semantically correct.
 - The current lock and the lock bound by the 2026-08-24 additive audit contain the same 247 crates.io registry package name/version/source/checksum records: zero additions, zero removals, and zero checksum changes. This is strong continuity evidence, but it is not by itself permission to replace the stale top-level binding.
-- All 314 current named legal-file hashes occur in the reviewed notice corpus, and every current supported package name/version record appears explicitly in its historical or additive inventory. This narrows the remaining work to reviewed reconciliation and verification. It does not turn the fragmented historical/additive document into a machine-proven current notice automatically.
+- All 314 current named legal-file input records reduce to 126 unique digests, and every digest has an exact reviewed-text heading in the retained notice corpus. Every current supported package name/version/license record appears exactly once across the historical or additive inventory. The tracked comparison audit machine-checks that narrow relationship. It does not recompute the retained Markdown body bytes, prove every historical package/path occurrence mapping, or turn the fragmented historical/additive document into a legally reviewed current notice automatically.
 
 ## Decision
 
@@ -51,12 +66,12 @@ No package, lockfile, notice corpus, release asset, or publication state was cha
 
 ## Safe claim boundary
 
-Allowed: the current tracked notice is byte-authentic to the assembler's reviewed notice identity; it has v0.1.14 three-target front matter; the package include list and assembler preserve the reviewed notice and license bytes; the current 191-record source-input inventory is reproducible from checksum-verified locked archives; and the focused notice input tests and exact manifest check pass.
+Allowed: the current tracked notice is byte-authentic to the assembler's reviewed notice identity; it has v0.1.14 three-target front matter; the package include list and assembler preserve the reviewed notice and license bytes; the current 191-record source-input inventory is reproducible from checksum-verified locked archives; the 191 package identities and licenses exactly match the retained inventories; the 314 named legal-file input records reduce to 126 digests that each have a reviewed-text heading; and the focused input and comparison checks pass.
 
 Not allowed: claiming that the current notice is a complete current-lock dependency/license inventory, claiming that its historical 156-record section alone is the current closure, claiming that the stale top-level lock binding is correct, or claiming that archive checksums alone resolve semantic completeness. A checksum proves bytes and identity, not legal sufficiency or a unified notice claim.
 
 ## Fail-closed follow-up
 
-Reconcile or regenerate the notice from `release/third-party-notice-inputs.json` and reviewed exact legal text. Extend `release/verify-third-party-notices.py` to validate the reconciled 191-record closure, all three target memberships, manifest-only exceptions, exact legal occurrence commitments, and the current lock binding. Retain failures for stale candidate/version text, missing release targets, missing closure records, notice identity drift, or notice/provenance source-commit mismatch. Until that passes, keep semantic completeness and publication withheld.
+Use the tracked comparison result to review the remaining legal-text body bytes, historical package/path occurrence mapping, historical headers, supplemental source occurrences, Intel Darwin target presentation, and top-level claims. Only after that review should `release/verify-third-party-notices.py` be extended to accept a current binding. Retain failures for stale candidate/version text, missing release targets, missing closure records, notice identity drift, or notice/provenance source-commit mismatch. Until that passes, keep semantic completeness and publication withheld.
 
 The existing strict verifier compares the notice's single declared `Cargo.lock` SHA-256 binding with the current regular, non-symlink lockfile and fails closed on a missing, duplicate, malformed, or stale binding. The manual publication workflow runs it before any GitHub API or release action. On this checkout, failure with the documented stale-hash mismatch remains expected and desired.

@@ -85,6 +85,7 @@ jobs:
           python3 -m unittest
           release/test_verify_third_party_notices.py
           release/test_audit_third_party_notice_inputs.py
+          release/test_reconcile_third_party_notice.py
       - run: cargo test --all --locked -- --test-threads=1
       - run: cargo build --release --locked
       - name: Verify advertised Linux glibc floor

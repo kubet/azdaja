@@ -1,0 +1,19 @@
+{
+  "authorization": "does not authorize a notice binding or publication change",
+  "cargo_lock_sha256": "f2ff24a523f718f12c7a3a40fbf412cc91346bf7acbb517ae23b98a3d7c1bfb3",
+  "input_manifest_sha256": "a732655b8ccc2f8afa109ee1411ff3ba34107fe7392c9f7e29852899f2693e2c",
+  "legal_file_records_checked": 314,
+  "legal_record_commitment_sha256": "bcb504f2d382f9ca492e3f338ba04923d7961e26428bed5d04fe0f6f9eacd1e0",
+  "manifest_only_records_matched": 13,
+  "notice_binding_current": false,
+  "notice_bound_cargo_lock_sha256": "4e2419eaf2f1cf4818dca37950af56a7aedf6a079567357f4b7b72f8dd72066d",
+  "packages_inventory_matched": 191,
+  "schema": "azdaja.third_party_notice_reconciliation.v1",
+  "status": "inputs_compared_notice_binding_blocked",
+  "targets": [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu"
+  ],
+  "unique_legal_hash_headings_found": 126
+}
