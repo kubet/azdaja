@@ -6,7 +6,7 @@ Versioned, hash-bound evidence for claims made by this repository. This page sep
 
 ## Live Claude Fable product suite
 
-At source commit `2514d26a245a5d1c9f6bb1f351391b69a616c3b1`, the opt-in harness invoked the authenticated local Claude CLI once per scenario as:
+At source commit `2514d26a245a5d1c9f6bb1f351391b69a616c3b1`, the opt-in harness invoked the configured local Claude CLI once per scenario as:
 
 ```text
 claude -p <model-facing prompt> --model claude-fable-5 --output-format text --max-turns 1 --tools ""

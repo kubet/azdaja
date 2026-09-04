@@ -13,7 +13,7 @@ cd azdaja
 The verifier itself uses only Python 3.9+, Git, and files in this checkout. It performs no provider call, downloads nothing, and does not rewrite a receipt. A successful run prints one JSON object with this stable shape:
 
 ```json
-{"artifacts_verified": 25, "bundle_source_commit": "<40-hex-source-commit>", "classification": "narrow first-party reproducible evidence", "git_binding": true, "live_fable": {"exact_results": 3, "monty_executions": 3, "provider_calls": 3}, "provider_free": {"scenarios": 3, "surviving_sessions": 0}, "schema": "azdaja.first_party_proof_verification.v1"}
+{"artifacts_verified": 26, "bundle_source_commit": "<40-hex-source-commit>", "classification": "narrow first-party reproducible evidence", "git_binding": true, "live_fable": {"exact_results": 3, "monty_executions": 3, "provider_calls": 3}, "provider_free": {"scenarios": 3, "surviving_sessions": 0}, "schema": "azdaja.first_party_proof_verification.v1"}
 ```
 
 Shallow clones and source archives can lack the historical commits named by the receipts. If Git reports a shallow checkout, run `git fetch --unshallow` before verification. A nonzero exit means the evidence was not verified. Read the `proof verification failed:` diagnostic rather than treating a partial check as a pass.
@@ -25,7 +25,7 @@ Shallow clones and source archives can lack the historical commits named by the 
 - the existing live Fable verifier accepts its source-bound receipt;
 - the existing provider-free verifier accepts its receipt and captured raw log;
 - the expected exact answers, input sizes, bounded prompt sizes, call counts, Monty execution counts, cleanup state, and live fixture SHA-256 values match the receipts;
-- `README.md`, `BENCHMARKS.md`, and `site/proof.html` expose the receipt, manifest, runner, verifier, source commit, and recorded live timings;
+- `README.md`, `BENCHMARKS.md`, `site/index.html`, and `site/proof.html` expose the receipt, manifest, runner, verifier, source commit, and recorded live timings;
 - changed hashes, sizes, paths, schemas, totals, answers, fixture identities, or claim boundaries fail closed.
 
 The verifier requires a Git checkout that contains the commits named by the two receipts and the bundle manifest. It does not require network access.

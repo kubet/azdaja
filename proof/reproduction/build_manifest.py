@@ -33,6 +33,7 @@ ARTIFACT_ROLES = {
     "proof/reproduction/run.sh": "one_command_verifier",
     "proof/reproduction/test_verify.py": "bundle_tests",
     "proof/reproduction/verify.py": "bundle_verifier",
+    "site/index.html": "public_claim_surface",
     "site/proof.html": "public_claim_surface",
     "tests/product_50mb.rs": "provider_free_fixture_generator",
     "tests/public_surface.rs": "public_claim_tests",

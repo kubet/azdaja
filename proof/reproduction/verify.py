@@ -290,6 +290,7 @@ def validate_provider_free(
 def validate_public_surfaces(root: Path, live_receipt: dict[str, object]) -> None:
     readme = (root / "README.md").read_text()
     benchmarks = (root / "BENCHMARKS.md").read_text()
+    site = (root / "site/index.html").read_text()
     proof = (root / "site/proof.html").read_text()
     guide = (root / "proof/reproduction/README.md").read_text()
     notice_audit = (root / "docs/release/notice-audit-2026-09-04.md").read_text()
@@ -311,6 +312,13 @@ def validate_public_surfaces(root: Path, live_receipt: dict[str, object]) -> Non
     for claim in required_scope:
         if claim not in proof:
             raise ValueError(f"public proof scope is missing: {claim}")
+    required_home_scope = (
+        "These first-party harness assertions returned <strong>3/3 exact</strong>",
+        "This is not benchmark accuracy or independent replication.",
+    )
+    for claim in required_home_scope:
+        if claim not in site:
+            raise ValueError(f"public home scope is missing: {claim}")
     required_guide = (
         "git clone https://github.com/kubet/azdaja.git",
         "git fetch --unshallow",
