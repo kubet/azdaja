@@ -6518,7 +6518,6 @@ print('```python\nFINAL("repo-memory-ok")\n```')
     assert_eq!(blocked.status.code(), Some(0));
     assert!(blocked.stdout.is_empty());
     assert!(blocked.stderr.is_empty());
-    return;
     /*
         let challenge = blocked_text
             .split_whitespace()
