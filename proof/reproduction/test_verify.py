@@ -1,11 +1,13 @@
 import copy
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 HERE = Path(__file__).parent
+ROOT = HERE.parents[1]
 SPEC = importlib.util.spec_from_file_location("proof_bundle_verify", HERE / "verify.py")
 verify = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -86,6 +88,36 @@ class ProofBundleVerifierTests(unittest.TestCase):
             "receipts/provider-free/index.json",
         ):
             self.assertIsInstance(json.loads((HERE / relative).read_text()), dict)
+
+    def test_reviewer_command_prints_the_documented_result_shape(self):
+        completed = subprocess.run(
+            [str(HERE / "run.sh")],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        result = json.loads(completed.stdout)
+        self.assertEqual(completed.stderr, "")
+        self.assertEqual(result["schema"], "azdaja.first_party_proof_verification.v1")
+        self.assertRegex(result["bundle_source_commit"], r"^[0-9a-f]{40}$")
+
+        documented = copy.deepcopy(result)
+        documented["bundle_source_commit"] = "<40-hex-source-commit>"
+        expected_line = json.dumps(documented, sort_keys=True)
+        guide = (HERE / "README.md").read_text()
+        self.assertIn(f"```json\n{expected_line}\n```", guide)
+
+    def test_reviewer_clone_recipe_is_copy_paste_complete(self):
+        guide = (HERE / "README.md").read_text()
+        recipe = """```sh
+git clone https://github.com/kubet/azdaja.git
+cd azdaja
+./proof/reproduction/run.sh
+```"""
+        self.assertIn(recipe, guide)
+        self.assertIn("git fetch --unshallow", guide)
+        self.assertIn("A nonzero exit means the evidence was not verified.", guide)
 
 
 if __name__ == "__main__":
