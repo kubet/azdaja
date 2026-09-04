@@ -13,7 +13,7 @@ cd azdaja
 The verifier itself uses only Python 3.9+, Git, and files in this checkout. It performs no provider call, downloads nothing, and does not rewrite a receipt. A successful run prints one JSON object with this stable shape:
 
 ```json
-{"artifacts_verified": 30, "bundle_source_commit": "<40-hex-source-commit>", "classification": "narrow first-party reproducible evidence", "git_binding": true, "live_fable": {"exact_results": 3, "provider_calls": 3, "scenarios": 3}, "provider_free": {"scenarios": 3, "surviving_sessions": 0}, "schema": "azdaja.first_party_proof_verification.v1"}
+{"artifacts_verified": 33, "bundle_source_commit": "<40-hex-source-commit>", "classification": "narrow first-party reproducible evidence", "git_binding": true, "live_fable": {"exact_results": 3, "provider_calls": 3, "scenarios": 3}, "provider_free": {"scenarios": 3, "surviving_sessions": 0}, "schema": "azdaja.first_party_proof_verification.v1"}
 ```
 
 Shallow clones and source archives can lack the historical commits named by the receipts. If Git reports a shallow checkout, run `git fetch --unshallow` before verification. A nonzero exit means the evidence was not verified. Read the `proof verification failed:` diagnostic rather than treating a partial check as a pass.
@@ -40,6 +40,9 @@ The verifier requires a Git checkout that contains the commits named by the two 
 - `verify.py`: stdlib-only fail-closed verifier
 - `test_verify.py`: artifact tamper, path escape, schema, and current-bundle tests
 - `../../docs/release/notice-audit-2026-09-04.md`: exact third-party notice metadata limitation that prevents calling this a complete verification capsule
+- `../../release/third-party-notice-inputs.json`: current-lock, three-target source-input inventory with archive, manifest, and legal-file hashes
+- `../../release/audit-third-party-notice-inputs.py`: fail-closed input inventory reproducer
+- `../../release/test_audit_third_party_notice_inputs.py`: cache-independent parser, archive, path, identity, and checksum tests
 - `../../release/verify-third-party-notices.py`: fail-closed publication gate for the notice's current `Cargo.lock` binding
 
 ## Provenance map
