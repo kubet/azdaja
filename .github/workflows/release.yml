@@ -49,6 +49,7 @@ jobs:
           test -f "$promotion"
           test -f "$note"
           test -z "$(find "$release_dir" -type l -print -quit)"
+          python3 release/verify-third-party-notices.py
 
           gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$commit" \
             --event push --limit 20 \

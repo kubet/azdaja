@@ -31,3 +31,5 @@ Not allowed: claiming that the current notice is a complete or current dependenc
 ## Fail-closed follow-up
 
 Regenerate from the current `Cargo.lock` and supported-target closure using authoritative upstream package/license metadata. Add or retain tests that fail on a notice lock-hash mismatch, stale candidate/version text, missing release targets, missing closure records, notice identity drift, or a notice/provenance source-commit mismatch. Until that regeneration passes, keep the semantic completeness claim withheld.
+
+The repository now includes `release/verify-third-party-notices.py`. It compares the notice's single declared `Cargo.lock` SHA-256 binding with the current regular, non-symlink lockfile and fails closed on a missing, duplicate, malformed, or stale binding. The main CI job runs its isolated unit tests, and the manual publication workflow runs the strict verifier before any GitHub API or release action. On the current checkout, the strict command is expected to fail with the exact stale-hash mismatch documented above. This gate does not regenerate or validate the dependency/license closure by itself.

@@ -476,6 +476,7 @@ fn release_publication_is_manual_exact_tag_nonoverwriting_and_attested() {
     assert!(workflow.contains(
         "test \"$(sed -n '/^\\[package\\]$/,/^\\[/ s/^version = \"\\(.*\\)\"$/\\1/p' Cargo.toml)\" = \"$version\""
     ));
+    assert!(workflow.contains("python3 release/verify-third-party-notices.py"));
     assert!(workflow.contains("promotion=\"$release_dir/PROVENANCE.json\""));
     assert!(workflow.contains("source_commit\"] != commit"));
     assert!(workflow.contains("actions/runs/$source_run_id"));

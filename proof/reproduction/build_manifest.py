@@ -11,6 +11,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACT_ROLES = {
+    ".github/workflows/ci.yml": "ci_verifier",
+    ".github/workflows/release.yml": "publication_gate",
     ".github/workflows/verify-proof.yml": "ci_verifier",
     "BENCHMARKS.md": "public_claim_surface",
     "README.md": "public_claim_surface",
@@ -33,6 +35,8 @@ ARTIFACT_ROLES = {
     "proof/reproduction/run.sh": "one_command_verifier",
     "proof/reproduction/test_verify.py": "bundle_tests",
     "proof/reproduction/verify.py": "bundle_verifier",
+    "release/test_verify_third_party_notices.py": "notice_verifier_tests",
+    "release/verify-third-party-notices.py": "notice_provenance_gate",
     "site/index.html": "public_claim_surface",
     "site/proof.html": "public_claim_surface",
     "tests/product_50mb.rs": "provider_free_fixture_generator",

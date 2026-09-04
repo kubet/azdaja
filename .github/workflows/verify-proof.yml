@@ -15,6 +15,10 @@ on:
       - "site/index.html"
       - "site/proof.html"
       - "docs/release/notice-audit-2026-09-04.md"
+      - "release/verify-third-party-notices.py"
+      - "release/test_verify_third_party_notices.py"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/release.yml"
       - ".github/workflows/verify-proof.yml"
   pull_request:
     paths:
@@ -30,6 +34,10 @@ on:
       - "site/index.html"
       - "site/proof.html"
       - "docs/release/notice-audit-2026-09-04.md"
+      - "release/verify-third-party-notices.py"
+      - "release/test_verify_third_party_notices.py"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/release.yml"
       - ".github/workflows/verify-proof.yml"
   workflow_dispatch:
 
@@ -47,7 +55,10 @@ jobs:
         with:
           python-version: "3.9"
       - name: Unit tests
-        run: python3 -m unittest proof/reproduction/test_verify.py
+        run: >-
+          python3 -m unittest
+          proof/reproduction/test_verify.py
+          release/test_verify_third_party_notices.py
       - name: Offline proof verification
         run: ./proof/reproduction/run.sh | tee "$RUNNER_TEMP/proof-verification.json"
       - name: Retain verifier output
