@@ -1,14 +1,14 @@
 {
   "schema": "azdaja.first_party_proof_bundle.v1",
   "bundle": "azdaja-first-party-proof",
-  "source_commit": "9c78337e1cf1b602924f93ffa33ba009e4d4c242",
+  "source_commit": "cc442345ef47cc62eb5d22b07a918eab9111766d",
   "hash_algorithm": "sha256",
   "artifacts": [
     {
       "path": ".github/workflows/ci.yml",
       "role": "ci_verifier",
-      "bytes": 21074,
-      "sha256": "4eca7d00fe5bfe7e7da8d04290cce62110b2e8fad780826682f0c34c5e0876db"
+      "bytes": 21129,
+      "sha256": "9112797f6f82b5ef472aef869e79c6c329c03053df0f60c0c818fff29286c31d"
     },
     {
       "path": ".github/workflows/release.yml",
@@ -19,8 +19,8 @@
     {
       "path": ".github/workflows/verify-proof.yml",
       "role": "ci_verifier",
-      "bytes": 2547,
-      "sha256": "b7f3deb750638cd61ce726101f16cae7c11a7de985086defcb7ffb6ab91d705e"
+      "bytes": 2926,
+      "sha256": "f7940135e967b6945479ff5c033cc68a4909b1b34a9192e4e7854dbdbc22b7ed"
     },
     {
       "path": "BENCHMARKS.md",
@@ -91,20 +91,20 @@
     {
       "path": "docs/release/notice-audit-2026-09-04.md",
       "role": "third_party_notice_limitation",
-      "bytes": 7612,
-      "sha256": "34a77eafd0a8545c836779bfd428c0893312b956dca03b9b44eef4b2a011f0eb"
+      "bytes": 9722,
+      "sha256": "3535619d73089ff08add8a406efc55600df1560771e6a88c5d077bd1bb99e162"
     },
     {
       "path": "proof/reproduction/README.md",
       "role": "bundle_documentation",
-      "bytes": 5774,
-      "sha256": "c13f70eec484ce204d31b1ae952c7bf03d0a24f4e5742ef28759a5517635ff28"
+      "bytes": 6256,
+      "sha256": "132e40e005f7674ecf2e0ffa461e19037600c8dddbf29dd6cb43eb7f1c90758c"
     },
     {
       "path": "proof/reproduction/build_manifest.py",
       "role": "manifest_builder",
-      "bytes": 4958,
-      "sha256": "691e1d416056061fd5a59fd00c3539ed58351b99911d8f2ddffb353d717ef18a"
+      "bytes": 5207,
+      "sha256": "2bfb01b905994f139c577c14b555d25095ef68293f3948842140736774b3c9dd"
     },
     {
       "path": "proof/reproduction/expected/invariants.json",
@@ -155,10 +155,22 @@
       "sha256": "d43f6c824d6bfa073973092615962de1651e28c4038c74d037be9dfdd119556c"
     },
     {
+      "path": "release/reconcile-third-party-notice.py",
+      "role": "notice_reconciliation_auditor",
+      "bytes": 15660,
+      "sha256": "d67efc0133bfe9ad4a6fbc787923845f027a4696b520d40c99fd8b14ff6f04ea"
+    },
+    {
       "path": "release/test_audit_third_party_notice_inputs.py",
       "role": "notice_input_audit_tests",
       "bytes": 6542,
       "sha256": "00437adca448003ed645cc6b20acf7155ee051c0d5fcad2edcc86030c95f713a"
+    },
+    {
+      "path": "release/test_reconcile_third_party_notice.py",
+      "role": "notice_reconciliation_tests",
+      "bytes": 5604,
+      "sha256": "36e4f25d279750d51e80cc7cdc909c2f94e0e3ad125c6e9640629d56c766fb81"
     },
     {
       "path": "release/test_verify_third_party_notices.py",
@@ -171,6 +183,12 @@
       "role": "notice_input_manifest",
       "bytes": 168138,
       "sha256": "a732655b8ccc2f8afa109ee1411ff3ba34107fe7392c9f7e29852899f2693e2c"
+    },
+    {
+      "path": "release/third-party-notice-reconciliation.json",
+      "role": "notice_reconciliation_result",
+      "bytes": 887,
+      "sha256": "8e5e81fb5575fe83377d8f034f00b37bf9604486452552d62f96b6c5bc3540ec"
     },
     {
       "path": "release/verify-third-party-notices.py",
