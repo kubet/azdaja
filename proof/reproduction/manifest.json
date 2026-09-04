@@ -1,20 +1,20 @@
 {
   "schema": "azdaja.first_party_proof_bundle.v1",
   "bundle": "azdaja-first-party-proof",
-  "source_commit": "ea9b8cd838525ced44cca12f10f5b13348c07641",
+  "source_commit": "99e18d107dd146d79415bea6ba267e32dfe1402a",
   "hash_algorithm": "sha256",
   "artifacts": [
     {
       "path": ".github/workflows/verify-proof.yml",
       "role": "ci_verifier",
-      "bytes": 1689,
-      "sha256": "a7bed79bf1b587e8628755529b09fec4878739ec606b39dfc3bc40d00dcf27ec"
+      "bytes": 1741,
+      "sha256": "fc4ef159018d605fd2b050dafefdc11cd5e2d811fbdd314d025594203d8f0b0f"
     },
     {
       "path": "BENCHMARKS.md",
       "role": "public_claim_surface",
-      "bytes": 10148,
-      "sha256": "3cc083e4504509ae28bda9c9cf801ba401b276e6e6923d4cf6090f12efd4e561"
+      "bytes": 10145,
+      "sha256": "5b3e690a4af42abb20405ad7b0b7b7949385e2410b9fbe9d698ffddec9835bf0"
     },
     {
       "path": "README.md",
@@ -85,14 +85,14 @@
     {
       "path": "proof/reproduction/README.md",
       "role": "bundle_documentation",
-      "bytes": 5270,
-      "sha256": "ce446fa39c97b655436126ff0354f11be1669bbd6bfdfd66322c9ba5ca65f8f2"
+      "bytes": 5282,
+      "sha256": "43c55f3732c0e3233240db66e7cca4eb52c7c1b51998f852627c10bb3dc335ea"
     },
     {
       "path": "proof/reproduction/build_manifest.py",
       "role": "manifest_builder",
-      "bytes": 4433,
-      "sha256": "d91cd0a47b8ec21d15976b159c0ce92e2dfe88797a9d299aa4aa87096a664f31"
+      "bytes": 4480,
+      "sha256": "8ad7d240d07b6e73e5d68807be28193a9eb105df4fca18611d9c36ed42f93e53"
     },
     {
       "path": "proof/reproduction/expected/invariants.json",
@@ -133,14 +133,20 @@
     {
       "path": "proof/reproduction/verify.py",
       "role": "bundle_verifier",
-      "bytes": 17315,
-      "sha256": "cdeecec2aec35968983d97567b842058f58af6d837265631a145f6eb0b7a1e0b"
+      "bytes": 17692,
+      "sha256": "187b8e6b97ee144d6ced3256bfdb4b63fe789ee2b7a4b2add66efe9005c716b7"
+    },
+    {
+      "path": "site/index.html",
+      "role": "public_claim_surface",
+      "bytes": 3646,
+      "sha256": "5be4c8fcd30b14e3bb25806e854bb57c81920787157dbd514f907f58b4f4cb8d"
     },
     {
       "path": "site/proof.html",
       "role": "public_claim_surface",
-      "bytes": 8884,
-      "sha256": "2191ccd44cc1b0f40c8026fa80a02ccfb1725ce7ffa3ddbb167c7c8e91cf1d79"
+      "bytes": 8889,
+      "sha256": "eb2e039156087ce472fd2e5a278ed4f13326970b68f37274a237196be858cedb"
     },
     {
       "path": "tests/product_50mb.rs",
