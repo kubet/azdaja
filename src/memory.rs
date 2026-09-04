@@ -1,4 +1,6 @@
 use anyhow::{Context, Result, bail};
+mod recall;
+pub use recall::{MemoryRecallReport, RecallBacklink, RecallItem, recall_at, recall_current};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,

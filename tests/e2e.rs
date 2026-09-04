@@ -9222,7 +9222,10 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
             "uninstall",
             "Usage: az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]",
         ),
-        ("memory", "Usage: az memory <add|list|show> [--global]"),
+        (
+            "memory",
+            "Usage: az memory <add|list|show|recall> [--global]",
+        ),
         ("help", "Usage: az help [command]"),
     ];
     let bare = format!(

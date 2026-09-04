@@ -186,7 +186,10 @@ const COMMAND_USAGES: [(&str, &str); 13] = [
         "uninstall",
         "Usage: az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]",
     ),
-    ("memory", "Usage: az memory <add|list|show> [--global]"),
+    (
+        "memory",
+        "Usage: az memory <add|list|show|recall> [--global]",
+    ),
     ("help", "Usage: az help [command]"),
 ];
 
@@ -554,7 +557,7 @@ fn memory_cmd(args: &[String]) -> Result<bool> {
     {
         exact(args, 2, "memory")?;
         println!(
-            "Usage: az memory <add|list|show> [--global]\n\
+            "Usage: az memory <add|list|show|recall> [--global]\n\
              Add: az memory add <decision|observation|failure|hypothesis|disagreement> <text> [--tag <tag>] [--link <relation:id>] [--global]\n\
              List: az memory list [--kind <decision|observation|failure|hypothesis|disagreement>] [--global]\n\
              Show: az memory show <id> [--global]\n\
@@ -618,6 +621,14 @@ fn memory_cmd(args: &[String]) -> Result<bool> {
                     );
                 }
             }
+        }
+        Some("recall") => {
+            if args.len() < 3 || args.len() > 4 {
+                bail!("Usage: az memory recall <query> [--global]");
+            }
+            let global = memory_global_flag(args, 3)?;
+            let report = azdaja::memory::recall_current(global, &args[2])?;
+            println!("{}", serde_json::to_string(&report)?);
         }
         Some("show") => {
             if args.len() < 3 || args.len() > 4 {

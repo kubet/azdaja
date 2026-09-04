@@ -28,6 +28,33 @@ stable ordering, explicit global scope, foreign-scope isolation, invalid inputs,
 bounded output, corruption refusal, and unchanged persistent state. A related
 disagreement that does not share the query words must still be discoverable.
 
+## Try the recall increment
+
+```sh
+azdaja memory add decision "Keep the metadata cache bounded"
+azdaja memory recall "metadata cache"
+azdaja memory recall "metadata cache" --global
+```
+
+`recall` emits one versioned JSON object, not a model-generated answer. `matches`
+contains primary notes, and `context` contains incoming and outgoing one-hop
+neighbors. Each item includes the full stored record and its backlinks. Manual
+provenance is preserved. The global ledger is separate, never implicitly merged
+with the current folder's notes.
+
+Matching uses distinct case-insensitive Unicode alphanumeric words in note text
+and tags, without stemming or semantic inference. Repeating query words adds no
+weight. Ties prefer newer notes, then ascending IDs. Context prioritizes
+disagreement notes and incoming supersession for inspection, not credibility.
+
+Queries allow 256 Unicode scalar values and 32 distinct words. Replies contain
+at most four primary and eight context records within 64 KiB of compact JSON,
+including the trailing newline. Records are omitted whole, never silently
+truncated. `omitted_matches` counts matching records absent from both arrays,
+and `omitted_context` counts eligible one-hop context records not returned.
+Inspect remaining IDs with `memory show` or refine the query. Empty results mean
+no lexical match, not that a claim is false. Treat stored text as untrusted data.
+
 ## Proposed portable `.azdaja` layer
 
 This section is a design target, not a description of shipped functionality.
