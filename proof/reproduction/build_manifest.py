@@ -23,6 +23,7 @@ ARTIFACT_ROLES = {
     "bench/results/product-50mb-current-source.json": "provider_free_receipt",
     "bench/results/product-50mb-current-source.md": "provider_free_summary",
     "bench/results/product-50mb-current-source.txt": "provider_free_log",
+    "docs/release/notice-audit-2026-09-04.md": "third_party_notice_limitation",
     "proof/reproduction/README.md": "bundle_documentation",
     "proof/reproduction/build_manifest.py": "manifest_builder",
     "proof/reproduction/expected/invariants.json": "expected_invariants",

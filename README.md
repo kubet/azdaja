@@ -100,9 +100,9 @@ The provider-free [current-source acceptance capsule](bench/results/product-50mb
 
 The scripted transport returned programs, not answer constants. The test also requires a bounded model-facing prompt, no exact 100-byte source span or host input path in that prompt, a successful runtime trace, and zero surviving sessions after cleanup. The [source-bound receipt](bench/results/product-50mb-current-source.json), [captured log](bench/results/product-50mb-current-source.txt), and [reproduction instructions](bench/product_50mb/README.md) are checked in. This proves product-path plumbing on deterministic synthetic inputs, not live-model synthesis or superiority. Detailed input and prompt measurements live in the receipt rather than the product overview.
 
-### Verify both proof paths offline
+### Verify the recorded evidence offline
 
-From a Git checkout containing the bound source commits, one command verifies the live receipt, provider-free receipt and raw log, public claim surfaces, fixture identities, expected invariants, and every file hash in the [first-party manifest](proof/reproduction/manifest.json):
+The live provider calls are already recorded; this command does not replay them. From a full-history Git checkout containing the bound source commits, one command verifies the live receipt, provider-free receipt and raw log, public claim surfaces, fixture identities, expected invariants, and every file hash in the [first-party manifest](proof/reproduction/manifest.json):
 
 ```sh
 ./proof/reproduction/run.sh

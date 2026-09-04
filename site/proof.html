@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#e8ddc4">
-  <meta name="description" content="A source-bound live product-path receipt: Claude Fable synthesized three programs, Azdaja executed them locally, and all three results were exact.">
-  <meta property="og:title" content="Three exact results, one bounded interface">
-  <meta property="og:description" content="Claude Fable wrote the programs. Azdaja executed them against complete local inputs. The suite returned 3/3 exact.">
+  <meta name="description" content="Three exact first-party harness assertions from one synthetic live run per task, with source-bound receipts and offline verification.">
+  <meta property="og:title" content="Three exact first-party harness assertions">
+  <meta property="og:description" content="Claude Fable wrote three programs. Azdaja executed them against complete local inputs. Inspect the source-bound first-party evidence.">
   <meta property="og:type" content="article">
   <meta property="og:url" content="https://azdaja.dev/proof.html">
   <meta property="og:image" content="https://azdaja.dev/og-card.jpg">
   <meta name="twitter:card" content="summary_large_image">
-  <title>Three exact results, one bounded interface</title>
+  <title>Three exact first-party harness assertions</title>
   <link rel="canonical" href="https://azdaja.dev/proof.html">
   <link rel="icon" href="/icon-384.png" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -20,8 +20,8 @@
   {
     "@context": "https://schema.org",
     "@type": "TechArticle",
-    "headline": "Three exact results, one bounded interface",
-    "description": "A source-bound live product-path receipt: Claude Fable synthesized three programs, Azdaja executed them locally, and all three results were exact.",
+    "headline": "Three exact first-party harness assertions",
+    "description": "Three exact first-party harness assertions from one synthetic live run per task, with source-bound receipts and offline verification.",
     "url": "https://azdaja.dev/proof.html",
     "image": "https://azdaja.dev/og-card.jpg",
     "isPartOf": {
@@ -38,8 +38,8 @@
     <article class="saga proof-page">
       <header>
         <p class="eyebrow">A live product-path receipt</p>
-        <h1>Three exact results, one bounded interface</h1>
-        <p class="standfirst">Claude Fable synthesized the programs. Azdaja executed them locally against complete deterministic inputs. The suite returned <strong>3/3 exact</strong>.</p>
+        <h1>Three exact first-party harness assertions</h1>
+        <p class="standfirst">Claude Fable synthesized the programs. Azdaja executed them locally against complete deterministic inputs. One synthetic live run per task returned <strong>3/3 exact</strong>. This is not benchmark accuracy or independent replication.</p>
       </header>
 
       <div class="proof-grid" aria-label="Live suite totals">
@@ -66,6 +66,21 @@
       </section>
 
       <section>
+        <h2>Provenance map</h2>
+        <div class="proof-table-wrap">
+          <table class="proof-table">
+            <thead><tr><th>Evidence</th><th>Measurement source</th><th>Receipt or artifact SHA-256</th><th>Scope</th></tr></thead>
+            <tbody>
+              <tr><td>Live Fable suite</td><td><a href="https://github.com/kubet/azdaja/commit/2514d26a245a5d1c9f6bb1f351391b69a616c3b1"><code>2514d26</code></a></td><td><code>966b92bd3153c519bd3e4e9d62152a590ab848b77a2c84729d0c38cbaa86b508</code></td><td>One provider-generated observation per synthetic task</td></tr>
+              <tr><td>Provider-free acceptance</td><td><a href="https://github.com/kubet/azdaja/commit/fe91f98d4c49d5aca59c4911c12869c9a05d22ea"><code>fe91f98</code></a></td><td><code>ebcc0632ef458a90b90eb0b95ed3343df85e66d9ed22633173e2ce3fdb1ec08b</code></td><td>Deterministic scripted transport and retained raw log</td></tr>
+              <tr><td>Shared release binary</td><td>Recorded by both receipts</td><td><code>3111c880bcf2cbf738282bf826bd5649e175fa5a0efc0b3ace5b077425f0921a</code></td><td>Binary identity only, not a security attestation</td></tr>
+              <tr><td>Offline verifier bundle</td><td><a href="https://github.com/kubet/azdaja/blob/main/proof/reproduction/manifest.json"><code>manifest.json → source_commit</code></a></td><td>Every listed artifact is byte-counted and SHA-256-bound</td><td>Narrow first-party reproducible evidence</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
         <h2>What the receipt checks</h2>
         <ul class="proof-list">
           <li>Each scenario used exactly one authenticated Claude Fable call.</li>
@@ -78,8 +93,8 @@
       </section>
 
       <section>
-        <h2>Verify both proof paths offline</h2>
-        <p>The first-party proof bundle binds both receipts, the provider-free raw log, fixture specifications, deterministic invariants, verifier sources, and this public page into one SHA-256 manifest. The command performs no provider call, downloads nothing, and fails closed on changed files, claims, answers, totals, paths, or source bindings.</p>
+        <h2>Verify the recorded evidence offline</h2>
+        <p>The provider-generated live observation is already recorded. This command does not reproduce that model call. It verifies both retained receipts, the provider-free raw log, fixture specifications, deterministic invariants, verifier sources, and this public page against one SHA-256 manifest. It performs no provider call, downloads nothing, and fails closed on changed files, claims, answers, totals, paths, or source bindings.</p>
         <pre class="proof-command"><code>./proof/reproduction/run.sh</code></pre>
         <p class="proof-actions"><a href="https://github.com/kubet/azdaja/blob/main/proof/reproduction/manifest.json">Inspect the manifest</a><a href="https://github.com/kubet/azdaja/blob/main/proof/reproduction/verify.py">Read the verifier</a><a href="https://github.com/kubet/azdaja/blob/main/proof/reproduction/README.md">Reproduction guide</a></p>
         <p>This is narrow first-party reproducible evidence, not an independent replication or complete third-party verification capsule. Exact deterministic checks are separated from timestamped live observations, and the provider-free v2 input-digest limitation is explicit.</p>

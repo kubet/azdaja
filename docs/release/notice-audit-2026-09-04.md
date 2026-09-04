@@ -20,7 +20,7 @@ The historical blocker that led to the current front-matter repair was the then-
 
 Do not rewrite the notice corpus or infer a new dependency/license closure from package names. The current lockfile hash mismatch means a fully supported notice correction requires regenerating the dependency closure from the current locked supported-target graph and authoritative upstream package/license metadata, then updating the notice's bound hash and any affected records together. A one-line hash substitution would be unsafe because it could falsely bind unchanged notice records to a changed closure.
 
-The tracked change in this commit is only this audit note. No package, lockfile, notice corpus, release asset, or test source was changed. An unrelated pre-existing modification remains in `.github/workflows/verify-proof.yml` and was not staged or altered.
+No package, lockfile, notice corpus, release asset, or notice test source was changed by this audit.
 
 ## Safe claim boundary
 

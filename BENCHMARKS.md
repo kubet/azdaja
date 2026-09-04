@@ -45,9 +45,9 @@ All three cases exercised the release `azdaja solo` path. The scripted transport
 
 The capsule does not demonstrate live-model program synthesis, semantic quality on natural data, arbitrary-input support, comparison superiority, official benchmark status, or operating-system sandbox guarantees.
 
-## One-command first-party verification
+## One-command offline evidence verification
 
-The [source-bound manifest](proof/reproduction/manifest.json) joins the live receipt, provider-free receipt and raw log, fixture specifications, deterministic invariants, verifier sources, and public claim surfaces into one hash-checked inventory. Verify it without provider access or network calls:
+The live provider calls are timestamped observations and are not replayed by this command. The [source-bound manifest](proof/reproduction/manifest.json) joins the live receipt, provider-free receipt and raw log, fixture specifications, deterministic invariants, verifier sources, and public claim surfaces into one hash-checked inventory. Verify the recorded evidence without provider access or network calls:
 
 ```sh
 ./proof/reproduction/run.sh

@@ -1,12 +1,22 @@
 # First-party proof bundle
 
-This directory gives reviewers one offline command for checking Azdaja's current first-party evidence:
+This directory gives reviewers one offline command for checking Azdaja's recorded first-party evidence. The command validates a retained live receipt and a provider-free receipt. It does not replay the live provider calls.
+
+From a full-history clone of the published repository:
 
 ```sh
+git clone https://github.com/kubet/azdaja.git
+cd azdaja
 ./proof/reproduction/run.sh
 ```
 
-The command uses only Python 3.9+, Git, and files in this checkout. It performs no provider call, downloads nothing, and does not rewrite a receipt. A successful run prints one JSON object describing the verified artifact count, Git binding, live exact-result total, provider-call total, provider-free scenario total, and cleanup state.
+The verifier itself uses only Python 3.9+, Git, and files in this checkout. It performs no provider call, downloads nothing, and does not rewrite a receipt. A successful run prints one JSON object with this stable shape:
+
+```json
+{"artifacts_verified": 25, "bundle_source_commit": "<40-hex-source-commit>", "classification": "narrow first-party reproducible evidence", "git_binding": true, "live_fable": {"exact_results": 3, "monty_executions": 3, "provider_calls": 3}, "provider_free": {"scenarios": 3, "surviving_sessions": 0}, "schema": "azdaja.first_party_proof_verification.v1"}
+```
+
+Shallow clones and source archives can lack the historical commits named by the receipts. If Git reports a shallow checkout, run `git fetch --unshallow` before verification. A nonzero exit means the evidence was not verified. Read the `proof verification failed:` diagnostic rather than treating a partial check as a pass.
 
 ## What it verifies
 
@@ -29,6 +39,16 @@ The verifier requires a Git checkout that contains the commits named by the two 
 - `expected/invariants.json`: deterministic values checked across both proof paths
 - `verify.py`: stdlib-only fail-closed verifier
 - `test_verify.py`: artifact tamper, path escape, schema, and current-bundle tests
+- `../../docs/release/notice-audit-2026-09-04.md`: exact third-party notice metadata limitation that prevents calling this a complete verification capsule
+
+## Provenance map
+
+| Evidence | Measurement source | Retained receipt SHA-256 | Claim scope |
+|---|---|---|---|
+| Live Fable suite | `2514d26a245a5d1c9f6bb1f351391b69a616c3b1` | `966b92bd3153c519bd3e4e9d62152a590ab848b77a2c84729d0c38cbaa86b508` | One provider-generated observation per synthetic task |
+| Provider-free acceptance | `fe91f98d4c49d5aca59c4911c12869c9a05d22ea` | `ebcc0632ef458a90b90eb0b95ed3343df85e66d9ed22633173e2ce3fdb1ec08b` | Deterministic scripted transport with retained raw log |
+| Shared release binary | recorded by both receipts | `3111c880bcf2cbf738282bf826bd5649e175fa5a0efc0b3ace5b077425f0921a` | Binary identity only, not a security attestation |
+| Offline verifier bundle | `manifest.json` field `source_commit` | every listed artifact is byte-counted and SHA-256-bound | Narrow first-party reproducible evidence |
 
 ## Optional replays
 

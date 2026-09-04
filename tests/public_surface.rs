@@ -44,7 +44,10 @@ fn public_surface_leads_with_the_product_contract_not_capacity_marketing() {
     assert!(site.contains("<h1>Azdaja</h1>"));
     assert!(site.contains("A local evaluator for language-model context."));
     assert!(site.contains("Keep complete source material outside the root prompt."));
-    assert!(site.contains("The suite returned <strong>3/3 exact</strong>"));
+    assert!(
+        site.contains("These first-party harness assertions returned <strong>3/3 exact</strong>")
+    );
+    assert!(site.contains("This is not benchmark accuracy or independent replication."));
     assert!(site.contains("three provider calls, three local Monty executions, and zero recursive or semantic subcalls"));
     assert!(site.contains("href=\"/proof.html\""));
     assert!(
@@ -56,7 +59,10 @@ fn public_surface_leads_with_the_product_contract_not_capacity_marketing() {
     assert!(site.contains("THIRD-PARTY-NOTICES.md\">third-party notices</a>"));
 
     let proof = read_public_surface(root, "site/proof.html");
-    assert!(proof.contains("The suite returned <strong>3/3 exact</strong>"));
+    assert!(proof.contains("One synthetic live run per task returned <strong>3/3 exact</strong>"));
+    assert!(proof.contains("Three exact first-party harness assertions"));
+    assert!(proof.contains("This command does not reproduce that model call."));
+    assert!(proof.contains("Provenance map"));
     assert!(
         proof.contains("contains neither its expected answer nor its answer-specific constant")
     );
@@ -112,7 +118,11 @@ fn public_surface_leads_with_the_product_contract_not_capacity_marketing() {
     assert!(readme.contains("proof/reproduction/verify.py"));
     assert!(!readme.contains("site/demo-50mb.gif"));
 
-    assert!(benchmarks.contains("## One-command first-party verification"));
+    assert!(benchmarks.contains("## One-command offline evidence verification"));
+    assert!(
+        benchmarks
+            .contains("live provider calls are timestamped observations and are not replayed")
+    );
     assert!(benchmarks.contains("./proof/reproduction/run.sh"));
     assert!(benchmarks.contains("proof/reproduction/manifest.json"));
 
@@ -148,7 +158,7 @@ fn public_site_exposes_machine_readable_search_metadata() {
     for (relative, headline, url) in [
         (
             "site/proof.html",
-            "Three exact results, one bounded interface",
+            "Three exact first-party harness assertions",
             "https://azdaja.dev/proof.html",
         ),
         (

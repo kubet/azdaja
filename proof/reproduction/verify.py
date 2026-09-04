@@ -291,6 +291,8 @@ def validate_public_surfaces(root: Path, live_receipt: dict[str, object]) -> Non
     readme = (root / "README.md").read_text()
     benchmarks = (root / "BENCHMARKS.md").read_text()
     proof = (root / "site/proof.html").read_text()
+    guide = (root / "proof/reproduction/README.md").read_text()
+    notice_audit = (root / "docs/release/notice-audit-2026-09-04.md").read_text()
     for path in (
         "proof/reproduction/manifest.json",
         "proof/reproduction/run.sh",
@@ -301,6 +303,31 @@ def validate_public_surfaces(root: Path, live_receipt: dict[str, object]) -> Non
     source_commit = live_receipt["source"]["commit"]
     if source_commit not in benchmarks or source_commit not in proof:
         raise ValueError("public live source binding mismatch")
+    required_scope = (
+        "Three exact first-party harness assertions",
+        "This command does not reproduce that model call.",
+        "not benchmark accuracy or independent replication",
+    )
+    for claim in required_scope:
+        if claim not in proof:
+            raise ValueError(f"public proof scope is missing: {claim}")
+    required_guide = (
+        "git clone https://github.com/kubet/azdaja.git",
+        "git fetch --unshallow",
+        "A nonzero exit means the evidence was not verified.",
+    )
+    for instruction in required_guide:
+        if instruction not in guide:
+            raise ValueError(f"reproduction guide is missing: {instruction}")
+    if "exact remaining semantic metadata blocker" not in notice_audit:
+        raise ValueError("third-party notice limitation is missing")
+    for digest in (
+        "966b92bd3153c519bd3e4e9d62152a590ab848b77a2c84729d0c38cbaa86b508",
+        "ebcc0632ef458a90b90eb0b95ed3343df85e66d9ed22633173e2ce3fdb1ec08b",
+        "3111c880bcf2cbf738282bf826bd5649e175fa5a0efc0b3ace5b077425f0921a",
+    ):
+        if digest not in proof or digest not in guide:
+            raise ValueError(f"public provenance digest is missing: {digest}")
     for scenario in live_receipt["scenarios"]:
         displayed = f"{scenario['transport']['elapsed_seconds']:.3f} s"
         if displayed not in benchmarks or displayed not in proof:
