@@ -1,7 +1,7 @@
 {
   "schema": "azdaja.first_party_proof_bundle.v1",
   "bundle": "azdaja-first-party-proof",
-  "source_commit": "785939e654a3692a6d77ddaf9587c8904efca727",
+  "source_commit": "b0d74813fcc89bef14c586d89236a0066c01dda4",
   "hash_algorithm": "sha256",
   "artifacts": [
     {
@@ -139,8 +139,8 @@
     {
       "path": "proof/reproduction/test_verify.py",
       "role": "bundle_tests",
-      "bytes": 3658,
-      "sha256": "77204eb917e19f9363a6ec897fbae7728e1621e295141d9b76140578bd035e58"
+      "bytes": 4908,
+      "sha256": "6d34129e9bce2aa603f2ccd65bc96529efd83bce26d6fec2138de3daa003d00c"
     },
     {
       "path": "proof/reproduction/verify.py",
