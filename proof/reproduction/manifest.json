@@ -1,14 +1,26 @@
 {
   "schema": "azdaja.first_party_proof_bundle.v1",
   "bundle": "azdaja-first-party-proof",
-  "source_commit": "99e18d107dd146d79415bea6ba267e32dfe1402a",
+  "source_commit": "785939e654a3692a6d77ddaf9587c8904efca727",
   "hash_algorithm": "sha256",
   "artifacts": [
     {
+      "path": ".github/workflows/ci.yml",
+      "role": "ci_verifier",
+      "bytes": 20993,
+      "sha256": "31672b2f10484b546085f1f300f2afadf342effe2f0bee9bc92bbe705f4a5ebe"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "role": "publication_gate",
+      "bytes": 9245,
+      "sha256": "242a3b94780b6fec0087f586ff1a14f5c06b3ef7ca1f04f8198ed0cc82bf4ff8"
+    },
+    {
       "path": ".github/workflows/verify-proof.yml",
       "role": "ci_verifier",
-      "bytes": 1741,
-      "sha256": "fc4ef159018d605fd2b050dafefdc11cd5e2d811fbdd314d025594203d8f0b0f"
+      "bytes": 2169,
+      "sha256": "57da8afb880b1ffb0812ebd13c33ebcffd2653e8bfdc2ea6800ee61ab5bd360c"
     },
     {
       "path": "BENCHMARKS.md",
@@ -79,20 +91,20 @@
     {
       "path": "docs/release/notice-audit-2026-09-04.md",
       "role": "third_party_notice_limitation",
-      "bytes": 4165,
-      "sha256": "bb0b45191562e59409c4ef976a4abc2faac61d6def41885caf341dad5869bfc5"
+      "bytes": 4772,
+      "sha256": "22ba7259e6e5d2a4f58c4a06a4b1067b0239223465082ad1a83d71fc5a93a0af"
     },
     {
       "path": "proof/reproduction/README.md",
       "role": "bundle_documentation",
-      "bytes": 5282,
-      "sha256": "43c55f3732c0e3233240db66e7cca4eb52c7c1b51998f852627c10bb3dc335ea"
+      "bytes": 5406,
+      "sha256": "ef71ce6ea8047cc19d57d8d8acf20763642a6fec3845449f5b4da839f0dbb9fa"
     },
     {
       "path": "proof/reproduction/build_manifest.py",
       "role": "manifest_builder",
-      "bytes": 4480,
-      "sha256": "8ad7d240d07b6e73e5d68807be28193a9eb105df4fca18611d9c36ed42f93e53"
+      "bytes": 4730,
+      "sha256": "fac5569276cab2bbfc23b64efc2eff546cdf119305d1abef695209c2150e2f77"
     },
     {
       "path": "proof/reproduction/expected/invariants.json",
@@ -135,6 +147,18 @@
       "role": "bundle_verifier",
       "bytes": 17692,
       "sha256": "187b8e6b97ee144d6ced3256bfdb4b63fe789ee2b7a4b2add66efe9005c716b7"
+    },
+    {
+      "path": "release/test_verify_third_party_notices.py",
+      "role": "notice_verifier_tests",
+      "bytes": 2691,
+      "sha256": "056da5d8793459ba92fcfc6881c10c97fba9d5afbfc43ed97888b15bcf039b7c"
+    },
+    {
+      "path": "release/verify-third-party-notices.py",
+      "role": "notice_provenance_gate",
+      "bytes": 2169,
+      "sha256": "693152fe8b195bf217d3cfde7d148398bae5b851d5a6ec91386079aaf6c2ea60"
     },
     {
       "path": "site/index.html",
