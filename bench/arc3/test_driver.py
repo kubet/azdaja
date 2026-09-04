@@ -183,10 +183,14 @@ class DriverUnitTests(unittest.TestCase):
                 )
 
     def test_materialized_managed_skill_validation(self) -> None:
+        from unittest import mock
+
         manifest, _ = DRIVER.verify_manifest(HERE / "mini-pilot-manifest.json")
         treatment = json.loads(json.dumps(manifest["treatment_only"]))
+        fixture_root = HERE / "fixtures" / "mini-pilot-v0.1.1"
         with tempfile.TemporaryDirectory() as directory:
-            skill_root = Path(directory) / ".jcode" / "skills" / "azdaja"
+            root = Path(directory)
+            skill_root = root / ".jcode" / "skills" / "azdaja"
             skill_root.mkdir(parents=True)
             staged_binary = skill_root / "azdaja"
             staged_binary.write_bytes(b"pinned-azdaja-binary")
@@ -195,7 +199,7 @@ class DriverUnitTests(unittest.TestCase):
                 "darwin-arm64": digest,
                 "linux-x86_64": digest,
             }
-            source_skill = (HERE.parents[1] / "assets" / "SKILL.md").read_text()
+            source_skill = (fixture_root / "SKILL.md").read_text()
             installed_skill = (
                 source_skill
                 .replace("{{VERSION}}", treatment["azdaja_release"][1:])
@@ -203,10 +207,22 @@ class DriverUnitTests(unittest.TestCase):
             )
             (skill_root / "SKILL.md").write_text(installed_skill)
             (skill_root / "config.toml").write_bytes(
-                (HERE.parents[1] / "assets" / "config.toml").read_bytes()
+                (fixture_root / "config.toml").read_bytes()
             )
             (skill_root / ".azdaja-managed").write_text("{}")
-            DRIVER.validate_managed_skill(skill_root, treatment)
+            copied_driver = root / "bench" / "arc3" / "driver.py"
+            copied_driver.parent.mkdir(parents=True)
+            copied_driver.write_bytes((HERE / "driver.py").read_bytes())
+            copied_assets = root / "assets"
+            copied_assets.mkdir()
+            (copied_assets / "SKILL.md").write_bytes(
+                (fixture_root / "SKILL.md").read_bytes()
+            )
+            (copied_assets / "config.toml").write_bytes(
+                (fixture_root / "config.toml").read_bytes()
+            )
+            with mock.patch.object(DRIVER, "__file__", str(copied_driver)):
+                DRIVER.validate_managed_skill(skill_root, treatment)
 
 
     def test_v3_is_full_completion_bound_claude_lane_and_preserves_games(self) -> None:
