@@ -163,6 +163,18 @@ jobs:
           cmp LICENSE "$install_home/.local/share/azdaja/LICENSE"
           cmp THIRD-PARTY-NOTICES.md "$install_home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
 
+          # Refuse a green run that registered zero or unexpected ignored tests.
+          cargo +1.95.0 test --release --locked --test installed_project_memory \
+            -- --ignored --list > "$scratch/installed-artifact-tests"
+          grep -Fx 'installed_artifact_preserves_cross_home_handoff_and_relocation: test' "$scratch/installed-artifact-tests"
+          grep -Fx 'installed_artifact_refuses_disabled_writes_and_corrupt_reads_without_fallback: test' "$scratch/installed-artifact-tests"
+          test "$(grep -c ': test$' "$scratch/installed-artifact-tests")" -eq 2
+          # Exercise the installed bytes, never Cargo's test-built CLI substitute.
+          AZDAJA_INSTALLED_TEST_BINARY="$installed" PATH="$guard:$PATH" \
+            cargo +1.95.0 test --release --locked --test installed_project_memory \
+            -- --ignored --test-threads=1
+          test ! -e "$marker"
+
           jcode_binary="$install_home/.jcode/skills/azdaja/azdaja"
           jcode_config="$install_home/.jcode/config.toml"
           test -x "$jcode_binary"
@@ -178,6 +190,10 @@ jobs:
             "$scratch/jcode-doctor"
 
           repo="$scratch/handoff-repo"
+          # The cooperative gate is opt-in. Keep both hook and solo processes
+          # bound to the same explicit CI session, rather than host defaults.
+          export AZDAJA_JCODE_ACTIVATION=session
+          export JCODE_HOOK_SESSION_ID=source-install-ci
           mkdir -p "$repo/src"
           printf 'pub fn answer() -> u32 { 42 }\n' > "$repo/src/lib.rs"
           printf '# local installer handoff\n' > "$repo/README.md"
