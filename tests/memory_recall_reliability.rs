@@ -399,6 +399,97 @@ fn concurrent_utf8_writers_at_byte_capacity_preserve_history_and_smaller_write_r
     );
 }
 
+#[test]
+fn documented_handoff_preserves_nonmatching_disagreement_in_a_fresh_process() {
+    let guide = include_str!("../docs/agent-memory-handoff-walkthrough.md");
+    let hypothesis =
+        "handoffdemo: A bounded cache may reduce repeated parsing. Benchmark before adopting it.";
+    let disagreement =
+        "The trial used more memory. Inspect the benchmark before choosing a cache policy.";
+    assert!(guide.contains(&format!("az memory add hypothesis '{hypothesis}'")));
+    assert!(guide.contains(&format!(
+        "az memory add disagreement '{disagreement}' --link 'related-to:REPLACE_WITH_RECORD_ID'"
+    )));
+    assert_eq!(guide.matches("\naz memory recall handoffdemo\n").count(), 2);
+    assert!(!disagreement.contains("handoffdemo"));
+
+    let fixture = Fixture::new();
+    let added = fixture.run(&["memory", "add", "hypothesis", hypothesis]);
+    assert!(
+        added.status.success(),
+        "{}",
+        String::from_utf8_lossy(&added.stderr)
+    );
+    let first = fixture.run(&["memory", "recall", "handoffdemo"]);
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let first: Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(first["total_matches"], 1);
+    assert_eq!(first["matches"][0]["record"]["text"], hypothesis);
+    let id = first["matches"][0]["record"]["id"].as_str().unwrap();
+    let link = format!("related-to:{id}");
+    let added = fixture.run(&[
+        "memory",
+        "add",
+        "disagreement",
+        disagreement,
+        "--link",
+        &link,
+    ]);
+    assert!(
+        added.status.success(),
+        "{}",
+        String::from_utf8_lossy(&added.stderr)
+    );
+
+    let fresh = fixture.run(&["memory", "recall", "handoffdemo"]);
+    assert!(
+        fresh.status.success(),
+        "{}",
+        String::from_utf8_lossy(&fresh.stderr)
+    );
+    assert!(fresh.stdout.len() <= 64 * 1024);
+    let report: Value = serde_json::from_slice(&fresh.stdout).unwrap();
+    assert_eq!(report["method"], "lexical");
+    assert_eq!(report["scope"], first["scope"]);
+    assert_ne!(report["scope"], "global");
+    assert_eq!(report["total_matches"], 1);
+    assert_eq!(report["matches"].as_array().unwrap().len(), 1);
+    assert_eq!(report["context"].as_array().unwrap().len(), 1);
+    assert_eq!(report["omitted_matches"], 0);
+    assert_eq!(report["omitted_context"], 0);
+    assert_eq!(
+        report["matches"][0]["record"],
+        first["matches"][0]["record"]
+    );
+    assert_eq!(report["matches"][0]["record"]["kind"], "hypothesis");
+    assert_eq!(
+        report["matches"][0]["record"]["provenance"]["origin"],
+        "manual"
+    );
+    let context = &report["context"][0]["record"];
+    assert_eq!(context["text"], disagreement);
+    assert_eq!(context["kind"], "disagreement");
+    assert_eq!(context["provenance"]["origin"], "manual");
+    assert_ne!(context["id"], id);
+    assert_eq!(context["links"][0]["relation"], "related-to");
+    assert_eq!(context["links"][0]["target_id"], id);
+    assert!(
+        report["caveat"]
+            .as_str()
+            .unwrap()
+            .contains("not verified truth")
+    );
+    assert_eq!(
+        fixture.recall("handoffdemo")["total_matches"],
+        0,
+        "default-scoped demo notes must not leak into explicit global recall"
+    );
+}
+
 struct StopOnDrop(Arc<AtomicBool>);
 impl Drop for StopOnDrop {
     fn drop(&mut self) {
@@ -860,5 +951,120 @@ fn recall_recovers_after_writer_custody_release() {
     assert_eq!(fixture.recall("lockreadsnapshot")["total_matches"], 1);
     eprintln!(
         "writer_custody_contention readback_after_release=passed ledger=byte_identical recovery=passed"
+    );
+}
+
+#[test]
+fn global_recall_refuses_a_ledger_above_the_byte_limit_without_repairing_it() {
+    const LIMIT: usize = 512 * 1024;
+    let fixture = Fixture::new();
+    fixture.add("readbyteboundary retained evidence");
+    let ledger = fixture.ledger();
+    let original = fs::read(&ledger).unwrap();
+    let record: Value = serde_json::from_slice(&original).unwrap();
+    let mut bytes = original.clone();
+    assert_eq!(bytes.pop(), Some(b'\n'));
+    assert!(bytes.len() < LIMIT - 1);
+    // JSON whitespace changes the file size, not the valid record or its text.
+    bytes.resize(LIMIT - 1, b' ');
+    bytes.push(b'\n');
+    assert_eq!(bytes.len(), LIMIT);
+    assert_eq!(serde_json::from_slice::<Value>(&bytes).unwrap(), record);
+    fs::write(&ledger, &bytes).unwrap();
+    assert_eq!(fixture.recall("readbyteboundary")["total_matches"], 1);
+    assert_eq!(fs::read(&ledger).unwrap(), bytes);
+
+    bytes.insert(bytes.len() - 1, b' ');
+    assert_eq!(bytes.len(), LIMIT + 1);
+    assert_eq!(serde_json::from_slice::<Value>(&bytes).unwrap(), record);
+    fs::write(&ledger, &bytes).unwrap();
+    let output = fixture.run(&["memory", "recall", "readbyteboundary", "--global"]);
+    assert!(
+        !output.status.success(),
+        "reader accepted an oversized ledger"
+    );
+    assert!(output.stdout.is_empty());
+    assert!(!output.stderr.is_empty());
+    assert_eq!(
+        fs::read(&ledger).unwrap(),
+        bytes,
+        "recall repaired or truncated evidence"
+    );
+
+    fs::write(&ledger, &original).unwrap();
+    assert_eq!(fixture.recall("readbyteboundary")["total_matches"], 1);
+    assert_eq!(fs::read(&ledger).unwrap(), original);
+    eprintln!(
+        "read_byte_boundary exact_limit=accepted one_over=refused oversized_bytes=preserved restored_read=passed"
+    );
+}
+
+#[test]
+fn global_recall_refuses_a_ledger_above_the_record_limit_without_dropping_history() {
+    let fixture = Fixture::new();
+    for index in 0..256 {
+        fixture.add(&format!("readrecordseed{index:03}"));
+    }
+    let ledger = fixture.ledger();
+    let original = fs::read(&ledger).unwrap();
+    let records = std::str::from_utf8(&original)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(records.len(), 256);
+    assert_eq!(fixture.recall("readrecordseed255")["total_matches"], 1);
+
+    // Obtain the extra valid record from another real CLI store, not a guessed schema.
+    let extra_fixture = Fixture::new();
+    extra_fixture.add("readrecordextra");
+    let extra = fs::read(extra_fixture.ledger()).unwrap();
+    let extra_record: Value = serde_json::from_slice(&extra).unwrap();
+    assert!(
+        records
+            .iter()
+            .all(|record| record["id"] != extra_record["id"])
+    );
+    // Prove the imported record is accepted in this destination at the limit.
+    // Only the last original record separates this valid control from 257 records.
+    let mut at_limit = original
+        .split_inclusive(|byte| *byte == b'\n')
+        .take(255)
+        .flatten()
+        .copied()
+        .collect::<Vec<_>>();
+    at_limit.extend_from_slice(&extra);
+    assert_eq!(std::str::from_utf8(&at_limit).unwrap().lines().count(), 256);
+    fs::write(&ledger, &at_limit).unwrap();
+    let control = fixture.recall("readrecordextra");
+    assert_eq!(control["total_matches"], 1);
+    assert_eq!(control["matches"][0]["record"], extra_record);
+    assert_eq!(fs::read(&ledger).unwrap(), at_limit);
+    let mut enlarged = original.clone();
+    enlarged.extend_from_slice(&extra);
+    assert!(
+        enlarged.len() < 512 * 1024,
+        "fixture must isolate record count, not byte limit"
+    );
+    assert_eq!(std::str::from_utf8(&enlarged).unwrap().lines().count(), 257);
+    fs::write(&ledger, &enlarged).unwrap();
+    for query in ["readrecordseed255", "readrecordextra"] {
+        let output = fixture.run(&["memory", "recall", query, "--global"]);
+        assert!(!output.status.success(), "reader accepted too many records");
+        assert!(output.stdout.is_empty());
+        assert!(!output.stderr.is_empty());
+        assert_eq!(
+            fs::read(&ledger).unwrap(),
+            enlarged,
+            "recall dropped stored history"
+        );
+    }
+
+    fs::write(&ledger, &original).unwrap();
+    assert_eq!(fixture.recall("readrecordseed255")["total_matches"], 1);
+    assert_eq!(fixture.recall("readrecordextra")["total_matches"], 0);
+    assert_eq!(fs::read(&ledger).unwrap(), original);
+    eprintln!(
+        "read_record_boundary exact_limit=accepted one_over=refused all_257_records=preserved restored_read=passed"
     );
 }
