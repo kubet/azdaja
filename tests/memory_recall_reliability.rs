@@ -402,6 +402,9 @@ fn concurrent_utf8_writers_at_byte_capacity_preserve_history_and_smaller_write_r
 #[test]
 fn documented_handoff_preserves_nonmatching_disagreement_in_a_fresh_process() {
     let guide = include_str!("../docs/agent-memory-handoff-walkthrough.md");
+    assert!(include_str!("../README.md").contains(
+        "[Leave evidence for the next session](docs/agent-memory-handoff-walkthrough.md)"
+    ));
     let hypothesis =
         "handoffdemo: A bounded cache may reduce repeated parsing. Benchmark before adopting it.";
     let disagreement =

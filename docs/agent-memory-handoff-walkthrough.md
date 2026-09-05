@@ -56,4 +56,4 @@ Do not store credentials, personal contact details, whole transcripts, or guesse
 
 ## Acceptance check
 
-`documented_handoff_preserves_nonmatching_disagreement_in_a_fresh_process` in `tests/memory_recall_reliability.rs` checks the command text against this guide, invokes the actual CLI in isolated state, substitutes the returned ID, and verifies fresh-process recall plus global isolation. It tests command arguments and behavior, not a shell parser or a model's interpretation of the notes.
+`documented_handoff_preserves_nonmatching_disagreement_in_a_fresh_process` in `tests/memory_recall_reliability.rs` checks the README link and command text against this guide, invokes the actual CLI in isolated state, substitutes the returned ID, and verifies fresh-process recall plus global isolation. It tests command arguments and behavior, not a shell parser or a model's interpretation of the notes.

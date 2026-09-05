@@ -4,6 +4,8 @@
 
 Azdaja keeps complete source material in a local evaluator and gives language models a bounded working surface for code, semantic calls, and one validated result.
 
+**Agent memory (development branch):** [Leave evidence for the next session](docs/agent-memory-handoff-walkthrough.md).
+
 [Install](#install) · [Use](#use) · [Live proof](https://azdaja.dev/proof.html) · [Receipts](BENCHMARKS.md) · [Releases](https://github.com/kubet/azdaja/releases)
 
 ## What it is
