@@ -163,6 +163,7 @@ fn cargo_package_list_matches_the_reviewed_file_allowlist() {
             "src/main.rs",
             "src/memory/project.rs",
             "src/memory/recall.rs",
+            "src/memory/transfer.rs",
             "src/memory.rs",
             "src/observability.rs",
             "src/repo_source.rs",

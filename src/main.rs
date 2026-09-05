@@ -188,7 +188,7 @@ const COMMAND_USAGES: [(&str, &str); 13] = [
     ),
     (
         "memory",
-        "Usage: az memory <add|list|show|recall> [--global]",
+        "Usage: az memory <add|list|show|recall|export> [--global]",
     ),
     ("help", "Usage: az help [command]"),
 ];
@@ -557,10 +557,12 @@ fn memory_cmd(args: &[String]) -> Result<bool> {
     {
         exact(args, 2, "memory")?;
         println!(
-            "Usage: az memory <add|list|show|recall> [--global]\n\
+            "Usage: az memory <add|list|show|recall|export> [--global]\n\
              Add: az memory add <decision|observation|failure|hypothesis|disagreement> <text> [--tag <tag>] [--link <relation:id>] [--global]\n\
              List: az memory list [--kind <decision|observation|failure|hypothesis|disagreement>] [--global]\n\
              Show: az memory show <id> [--global]\n\
+             Export: az memory export <id>... [--with-context] [--global]\n\
+             Export refuses incomplete linked evidence. --with-context includes additional connected notes; review all records before sharing.\n\
              Records are explicit, local-first, bounded, and never injected into a model automatically."
         );
         return Ok(true);
@@ -621,6 +623,23 @@ fn memory_cmd(args: &[String]) -> Result<bool> {
                     );
                 }
             }
+        }
+        Some("export") => {
+            let mut global = false;
+            let mut with_context = false;
+            let mut ids = Vec::new();
+            for argument in &args[2..] {
+                match argument.as_str() {
+                    "--global" if !global => global = true,
+                    "--with-context" if !with_context => with_context = true,
+                    value if !value.starts_with('-') => ids.push(argument.clone()),
+                    _ => bail!("Usage: az memory export <id>... [--with-context] [--global]"),
+                }
+            }
+            println!(
+                "{}",
+                azdaja::memory::export_current(global, &ids, with_context)?
+            );
         }
         Some("recall") => {
             if args.len() < 3 || args.len() > 4 {

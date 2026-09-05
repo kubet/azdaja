@@ -9224,7 +9224,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
         ),
         (
             "memory",
-            "Usage: az memory <add|list|show|recall> [--global]",
+            "Usage: az memory <add|list|show|recall|export> [--global]",
         ),
         ("help", "Usage: az help [command]"),
     ];

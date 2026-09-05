@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
 mod project;
 mod recall;
+mod transfer;
 pub use recall::{MemoryRecallReport, RecallBacklink, RecallItem, recall_at, recall_current};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -10,6 +11,7 @@ use std::{
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
+pub use transfer::export_current;
 
 const SCHEMA_VERSION: u32 = 1;
 const MEMORY_DIR: &str = "memory";
