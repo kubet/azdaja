@@ -177,6 +177,228 @@ impl Drop for Fixture {
     }
 }
 
+fn race_adds(fixture: &Fixture, texts: &[String]) -> Vec<(String, Output)> {
+    assert!(!texts.is_empty() && texts.len() <= 32);
+    let start = Arc::new(AtomicBool::new(false));
+    thread::scope(|scope| {
+        // Release waiting workers even if thread creation or readiness fails.
+        let release = StopOnDrop(start.clone());
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let handles = texts
+            .iter()
+            .map(|text| {
+                let start = start.clone();
+                let ready_tx = ready_tx.clone();
+                scope.spawn(move || {
+                    ready_tx.send(()).unwrap();
+                    let deadline = Instant::now() + Duration::from_secs(30);
+                    while !start.load(Ordering::Acquire) {
+                        assert!(Instant::now() < deadline, "writer start gate timed out");
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                    let output = fixture.run(&["memory", "add", "observation", text, "--global"]);
+                    (text.clone(), output)
+                })
+            })
+            .collect::<Vec<_>>();
+        for _ in texts {
+            ready_rx
+                .recv_timeout(Duration::from_secs(30))
+                .expect("writer did not reach the start gate");
+        }
+        drop(release);
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect()
+    })
+}
+
+fn ledger_records(fixture: &Fixture) -> Vec<Value> {
+    let bytes = fs::read(fixture.ledger()).unwrap();
+    assert!(bytes.len() <= 512 * 1024);
+    assert!(bytes.ends_with(b"\n"));
+    let records = std::str::from_utf8(&bytes)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    let ids = records
+        .iter()
+        .map(|record| record["id"].as_str().unwrap())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        ids.len(),
+        records.len(),
+        "concurrent writes reused a record ID"
+    );
+    records
+}
+
+#[test]
+fn concurrent_first_use_initializes_one_store_without_losing_successful_notes() {
+    let fixture = Fixture::new();
+    assert!(!fixture.0.join("state").exists());
+    let texts = (0..12)
+        .map(|index| format!("coldwriter{index:03}"))
+        .collect::<Vec<_>>();
+    let outcomes = race_adds(&fixture, &texts);
+    for (text, output) in &outcomes {
+        assert!(
+            output.status.success(),
+            "cold add {text} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let records = ledger_records(&fixture);
+    assert_eq!(records.len(), texts.len());
+    let stored = records
+        .iter()
+        .map(|record| record["text"].as_str().unwrap())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(stored, texts.iter().map(String::as_str).collect());
+    let before = fs::read(fixture.ledger()).unwrap();
+    for text in &texts {
+        let report = fixture.recall(text);
+        assert_eq!(report["total_matches"], 1);
+        assert_eq!(report["matches"][0]["record"]["text"], text.as_str());
+    }
+    assert_eq!(fs::read(fixture.ledger()).unwrap(), before);
+    eprintln!(
+        "cold_start concurrent_writers=12 acknowledged=12 unique_persisted=12 fresh_recall=passed"
+    );
+}
+
+#[test]
+fn concurrent_writers_at_record_capacity_preserve_exactly_the_acknowledged_notes() {
+    let fixture = Fixture::new();
+    for index in 0..248 {
+        fixture.add(&format!("capacityseed{index:03}"));
+    }
+    let before = ledger_records(&fixture);
+    let texts = (0..24)
+        .map(|index| format!("capacityracer{index:03}"))
+        .collect::<Vec<_>>();
+    let outcomes = race_adds(&fixture, &texts);
+    let accepted = outcomes
+        .iter()
+        .filter(|(_, output)| output.status.success())
+        .count();
+    assert_eq!(
+        accepted, 8,
+        "eight available record slots must admit eight valid writes"
+    );
+    let after = ledger_records(&fixture);
+    assert_eq!(after.len(), 256);
+    for record in &before {
+        assert!(
+            after.contains(record),
+            "capacity contention changed pre-existing history"
+        );
+    }
+    let snapshot = fs::read(fixture.ledger()).unwrap();
+    for (text, output) in &outcomes {
+        let report = fixture.recall(text);
+        if output.status.success() {
+            assert_eq!(
+                report["total_matches"], 1,
+                "acknowledged note was lost: {text}"
+            );
+            assert_eq!(report["matches"][0]["record"]["text"], text.as_str());
+        } else {
+            assert!(output.stdout.is_empty());
+            assert!(!output.stderr.is_empty());
+            assert_eq!(
+                report["total_matches"], 0,
+                "failed add committed a note: {text}"
+            );
+        }
+    }
+    assert_eq!(fs::read(fixture.ledger()).unwrap(), snapshot);
+    eprintln!(
+        "record_capacity_race writers=24 free_slots=8 accepted=8 rejected=16 final_records=256 prior_records=unchanged"
+    );
+}
+
+#[test]
+fn concurrent_utf8_writers_at_byte_capacity_preserve_history_and_smaller_write_recovery() {
+    let fixture = Fixture::new();
+    for index in 0..30 {
+        fixture.add(&format!("byteseed{index:03} {}", "🦀".repeat(4080)));
+    }
+    let before = ledger_records(&fixture);
+    // Calibrate framing against the real writer, then substitute a contender's
+    // text into a stored record so the capacity precondition includes metadata.
+    assert_eq!(
+        fs::metadata(fixture.ledger()).unwrap().len() as usize,
+        before
+            .iter()
+            .map(|record| serde_json::to_vec(record).unwrap().len() + 1)
+            .sum::<usize>()
+    );
+    let mut candidate = before[0].clone();
+    candidate["text"] = Value::String(format!("byteracer000 {}", "🦀".repeat(4080)));
+    let candidate_bytes = serde_json::to_vec(&candidate).unwrap().len() + 1;
+    let remaining = 512 * 1024 - fs::metadata(fixture.ledger()).unwrap().len() as usize;
+    assert!(
+        remaining >= candidate_bytes && remaining < 2 * candidate_bytes,
+        "fixture must leave room for exactly one large record, remaining={remaining}"
+    );
+    let texts = (0..12)
+        .map(|index| format!("byteracer{index:03} {}", "🦀".repeat(4080)))
+        .collect::<Vec<_>>();
+    assert!(texts.iter().all(|text| text.chars().count() <= 4096));
+    let outcomes = race_adds(&fixture, &texts);
+    assert_eq!(
+        outcomes
+            .iter()
+            .filter(|(_, output)| output.status.success())
+            .count(),
+        1
+    );
+    let after = ledger_records(&fixture);
+    assert_eq!(after.len(), 31);
+    let inserted = after
+        .iter()
+        .find(|record| !before.contains(record))
+        .unwrap();
+    assert_eq!(
+        serde_json::to_vec(inserted).unwrap().len() + 1,
+        candidate_bytes,
+        "the admitted record must match the fixture's encoded-size precondition"
+    );
+    for record in &before {
+        assert!(
+            after.contains(record),
+            "byte-capacity contention changed pre-existing history"
+        );
+    }
+    for (text, output) in &outcomes {
+        let report = fixture.recall(text.split_whitespace().next().unwrap());
+        if output.status.success() {
+            assert_eq!(report["total_matches"], 1);
+            assert_eq!(report["matches"][0]["record"]["text"], text.as_str());
+        } else {
+            assert!(output.stdout.is_empty());
+            assert!(!output.stderr.is_empty());
+            assert_eq!(report["total_matches"], 0);
+        }
+    }
+    fixture.add("byteracerecovery");
+    assert_eq!(fixture.recall("byteracerecovery")["total_matches"], 1);
+    let recovered = ledger_records(&fixture);
+    assert_eq!(recovered.len(), 32);
+    for record in &after {
+        assert!(
+            recovered.contains(record),
+            "recovery changed committed history"
+        );
+    }
+    eprintln!(
+        "byte_capacity_race writers=12 accepted=1 rejected=11 prior_records=unchanged smaller_write_recovery=passed"
+    );
+}
+
 struct StopOnDrop(Arc<AtomicBool>);
 impl Drop for StopOnDrop {
     fn drop(&mut self) {
@@ -592,5 +814,51 @@ fn killed_writer_while_store_lock_is_held_preserves_history_and_recovery() {
     assert_eq!(fixture.recall("lockwaitrecovery")["total_matches"], 1);
     eprintln!(
         "held_lock_fault deliberate_kill=confirmed prior_history=byte_identical recovery=passed"
+    );
+}
+
+#[test]
+fn recall_recovers_after_writer_custody_release() {
+    let fixture = Fixture::new();
+    let text = "lockreadsnapshot original evidence";
+    fixture.add(text);
+    let ledger = fixture.ledger();
+    let before = fs::read(&ledger).unwrap();
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(fixture.state_file("global.lock"))
+        .unwrap();
+    lock.lock().unwrap();
+
+    // Contention may legitimately wait for writer custody. This checks recovery
+    // after release, not lock-free reads or a timeout while the owner is alive.
+    let child = fixture.spawn(&["memory", "recall", "lockreadsnapshot", "--global"]);
+    thread::sleep(Duration::from_millis(50));
+    drop(lock);
+    let output = child.finish();
+    assert!(
+        output.status.success(),
+        "recall did not recover after custody release: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stdout.len() <= 64 * 1024);
+    assert_eq!(
+        output.stdout.iter().filter(|byte| **byte == b'\n').count(),
+        1
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["method"], "lexical");
+    assert_eq!(report["scope"], "global");
+    assert_eq!(report["query"], "lockreadsnapshot");
+    assert_eq!(report["total_matches"], 1);
+    assert_eq!(report["matches"][0]["record"]["text"], text);
+    assert_eq!(fs::read(&ledger).unwrap(), before);
+
+    fixture.add("lockreadrecovery");
+    assert_eq!(fixture.recall("lockreadrecovery")["total_matches"], 1);
+    assert_eq!(fixture.recall("lockreadsnapshot")["total_matches"], 1);
+    eprintln!(
+        "writer_custody_contention readback_after_release=passed ledger=byte_identical recovery=passed"
     );
 }
