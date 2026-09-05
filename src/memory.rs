@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+mod project;
 mod recall;
 pub use recall::{MemoryRecallReport, RecallBacklink, RecallItem, recall_at, recall_current};
 use serde::{Deserialize, Serialize};
@@ -151,24 +152,46 @@ pub fn add_current(
     tags: Vec<String>,
     links: Vec<MemoryLink>,
 ) -> Result<MemoryRecord> {
+    if let Some(root) = project::current_root(global, true)? {
+        return append_at(&root, None, kind, text, tags, links);
+    }
     let root = crate::state_home()?;
     let scope_key = current_scope_key(global)?;
     append_at(&root, scope_key.as_deref(), kind, text, tags, links)
 }
 
 pub fn list_current(global: bool) -> Result<Vec<MemoryRecord>> {
+    if let Some(root) = project::current_root(global, false)? {
+        if !project::has_ledger(&root)? {
+            return Ok(Vec::new());
+        }
+        return list_at(&root, None);
+    }
     let root = crate::state_home()?;
     let scope_key = current_scope_key(global)?;
     list_at(&root, scope_key.as_deref())
 }
 
 pub fn list_current_kind(global: bool, kind: MemoryKind) -> Result<Vec<MemoryRecord>> {
+    if let Some(root) = project::current_root(global, false)? {
+        if !project::has_ledger(&root)? {
+            return Ok(Vec::new());
+        }
+        return list_kind_at(&root, None, kind);
+    }
     let root = crate::state_home()?;
     let scope_key = current_scope_key(global)?;
     list_kind_at(&root, scope_key.as_deref(), kind)
 }
 
 pub fn show_current(global: bool, id: &str) -> Result<MemoryView> {
+    if let Some(root) = project::current_root(global, false)? {
+        validate_id(id)?;
+        if !project::has_ledger(&root)? {
+            bail!("memory record {id:?} not found");
+        }
+        return show_at(&root, None, id);
+    }
     let root = crate::state_home()?;
     let scope_key = current_scope_key(global)?;
     show_at(&root, scope_key.as_deref(), id)

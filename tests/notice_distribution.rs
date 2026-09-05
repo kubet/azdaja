@@ -161,6 +161,7 @@ fn cargo_package_list_matches_the_reviewed_file_allowlist() {
             "src/jcode_gate.rs",
             "src/lib.rs",
             "src/main.rs",
+            "src/memory/project.rs",
             "src/memory/recall.rs",
             "src/memory.rs",
             "src/observability.rs",

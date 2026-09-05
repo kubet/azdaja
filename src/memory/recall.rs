@@ -47,6 +47,14 @@ pub struct MemoryRecallReport {
 
 pub fn recall_current(global: bool, query: &str) -> Result<MemoryRecallReport> {
     query_terms(query)?;
+    if let Some(root) = super::project::current_root(global, false)? {
+        let mut report = recall_at(&root, None, query)?;
+        report.scope = "project";
+        if serde_json::to_vec(&report)?.len() + 1 > MAX_OUTPUT_BYTES {
+            bail!("project memory recall exceeds the output byte budget");
+        }
+        return Ok(report);
+    }
     let root = state_root_for_read()?;
     let scope_key = if global {
         None
@@ -62,7 +70,7 @@ pub fn recall_current(global: bool, query: &str) -> Result<MemoryRecallReport> {
 // `state_home` initializes runtime directories. Recall must honor the same
 // documented path precedence without initializing or repairing any state.
 // Existing-ledger CLI tests exercise parity with the ordinary write path.
-fn state_root_for_read() -> Result<PathBuf> {
+pub(super) fn state_root_for_read() -> Result<PathBuf> {
     let home = env::var_os("HOME").map(PathBuf::from);
     #[cfg(windows)]
     let home = home.or_else(|| env::var_os("USERPROFILE").map(PathBuf::from));
