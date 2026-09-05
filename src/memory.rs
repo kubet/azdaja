@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
-pub use transfer::export_current;
+pub use transfer::{export_current, import_current};
 
 const SCHEMA_VERSION: u32 = 1;
 const MEMORY_DIR: &str = "memory";

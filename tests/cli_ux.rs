@@ -139,7 +139,7 @@ fn help_alias_is_concise_and_command_help_uses_plain_targets() {
         .unwrap();
     assert!(memory_help.status.success());
     let memory_help = String::from_utf8(memory_help.stdout).unwrap();
-    assert!(memory_help.contains("Usage: az memory <add|list|show|recall|export>"));
+    assert!(memory_help.contains("Usage: az memory <add|list|show|recall|export|import>"));
     assert!(memory_help.contains("explicit, local-first, bounded"));
 }
 

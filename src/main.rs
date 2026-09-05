@@ -188,7 +188,7 @@ const COMMAND_USAGES: [(&str, &str); 13] = [
     ),
     (
         "memory",
-        "Usage: az memory <add|list|show|recall|export> [--global]",
+        "Usage: az memory <add|list|show|recall|export|import> [--global]",
     ),
     ("help", "Usage: az help [command]"),
 ];
@@ -557,11 +557,13 @@ fn memory_cmd(args: &[String]) -> Result<bool> {
     {
         exact(args, 2, "memory")?;
         println!(
-            "Usage: az memory <add|list|show|recall|export> [--global]\n\
+            "Usage: az memory <add|list|show|recall|export|import> [--global]\n\
              Add: az memory add <decision|observation|failure|hypothesis|disagreement> <text> [--tag <tag>] [--link <relation:id>] [--global]\n\
              List: az memory list [--kind <decision|observation|failure|hypothesis|disagreement>] [--global]\n\
              Show: az memory show <id> [--global]\n\
              Export: az memory export <id>... [--with-context] [--global]\n\
+             Import: az memory import <bundle-file> [--apply] [--global]\n\
+             Import defaults to a no-write dry-run; --apply explicitly merges untrusted records without replacing conflicting IDs.\n\
              Export refuses incomplete linked evidence. --with-context includes additional connected notes; review all records before sharing.\n\
              Records are explicit, local-first, bounded, and never injected into a model automatically."
         );
@@ -623,6 +625,24 @@ fn memory_cmd(args: &[String]) -> Result<bool> {
                     );
                 }
             }
+        }
+        Some("import") => {
+            if args.len() < 3 {
+                bail!("Usage: az memory import <bundle-file> [--apply] [--global]");
+            }
+            let mut global = false;
+            let mut apply = false;
+            for argument in &args[3..] {
+                match argument.as_str() {
+                    "--global" if !global => global = true,
+                    "--apply" if !apply => apply = true,
+                    _ => bail!("Usage: az memory import <bundle-file> [--apply] [--global]"),
+                }
+            }
+            println!(
+                "{}",
+                azdaja::memory::import_current(global, std::path::Path::new(&args[2]), apply)?
+            );
         }
         Some("export") => {
             let mut global = false;
