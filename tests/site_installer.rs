@@ -2884,6 +2884,298 @@ fn installed_alias_matches_solo_through_a_provider_free_fixture() {
     assert_eq!(short.stdout, long.stdout);
     assert_eq!(short.stderr, long.stderr);
     assert_eq!(String::from_utf8(short.stdout).unwrap(), "ALIAS_SOLO_OK\n");
+    verify_http_installed_project_memory(&scratch.0, &bin.join("azdaja"), &candidate, &system_path);
+}
+
+// Extend the established loopback installer, not the host's managed integration.
+// The payload originates in local_candidate and has passed through site/install.
+fn verify_http_installed_project_memory(
+    root: &Path,
+    installed: &Path,
+    candidate: &Path,
+    path: &str,
+) {
+    assert_eq!(sha256(installed), sha256(candidate));
+    let home_a = root.join("memory-home-a");
+    let home_b = root.join("memory-home-b");
+    let repo = root.join("memory-repo");
+    fs::create_dir(&repo).unwrap();
+    fs::create_dir(repo.join("src")).unwrap();
+    let git = std::env::split_paths(&std::env::var_os("PATH").expect("test runner PATH"))
+        .map(|directory| directory.join("git"))
+        .find(|candidate| {
+            use std::os::unix::fs::PermissionsExt;
+            fs::metadata(candidate).is_ok_and(|metadata| {
+                metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
+            })
+        })
+        .expect("Git executable required for installed project-memory acceptance")
+        .canonicalize()
+        .unwrap();
+    assert_success(&installed_memory_probe(
+        &git,
+        &home_a,
+        &repo,
+        path,
+        "on",
+        &["init", "--quiet", "--template="],
+    ));
+    let recall_args = ["memory", "recall", "installedlesson"];
+    let cold = installed_memory_probe(installed, &home_b, &repo, path, "on", &recall_args);
+    assert_success(&cold);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&cold.stdout).unwrap()["total_matches"],
+        0
+    );
+    assert!(!repo.join(".azdaja").exists());
+    assert_success(&installed_memory_probe(
+        installed,
+        &home_a,
+        &repo,
+        path,
+        "on",
+        &[
+            "memory",
+            "add",
+            "decision",
+            "installedlesson verify current source",
+            "--tag",
+            "file:src/cache.rs",
+        ],
+    ));
+    let first = installed_memory_probe(
+        installed,
+        &home_b,
+        &repo.join("src"),
+        path,
+        "on",
+        &recall_args,
+    );
+    assert_success(&first);
+    let first: serde_json::Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(first["scope"], "project");
+    assert_eq!(first["total_matches"], 1);
+    assert_eq!(
+        first["matches"][0]["record"]["text"],
+        "installedlesson verify current source"
+    );
+    assert_eq!(
+        first["matches"][0]["record"]["provenance"]["origin"],
+        "manual"
+    );
+    let link = format!(
+        "related-to:{}",
+        first["matches"][0]["record"]["id"].as_str().unwrap()
+    );
+    assert_success(&installed_memory_probe(
+        installed,
+        &home_b,
+        &repo,
+        path,
+        "on",
+        &[
+            "memory",
+            "add",
+            "disagreement",
+            "contrary evidence requires a fresh check",
+            "--link",
+            &link,
+        ],
+    ));
+    let ledger = repo.join(".azdaja/memory/global.jsonl");
+    let before = fs::read(&ledger).unwrap();
+    let recalled = installed_memory_probe(installed, &home_a, &repo, path, "on", &recall_args);
+    assert_success(&recalled);
+    let report: serde_json::Value = serde_json::from_slice(&recalled.stdout).unwrap();
+    assert_eq!(report["total_matches"], 1);
+    assert_eq!(report["context"][0]["record"]["kind"], "disagreement");
+    assert_eq!(
+        report["context"][0]["record"]["text"],
+        "contrary evidence requires a fresh check"
+    );
+    assert_eq!(before, fs::read(&ledger).unwrap());
+    let off = installed_memory_probe(
+        installed,
+        &home_a,
+        &repo,
+        path,
+        "off",
+        &["memory", "add", "observation", "must not persist"],
+    );
+    assert_eq!(off.status.code(), Some(2));
+    assert!(off.stdout.is_empty());
+    assert_eq!(before, fs::read(&ledger).unwrap());
+    assert_success(&installed_memory_probe(
+        installed,
+        &home_a,
+        &repo,
+        path,
+        "off",
+        &[
+            "memory",
+            "add",
+            "observation",
+            "personal installedlesson",
+            "--global",
+        ],
+    ));
+    let personal = installed_memory_probe(
+        installed,
+        &home_a,
+        &repo,
+        path,
+        "off",
+        &["memory", "recall", "installedlesson", "--global"],
+    );
+    assert_success(&personal);
+    let personal: serde_json::Value = serde_json::from_slice(&personal.stdout).unwrap();
+    assert_eq!(personal["total_matches"], 1);
+    assert_eq!(
+        personal["matches"][0]["record"]["text"],
+        "personal installedlesson"
+    );
+    assert_eq!(before, fs::read(&ledger).unwrap());
+    let global = installed_memory_probe(
+        installed,
+        &home_b,
+        &repo,
+        path,
+        "on",
+        &["memory", "recall", "installedlesson", "--global"],
+    );
+    assert_success(&global);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&global.stdout).unwrap()["total_matches"],
+        0
+    );
+    let relocated = root.join("memory-relocated");
+    fs::rename(&repo, &relocated).unwrap();
+    let moved = installed_memory_probe(
+        installed,
+        &home_b,
+        &relocated.join("src"),
+        path,
+        "on",
+        &recall_args,
+    );
+    assert_success(&moved);
+    assert_eq!(
+        report,
+        serde_json::from_slice::<serde_json::Value>(&moved.stdout).unwrap()
+    );
+    let ledger = relocated.join(".azdaja/memory/global.jsonl");
+    fs::write(&ledger, b"not-json\n").unwrap();
+    let corrupt = installed_memory_probe(installed, &home_a, &relocated, path, "on", &recall_args);
+    assert_eq!(corrupt.status.code(), Some(2));
+    assert!(corrupt.stdout.is_empty() && !corrupt.stderr.is_empty());
+    assert_eq!(fs::read(&ledger).unwrap(), b"not-json\n");
+    fs::write(&ledger, &before).unwrap();
+    let recovered =
+        installed_memory_probe(installed, &home_b, &relocated, path, "on", &recall_args);
+    assert_success(&recovered);
+    assert_eq!(
+        report,
+        serde_json::from_slice::<serde_json::Value>(&recovered.stdout).unwrap()
+    );
+    eprintln!(
+        "http_installed_memory bytes_verified=true cross_home=passed relocation=passed corrupt_recovery=passed"
+    );
+}
+
+fn installed_memory_probe(
+    binary: &Path,
+    home: &Path,
+    repo: &Path,
+    path: &str,
+    mode: &str,
+    args: &[&str],
+) -> Output {
+    use std::io::Read;
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+    struct Running(Option<std::process::Child>);
+    impl Drop for Running {
+        fn drop(&mut self) {
+            if let Some(mut child) = self.0.take() {
+                #[cfg(unix)]
+                if let Ok(pid) = libc::pid_t::try_from(child.id())
+                    && pid > 0
+                {
+                    unsafe {
+                        libc::kill(-pid, libc::SIGKILL);
+                    }
+                }
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+    fs::create_dir_all(home).unwrap();
+    let stdout_path = home.join("memory-probe.stdout");
+    let stderr_path = home.join("memory-probe.stderr");
+    let git_config = home.join("empty-gitconfig");
+    fs::write(&git_config, b"").unwrap();
+    let mut command = Command::new(binary);
+    for (key, _) in std::env::vars_os() {
+        if ["AZDAJA_", "JCODE_", "GIT_", "RLM_"]
+            .iter()
+            .any(|prefix| key.to_string_lossy().starts_with(prefix))
+        {
+            command.env_remove(key);
+        }
+    }
+    command
+        .args(args)
+        .current_dir(repo)
+        .env("HOME", home)
+        .env("USERPROFILE", home)
+        .env("PATH", path)
+        .env("XDG_CONFIG_HOME", home.join("config"))
+        .env("XDG_STATE_HOME", home.join("state"))
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", git_config)
+        .env("AZDAJA_PROJECT_MEMORY", mode)
+        .stdin(Stdio::null())
+        .stdout(fs::File::create(&stdout_path).unwrap())
+        .stderr(fs::File::create(&stderr_path).unwrap());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut running = Running(Some(command.spawn().unwrap_or_else(|error| {
+        panic!("cannot spawn {} with {args:?}: {error}", binary.display())
+    })));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let status = loop {
+        if let Some(status) = running.0.as_mut().unwrap().try_wait().unwrap() {
+            running.0.take();
+            break status;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "installed memory command exceeded timeout"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    let capture = |file: &Path| {
+        let mut bytes = Vec::new();
+        fs::File::open(file)
+            .unwrap()
+            .take(64 * 1024 + 1)
+            .read_to_end(&mut bytes)
+            .unwrap();
+        assert!(
+            bytes.len() <= 64 * 1024,
+            "installed output exceeded its bound"
+        );
+        bytes
+    };
+    Output {
+        status,
+        stdout: capture(&stdout_path),
+        stderr: capture(&stderr_path),
+    }
 }
 
 #[test]
