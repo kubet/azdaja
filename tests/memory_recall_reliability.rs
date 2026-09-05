@@ -362,7 +362,7 @@ fn timed_writer_termination_attempts_preserve_acknowledged_records_and_allow_rec
 
 #[cfg(unix)]
 #[test]
-fn symlinked_ledger_is_refused_without_reading_or_modifying_victim() {
+fn symlinked_ledger_is_refused_without_exposing_or_modifying_victim() {
     use std::os::unix::fs::symlink;
     let fixture = Fixture::new();
     fixture.add("privatevictim secret fixture note");
@@ -374,6 +374,7 @@ fn symlinked_ledger_is_refused_without_reading_or_modifying_victim() {
     let output = fixture.run(&["memory", "recall", "privatevictim", "--global"]);
     assert!(!output.status.success(), "recall followed a ledger symlink");
     assert!(output.stdout.is_empty());
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("secret fixture note"));
     assert_eq!(fs::read(&victim).unwrap(), before);
     assert!(
         fs::symlink_metadata(&ledger)
@@ -549,7 +550,7 @@ fn utf8_byte_capacity_refusal_preserves_history_and_allows_a_smaller_write() {
 }
 
 #[test]
-fn killed_lock_waiting_writer_cannot_damage_history_or_poison_recovery() {
+fn killed_writer_while_store_lock_is_held_preserves_history_and_recovery() {
     let fixture = Fixture::new();
     fixture.add("lockwaitanchor");
     let ledger = fixture.ledger();
@@ -567,10 +568,12 @@ fn killed_lock_waiting_writer_cannot_damage_history_or_poison_recovery() {
         "lockwaitunacknowledged",
         "--global",
     ]);
+    // Liveness does not prove the child has reached its lock syscall.
+    // This case guarantees a kill while custody is held, not a crash mid-write.
     thread::sleep(Duration::from_millis(20));
     assert!(
         child.0.as_mut().unwrap().try_wait().unwrap().is_none(),
-        "writer did not remain blocked behind the fixture lock"
+        "writer exited while the fixture held the store lock"
     );
     let (output, kill_sent) = child.interrupt();
     assert!(kill_sent);
@@ -588,6 +591,6 @@ fn killed_lock_waiting_writer_cannot_damage_history_or_poison_recovery() {
     assert_eq!(fixture.recall("lockwaitanchor")["total_matches"], 1);
     assert_eq!(fixture.recall("lockwaitrecovery")["total_matches"], 1);
     eprintln!(
-        "lock_wait_fault deliberate_kill=confirmed prior_history=byte_identical recovery=passed"
+        "held_lock_fault deliberate_kill=confirmed prior_history=byte_identical recovery=passed"
     );
 }
