@@ -1559,10 +1559,53 @@ fn cargo_command_is_safe(arguments: &[&str]) -> bool {
         Some(argument) if argument.starts_with('+') && argument.len() > 1 => &arguments[1..],
         _ => arguments,
     };
-    matches!(
-        arguments.first(),
-        Some(&("build" | "check" | "test" | "clippy" | "fmt" | "bench" | "doc" | "metadata"))
-    )
+    match arguments {
+        ["package", options @ ..] => {
+            options.contains(&"--locked")
+                && options.iter().all(|option| {
+                    matches!(
+                        *option,
+                        "--locked" | "--offline" | "--allow-dirty" | "--list" | "--no-verify"
+                    )
+                })
+        }
+        ["install", options @ ..] => local_cargo_install_is_explicit(options),
+        _ => matches!(
+            arguments.first(),
+            Some(&("build" | "check" | "test" | "clippy" | "fmt" | "bench" | "doc" | "metadata"))
+        ),
+    }
+}
+
+// This is a cooperative command-routing exception, not installation authority.
+// The caller still owns destination safety and must not infer artifact provenance
+// from an allowed command. Keep remote installs, Cargo config, and implicit HOME
+// destinations out of this narrowly scoped release-build path.
+// Locked builds may still download dependencies and execute build scripts.
+fn local_cargo_install_is_explicit(mut options: &[&str]) -> bool {
+    let mut locked = false;
+    let mut local_path = false;
+    let mut explicit_root = false;
+    while let Some((option, rest)) = options.split_first() {
+        match (*option, rest) {
+            ("--locked", _) if !locked => {
+                locked = true;
+                options = rest;
+            }
+            ("--path", [".", remaining @ ..]) if !local_path => {
+                local_path = true;
+                options = remaining;
+            }
+            ("--root", [root, remaining @ ..])
+                if !explicit_root && !root.is_empty() && !root.starts_with('-') =>
+            {
+                explicit_root = true;
+                options = remaining;
+            }
+            _ => return false,
+        }
+    }
+    locked && local_path && explicit_root
 }
 
 fn rustup_build_setup_is_safe(arguments: &[&str]) -> bool {
@@ -1607,6 +1650,51 @@ fn rustup_target_add_arguments_are_safe(arguments: &[&str]) -> bool {
 #[cfg(test)]
 mod build_command_classification_tests {
     use super::is_git_build_test_lint_or_format;
+
+    #[test]
+    fn allows_locked_package_and_explicit_local_install() {
+        for command in [
+            "cargo package --locked",
+            "cargo +1.95.0 package --locked --allow-dirty --list",
+            "cargo +1.95.0 package --locked --no-verify",
+            "cargo +1.95.0 install --path . --locked --root /fixture/candidate",
+            "cargo install --locked --root '/fixture/candidate with spaces' --path .",
+        ] {
+            assert!(is_git_build_test_lint_or_format(command), "{command}");
+        }
+    }
+
+    #[test]
+    fn release_build_exceptions_reject_implicit_remote_and_compound_operations() {
+        for command in [
+            "cargo package",
+            "cargo package --locked --config build.rustc=cat",
+            "cargo package --locked --manifest-path ../other/Cargo.toml",
+            "cargo publish --locked",
+            "cargo install --path . --locked",
+            "cargo install --path . --root /fixture/candidate",
+            "cargo install --path ../other --locked --root /fixture/candidate",
+            "cargo install --git https://example.invalid/repo --locked --root /fixture/candidate",
+            "cargo install arbitrary-crate --locked --root /fixture/candidate",
+            "cargo install --path . --locked --root ''",
+            "cargo install --path . --locked --root --force",
+            "cargo install --path . --locked --root /fixture/candidate --force",
+            "cargo install --path . --path . --locked --root /fixture/candidate",
+            "cargo install --path . --locked --locked --root /fixture/candidate",
+            "cargo install --path . --locked --root /fixture/a --root /fixture/b",
+            "cargo install --locked --root /fixture/candidate",
+            "cargo install --path . --locked --root",
+            "cargo install --path . --locked --root /fixture/candidate --config build.rustc=cat",
+            "cargo package --locked && cat src/lib.rs",
+            "cargo package --locked || cat src/lib.rs",
+            "cargo package --locked; cat src/lib.rs",
+            "cargo package --locked | cat",
+            "cargo package --locked > /fixture/listing",
+            "cargo install --path . --locked --root $(cat location)",
+        ] {
+            assert!(!is_git_build_test_lint_or_format(command), "{command}");
+        }
+    }
 
     #[test]
     fn allows_toolchain_qualified_cargo_build_and_build_rustup_setup() {
