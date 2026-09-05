@@ -116,10 +116,12 @@ fn stored_instruction_text_remains_exact_untrusted_json_data() {
         report["matches"][0]["record"]["provenance"]["origin"],
         "manual"
     );
-    assert!(report["caveat"]
-        .as_str()
-        .unwrap()
-        .contains("not verified truth"));
+    assert!(
+        report["caveat"]
+            .as_str()
+            .unwrap()
+            .contains("not verified truth")
+    );
     assert!(!fixture.0.join("scope/SHOULD_NOT_EXIST").exists());
     // Escaping keeps multiline notes inside one JSON object and one output line.
     assert_eq!(bytes.iter().filter(|&&byte| byte == b'\n').count(), 1);
