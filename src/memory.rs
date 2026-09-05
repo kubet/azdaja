@@ -167,7 +167,7 @@ pub fn list_current(global: bool) -> Result<Vec<MemoryRecord>> {
         }
         return list_at(&root, None);
     }
-    let root = crate::state_home()?;
+    let root = recall::state_root_for_read()?;
     let scope_key = current_scope_key(global)?;
     list_at(&root, scope_key.as_deref())
 }
@@ -179,7 +179,7 @@ pub fn list_current_kind(global: bool, kind: MemoryKind) -> Result<Vec<MemoryRec
         }
         return list_kind_at(&root, None, kind);
     }
-    let root = crate::state_home()?;
+    let root = recall::state_root_for_read()?;
     let scope_key = current_scope_key(global)?;
     list_kind_at(&root, scope_key.as_deref(), kind)
 }
@@ -192,7 +192,7 @@ pub fn show_current(global: bool, id: &str) -> Result<MemoryView> {
         }
         return show_at(&root, None, id);
     }
-    let root = crate::state_home()?;
+    let root = recall::state_root_for_read()?;
     let scope_key = current_scope_key(global)?;
     show_at(&root, scope_key.as_deref(), id)
 }
@@ -273,8 +273,23 @@ pub fn append_at(
 
 pub fn list_at(root: &Path, scope_key: Option<&str>) -> Result<Vec<MemoryRecord>> {
     let path = ledger_path(root, scope_key)?;
-    prepare_parent(root, scope_key)?;
-    let _lock = crate::lock_path(&path.with_extension("lock"))?;
+    if !recall::ledger_present(root, scope_key)? {
+        return Ok(Vec::new());
+    }
+    let lock_path = path.with_extension("lock");
+    let _read_lock = match fs::symlink_metadata(&lock_path) {
+        Ok(_) => {
+            let file = crate::open_private_file(&lock_path, false)
+                .with_context(|| "memory reader lock is unsafe or not private")?;
+            fs2::FileExt::lock_shared(&file)?;
+            Some(file)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.into()),
+    };
+    // Writers publish complete ledgers by atomic replacement. If the optional
+    // writer lock is absent, opening the ledger still yields one committed
+    // snapshot. A reader must never create that lock or repair directories.
     load_path(&path)
 }
 

@@ -252,7 +252,7 @@ pub fn recall_at(root: &Path, scope_key: Option<&str>, query: &str) -> Result<Me
 
 // The ordinary list path can initialize storage directories. A missing ledger
 // is an empty read, not a reason to initialize that infrastructure.
-fn ledger_present(root: &Path, scope_key: Option<&str>) -> Result<bool> {
+pub(super) fn ledger_present(root: &Path, scope_key: Option<&str>) -> Result<bool> {
     if scope_key.is_some_and(|scope| {
         scope.is_empty()
             || scope.len() > 128
@@ -273,7 +273,24 @@ fn ledger_present(root: &Path, scope_key: Option<&str>) -> Result<bool> {
     };
     for directory in directories {
         match fs::symlink_metadata(directory) {
-            Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {}
+            Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+                    if metadata.uid() != unsafe { libc::geteuid() }
+                        || metadata.permissions().mode() & 0o077 != 0
+                    {
+                        bail!("memory ledger parent must be private and owned by the current user");
+                    }
+                }
+                #[cfg(windows)]
+                {
+                    use std::os::windows::fs::MetadataExt;
+                    if metadata.file_attributes() & 0x400 != 0 {
+                        bail!("memory ledger parent must not be a reparse point");
+                    }
+                }
+            }
             Ok(_) => bail!("memory recall ledger parent must be a real directory"),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
             Err(error) => return Err(error.into()),

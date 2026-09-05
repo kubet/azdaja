@@ -69,7 +69,7 @@ impl Fixture {
         }
     }
 
-    fn run(&self, program: &str, home: &str, cwd: &Path, args: &[&str]) -> Output {
+    fn output(&self, program: &str, home: &str, cwd: &Path, args: &[&str]) -> Output {
         let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
         let stdout_path = self.root.join(format!("stdout-{sequence}"));
         let stderr_path = self.root.join(format!("stderr-{sequence}"));
@@ -134,13 +134,18 @@ impl Fixture {
             stderr: capture(&stderr_path),
         };
         assert!(
+            !self.root.join("provider-called").exists(),
+            "memory workflow invoked a provider"
+        );
+        output
+    }
+
+    fn run(&self, program: &str, home: &str, cwd: &Path, args: &[&str]) -> Output {
+        let output = self.output(program, home, cwd, args);
+        assert!(
             output.status.success(),
             "{program} {args:?}: {}",
             String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(
-            !self.root.join("provider-called").exists(),
-            "memory workflow invoked a provider"
         );
         output
     }
@@ -414,4 +419,153 @@ fn ordinary_clone_excludes_private_notes_and_requires_an_explicit_new_handoff() 
         "manual"
     );
     assert_eq!(before, snapshot(&source.join(".azdaja")));
+}
+
+#[test]
+fn populated_project_reads_do_not_recreate_the_actual_writer_lock() {
+    let fixture = Fixture::new();
+    let repo = fixture.seed();
+    let text = "locklesson committed evidence survives read-only access";
+    fixture.az("home-a", &repo, &["memory", "add", "observation", text]);
+    let initial = fixture.recall("home-b", &repo, "locklesson");
+    assert_eq!(initial["total_matches"], 1);
+    let id = initial["matches"][0]["record"]["id"].as_str().unwrap();
+    let store = repo.join(".azdaja");
+    let lock = store.join("memory/global.jsonl").with_extension("lock");
+    assert!(
+        lock.is_file(),
+        "positive control: writer created its actual lock"
+    );
+    fs::remove_file(&lock).unwrap();
+    assert!(!lock.exists());
+    let before = snapshot(&store);
+    let commands = [
+        vec!["memory", "recall", "locklesson"],
+        vec!["memory", "list"],
+        vec!["memory", "list", "--kind", "observation"],
+        vec!["memory", "show", id],
+    ];
+    for args in commands {
+        let output = fixture.az("home-b", &repo.join("src"), &args);
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(stdout.contains(text), "{args:?} lost the committed note");
+        assert!(stdout.contains(id), "{args:?} lost its identity");
+        assert_eq!(
+            before,
+            snapshot(&store),
+            "{args:?} mutated the populated store"
+        );
+        assert!(!lock.exists(), "{args:?} recreated the writer lock");
+    }
+}
+
+#[test]
+fn cold_global_and_legacy_read_commands_do_not_initialize_personal_state() {
+    let fixture = Fixture::new();
+    let repo = fixture.seed();
+    let outside = fixture.root.join("outside");
+    fs::create_dir(&outside).unwrap();
+    let home = fixture.root.join("home-b");
+    let before = snapshot(&home);
+    for (cwd, global) in [(&repo, true), (&outside, false)] {
+        let commands = [
+            vec!["memory", "list"],
+            vec!["memory", "list", "--kind", "observation"],
+            vec!["memory", "recall", "coldlesson"],
+        ];
+        for mut args in commands {
+            if global {
+                args.push("--global");
+            }
+            fixture.az("home-b", cwd, &args);
+            assert_eq!(
+                before,
+                snapshot(&home),
+                "{args:?} initialized personal state"
+            );
+        }
+        let mut args = vec!["memory", "show", "m0000000000000000"];
+        if global {
+            args.push("--global");
+        }
+        let output = fixture.output(env!("CARGO_BIN_EXE_azdaja"), "home-b", cwd, &args);
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty() && !output.stderr.is_empty());
+        assert_eq!(
+            before,
+            snapshot(&home),
+            "missing show initialized personal state"
+        );
+    }
+    assert!(!repo.join(".azdaja").exists());
+    assert!(!outside.join(".azdaja").exists());
+}
+
+#[test]
+fn unsafe_existing_reader_custody_is_refused_without_repair_or_exposure() {
+    let fixture = Fixture::new();
+    let repo = fixture.seed();
+    let text = "custodylesson retained private fixture evidence";
+    fixture.az("home-a", &repo, &["memory", "add", "observation", text]);
+    let initial = fixture.recall("home-b", &repo, "custodylesson");
+    let id = initial["matches"][0]["record"]["id"].as_str().unwrap();
+    let store = repo.join(".azdaja");
+    let original = snapshot(&store);
+    let commands = [
+        vec!["memory", "recall", "custodylesson"],
+        vec!["memory", "list"],
+        vec!["memory", "list", "--kind", "observation"],
+        vec!["memory", "show", id],
+    ];
+    for (relative, bad_mode) in [("memory", 0o755), ("memory/global.lock", 0o644)] {
+        let path = store.join(relative);
+        let original_mode = fs::metadata(&path).unwrap().permissions().mode();
+        fs::set_permissions(&path, fs::Permissions::from_mode(bad_mode)).unwrap();
+        let damaged = snapshot(&store);
+        for args in &commands {
+            let output = fixture.output(env!("CARGO_BIN_EXE_azdaja"), "home-b", &repo, args);
+            assert_eq!(output.status.code(), Some(2), "{relative}: {args:?}");
+            assert!(output.stdout.is_empty() && !output.stderr.is_empty());
+            assert!(!String::from_utf8_lossy(&output.stderr).contains(text));
+            assert_eq!(
+                damaged,
+                snapshot(&store),
+                "{relative}: {args:?} repaired custody"
+            );
+        }
+        fs::set_permissions(&path, fs::Permissions::from_mode(original_mode)).unwrap();
+        assert_eq!(initial, fixture.recall("home-b", &repo, "custodylesson"));
+        assert_eq!(original, snapshot(&store));
+    }
+    let lock = store.join("memory/global.lock");
+    let lock_bytes = fs::read(&lock).unwrap();
+    fs::remove_file(&lock).unwrap();
+    let victim = fixture.root.join("lock-victim");
+    let victim_bytes = b"private fixture lock victim";
+    fs::write(&victim, victim_bytes).unwrap();
+    fs::set_permissions(&victim, fs::Permissions::from_mode(0o600)).unwrap();
+    std::os::unix::fs::symlink(&victim, &lock).unwrap();
+    let ledger_before = fs::read(store.join("memory/global.jsonl")).unwrap();
+    for args in &commands {
+        let output = fixture.output(env!("CARGO_BIN_EXE_azdaja"), "home-b", &repo, args);
+        assert_eq!(output.status.code(), Some(2), "symlink lock: {args:?}");
+        assert!(output.stdout.is_empty() && !output.stderr.is_empty());
+        assert!(!String::from_utf8_lossy(&output.stderr).contains(text));
+        assert!(!String::from_utf8_lossy(&output.stderr).contains("private fixture lock victim"));
+        assert_eq!(fs::read_link(&lock).unwrap(), victim);
+        assert_eq!(fs::read(&victim).unwrap(), victim_bytes);
+        assert_eq!(
+            fs::metadata(&victim).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(
+            fs::read(store.join("memory/global.jsonl")).unwrap(),
+            ledger_before
+        );
+    }
+    fs::remove_file(&lock).unwrap();
+    fs::write(&lock, lock_bytes).unwrap();
+    fs::set_permissions(&lock, fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(initial, fixture.recall("home-b", &repo, "custodylesson"));
+    assert_eq!(original, snapshot(&store));
 }

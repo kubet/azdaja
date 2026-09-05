@@ -17,9 +17,9 @@ Work order: **finish the current worktree acceptance, implement deliberate cross
 
 Existing acceptance targets: `project_memory`, `memory_recall_contract`, `memory_recall_paths`, `memory_recall_reliability`, `memory_recall_review`.
 
-## 2. Real Git worktree and clone acceptance
+## 2. Real Git worktree, clone and read-only acceptance
 
-**Status:** both optimized tests passed. The integrated formatting, strict all-target Clippy and full optimized Cargo suite passed, followed by strict compilation/lint checks for Linux x86_64 and Intel macOS. Those cross-target checks are not foreign-platform runtime results.
+**Status:** all five optimized tests passed. The integrated formatting, strict all-target Clippy and full optimized Cargo suite passed, followed by strict all-target checks for Windows GNU, Linux x86_64 and Intel macOS. Those cross-target checks are not foreign-platform runtime results.
 
 Owned file: `tests/project_memory_worktrees.rs`.
 
@@ -38,6 +38,11 @@ Exit checks:
 6. Ordinary Git staging and cloning exclude the private `.azdaja` contents.
 7. Cold clone recall creates no project store. An explicit new note enables a subsequent cross-HOME handoff.
 8. Provider tripwires remain untouched. These tests are Unix runtime coverage, not Windows runtime proof.
+9. `populated_project_reads_do_not_recreate_the_actual_writer_lock` removes the positively identified `memory/global.lock`, then checks exact note identity and unchanged store snapshots after recall, list, kind-filtered list and show. This regression failed before the production reader repair and passed afterward.
+10. `cold_global_and_legacy_read_commands_do_not_initialize_personal_state` checks successful empty reads and missing-record refusal without creating personal runtime directories.
+11. `unsafe_existing_reader_custody_is_refused_without_repair_or_exposure` checks public parent/lock modes and a symlinked lock across all four read commands: clean exit 2, empty stdout, no note/victim body in diagnostics, unchanged data/permissions, and successful recovery after fixture restoration.
+
+The reader repair reuses existing private-file and record validation, takes a shared lock only when the writer lock already exists, and never creates or repairs read-side custody. Existing writer-held-lock recovery and live-reader/concurrent-writer acceptance also passed.
 
 ## 3. Deliberate cross-developer transfer
 
