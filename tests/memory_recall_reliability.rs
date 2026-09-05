@@ -11,6 +11,118 @@ use std::time::{Duration, Instant};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
+#[test]
+fn global_parseable_invalid_record_shapes_are_refused_without_rewriting_history() {
+    let encode = |records: &[Value]| {
+        let mut bytes = Vec::new();
+        for record in records {
+            serde_json::to_writer(&mut bytes, record).unwrap();
+            bytes.push(b'\n');
+        }
+        bytes
+    };
+    let corruptions = [
+        ("null text", "text", Some(Value::Null)),
+        (
+            "unknown kind",
+            "kind",
+            Some(Value::from("not-a-memory-kind")),
+        ),
+        ("null id", "id", Some(Value::Null)),
+        ("object links", "links", Some(serde_json::json!({}))),
+        ("negative timestamp", "created_unix", Some(Value::from(-1))),
+        ("null provenance", "provenance", Some(Value::Null)),
+        ("missing text", "text", None),
+    ];
+    for (label, field, replacement) in corruptions {
+        for damaged_first in [false, true] {
+            let fixture = Fixture::new();
+            fixture.add("shapeprobe trusted existing observation");
+            fixture.add("othernote unqueried record");
+            let ledger = fixture.ledger();
+            let original = fs::read(&ledger).unwrap();
+            let baseline = fixture.recall("shapeprobe");
+            assert_eq!(baseline["total_matches"], 1);
+            let mut records = ledger_records(&fixture);
+            assert_eq!(records.len(), 2);
+            let original_records = records.clone();
+            let damaged_index = records
+                .iter()
+                .position(|record| record["text"] == "othernote unqueried record")
+                .unwrap();
+            let mut damaged = records.remove(damaged_index);
+            let pristine = damaged.clone();
+            let object = damaged.as_object_mut().unwrap();
+            assert!(object.contains_key(field), "fixture missing {field}");
+            if let Some(value) = &replacement {
+                object.insert(field.to_owned(), value.clone());
+            } else {
+                object.remove(field);
+            }
+            if damaged_first {
+                records.insert(0, damaged);
+            } else {
+                records.push(damaged);
+            }
+            let mut control_records = records.clone();
+            control_records[if damaged_first { 0 } else { 1 }] = pristine;
+            let control = encode(&control_records);
+            fs::write(&ledger, &control).unwrap();
+            assert_eq!(fixture.recall("shapeprobe"), baseline);
+            assert_eq!(fixture.recall("othernote")["total_matches"], 1);
+            assert_eq!(fs::read(&ledger).unwrap(), control);
+            let corrupted = encode(&records);
+            assert_ne!(corrupted, original);
+            for line in std::str::from_utf8(&corrupted).unwrap().lines() {
+                serde_json::from_str::<Value>(line).unwrap();
+            }
+            fs::write(&ledger, &corrupted).unwrap();
+            for args in [
+                vec!["memory", "recall", "shapeprobe", "--global"],
+                vec!["memory", "recall", "no_matching_terms", "--global"],
+                vec!["memory", "add", "observation", "mustnotpersist", "--global"],
+            ] {
+                let output = fixture.run(&args);
+                assert_eq!(
+                    output.status.code(),
+                    Some(2),
+                    "{label}, damaged_first={damaged_first}, args={args:?}: not a clean refusal"
+                );
+                assert!(output.stdout.is_empty(), "{label}: partial success output");
+                assert!(
+                    !output.stderr.is_empty(),
+                    "{label}: missing error diagnostic"
+                );
+                assert_eq!(
+                    fs::read(&ledger).unwrap(),
+                    corrupted,
+                    "{label}: ledger changed"
+                );
+            }
+            fs::write(&ledger, &original).unwrap();
+            assert_eq!(
+                fixture.recall("shapeprobe"),
+                baseline,
+                "{label}: recovery differs"
+            );
+            assert_eq!(fixture.recall("othernote")["total_matches"], 1);
+            assert_eq!(fixture.recall("mustnotpersist")["total_matches"], 0);
+            assert_eq!(fs::read(&ledger).unwrap(), original);
+            fixture.add("recoverymarker valid write after restoring history");
+            assert_eq!(fixture.recall("recoverymarker")["total_matches"], 1);
+            let recovered_records = ledger_records(&fixture);
+            assert_eq!(recovered_records.len(), 3);
+            for record in &original_records {
+                assert!(
+                    recovered_records.contains(record),
+                    "{label}: old record changed"
+                );
+            }
+            assert_eq!(fixture.recall("shapeprobe"), baseline);
+        }
+    }
+}
+
 struct Fixture(PathBuf);
 struct Running(Option<Child>);
 
