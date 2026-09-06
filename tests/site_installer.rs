@@ -2889,6 +2889,9 @@ fn installed_alias_matches_solo_through_a_provider_free_fixture() {
 
 // Extend the established loopback installer, not the host's managed integration.
 // The payload originates in local_candidate and has passed through site/install.
+#[path = "support/http_installed_memory_transfer.rs"]
+mod installed_memory_transfer;
+
 fn verify_http_installed_project_memory(
     root: &Path,
     installed: &Path,
@@ -2896,6 +2899,7 @@ fn verify_http_installed_project_memory(
     path: &str,
 ) {
     assert_eq!(sha256(installed), sha256(candidate));
+    installed_memory_transfer::verify(root, installed);
     let home_a = root.join("memory-home-a");
     let home_b = root.join("memory-home-b");
     let repo = root.join("memory-repo");
