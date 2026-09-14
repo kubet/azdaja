@@ -6126,7 +6126,8 @@ exit 9
     assert!(
         skill.contains("Azdaja 0.1.15") && skill.contains(dst.join("azdaja").to_str().unwrap())
     );
-    assert!(skill.contains("one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle"));
+    assert!(skill.contains("explicit user activation"));
+    assert!(!skill.contains("A matching task means invoke this skill now"));
     assert!(skill.contains("llm_batch(prompts, workers=6)"));
     assert!(skill.contains("Never rerun the whole transaction after a child call"));
     assert!(skill.contains("Never call `llm` for batch classification"));
@@ -6489,6 +6490,7 @@ print('```python\nFINAL("repo-memory-ok")\n```')
             .env("AZDAJA_HOME", &state)
             .env("JCODE_HOOK_EVENT", event)
             .env("JCODE_HOOK_SESSION_ID", "session-handoff")
+            .env("AZDAJA_JCODE_ACTIVATION", "session")
             .env("JCODE_HOOK_CWD", &repo)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -6556,7 +6558,6 @@ print('```python\nFINAL("repo-memory-ok")\n```')
         "dd if=src/lib.rs bs=4096 count=1",
         "printf '%s' \"$(<src/lib.rs)\"",
         "base64 src/lib.rs",
-        "sed -n '1,20p' src/lib.rs",
     ] {
         let input = serde_json::json!({"command": command}).to_string();
         let extracted = hook("pre_tool", Some("bash"), &input);
@@ -6568,6 +6569,13 @@ print('```python\nFINAL("repo-memory-ok")\n```')
         );
         assert!(extracted.stdout.is_empty(), "{command}");
     }
+    let bounded_read = hook(
+        "pre_tool",
+        Some("bash"),
+        r#"{"command":"sed -n '1,20p' src/lib.rs"}"#,
+    );
+    assert_eq!(bounded_read.status.code(), Some(0));
+    assert!(bounded_read.stdout.is_empty() && bounded_read.stderr.is_empty());
     let safe_build = hook(
         "pre_tool",
         Some("bash"),

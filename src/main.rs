@@ -1287,7 +1287,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
     match harness {
         "jcode" => Some((
             "Jcode",
-            "In Jcode, invoke the `azdaja` skill immediately when the user names Azdaja or before broad repository and multi-file inspection. Azdaja is the installed local virtual-memory tool. Skill loading alone is not memory work. On a broad-read block, put the current request in `<user task>`, run the challenged `solo --repo .` once, and continue from its answer. Never retry the blocked read. Narrow reads, Git control, builds, and tests stay available. If this skill was installed after the session started, reload all skills from `/skills` or restart Jcode.",
+            "In Jcode, use the `azdaja` skill only after explicit user activation for the current request, session, or repository. Skill loading and mentions are not activation. Without activation, or if Azdaja fails, continue with native tools. Hook routing requires explicit `AZDAJA_JCODE_ACTIVATION=request`, `session`, or `repository` in the host environment. On a broad-read block, put the current request in `<user task>`, run the challenged `solo --repo .` once, and continue from its answer. Never retry the blocked read. Narrow reads, Git control, builds, and tests stay available. If this skill was installed after the session started, reload all skills from `/skills` or restart Jcode.",
         )),
         "claude" => Some((
             "Claude Code",
@@ -1299,7 +1299,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "gemini" => Some((
             "Gemini",
-            "In Gemini, activate the `azdaja` skill before broad manual reads or shell sampling. Use the exact managed binary path below for every Azdaja command.",
+            "In Gemini, activate the `azdaja` skill only after explicit user choice. Without activation, continue with native tools. Use the exact managed binary path below for every Azdaja command.",
         )),
         "opencode" => Some((
             "OpenCode",
@@ -1311,11 +1311,11 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
 
 fn harness_skill_description(harness: &str, display: &str) -> String {
     match harness {
-        "jcode" => "MUST invoke Azdaja, the installed and available local az virtual-memory tool, whenever the user names it and before broad repository or multi-file inspection. Skill loading is awareness, not a memory pass. On a broad-read block, put the current request in <user task>, run the challenged solo --repo . once, continue from its answer, and never retry the blocked read.".to_owned(),
-        "claude" => "Use Azdaja only for exhaustive semantic judgment or classification over one input that exceeds 1 MiB or exceeds 200 records, or requires judging every record. Non-triggers: repository audits, code navigation, structural searches, bounded excerpts, smaller files, and deterministic count, tail, or checksum work. It is the installed and available local az virtual-memory tool when explicitly requested.".to_owned(),
-        "codex" | "opencode" => "Use Azdaja, the installed and available local az virtual-memory tool, only for exhaustive semantic judgment or classification over one input when it exceeds 1 MiB, exceeds 200 records, or requires judging every record. Also use it when explicitly asked to use Azdaja or confirm availability. Non-triggers: repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB without the record threshold, deterministic count/tail/checksum work, and a mere mention of Azdaja.".to_owned(),
+        "jcode" => "Use Azdaja only after explicit user activation for the current request, session, or repository. Skill loading is awareness, not activation. When active and a broad-read block occurs, put the current request in <user task>, run the challenged solo --repo . once, continue from its answer, and never retry the blocked read.".to_owned(),
+        "claude" => "Azdaja is used only after explicit user activation. When active, use it for exhaustive semantic judgment or classification over one input that exceeds 1 MiB, exceeds 200 records, or requires judging every record. Non-triggers without activation: repository audits, code navigation, structural searches, bounded excerpts, smaller files, and deterministic count, tail, or checksum work.".to_owned(),
+        "codex" | "opencode" => "Azdaja is used only after explicit user activation. When active, use it for exhaustive semantic judgment or classification over one input that exceeds 1 MiB, exceeds 200 records, or requires judging every record. Without activation, continue natively; repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB, deterministic count/tail/checksum work, availability questions, and a mere mention of Azdaja are not activation.".to_owned(),
         _ => format!(
-            "MUST invoke Azdaja, the installed and available local az virtual-memory tool, whenever the user names Azdaja, asks whether it is available, asks how to use it or how it works, or requests complete semantic work over inputs too large for one safe context. Invoke it before native inspection or broad manual reading in {display}."
+            "Use Azdaja in {display} only after explicit user activation for the current request, session, or repository. Without activation, continue with native tools."
         ),
     }
 }
@@ -3824,21 +3824,36 @@ fn validate_skill_custody(dst: &Path) -> Result<()> {
         .lines()
         .find_map(|line| line.strip_prefix("description: "))
         .ok_or_else(|| anyhow!("managed SKILL.md frontmatter description is missing"))?;
-    for required in ["Azdaja", "az virtual-memory tool", "installed", "available"] {
-        if !description.contains(required) {
-            bail!("managed SKILL.md description lacks awareness text {required:?}")
+    if !description.contains("Azdaja") || !description.to_ascii_lowercase().contains("explicit") {
+        bail!("managed SKILL.md description lacks the explicit activation contract")
+    }
+    for prohibited in [
+        "Mandatory",
+        "installed",
+        "available",
+        "whenever the prompt names Azdaja",
+        "Invoke before reading or solving natively",
+    ] {
+        if description.contains(prohibited) {
+            bail!("managed SKILL.md description retains coercive activation text")
         }
     }
     if !skill.contains(&format!("# Azdaja {VERSION}")) {
         bail!("managed SKILL.md version is not {VERSION}")
     }
-    for required in [
-        "## Managed-skill awareness",
+    for required in ["## Managed-skill awareness"] {
+        if !skill.contains(required) {
+            bail!("managed SKILL.md awareness section is incomplete: missing {required:?}")
+        }
+    }
+    for prohibited in [
+        "A matching task means invoke this skill now",
+        "must not solve a matching task natively",
         "answer **yes**",
         "Never claim ignorance of Azdaja",
     ] {
-        if !skill.contains(required) {
-            bail!("managed SKILL.md awareness section is incomplete")
+        if skill.contains(prohibited) {
+            bail!("managed SKILL.md retains coercive activation text")
         }
     }
     let embedded = shell_quote(&binary);
@@ -8946,16 +8961,11 @@ mod tests {
                     assert!(rendered.contains("repository audits, code navigation"));
                     assert!(rendered.contains("a mere mention of Azdaja"));
                 }
-                assert!(rendered.contains("installed and available local az virtual-memory tool"));
-                if matches!(harness, "claude" | "opencode") {
-                    assert!(rendered.contains(
-                        "Use one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
-                    ));
-                } else {
-                    assert!(rendered.contains(
-                        "Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`."
-                    ));
-                }
+                assert!(rendered.contains("activation"));
+                assert!(
+                    rendered.to_ascii_lowercase().contains("explicit")
+                        && rendered.to_ascii_lowercase().contains("user")
+                );
                 assert!(!rendered.contains("## Other-host `solo` lane"));
                 assert!(!rendered.contains("Other hosts: one `solo` call"));
                 if harness == "claude" {
@@ -8997,16 +9007,21 @@ mod tests {
                     assert!(rendered.contains("sole assistant response"));
                 }
             } else if harness == "jcode" {
-                assert!(rendered.contains("installed and available local az virtual-memory tool"));
-                assert!(rendered.contains("before broad repository or multi-file inspection"));
-                assert!(rendered.contains("Skill loading is awareness, not a memory pass"));
+                assert!(rendered.contains("activation"));
+                assert!(rendered.contains("Skill loading is awareness, not activation"));
+                assert!(rendered.contains(
+                    "Without activation, or if Azdaja fails, continue with native tools"
+                ));
+                assert!(rendered.contains("AZDAJA_JCODE_ACTIVATION=request"));
+                assert!(!rendered.contains("MUST invoke"));
+                assert!(!rendered.contains("invoke the `azdaja` skill immediately"));
                 assert!(rendered.contains("challenged solo --repo . once"));
             } else {
-                assert!(rendered.contains("installed and available local az virtual-memory tool"));
-                assert!(rendered.contains("before native inspection or broad manual reading"));
+                assert!(rendered.contains("activation"));
+                assert!(rendered.contains("Without activation, continue with native tools"));
             }
             assert!(rendered.contains("## Managed-skill awareness"));
-            assert!(rendered.contains("virtual-memory tool"));
+            assert!(rendered.contains("Azdaja"));
             assert!(rendered.contains(&shell_quote(binary)));
             assert!(!rendered.contains("{{VERSION}}"));
             assert!(!rendered.contains("{{BIN}}"));
@@ -9236,7 +9251,7 @@ mod tests {
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
         assert_eq!(
-            digest, "ea7094ca649543fe33e8666ee232b4e0c4aaa677c7536fbb340183d40a158d6c",
+            digest, "c115a35d9b280018d750d0415a53f5daadb513b0e900be65eee10b62fb65761d",
             "OpenCode rendered bytes changed"
         );
     }
@@ -9254,7 +9269,7 @@ mod tests {
             "exceeds 1 MiB",
             "exceeds 200 records",
             "requires judging every record",
-            "explicitly asked to use Azdaja",
+            "explicit user activation",
         ] {
             assert!(description.contains(trigger), "missing trigger: {trigger}");
         }
@@ -9578,19 +9593,19 @@ mod tests {
         let expected = [
             (
                 "default",
-                "588458246022efa6ee6a8ea29195accf1da829abe73917e4493c7a137dd886ee",
+                "65de259172b0b1be7c78b7491bf4fe8df69c2d92cb9f4a06e0cfba8a42744fc8",
             ),
             (
                 "jcode",
-                "69ef2dc83e3259721ba46a93c86ec88ea917567d614492fd05120fe2f46bf79f",
+                "5e1f217219d8476b4d47530302d489d6b82dc6bcb6d2604dec9ab7862cb3cff4",
             ),
             (
                 "codex",
-                "4583fcdc7f035f3af481273a492eca0a18f8b45b2375c9ef6eaa441094e6bb3a",
+                "fbf32094ecda59276298241c950efb0bc9227125e4b5dcbe718e0f1723f849ff",
             ),
             (
                 "gemini",
-                "008a19d9a670c31c87bc3df101128b7e5dfd557685b256f8a47865a612566fb3",
+                "f949274e8bccdc5748714c0a7495290e08aa8deb624132e51f2b82c54c7407d6",
             ),
         ];
         let actual = expected
