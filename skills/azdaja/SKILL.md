@@ -1,9 +1,9 @@
 ---
 name: azdaja
-description: Mandatory for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja, asks if it is installed or available, or names the az virtual-memory tool. Invoke before reading or solving natively.
+description: Opt-in for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja, asks if it is installed or available, or names the az virtual-memory tool. Invoke before reading or solving natively.
 ---
 
-# Azdaja 0.1.14
+# Azdaja 0.1.15
 
 ## Managed-skill awareness and route
 
