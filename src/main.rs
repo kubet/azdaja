@@ -1375,12 +1375,12 @@ fn render_managed_skill(harness: &str, binary: &Path) -> String {
             "Return the final value unchanged as the requested JSON object and sole response. Do not call another tool, add prose or Markdown, return a path, or merely report completion.\n\n### Cell contract",
             r#"### Standard cell contract
 
-Use this coworker lane by default. Use the user-supplied input path verbatim; load once for one complete evidence pass. Do not search, pre-read, or query CLI help.
+When explicitly opted in, use this coworker lane. Use the user-supplied input path verbatim; load once for one complete evidence pass. Do not search, pre-read, or query CLI help for the qualifying input.
 
 - Parse and reduce in code. Dedupe byte-identical evidence; retain occurrence IDs and multiplicities.
 - Semantic work uses shards of at most 256 unique items and 64 KiB each in one ordered `llm_batch(..., workers=6)`. Require compact positional JSON such as `{"labels":"TFT..."}`. Never call `llm` for batch classification; never use keyword, regex, substring, label-name, or hand-written semantic rules.
 - Validate coverage and the exact requested result shape. Do not emit per-record objects unless the user requested them. End with `FINAL(answer)` exactly once.
-- Fail on malformed, missing, extra, or `azdaja_error` output. Do not rerun the whole transaction after a child call or run a framing or diagnostic probe. Evaluations get no retry. Never fabricate labels or claim complete coverage from partial evidence; report failure and keep ordinary tools available.
+- Fail on malformed, missing, extra, or `azdaja_error` output. For the same semantic evaluation, do not rerun the whole transaction after a child call or run a framing or diagnostic probe. Do not let that restriction block ordinary follow-up work. Never fabricate labels or claim complete coverage from partial evidence; report failure and keep ordinary tools available.
 - `json` is preloaded; do not import modules, use host I/O, or catch failures to substitute labels.
 
 Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add prose unless exact format was requested.
@@ -9193,7 +9193,7 @@ mod tests {
             .expect("strict Claude lane boundary")
             .0;
         for contract in [
-            "Use this coworker lane by default",
+            "When explicitly opted in, use this coworker lane",
             "Use the user-supplied input path verbatim",
             "Parse and reduce in code",
             "at most 256 unique items and 64 KiB each",

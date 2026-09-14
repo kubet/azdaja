@@ -6124,7 +6124,7 @@ exit 9
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
     assert!(
-        skill.contains("Azdaja 0.1.15") && skill.contains(dst.join("azdaja").to_str().unwrap())
+        skill.contains("Azdaja 0.1.16") && skill.contains(dst.join("azdaja").to_str().unwrap())
     );
     assert!(skill.contains("explicit user activation"));
     assert!(!skill.contains("A matching task means invoke this skill now"));
