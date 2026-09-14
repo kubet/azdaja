@@ -163,7 +163,8 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
     let opencode_skill = fs::read_to_string(opencode.join("SKILL.md")).unwrap();
     let binary_text = opencode_binary.to_str().unwrap();
     assert!(opencode_skill.contains("Run this exact wrapper as one Bash call"));
-    assert!(opencode_skill.contains("one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle"));
+    assert!(opencode_skill.contains("Run exactly one lifecycle with exactly one literal `start`, `load`, `exec`, `final`, and `kill`"));
+    assert!(opencode_skill.contains("explicit user activation"));
     assert!(opencode_skill.contains("Its source load is the only `load`"));
     assert!(opencode_skill.contains("trap cleanup EXIT"));
     assert!(opencode_skill.contains("Use exactly one inline heredoc cell"));
