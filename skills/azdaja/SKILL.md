@@ -1,18 +1,17 @@
 ---
 name: azdaja
-description: Opt-in for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja, asks if it is installed or available, or names the az virtual-memory tool. Invoke before reading or solving natively.
+description: Use only when the user explicitly chooses Azdaja for the current request, session, or repository.
 ---
 
 # Azdaja 0.1.15
 
 ## Managed-skill awareness and route
 
-- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. OpenCode must not solve a matching task natively.
-- If asked whether Azdaja is available, run the resolver below. Answer **yes** only after its identity probe succeeds. Bare `az` may be Azure CLI and must never be accepted without the Azdaja version probe.
-- Jcode: loading is awareness, not memory. On a broad-read block, put this request in `<user task>`, run the challenged `solo --repo .` once, and continue from its answer. Never retry the blocked read. Narrow reads, Git control, builds, and tests remain available.
-- Keep raw input in Azdaja. Never copy it into host context or use a native full-source fallback.
-- Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`.
-- Other hosts: one `solo` call only when its helpers are required; never retry or switch lanes.
+- Optional. Use only after explicit user choice. Mentions, installed files, hooks, and skill loading do not activate Azdaja.
+- Check availability with the resolver below. Bare `az` may be Azure CLI and must never be accepted without the Azdaja identity probe.
+- Without activation, or when Azdaja fails, keep host-native tools available.
+- Jcode hook routing requires `AZDAJA_JCODE_ACTIVATION=request`, `session`, or `repository` in the host process environment. Do not set this automatically merely because the skill was loaded.
+- Azdaja is a cooperative workflow tool, not an OS sandbox.
 
 ## Claude Code and OpenCode
 
