@@ -3012,7 +3012,7 @@ fn claude_hook_samples_are_byte_bounded(samples: &[ClaudeHookSample], cwd: &Path
     Ok(true)
 }
 
-fn claude_hook_bash_metadata_only(command: &str) -> bool {
+fn claude_hook_bash_metadata_only(command: &str, cwd: &Path) -> bool {
     if command.contains("$(")
         || command.contains('`')
         || command.contains('<')
@@ -3052,22 +3052,34 @@ fn claude_hook_bash_metadata_only(command: &str) -> bool {
         }
         let safe = match program.as_str() {
             "pwd" | "true" => arguments.is_empty(),
-            // Copies do not send source contents into the model context.
+            // Ordinary copies do not send source contents into model context.
+            // Descriptor/device targets are not ordinary destinations.
             "cp" => {
-                let mut operands = 0;
-                arguments.iter().all(|argument| {
-                    if matches!(
-                        argument.as_str(),
-                        "-r" | "-R" | "-p" | "-a" | "-f" | "-n" | "--"
-                    ) {
+                let mut operands = Vec::new();
+                let mut options = true;
+                let safe = arguments.iter().all(|argument| {
+                    if options && argument == "--" {
+                        options = false;
                         true
-                    } else if argument.starts_with('-') {
-                        false
+                    } else if options && argument.starts_with('-') {
+                        matches!(argument.as_str(), "-r" | "-R" | "-p" | "-a" | "-f" | "-n")
                     } else {
-                        operands += 1;
-                        claude_hook_literal_path_operand(argument)
+                        options = false;
+                        operands.push(argument);
+                        claude_hook_literal_path_operand(argument) && argument != "-"
                     }
-                }) && operands >= 2
+                });
+                safe && operands.len() >= 2
+                    && operands.iter().all(|operand| {
+                        let path = claude_hook_resolve(cwd, operand);
+                        if let Ok(metadata) = fs::symlink_metadata(&path) {
+                            if !metadata.is_file() && !metadata.is_dir() {
+                                return false;
+                            }
+                        }
+                        let resolved = fs::canonicalize(&path).unwrap_or(path);
+                        !resolved.starts_with("/dev") && !resolved.starts_with("/proc")
+                    })
             }
             "wc" => {
                 let mut operands = Vec::new();
@@ -3162,7 +3174,7 @@ fn claude_hook_argument_is_large(raw: &str, cwd: &Path) -> Result<bool> {
 }
 
 fn claude_hook_bash_access(command: &str, cwd: &Path) -> Result<ClaudeHookBashAccess> {
-    if claude_hook_bash_metadata_only(command) {
+    if claude_hook_bash_metadata_only(command, cwd) {
         return Ok(ClaudeHookBashAccess::None);
     }
     if let Some(samples) = claude_hook_bounded_sample(command) {

@@ -52,8 +52,18 @@ fn event(
         "session_id": session,
         "hook_event_name": name,
         "cwd": cwd,
-        "tool_input": input,
     });
+    if name == "UserPromptSubmit" {
+        if let Some(prompt) = input.get("user_prompt").cloned() {
+            value["user_prompt"] = prompt;
+        }
+        if let Some(prompt) = input.get("prompt").cloned() {
+            value["prompt"] = prompt;
+        }
+        value["tool_input"] = serde_json::json!({});
+    } else {
+        value["tool_input"] = input;
+    }
     if let Some(tool) = tool {
         value["tool_name"] = serde_json::json!(tool);
     }
@@ -67,7 +77,8 @@ fn assert_denied(output: std::process::Output) {
         output.status,
         output.stderr
     );
-    assert!(!output.stdout.is_empty(), "expected a permission decision");
+    let decision: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(decision["hookSpecificOutput"]["permissionDecision"], "deny");
 }
 
 fn assert_open(output: std::process::Output) {
@@ -201,8 +212,7 @@ fn claude_hook_opt_in_handles_stale_markers_and_releases_failed_transactions() {
             serde_json::json!({"skill":"azdaja"}),
         ),
     ));
-    let transaction =
-        serde_json::json!({"command":"\"$AZ\" exec \"recovery\" >/dev/null <<'AZD\nanswer\nAZD"});
+    let transaction = serde_json::json!({"command":format!("set -euo pipefail\nAZ={}\nsid=\ncleanup() {{\nif [[ -n \"$sid\" ]]; then\n\"$AZ\" kill \"$sid\" >/dev/null 2>&1 || true\nfi\n}}\ntrap cleanup EXIT\nsid=\"$(\"$AZ\" start)\"\n\"$AZ\" load \"$sid\" '{}' source >/dev/null\n\"$AZ\" exec \"$sid\" >/dev/null <<'PY'\nFINAL(1)\nPY\n\"$AZ\" final \"$sid\"", env!("CARGO_BIN_EXE_azdaja"), cwd.join("small.txt").display())});
     assert_open(hook(
         &root,
         Some("session"),

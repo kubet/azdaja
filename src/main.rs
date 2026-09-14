@@ -9204,10 +9204,10 @@ mod tests {
             "Do not emit per-record objects unless the user requested them",
             "one complete evidence pass",
             "normal conversational answer",
-            "Never rerun the whole transaction after a child call",
+            "For the same semantic evaluation, do not rerun the whole transaction after a child call",
             "report failure and keep ordinary tools available",
             "framing or diagnostic probe",
-            "Evaluations get no retry",
+            "Do not let that restriction block ordinary follow-up work",
             "Never fabricate labels",
             "do not import modules",
         ] {
@@ -9593,19 +9593,19 @@ mod tests {
         let expected = [
             (
                 "default",
-                "65de259172b0b1be7c78b7491bf4fe8df69c2d92cb9f4a06e0cfba8a42744fc8",
+                "e6ede5e6d21b41ad15741d5d553c8e7300f7735b0505610b6ef787949566b7a1",
             ),
             (
                 "jcode",
-                "5e1f217219d8476b4d47530302d489d6b82dc6bcb6d2604dec9ab7862cb3cff4",
+                "4e926666e92dfd8a606725284b2660705edd4d29b012067ef6bee3ac9f143d4e",
             ),
             (
                 "codex",
-                "fbf32094ecda59276298241c950efb0bc9227125e4b5dcbe718e0f1723f849ff",
+                "3421e86408aae07f33a6c07edf2e92c5ae0ec6f68c4f83da91a49e906ba3d7d8",
             ),
             (
                 "gemini",
-                "f949274e8bccdc5748714c0a7495290e08aa8deb624132e51f2b82c54c7407d6",
+                "8dd7af1ae70a1205c22eb8303160f17112dbb3727a2c1a3dcf2123d7fdad747c",
             ),
         ];
         let actual = expected
