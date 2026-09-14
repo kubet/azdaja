@@ -1188,7 +1188,7 @@ const LEGACY_MANAGED_OPENCODE_CONFIGS: &[&[u8]] = &[include_bytes!(
     "../assets/legacy/opencode-config-f077082c.toml"
 )];
 
-const CLAUDE_ACTIVATION_RULE: &str = r#"Invoke `Skill` with `azdaja` only when the answer requires exhaustive semantic judgment or classification over one input and that input exceeds 1 MiB, exceeds 200 records, or the prompt requires judging every record. Do not invoke it for repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB when no record threshold applies, or deterministic count, tail, and checksum work. Activation is session-sticky. Discovery is not invocation.
+const CLAUDE_ACTIVATION_RULE: &str = r#"Invoke `Skill` with `azdaja` only after the user explicitly opts in for this request, session, or repository, and only when the answer requires exhaustive semantic judgment or classification over one input and that input exceeds 1 MiB, exceeds 200 records, or the prompt requires judging every record. Skill loading, discovery, and mentions never activate it. Without explicit opt-in, continue with native tools, including repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB when no record threshold applies, and deterministic count, tail, and checksum work. Hook routing is enabled only when the host environment explicitly sets `AZDAJA_CLAUDE_ACTIVATION=request`, `session`, or `repository`; this installer never sets it automatically.
 "#;
 
 const CLAUDE_HOOKS: &str = r#"{
@@ -1291,7 +1291,7 @@ fn harness_skill_profile(harness: &str) -> Option<(&'static str, &'static str)> 
         )),
         "claude" => Some((
             "Claude Code",
-            "<execution_state>Azdaja is active and session-sticky; stay in the main conversation.</execution_state>\n<execution_contract>\n1. The mandatory route is narrow: exhaustive semantic judgment or classification over one input that exceeds 1 MiB, exceeds 200 records, or requires judging every record.\n2. Use the standard coworker lane by default. Run one Bash lifecycle transaction with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; deterministic reduction is allowed, while semantic judgment must use one ordered `llm_batch(..., workers=6)` pass.\n3. Use the strict A/B, adjudication, JSON-only, fail-closed lane only for an explicit audit-grade, benchmark, or machine-graded exact-schema request.\n4. After a successful transaction, integrate `FINAL` into the normal conversational answer. Do not call Skill again in this session.\n5. The first Bash lifecycle is the final tool call: answer from stdout or report failure. Never run a framing/diagnostic probe, another Azdaja command, or a whole-transaction retry after a child-model call. Never replace semantic judgment with keyword, regex, substring, or hand-written rules. Malformed or incomplete semantic output fails closed rather than fabricating labels.\nFailure must not strand ordinary follow-up work.</execution_contract>",
+            "<execution_state>Azdaja is inactive unless the user explicitly opts in for this request, session, or repository.</execution_state>\n<execution_contract>\n1. Use Azdaja only after explicit user opt-in and only for exhaustive semantic judgment or classification over one input that exceeds 1 MiB, exceeds 200 records, or requires judging every record. Skill loading, discovery, and mentions never activate it.\n2. Without opt-in, continue with native tools. Ordinary tools, copy, code navigation, audits, bounded reads, builds, tests, and ordinary follow-up work remain available.\n3. Hook routing requires the host environment to explicitly set `AZDAJA_CLAUDE_ACTIVATION=request`, `session`, or `repository`; never set it automatically.\n4. When opted in, use the standard coworker lane by default. Run one Bash lifecycle transaction with exactly one literal `start`, `load`, `exec`, `final`, and `kill`; deterministic reduction is allowed, while semantic judgment must use one ordered `llm_batch(..., workers=6)` pass.\n5. Use the strict A/B, adjudication, JSON-only, fail-closed lane only for an explicit audit-grade, benchmark, or machine-graded exact-schema request. Preserve semantic integrity inside the requested lifecycle. A failed transaction must not strand ordinary tools or force final-tool-call wording for ordinary follow-up.\nMalformed or incomplete semantic output fails closed rather than fabricating labels.</execution_contract>",
         )),
         "codex" => Some((
             "Codex",
@@ -1380,7 +1380,7 @@ Use this coworker lane by default. Use the user-supplied input path verbatim; lo
 - Parse and reduce in code. Dedupe byte-identical evidence; retain occurrence IDs and multiplicities.
 - Semantic work uses shards of at most 256 unique items and 64 KiB each in one ordered `llm_batch(..., workers=6)`. Require compact positional JSON such as `{"labels":"TFT..."}`. Never call `llm` for batch classification; never use keyword, regex, substring, label-name, or hand-written semantic rules.
 - Validate coverage and the exact requested result shape. Do not emit per-record objects unless the user requested them. End with `FINAL(answer)` exactly once.
-- Fail on malformed, missing, extra, or `azdaja_error` output. The first Bash lifecycle is the final tool call. Never rerun the whole transaction after a child call or run a framing or diagnostic probe. Evaluations get no retry. Never fabricate labels or claim complete coverage from partial evidence.
+- Fail on malformed, missing, extra, or `azdaja_error` output. Do not rerun the whole transaction after a child call or run a framing or diagnostic probe. Evaluations get no retry. Never fabricate labels or claim complete coverage from partial evidence; report failure and keep ordinary tools available.
 - `json` is preloaded; do not import modules, use host I/O, or catch failures to substitute labels.
 
 Treat `azdaja final` stdout as working evidence. Integrate its `FINAL` value into the normal conversational answer. Add prose unless exact format was requested.
@@ -9205,7 +9205,7 @@ mod tests {
             "one complete evidence pass",
             "normal conversational answer",
             "Never rerun the whole transaction after a child call",
-            "The first Bash lifecycle is the final tool call",
+            "report failure and keep ordinary tools available",
             "framing or diagnostic probe",
             "Evaluations get no retry",
             "Never fabricate labels",
@@ -9630,7 +9630,7 @@ mod tests {
     fn claude_activation_rule_is_narrow_semantic_and_names_nontriggers() {
         let rule = render_claude_activation_rule();
         assert!(
-            rule.len() <= 500,
+            rule.len() <= 1_000,
             "activation rule grew to {} bytes",
             rule.len()
         );
@@ -9651,8 +9651,10 @@ mod tests {
                 "missing nontrigger: {nontrigger}"
             );
         }
-        assert!(rule.contains("Activation is session-sticky"));
-        assert!(rule.contains("Discovery is not invocation"));
+        assert!(rule.contains("explicitly opts in"));
+        assert!(rule.contains("Skill loading, discovery, and mentions never activate it"));
+        assert!(rule.contains("AZDAJA_CLAUDE_ACTIVATION=request"));
+        assert!(rule.contains("this installer never sets it automatically"));
         assert_eq!(CLAUDE_HOOKS.matches("\"timeout\": 30").count(), 5);
         assert!(CLAUDE_HOOKS.contains("\"matcher\": \"Skill|Bash\""));
         assert!(CLAUDE_HOOKS.contains("PostToolUseFailure"));
