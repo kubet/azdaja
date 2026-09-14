@@ -304,6 +304,66 @@ fn claude_hook_active_allows_ordinary_cp_read_grep_and_screenshot_workflow() {
             event(session, "PreToolUse", &cwd, Some(tool), input),
         ));
     }
+    let missing = cwd.join("absent.txt");
+    let failed_copy = cwd.join("failed.bin");
+    let missing_command = serde_json::json!({
+        "command": format!("cp {} {}", missing.display(), failed_copy.display())
+    });
+    assert_open(hook(
+        &root,
+        Some("request"),
+        event(
+            session,
+            "PreToolUse",
+            &cwd,
+            Some("Bash"),
+            missing_command.clone(),
+        ),
+    ));
+    assert_open(hook(
+        &root,
+        Some("request"),
+        event(
+            session,
+            "PostToolUseFailure",
+            &cwd,
+            Some("Bash"),
+            missing_command,
+        ),
+    ));
+    assert_open(hook(
+        &root,
+        Some("request"),
+        event(
+            session,
+            "PreToolUse",
+            &cwd,
+            Some("Read"),
+            serde_json::json!({"file_path": small}),
+        ),
+    ));
+    assert_open(hook(
+        &root,
+        Some("request"),
+        event(
+            session,
+            "UserPromptSubmit",
+            &cwd,
+            None,
+            serde_json::json!({"user_prompt":"Classify every record in the full input."}),
+        ),
+    ));
+    assert_open(hook(
+        &root,
+        Some("request"),
+        event(
+            session,
+            "PostToolUse",
+            &cwd,
+            Some("Skill"),
+            serde_json::json!({"skill":"azdaja"}),
+        ),
+    ));
     for destination in [
         "/dev/stdout",
         "/dev/fd/1",

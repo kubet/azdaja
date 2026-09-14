@@ -6968,7 +6968,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
     let activation = t.join(".claude/skills/azdaja/ACTIVATION.md");
     let activation_text = fs::read_to_string(&activation).unwrap();
     assert!(activation_text.len() <= 500);
-    assert!(activation_text.contains("exhaustive semantic judgment or classification"));
+    assert!(activation_text.contains("exhaustive semantic judgment"));
     assert!(activation_text.contains("repository audits"));
     assert!(activation_text.contains("deterministic count, tail, and checksum work"));
     let plugin =
