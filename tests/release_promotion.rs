@@ -11,11 +11,11 @@ use std::{
 static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 const RUN_ID: &str = "645";
 const RUN_ATTEMPT: &str = "2";
-const VERSION: &str = "0.1.15";
+const VERSION: &str = "0.1.16";
 const TARGETS: [(&str, &str); 3] = [
-    ("aarch64-apple-darwin", "azdaja-v0.1.15-darwin-arm64"),
-    ("x86_64-apple-darwin", "azdaja-v0.1.15-darwin-x86_64"),
-    ("x86_64-unknown-linux-gnu", "azdaja-v0.1.15-linux-x86_64"),
+    ("aarch64-apple-darwin", "azdaja-v0.1.16-darwin-arm64"),
+    ("x86_64-apple-darwin", "azdaja-v0.1.16-darwin-x86_64"),
+    ("x86_64-unknown-linux-gnu", "azdaja-v0.1.16-linux-x86_64"),
 ];
 
 struct Scratch(PathBuf);
@@ -201,9 +201,9 @@ fn promotion_succeeds_with_exact_payloads_and_is_deterministic() {
             "PROVENANCE.json",
             "SHA256SUMS",
             "THIRD-PARTY-NOTICES.md",
-            "azdaja-v0.1.15-darwin-arm64",
-            "azdaja-v0.1.15-darwin-x86_64",
-            "azdaja-v0.1.15-linux-x86_64",
+            "azdaja-v0.1.16-darwin-arm64",
+            "azdaja-v0.1.16-darwin-x86_64",
+            "azdaja-v0.1.16-linux-x86_64",
         ]
     );
     assert_eq!(
@@ -318,7 +318,7 @@ fn promotion_rejects_receipt_identity_and_wrong_magic_atomically() {
         ),
         (
             "version",
-            "\"version\":\"0.1.15\"",
+            "\"version\":\"0.1.16\"",
             "\"version\":\"0.1.13\"",
             "receipt mismatch for version",
         ),

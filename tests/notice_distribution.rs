@@ -116,6 +116,7 @@ fn cargo_package_list_matches_the_reviewed_file_allowlist() {
             "src/observability.rs",
             "src/repo_source.rs",
             "src/tui.rs",
+            "tests/claude_nonblocking.rs",
         ]
     );
 }
@@ -170,9 +171,9 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads()
         std::process::id()
     ));
     fs::create_dir(&dist).unwrap();
-    let darwin = dist.join("azdaja-v0.1.15-darwin-arm64");
-    let darwin_x86_64 = dist.join("azdaja-v0.1.15-darwin-x86_64");
-    let linux = dist.join("azdaja-v0.1.15-linux-x86_64");
+    let darwin = dist.join("azdaja-v0.1.16-darwin-arm64");
+    let darwin_x86_64 = dist.join("azdaja-v0.1.16-darwin-x86_64");
+    let linux = dist.join("azdaja-v0.1.16-linux-x86_64");
     fs::write(&darwin, b"raw darwin binary").unwrap();
     fs::write(&darwin_x86_64, b"raw darwin x86-64 binary").unwrap();
     fs::write(&linux, b"raw linux binary").unwrap();
@@ -204,9 +205,9 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads()
     let lines: Vec<_> = sums.lines().collect();
     assert_eq!(lines.len(), 5);
     for name in [
-        "azdaja-v0.1.15-darwin-arm64",
-        "azdaja-v0.1.15-darwin-x86_64",
-        "azdaja-v0.1.15-linux-x86_64",
+        "azdaja-v0.1.16-darwin-arm64",
+        "azdaja-v0.1.16-darwin-x86_64",
+        "azdaja-v0.1.16-linux-x86_64",
         "LICENSE",
         "THIRD-PARTY-NOTICES.md",
     ] {

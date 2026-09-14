@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidateNotNullOrEmpty()]
-    [string]$Version = "0.1.15",
+    [string]$Version = "0.1.16",
 
     [ValidateNotNullOrEmpty()]
     [string]$ReleaseRoot = "https://azdaja.dev/releases",
