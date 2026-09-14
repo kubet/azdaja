@@ -6873,26 +6873,15 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             .lines()
             .find_map(|line| line.strip_prefix("description: "))
             .expect("installed skill description");
-        let size_trigger = match harness {
-            "jcode" => "broad repository or multi-file inspection",
-            "claude" => "exhaustive semantic judgment or classification over one input",
-            "codex" | "opencode" => "exhaustive semantic judgment or classification over one input",
-            _ => "inputs too large",
-        };
-        let mut triggers = vec![
-            size_trigger,
-            "Azdaja",
-            "az virtual-memory tool",
-            "installed",
-            "available",
-        ];
-        if !matches!(harness, "jcode" | "claude" | "codex" | "opencode") {
-            triggers.push("how to use");
+        for required in ["Azdaja", "explicit user activation"] {
+            assert!(description.contains(required), "{harness} lacks {required}");
         }
-        for trigger in triggers {
+        assert!(!description.contains("MUST invoke"));
+        assert!(!description.contains("installed and available"));
+        if matches!(harness, "claude" | "codex" | "opencode") {
             assert!(
-                description.contains(trigger),
-                "{harness} description is missing trigger {trigger:?}"
+                description
+                    .contains("exhaustive semantic judgment or classification over one input")
             );
         }
         if matches!(harness, "codex" | "opencode") {
@@ -6938,13 +6927,18 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
         }
         for awareness in [
             "## Managed-skill awareness",
-            "answer **yes**",
-            "local `az` virtual-memory tool",
-            "Never claim ignorance of Azdaja",
+            "Optional; use only after explicit user choice.",
+            "On absence or failure, leave host-native tools available.",
         ] {
             assert!(
                 skill.contains(awareness),
                 "{harness} skill is missing awareness text {awareness:?}"
+            );
+        }
+        for prohibited in ["answer **yes**", "Never claim ignorance of Azdaja"] {
+            assert!(
+                !skill.contains(prohibited),
+                "{harness} forces availability claims"
             );
         }
         let internal_commands = skill
