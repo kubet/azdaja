@@ -1,18 +1,16 @@
 ---
 name: azdaja
-description: Mandatory for complete semantic classification, review, extraction, or reduction over a large file (over 1 MiB, over 200 records, or too large for one Read), and whenever the prompt names Azdaja, asks if it is installed or available, or names the az virtual-memory tool. Invoke before reading or solving natively.
+description: Use only when the user explicitly chooses Azdaja for the current request, session, or repository.
 ---
 
 # Azdaja {{VERSION}}
 
 ## Managed-skill awareness and route
 
-- A matching task means invoke this skill now, before any `Read`, `Grep`, or Bash inspection. OpenCode must not solve a matching task natively.
-- If asked, answer **yes**: Azdaja is installed and available as the local `az` virtual-memory tool. Never claim ignorance of Azdaja. Use only the embedded path below; bare `az` may be Azure CLI.
-- Jcode: loading is awareness, not memory. On a broad-read block, put this request in `<user task>`, run the challenged `solo --repo .` once, and continue from its answer. Never retry the blocked read. Narrow reads, Git control, builds, and tests remain available.
-- Keep raw input in Azdaja. Never copy it into host context or use a native full-source fallback.
-- Claude Code and OpenCode: one explicit `start`/`load`/`exec`/`final`/`kill` lifecycle; never `solo`.
-- Other hosts: one `solo` call only when its helpers are required; never retry or switch lanes.
+- Optional; use only after explicit user choice.
+- Do not infer activation from mentions, files, hooks, or binaries.
+- On absence or failure, leave host-native tools available.
+- Azdaja is not an OS sandbox.
 
 ## Claude Code and OpenCode
 

@@ -138,9 +138,9 @@ jobs:
             Darwin-arm64|Darwin-x86_64|Linux-x86_64) ;;
             *) printf 'unsupported CI host: %s-%s\n' "$(uname -s)" "$(uname -m)" >&2; exit 1 ;;
           esac
-          cp "$candidate" "$fixture/azdaja-v0.1.14-darwin-arm64"
-          cp "$candidate" "$fixture/azdaja-v0.1.14-darwin-x86_64"
-          cp "$candidate" "$fixture/azdaja-v0.1.14-linux-x86_64"
+          cp "$candidate" "$fixture/azdaja-v0.1.15-darwin-arm64"
+          cp "$candidate" "$fixture/azdaja-v0.1.15-darwin-x86_64"
+          cp "$candidate" "$fixture/azdaja-v0.1.15-linux-x86_64"
           cp LICENSE THIRD-PARTY-NOTICES.md "$fixture/"
           python3 - "$fixture" "$digest" <<'PY'
           import hashlib
@@ -148,9 +148,9 @@ jobs:
           import sys
           fixture, binary_digest = pathlib.Path(sys.argv[1]), sys.argv[2]
           payloads = [
-              ("azdaja-v0.1.14-darwin-arm64", binary_digest),
-              ("azdaja-v0.1.14-darwin-x86_64", binary_digest),
-              ("azdaja-v0.1.14-linux-x86_64", binary_digest),
+              ("azdaja-v0.1.15-darwin-arm64", binary_digest),
+              ("azdaja-v0.1.15-darwin-x86_64", binary_digest),
+              ("azdaja-v0.1.15-linux-x86_64", binary_digest),
               ("LICENSE", hashlib.sha256((fixture / "LICENSE").read_bytes()).hexdigest()),
               ("THIRD-PARTY-NOTICES.md", hashlib.sha256((fixture / "THIRD-PARTY-NOTICES.md").read_bytes()).hexdigest()),
           ]
@@ -220,7 +220,7 @@ jobs:
           cmp THIRD-PARTY-NOTICES.md "$home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
 
           cat > "$scratch/expected-help" <<'EOF'
-          AZDAJA v0.1.14 — virtual memory for language models
+          AZDAJA v0.1.15 — virtual memory for language models
           Usage: az <command>
           Commands: help solo map install doctor start load exec final list kill uninstall memory
           Install: az install  (auto-detects supported tools)
@@ -279,9 +279,9 @@ jobs:
           host = subprocess.check_output(["rustc", "-vV"], text=True)
           host = next(line.split(": ", 1)[1] for line in host.splitlines() if line.startswith("host: "))
           assets = {
-              "aarch64-apple-darwin": "azdaja-v0.1.14-darwin-arm64",
-              "x86_64-apple-darwin": "azdaja-v0.1.14-darwin-x86_64",
-              "x86_64-unknown-linux-gnu": "azdaja-v0.1.14-linux-x86_64",
+              "aarch64-apple-darwin": "azdaja-v0.1.15-darwin-arm64",
+              "x86_64-apple-darwin": "azdaja-v0.1.15-darwin-x86_64",
+              "x86_64-unknown-linux-gnu": "azdaja-v0.1.15-linux-x86_64",
           }
           if host not in assets:
               raise SystemExit(f"unsupported standalone target: {host}")
@@ -305,7 +305,7 @@ jobs:
           if not architecture_valid:
               raise SystemExit(f"binary architecture validation failed for {host}")
           reported_version = subprocess.check_output([str(source), "--version"], text=True).strip()
-          if reported_version != "azdaja 0.1.14 (monty 0.0.21)":
+          if reported_version != "azdaja 0.1.15 (monty 0.0.21)":
               raise SystemExit(f"unexpected binary version: {reported_version}")
           receipt = {
               "schema_version": 1,
@@ -316,7 +316,7 @@ jobs:
               "asset_name": asset_name,
               "bytes": len(data),
               "sha256": hashlib.sha256(data).hexdigest(),
-              "version": "0.1.14",
+              "version": "0.1.15",
               "architecture_validation": True,
               "publication_authorized": False,
           }
@@ -396,7 +396,7 @@ jobs:
           set -euo pipefail
           mkdir release-candidate
           cp "target/${{ matrix.rust_target }}/release/azdaja" \
-            "release-candidate/azdaja-v0.1.14-${{ matrix.asset }}"
+            "release-candidate/azdaja-v0.1.15-${{ matrix.asset }}"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: github.event_name == 'workflow_dispatch'
         with:
@@ -438,10 +438,10 @@ jobs:
         shell: pwsh
         run: |
           $scratch = Join-Path $env:RUNNER_TEMP "azdaja-windows-installer-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $release = Join-Path $scratch "v0.1.14"
+          $release = Join-Path $scratch "v0.1.15"
           $install = Join-Path $scratch "installed"
           $tamperedInstall = Join-Path $scratch "tampered-installed"
-          $asset = "azdaja-v0.1.14-windows-x86_64.exe"
+          $asset = "azdaja-v0.1.15-windows-x86_64.exe"
           try {
             New-Item -ItemType Directory -Path $release -Force | Out-Null
             Copy-Item .\target\release\azdaja.exe (Join-Path $release $asset)
@@ -481,7 +481,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path release-candidate | Out-Null
           Copy-Item .\target\release\azdaja.exe `
-            .\release-candidate\azdaja-v0.1.14-windows-x86_64.exe
+            .\release-candidate\azdaja-v0.1.15-windows-x86_64.exe
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: github.event_name == 'workflow_dispatch'
         with:

@@ -53,6 +53,15 @@ impl Fixture {
     }
 
     fn event(&self, tool: &str, input: serde_json::Value) -> Output {
+        self.event_with_activation(tool, input, Some("session"))
+    }
+
+    fn event_with_activation(
+        &self,
+        tool: &str,
+        input: serde_json::Value,
+        activation: Option<&str>,
+    ) -> Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_azdaja"));
         for (key, _) in std::env::vars_os() {
             if ["AZDAJA_", "JCODE_", "GIT_"]
@@ -69,7 +78,6 @@ impl Fixture {
             .env("XDG_CONFIG_HOME", self.0.join("config"))
             .env("XDG_STATE_HOME", self.0.join("state"))
             .env("AZDAJA_HOME", self.0.join("az-state"))
-            .env("AZDAJA_JCODE_ACTIVATION", "session")
             .env("JCODE_HOOK_EVENT", "pre_tool")
             .env("JCODE_HOOK_SESSION_ID", "release-command-fixture")
             .env("JCODE_HOOK_CWD", self.0.join("repo"))
@@ -78,6 +86,9 @@ impl Fixture {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        if let Some(activation) = activation {
+            command.env("AZDAJA_JCODE_ACTIVATION", activation);
+        }
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt;
@@ -234,4 +245,43 @@ fn active_hook_allows_release_build_events_without_unlocking_broad_reads() {
         blocked.stderr, still_blocked.stderr,
         "the pending challenge changed"
     );
+}
+
+#[test]
+fn source_install_hook_blocking_requires_explicit_session_activation() {
+    let fixture = Fixture::new();
+    let broad =
+        json!({"file_path": fixture.0.join("repo/source.txt"), "start_line": 1, "limit": 5000});
+    let inactive = fixture.event_with_activation("read", broad.clone(), None);
+    assert_eq!(
+        inactive.status.code(),
+        Some(0),
+        "unactivated control: {inactive:?}"
+    );
+    assert!(inactive.stdout.is_empty() && inactive.stderr.is_empty());
+    let active = fixture.event("read", broad.clone());
+    assert_eq!(
+        active.status.code(),
+        Some(2),
+        "explicit CI activation: {active:?}"
+    );
+    assert!(active.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&active.stderr).contains("AZDAJA_JCODE_CHALLENGE="));
+    let pending = snapshot(&fixture.0);
+    for (tool, input) in [
+        ("read", broad),
+        (
+            "bash",
+            json!({"command":"npx playwright screenshot http://localhost:3000/live arena.png"}),
+        ),
+    ] {
+        let inactive = fixture.event_with_activation(tool, input, None);
+        assert!(
+            inactive.status.success(),
+            "pending challenge blocked inactive hook: {inactive:?}"
+        );
+        assert!(inactive.stdout.is_empty() && inactive.stderr.is_empty());
+    }
+    assert_eq!(pending, snapshot(&fixture.0));
+    eprintln!("source_install_hook inactive_exit=0 explicit_session_exit=2");
 }
