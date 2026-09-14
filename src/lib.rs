@@ -3052,6 +3052,23 @@ fn claude_hook_bash_metadata_only(command: &str) -> bool {
         }
         let safe = match program.as_str() {
             "pwd" | "true" => arguments.is_empty(),
+            // Copies do not send source contents into the model context.
+            "cp" => {
+                let mut operands = 0;
+                arguments.iter().all(|argument| {
+                    if matches!(
+                        argument.as_str(),
+                        "-r" | "-R" | "-p" | "-a" | "-f" | "-n" | "--"
+                    ) {
+                        true
+                    } else if argument.starts_with('-') {
+                        false
+                    } else {
+                        operands += 1;
+                        claude_hook_literal_path_operand(argument)
+                    }
+                }) && operands >= 2
+            }
             "wc" => {
                 let mut operands = Vec::new();
                 let options_safe = arguments.iter().all(|argument| {
@@ -3222,7 +3239,7 @@ fn claude_hook_lifecycle_denial() -> String {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
-            "permissionDecisionReason": "After Azdaja activation, use exactly one managed Bash transaction containing start/load/exec/final/kill. Do not inspect, stage, validate, or retry with another tool."
+            "permissionDecisionReason": "An Azdaja transaction is already in flight for this request. Ordinary tools remain available. Submit a new prompt to reset this request if the transaction was interrupted."
         }
     })
     .to_string()
@@ -3417,15 +3434,15 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
                 .and_then(serde_json::Value::as_str)
                 .is_some_and(claude_hook_coverage_prompt) =>
         {
-            // Activation belongs to the session. Prompt-scoped coverage and leases
-            // reset without forgetting that Claude already loaded the skill.
-            for path in [&coverage, &sample, &transaction] {
+            // Every prompt gets a fresh scope, including activation and leases.
+            // Never inherit the previous request's skill monopoly.
+            for path in [&coverage, &active, &sample, &transaction] {
                 claude_hook_remove_marker(path)?;
             }
             claude_hook_write_marker(&coverage)?;
         }
         "UserPromptSubmit" => {
-            for path in [&coverage, &sample, &transaction] {
+            for path in [&coverage, &active, &sample, &transaction] {
                 claude_hook_remove_marker(path)?;
             }
         }
@@ -3450,27 +3467,17 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
             {
                 // PostToolUse means the claimed transaction succeeded. Release this
                 // prompt so Claude can use ordinary tools and answer normally.
-                for path in [&coverage, &sample, &transaction] {
+                for path in [&coverage, &active, &sample, &transaction] {
                     claude_hook_remove_marker(path)?;
                 }
             }
         }
         "PostToolUseFailure" => {
-            let tool = event
-                .get("tool_name")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or_default();
-            let command = event
-                .get("tool_input")
-                .and_then(|input| input.get("command"))
-                .and_then(serde_json::Value::as_str);
-            if tool == "Bash"
-                && command.is_some_and(claude_hook_is_managed_transaction)
-                && claude_hook_marker_present(&transaction)?
-            {
-                // The standard lane permits one disclosed retry. The skill owns
-                // that cap; the hook only releases the failed transaction lease.
-                claude_hook_remove_marker(&transaction)?;
+            // Fail closed for the requested semantic result, not for the host's
+            // entire conversation. Even an unrecognized/failed wrapper releases
+            // routing so recovery does not require another recognized wrapper.
+            for path in [&coverage, &active, &sample, &transaction] {
+                claude_hook_remove_marker(path)?;
             }
         }
         "PreToolUse" => {
@@ -3482,20 +3489,17 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or_default();
             let tool_input = event.get("tool_input").unwrap_or(&serde_json::Value::Null);
-            if claude_hook_marker_present(&active)? {
-                if tool == "StructuredOutput" {
+            // A loaded skill is not a tool monopoly. Only recognize the managed
+            // transaction here; ordinary tools still use the narrow access classifier.
+            if tool == "Bash"
+                && tool_input
+                    .get("command")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(claude_hook_is_managed_transaction)
+                && claude_hook_marker_present(&active)?
+            {
+                if claude_hook_claim_sample(&transaction)? {
                     return Ok(None);
-                }
-                if tool == "Bash" {
-                    let command = tool_input
-                        .get("command")
-                        .and_then(serde_json::Value::as_str)
-                        .unwrap_or_default();
-                    if claude_hook_is_managed_transaction(command)
-                        && claude_hook_claim_sample(&transaction)?
-                    {
-                        return Ok(None);
-                    }
                 }
                 return Ok(Some(claude_hook_lifecycle_denial()));
             }
@@ -3611,6 +3615,14 @@ where
 }
 
 pub fn claude_hook(input: &str) -> Result<Option<String>> {
+    // Host-owned opt-in only. Old markers, skill discovery, and heuristic prompt
+    // matches must not activate restrictions or mutate state in ordinary sessions.
+    if !matches!(
+        std::env::var("AZDAJA_CLAUDE_ACTIVATION").as_deref(),
+        Ok("request" | "session" | "repository")
+    ) {
+        return Ok(None);
+    }
     let event: serde_json::Value = match serde_json::from_str(input) {
         Ok(event) => event,
         Err(_) => return Ok(None),
@@ -12825,7 +12837,7 @@ PY
     }
 
     #[test]
-    fn claude_hook_activation_is_session_sticky_and_success_releases_prompt() {
+    fn claude_hook_activation_is_request_scoped_and_completion_releases_prompt() {
         let base = unique_temp_dir("azdaja-claude-hook-sticky");
         let root = base.join("markers");
         let large = base.join("records.jsonl");
@@ -12896,7 +12908,7 @@ PY
             "successful managed work must release the current prompt"
         );
         let (_, active, _, _) = claude_hook_paths(&root, session);
-        assert!(claude_hook_marker_present(&active).unwrap());
+        assert!(!claude_hook_marker_present(&active).unwrap());
 
         let unrelated = event(
             session,
@@ -12907,13 +12919,13 @@ PY
             Some("Explain the result in one paragraph."),
         );
         assert_eq!(claude_hook_with_root(&unrelated, &root).unwrap(), None);
-        assert!(claude_hook_marker_present(&active).unwrap());
+        assert!(!claude_hook_marker_present(&active).unwrap());
 
         assert_eq!(claude_hook_with_root(&prompt, &root).unwrap(), None);
         let premature_read = claude_hook_with_root(&followup_read, &root).unwrap();
         assert!(
             premature_read.is_some(),
-            "sticky activation must require the managed transaction on later semantic prompts"
+            "explicit routing still protects broad reads on later semantic prompts"
         );
         fs::remove_dir_all(base).unwrap();
     }
