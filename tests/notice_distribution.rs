@@ -386,7 +386,7 @@ fn ci_windows_safety_is_strict_and_retains_exact_commit_candidates() {
     assert!(job.contains("cargo test --lib --bin azdaja --locked -- --test-threads=1"));
     assert!(job.contains(".\\target\\release\\azdaja.exe --version"));
     assert!(job.contains(".\\target\\release\\azdaja.exe doctor --caps"));
-    assert!(job.contains("azdaja-v0.1.15-windows-x86_64.exe"));
+    assert!(job.contains("azdaja-v0.1.16-windows-x86_64.exe"));
     assert!(
         job.contains(
             "azdaja-standalone-windows-x86_64-${{ github.sha }}-${{ github.run_attempt }}"
@@ -472,4 +472,26 @@ fn intel_darwin_dependency_delta_is_already_in_the_reviewed_notice_corpus() {
     assert!(
         notices.contains("pkg:cargo/spin@0.9.9 — `src/barrier.rs` (archive_legal_header_block)")
     );
+}
+
+#[test]
+fn workflow_release_identity_matches_current_package_version() {
+    let version = env!("CARGO_PKG_VERSION");
+    let pattern = regex::Regex::new(r"(?i)azdaja[ -]v?(\d+\.\d+\.\d+)").unwrap();
+    for (name, text) in [
+        ("ci.yml", include_str!("../.github/workflows/ci.yml")),
+        (
+            "source-install-integrity.yml",
+            include_str!("../.github/workflows/source-install-integrity.yml"),
+        ),
+    ] {
+        let identities: Vec<_> = pattern.captures_iter(text).collect();
+        assert!(
+            !identities.is_empty(),
+            "{name} lacks release identity checks"
+        );
+        for identity in identities {
+            assert_eq!(&identity[1], version, "stale release identity in {name}");
+        }
+    }
 }
