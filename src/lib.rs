@@ -3040,7 +3040,7 @@ fn claude_hook_bash_metadata_only(command: &str, cwd: &Path) -> bool {
             .and_then(|name| name.to_str())
             .unwrap_or(program_token)
             .to_ascii_lowercase();
-        if !claude_hook_trusted_system_program(program_token, &program) {
+        if !claude_hook_trusted_system_program(program_token, &program) && program_token != "cp" {
             return false;
         }
         let arguments = &tokens[1..];
