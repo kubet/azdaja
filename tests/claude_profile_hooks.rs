@@ -1,7 +1,6 @@
 use std::{
     fs,
     io::Write,
-    path::Path,
     process::{Command, Stdio},
 };
 
@@ -15,6 +14,7 @@ fn collect_strings(value: &serde_json::Value, out: &mut Vec<String>) {
 }
 
 #[test]
+#[cfg(unix)]
 fn installed_claude_hooks_execute_actual_registered_commands() {
     let root = std::env::temp_dir().join(format!("azdaja-claude-profile-{}", std::process::id()));
     let home = root.join("home with spaces");

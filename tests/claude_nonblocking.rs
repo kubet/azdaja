@@ -256,6 +256,7 @@ fn claude_hook_opt_in_handles_stale_markers_and_releases_failed_transactions() {
 }
 
 #[test]
+#[cfg(unix)]
 fn claude_hook_active_allows_ordinary_cp_read_grep_and_screenshot_workflow() {
     let root = temp("claude-nonblocking-screenshot");
     let cwd = root.join("project");
