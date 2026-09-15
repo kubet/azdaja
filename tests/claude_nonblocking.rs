@@ -70,6 +70,7 @@ fn event(
     value
 }
 
+#[cfg(unix)]
 fn assert_denied(output: std::process::Output) {
     assert!(
         output.status.success(),
