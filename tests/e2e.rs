@@ -6129,7 +6129,10 @@ exit 9
     assert!(skill.contains("explicit user activation"));
     assert!(!skill.contains("A matching task means invoke this skill now"));
     assert!(skill.contains("llm_batch(prompts, workers=6)"));
-    assert!(skill.contains("Never rerun the whole transaction after a child call"));
+    assert!(skill.contains(
+        "For the same semantic evaluation, do not rerun the whole transaction after a child call"
+    ));
+    assert!(skill.contains("Do not let that restriction block ordinary follow-up work"));
     assert!(skill.contains("Never call `llm` for batch classification"));
     assert!(skill.contains("Do not emit per-record objects unless the user requested them"));
     assert!(skill.contains("do not import modules"));
