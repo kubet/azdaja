@@ -6969,8 +6969,25 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
     let activation_text = fs::read_to_string(&activation).unwrap();
     assert!(activation_text.len() <= 500);
     assert!(activation_text.contains("exhaustive semantic judgment"));
-    assert!(activation_text.to_ascii_lowercase().contains("repository audits"));
-    assert!(activation_text.contains("deterministic count, tail, and checksum work"));
+    assert!(
+        activation_text
+            .to_ascii_lowercase()
+            .contains("repository audits")
+    );
+    for marker in [
+        "count",
+        "tail",
+        "checksum",
+        "explicit user opt-in",
+        "AZDAJA_CLAUDE_ACTIVATION=request",
+        "never set it automatically",
+    ] {
+        assert!(
+            activation_text.contains(marker),
+            "missing activation contract: {marker}"
+        );
+    }
+    assert!(!activation_text.contains("session-sticky"));
     let plugin =
         fs::read_to_string(t.join(".claude/skills/azdaja/.claude-plugin/plugin.json")).unwrap();
     let hooks = fs::read_to_string(t.join(".claude/skills/azdaja/hooks/hooks.json")).unwrap();

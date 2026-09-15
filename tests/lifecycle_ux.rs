@@ -352,6 +352,9 @@ fn claude_activation_rule_is_owned_checked_removed_and_never_clobbers_foreign_co
     let rule = fs::read_to_string(&target).unwrap();
     assert!(rule.len() <= 500, "rule grew to {} bytes", rule.len());
     assert!(rule.contains("exhaustive semantic judgment"));
+    assert!(rule.contains("explicit user opt-in"));
+    assert!(rule.contains("AZDAJA_CLAUDE_ACTIVATION=request"));
+    assert!(!rule.contains("session-sticky"));
     let plugin_text = fs::read_to_string(&plugin).unwrap();
     let hook_bytes = fs::read(&hooks).unwrap();
     let hook_text = std::str::from_utf8(&hook_bytes).unwrap();

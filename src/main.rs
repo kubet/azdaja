@@ -9650,13 +9650,23 @@ mod tests {
         assert!(rule.contains("Skill loading, discovery, and mentions never activate it"));
         assert!(rule.contains("AZDAJA_CLAUDE_ACTIVATION=request"));
         assert!(rule.contains("never set it automatically"));
-        let hooks: serde_json::Value = serde_json::from_str(CLAUDE_HOOKS).expect("valid Claude hooks JSON");
+        let hooks: serde_json::Value =
+            serde_json::from_str(CLAUDE_HOOKS).expect("valid Claude hooks JSON");
         assert_eq!(CLAUDE_HOOKS.matches("\"type\": \"command\"").count(), 5);
-        assert_eq!(CLAUDE_HOOKS.matches("\"command\": \"\\\"${CLAUDE_PLUGIN_ROOT}/azdaja\\\" claude-hook\"").count(), 5);
+        assert_eq!(
+            CLAUDE_HOOKS
+                .matches("\"command\": \"\\\"${CLAUDE_PLUGIN_ROOT}/azdaja\\\" claude-hook\"")
+                .count(),
+            5
+        );
         assert!(!CLAUDE_HOOKS.contains("\"args\""));
-        assert!(hooks["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
-            .as_str()
-            .is_some_and(|command| command.contains("\"${CLAUDE_PLUGIN_ROOT}/azdaja\" claude-hook")));
+        assert!(
+            hooks["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+                .as_str()
+                .is_some_and(
+                    |command| command.contains("\"${CLAUDE_PLUGIN_ROOT}/azdaja\" claude-hook")
+                )
+        );
         assert_eq!(CLAUDE_HOOKS.matches("\"timeout\": 30").count(), 5);
         assert!(CLAUDE_HOOKS.contains("\"matcher\": \"Skill|Bash\""));
         assert!(CLAUDE_HOOKS.contains("PostToolUseFailure"));
