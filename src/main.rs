@@ -1188,7 +1188,7 @@ const LEGACY_MANAGED_OPENCODE_CONFIGS: &[&[u8]] = &[include_bytes!(
     "../assets/legacy/opencode-config-f077082c.toml"
 )];
 
-const CLAUDE_ACTIVATION_RULE: &str = r#"Invoke `Skill` with `azdaja` only after the user explicitly opts in for this request, session, or repository, and only when the answer requires exhaustive semantic judgment or classification over one input and that input exceeds 1 MiB, exceeds 200 records, or the prompt requires judging every record. Skill loading, discovery, and mentions never activate it. Without explicit opt-in, continue with native tools, including repository audits, code navigation, structural searches, bounded excerpts, files below 1 MiB when no record threshold applies, and deterministic count, tail, and checksum work. Hook routing is enabled only when the host environment explicitly sets `AZDAJA_CLAUDE_ACTIVATION=request`, `session`, or `repository`; this installer never sets it automatically.
+const CLAUDE_ACTIVATION_RULE: &str = r#"Use `Skill` with `azdaja` only after explicit user opt-in for exhaustive semantic judgment over one input (>1 MiB, >200 records, or every record). Skill loading, discovery, and mentions never activate it. Repository audits, code navigation, structural searches, bounded excerpts, count, tail, checksum, and ordinary file copies use native tools. Hook routing requires host `AZDAJA_CLAUDE_ACTIVATION=request`, `session`, or `repository`; never set it automatically.
 "#;
 
 const CLAUDE_HOOKS: &str = r#"{
@@ -1198,8 +1198,7 @@ const CLAUDE_HOOKS: &str = r#"{
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/azdaja",
-            "args": ["claude-hook"],
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/azdaja\" claude-hook",
             "timeout": 30
           }
         ]
@@ -1211,8 +1210,7 @@ const CLAUDE_HOOKS: &str = r#"{
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/azdaja",
-            "args": ["claude-hook"],
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/azdaja\" claude-hook",
             "timeout": 30
           }
         ]
@@ -1224,8 +1222,7 @@ const CLAUDE_HOOKS: &str = r#"{
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/azdaja",
-            "args": ["claude-hook"],
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/azdaja\" claude-hook",
             "timeout": 30
           }
         ]
@@ -1237,8 +1234,7 @@ const CLAUDE_HOOKS: &str = r#"{
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/azdaja",
-            "args": ["claude-hook"],
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/azdaja\" claude-hook",
             "timeout": 30
           }
         ]
@@ -1249,8 +1245,7 @@ const CLAUDE_HOOKS: &str = r#"{
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/azdaja",
-            "args": ["claude-hook"],
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/azdaja\" claude-hook",
             "timeout": 30
           }
         ]
@@ -9630,31 +9625,38 @@ mod tests {
     fn claude_activation_rule_is_narrow_semantic_and_names_nontriggers() {
         let rule = render_claude_activation_rule();
         assert!(
-            rule.len() <= 1_000,
+            rule.len() <= 500,
             "activation rule grew to {} bytes",
             rule.len()
         );
-        assert!(rule.contains("exhaustive semantic judgment or classification"));
+        assert!(rule.contains("exhaustive semantic judgment"));
         assert!(rule.contains("one input"));
-        assert!(rule.contains("exceeds 1 MiB"));
-        assert!(rule.contains("exceeds 200 records"));
+        assert!(rule.contains(">1 MiB"));
+        assert!(rule.contains(">200 records"));
         for nontrigger in [
-            "repository audits",
+            "Repository audits",
             "code navigation",
             "structural searches",
             "bounded excerpts",
-            "files below 1 MiB",
-            "deterministic count, tail, and checksum work",
+            "ordinary file copies",
+            "count, tail, checksum",
         ] {
             assert!(
                 rule.contains(nontrigger),
                 "missing nontrigger: {nontrigger}"
             );
         }
-        assert!(rule.contains("explicitly opts in"));
+        assert!(rule.contains("explicit user opt-in"));
         assert!(rule.contains("Skill loading, discovery, and mentions never activate it"));
         assert!(rule.contains("AZDAJA_CLAUDE_ACTIVATION=request"));
-        assert!(rule.contains("this installer never sets it automatically"));
+        assert!(rule.contains("never set it automatically"));
+        let hooks: serde_json::Value = serde_json::from_str(CLAUDE_HOOKS).expect("valid Claude hooks JSON");
+        assert_eq!(CLAUDE_HOOKS.matches("\"type\": \"command\"").count(), 5);
+        assert_eq!(CLAUDE_HOOKS.matches("\"command\": \"\\\"${CLAUDE_PLUGIN_ROOT}/azdaja\\\" claude-hook\"").count(), 5);
+        assert!(!CLAUDE_HOOKS.contains("\"args\""));
+        assert!(hooks["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+            .as_str()
+            .is_some_and(|command| command.contains("\"${CLAUDE_PLUGIN_ROOT}/azdaja\" claude-hook")));
         assert_eq!(CLAUDE_HOOKS.matches("\"timeout\": 30").count(), 5);
         assert!(CLAUDE_HOOKS.contains("\"matcher\": \"Skill|Bash\""));
         assert!(CLAUDE_HOOKS.contains("PostToolUseFailure"));
