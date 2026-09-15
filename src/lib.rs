@@ -3072,10 +3072,11 @@ fn claude_hook_bash_metadata_only(command: &str, cwd: &Path) -> bool {
                 safe && operands.len() >= 2
                     && operands.iter().all(|operand| {
                         let path = claude_hook_resolve(cwd, operand);
-                        if let Ok(metadata) = fs::symlink_metadata(&path) {
-                            if !metadata.is_file() && !metadata.is_dir() {
-                                return false;
-                            }
+                        if let Ok(metadata) = fs::symlink_metadata(&path)
+                            && !metadata.is_file()
+                            && !metadata.is_dir()
+                        {
+                            return false;
                         }
                         let resolved = fs::canonicalize(&path).unwrap_or(path);
                         !resolved.starts_with("/dev") && !resolved.starts_with("/proc")
