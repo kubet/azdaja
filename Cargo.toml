@@ -18,6 +18,7 @@ include = [
     "/assets/config.toml",
     "/assets/legacy/*.toml",
     "/tests/claude_nonblocking.rs",
+    "/tests/claude_profile_hooks.rs",
 ]
 
 [dependencies]
