@@ -2,6 +2,14 @@
 
 Development source capability, not a promise that an existing installed release includes it.
 
+**Publication is not cleared.** The repository's third-party notice is historical
+and its bound lockfile differs from the current `Cargo.lock`. The existing
+`python3 release/verify-third-party-notices.py` gate rejects that mismatch. The
+optional `typesafe` feature adds a dependency closure that has not received a
+fresh notice audit. Local workflow tests do not authorize distributing these
+artifacts. Keep publication blocked until that audit and binding are completed;
+do not relabel the old notice or change its hash merely to make a test pass.
+
 ## The useful boundary
 
 ```text

@@ -6455,7 +6455,6 @@ fn jcode_install_refuses_linked_hook_configs_without_mutating_victims() {
 }
 
 #[test]
-#[allow(unused_variables)]
 fn jcode_memory_handoff_returns_answer_without_unlocking_broad_reads() {
     let t = temp("jcode-memory-handoff-flow");
     let repo = t.join("repo");
@@ -6515,16 +6514,24 @@ print('```python\nFINAL("repo-memory-ok")\n```')
     };
     let broad_input = r#"{"file_path":"src/lib.rs","start_line":1,"limit":5000}"#;
     let blocked = hook("pre_tool", Some("read"), broad_input);
-    assert_eq!(blocked.status.code(), Some(0));
+    assert_eq!(blocked.status.code(), Some(2));
     assert!(blocked.stdout.is_empty());
-    assert!(blocked.stderr.is_empty());
-    /*
-        let challenge = blocked_text
-            .split_whitespace()
-            .find_map(|word| word.strip_prefix("AZDAJA_JCODE_CHALLENGE="))
-            .expect("challenge assignment")
-            .to_owned();
-        assert_eq!(challenge.len(), 32);
+    let blocked_text = String::from_utf8(blocked.stderr).unwrap();
+    assert!(blocked_text.contains("Azdaja should carry this broad read."));
+    assert!(blocked_text.contains("Run one challenged repository pass now."));
+    assert!(blocked_text.contains("Replace <user task> with the current user request"));
+    assert!(blocked_text.contains("--repo ."));
+    assert!(blocked_text.contains("Continue from its answer."));
+    assert!(blocked_text.contains("Do not retry the blocked broad read."));
+    assert!(
+        blocked_text.contains("Narrow reads, Git control, builds, and tests remain available.")
+    );
+    let challenge = blocked_text
+        .split_whitespace()
+        .find_map(|word| word.strip_prefix("AZDAJA_JCODE_CHALLENGE="))
+        .expect("challenge assignment")
+        .to_owned();
+    assert_eq!(challenge.len(), 32);
 
     let challenged_command = format!(
         "AZDAJA_JCODE_CHALLENGE={challenge} {} solo \"classify id|statement records; preserve <shape> & counts\" --repo .",
@@ -6534,16 +6541,21 @@ print('```python\nFINAL("repo-memory-ok")\n```')
         "pre_tool",
         Some("bash"),
         &serde_json::json!({"command": challenged_command}).to_string(),
+    );
     assert_eq!(
         allowed_challenge.status.code(),
         Some(0),
         "{}",
         String::from_utf8_lossy(&allowed_challenge.stderr)
+    );
     let smuggled_read = hook(
+        "pre_tool",
+        Some("bash"),
         &serde_json::json!({
             "command": format!("{challenged_command}; cat src/lib.rs")
         })
         .to_string(),
+    );
     assert_eq!(smuggled_read.status.code(), Some(2));
 
     for command in [
@@ -6563,122 +6575,85 @@ print('```python\nFINAL("repo-memory-ok")\n```')
         assert!(extracted.stdout.is_empty(), "{command}");
     }
     let bounded_read = hook(
+        "pre_tool",
+        Some("bash"),
         r#"{"command":"sed -n '1,20p' src/lib.rs"}"#,
+    );
     assert_eq!(bounded_read.status.code(), Some(0));
     assert!(bounded_read.stdout.is_empty() && bounded_read.stderr.is_empty());
     let safe_build = hook(
+        "pre_tool",
+        Some("bash"),
         r#"{"command":"cargo test --no-run"}"#,
+    );
+    assert_eq!(
         safe_build.status.code(),
+        Some(0),
+        "{}",
         String::from_utf8_lossy(&safe_build.stderr)
-        let challenged_command = format!(
-            "AZDAJA_JCODE_CHALLENGE={challenge} {} solo \"classify id|statement records; preserve <shape> & counts\" --repo .",
-            env!("CARGO_BIN_EXE_azdaja")
-        let allowed_challenge = hook(
-            "pre_tool",
-            Some("bash"),
-            &serde_json::json!({"command": challenged_command}).to_string(),
-            allowed_challenge.status.code(),
-            Some(0),
-            "{}",
-            String::from_utf8_lossy(&allowed_challenge.stderr)
-        let smuggled_read = hook(
-            &serde_json::json!({
-                "command": format!("{challenged_command}; cat src/lib.rs")
-            })
-            .to_string(),
-        assert_eq!(smuggled_read.status.code(), Some(2));
+    );
 
-        for command in [
-            "cp src/lib.rs /dev/stdout",
-            "dd if=src/lib.rs bs=4096 count=1",
-            "printf '%s' \"$(<src/lib.rs)\"",
-            "base64 src/lib.rs",
-            "sed -n '1,20p' src/lib.rs",
-        ] {
-            let input = serde_json::json!({"command": command}).to_string();
-            let extracted = hook("pre_tool", Some("bash"), &input);
-            assert_eq!(
-                extracted.status.code(),
-                Some(2),
-                "shell content extraction escaped the handoff: {command}; stderr={}",
-                String::from_utf8_lossy(&extracted.stderr)
-            );
-            assert!(extracted.stdout.is_empty(), "{command}");
-        }
-        let safe_build = hook(
-            "pre_tool",
-            Some("bash"),
-            r#"{"command":"cargo test --no-run"}"#,
-        );
-        assert_eq!(
-            safe_build.status.code(),
-            Some(0),
-            "{}",
-            String::from_utf8_lossy(&safe_build.stderr)
-        );
+    let completed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args([
+            "solo",
+            "summarize the repository implementation",
+            "--repo",
+            repo.to_str().unwrap(),
+        ])
+        .current_dir(&repo)
+        .env("HOME", &t)
+        .env("AZDAJA_HOME", &state)
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_CHALLENGE", &challenge)
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert!(
+        completed.status.success(),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&completed.stdout),
+        String::from_utf8_lossy(&completed.stderr)
+    );
+    assert_eq!(completed.stdout, b"repo-memory-ok\n");
+    assert_eq!(fs::read_to_string(&provider_calls).unwrap(), "call\n");
 
-        let completed = Command::new(env!("CARGO_BIN_EXE_azdaja"))
-            .args([
-                "solo",
-                "summarize the repository implementation",
-                "--repo",
-                repo.to_str().unwrap(),
-            ])
-            .current_dir(&repo)
-            .env("HOME", &t)
-            .env("AZDAJA_HOME", &state)
-            .env("AZDAJA_CONFIG", &cfg)
-            .env("AZDAJA_JCODE_CHALLENGE", &challenge)
-            .env_remove("RLM_DEPTH")
-            .output()
-            .unwrap();
-        assert!(
-            completed.status.success(),
-            "stdout={} stderr={}",
-            String::from_utf8_lossy(&completed.stdout),
-            String::from_utf8_lossy(&completed.stderr)
-        );
-        assert_eq!(completed.stdout, b"repo-memory-ok\n");
-        assert_eq!(fs::read_to_string(&provider_calls).unwrap(), "call\n");
+    let blocked_again = hook("pre_tool", Some("read"), broad_input);
+    assert_eq!(blocked_again.status.code(), Some(2));
+    let blocked_again_text = String::from_utf8(blocked_again.stderr).unwrap();
+    let second_challenge = blocked_again_text
+        .split_whitespace()
+        .find_map(|word| word.strip_prefix("AZDAJA_JCODE_CHALLENGE="))
+        .expect("second challenge assignment");
+    assert_ne!(second_challenge, challenge);
 
-        let blocked_again = hook("pre_tool", Some("read"), broad_input);
-        assert_eq!(blocked_again.status.code(), Some(2));
-        let blocked_again_text = String::from_utf8(blocked_again.stderr).unwrap();
-        let second_challenge = blocked_again_text
-            .split_whitespace()
-            .find_map(|word| word.strip_prefix("AZDAJA_JCODE_CHALLENGE="))
-            .expect("second challenge assignment");
-        assert_ne!(second_challenge, challenge);
+    let tiny = repo.join("tiny.txt");
+    fs::write(&tiny, "tiny\n").unwrap();
+    let file_only = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .args(["solo", "read the tiny file", "-f", tiny.to_str().unwrap()])
+        .current_dir(&repo)
+        .env("HOME", &t)
+        .env("AZDAJA_HOME", &state)
+        .env("AZDAJA_CONFIG", &cfg)
+        .env("AZDAJA_JCODE_CHALLENGE", second_challenge)
+        .env_remove("RLM_DEPTH")
+        .output()
+        .unwrap();
+    assert_eq!(file_only.status.code(), Some(2));
+    assert!(file_only.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&file_only.stderr).contains("file-scoped Azdaja work"));
+    assert_eq!(fs::read_to_string(&provider_calls).unwrap(), "call\n");
+    assert_eq!(
+        hook("pre_tool", Some("read"), broad_input).status.code(),
+        Some(2)
+    );
 
-        let tiny = repo.join("tiny.txt");
-        fs::write(&tiny, "tiny\n").unwrap();
-        let file_only = Command::new(env!("CARGO_BIN_EXE_azdaja"))
-            .args(["solo", "read the tiny file", "-f", tiny.to_str().unwrap()])
-            .current_dir(&repo)
-            .env("HOME", &t)
-            .env("AZDAJA_HOME", &state)
-            .env("AZDAJA_CONFIG", &cfg)
-            .env("AZDAJA_JCODE_CHALLENGE", second_challenge)
-            .env_remove("RLM_DEPTH")
-            .output()
-            .unwrap();
-        assert_eq!(file_only.status.code(), Some(2));
-        assert!(file_only.stdout.is_empty());
-        assert!(String::from_utf8_lossy(&file_only.stderr).contains("file-scoped Azdaja work"));
-        assert_eq!(fs::read_to_string(&provider_calls).unwrap(), "call\n");
-        assert_eq!(
-            hook("pre_tool", Some("read"), broad_input).status.code(),
-            Some(2)
-        );
-
-        let narrow = hook(
-            "pre_tool",
-            Some("read"),
-            r#"{"file_path":"src/lib.rs","start_line":1,"limit":64}"#,
-        );
-        assert_eq!(narrow.status.code(), Some(0));
-        fs::remove_dir_all(t).unwrap();
-    }*/
+    let narrow = hook(
+        "pre_tool",
+        Some("read"),
+        r#"{"file_path":"src/lib.rs","start_line":1,"limit":64}"#,
+    );
+    assert_eq!(narrow.status.code(), Some(0));
+    fs::remove_dir_all(t).unwrap();
 }
 
 #[test]

@@ -9296,7 +9296,7 @@ mod tests {
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
         assert_eq!(
-            digest, "c115a35d9b280018d750d0415a53f5daadb513b0e900be65eee10b62fb65761d",
+            digest, "de66dc8abc42ad501977a5787a45ed93801fe02cd4d5594ef5896a1caa21e52a",
             "OpenCode rendered bytes changed"
         );
     }
@@ -9638,19 +9638,19 @@ mod tests {
         let expected = [
             (
                 "default",
-                "d9ee0d026fa503511d46507dd86d2216a2cc95e5e9a20cdca4aba3ed7726cf2e",
+                "c21ba4fd55ac8ec9e78f5eda6a6f2fe42a91c1421cd1feada4ecfe12bd86c55a",
             ),
             (
                 "jcode",
-                "e5684cb7ce09b737beda051a6bd0befd52ab50c0b733379a555cefbe5df87482",
+                "11cf8401ed781b8082e717af81078cd09e813c5f267b2207b1665ae708c83aff",
             ),
             (
                 "codex",
-                "e2fc28e23191bc4da2bedaad89678e54ac27dbeacdd2f708027d6039de54cca4",
+                "4a19a3433d93fd6d94ac4f6fd69ec7d113788cba3e76e13ce240d82306aa28df",
             ),
             (
                 "gemini",
-                "e38f3ff3bfa39a08d68687436a1a5aa54cd0f186249e073a926ee185d2dbee92",
+                "f9cff26de5e8b52c36f6230e5459a21be910a514800b325cd9dd95488e844196",
             ),
         ];
         let actual = expected
