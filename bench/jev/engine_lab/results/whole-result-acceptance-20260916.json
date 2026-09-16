@@ -1,0 +1,316 @@
+{
+  "recorded_at": "2026-09-16T20:39:50.727068+00:00",
+  "source_revision": "054f8ca83dbc401a89b80e96c019fe5f4df2ca0f",
+  "binary_sha256": "74e74287c6824eeb2420d11191026e72956bee60e409bfbb5716ae85392bb84b",
+  "new_live_inference_calls": 0,
+  "overall_live_usefulness_established": false,
+  "checks": {
+    "default_experiment_cli": {
+      "exit": 0,
+      "status": "offline_plan",
+      "network_calls": 0,
+      "cases": 66
+    },
+    "original_suite": {
+      "exit": 0,
+      "passed": 87,
+      "skipped": 0,
+      "summary": [
+        "Ran 87 tests in 7.550s",
+        "",
+        "OK"
+      ]
+    },
+    "engine_public_cli": {
+      "exit": 0,
+      "tests": {
+        "run": 20,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "observations": {
+        "M2": {
+          "same_chosen_unary_features": true,
+          "pair_outputs_differ": true,
+          "sufficiency_of_these_chosen_unary_features": "falsified",
+          "fallback": "direct_pair_requests",
+          "fallback_questions": 6,
+          "automatic_collision_discovery": false
+        },
+        "M1_M4_M6": {
+          "occurrences": 72,
+          "unique_source_records": 16,
+          "pair_universe": 2556,
+          "positive_pairs": 336,
+          "matched_python_semantic_questions": 16,
+          "same_plan_python_equal": true,
+          "direct_pair_oracle_evaluations": 2556,
+          "cache_off": {
+            "backend_calls": 72,
+            "questions": 72,
+            "request_bytes": 47360,
+            "response_bytes": 14372,
+            "cache_hits": 0,
+            "completed_calls": 72
+          },
+          "cache_on_after_second_view": {
+            "backend_calls": 16,
+            "questions": 16,
+            "request_bytes": 10549,
+            "response_bytes": 3193,
+            "cache_hits": 128,
+            "completed_calls": 16
+          },
+          "full_ledger_bytes": 34739,
+          "root_summary_bytes": 29,
+          "automatic_plan_generation": false
+        },
+        "wrong_feature_falsifier": {
+          "unique_wrong_features": 1,
+          "wrong_pair_decisions": 96,
+          "structurally_complete": true,
+          "claim_that_exact_join_repairs_semantics": "falsified"
+        },
+        "M3": {
+          "residual_occurrence_ids": [
+            "0",
+            "8",
+            "16"
+          ],
+          "additional_unique_questions": 2,
+          "unknown_pairs_before": 9,
+          "unknown_pairs_after": 3,
+          "complete": false,
+          "real_generative_llm_called": false
+        }
+      },
+      "sha256": {
+        "__init__.py": "50962f22e7640082c9a133ac995ae274a3c19f3b8c421d87d40b9163d9263a51",
+        "kernel.py": "5e8c1a312a0585cfa06cc14eb218dcb7247e04ccbd0b95d39f55a44026f99de4",
+        "monty.py": "1e1e42b81136864b0c1a6f804d507cc6fb368c61e12e4141305cd0ee5ed74653",
+        "run.py": "98291890380135a0067b3fe3e5bf546c3d4ff661767767f260355a5e77dab994",
+        "scenarios.py": "a1c860b1a89366f28865f85157cf7531143495973d38c4e46364f3af74fa1ad0",
+        "tests.py": "7d39a8b98dc859a161f3e26862fcdac0947a00e9b60c958f5c285b15708491f1",
+        "fixtures.json": "81badd8e7d7914e10954989fce74a8685d53c88ef6dffadf29739703e5904489",
+        "adapter.py": "26fd3b4564db43b3469cffa1f8efee00e6c1237f7bfede13dbec8f5df0b6565d",
+        "bridge.py": "07843f9d7fad1a5d1cea0d504923c5d5f3e4ebb04b54169b5e934284cda6ca2d",
+        "azdaja": "74e74287c6824eeb2420d11191026e72956bee60e409bfbb5716ae85392bb84b",
+        "jev-engine-mechanism-protocol-20260916.md": "67a18386a5c70e9c08bc7be369ea19a090b23513ed8e45b3ae468f884ffac424"
+      },
+      "evidence_kind": "synthetic_oracles_with_real_evaluator_not_live_acceptance"
+    },
+    "engine_receipt_no_overwrite": {
+      "exit": 1,
+      "original_bytes_preserved": true,
+      "note": "Current CLI discovers existing output after rerunning its offline tests. No provider calls exist in this command."
+    },
+    "frozen_live_receipt_public_audits": {
+      "pilot-20260916": {
+        "receipt_sha256": "1041260d6de17ba26d0bbbbfc9cb4f3a35d2fc7a50ed45d1a96504d180c8ddaa",
+        "recorded_status": "stopped",
+        "recorded_error_code": "http_400",
+        "audit_exit": 0,
+        "strict_exit": 2,
+        "strict_output_exists": false,
+        "occurrences": 68,
+        "unjudged": 68,
+        "validated_judgments": 0,
+        "complete": false,
+        "usage_complete": false,
+        "billing": "unknown"
+      },
+      "pilot-alias-20260916": {
+        "receipt_sha256": "f0b01dd126147b6332e56254610f4a720a77387553ccb24fba6d5477d4a126a4",
+        "recorded_status": "stopped",
+        "recorded_error_code": "response_model_mismatch",
+        "audit_exit": 0,
+        "strict_exit": 2,
+        "strict_output_exists": false,
+        "occurrences": 68,
+        "unjudged": 68,
+        "validated_judgments": 0,
+        "complete": false,
+        "usage_complete": false,
+        "billing": "unknown"
+      }
+    },
+    "ordinary_azdaja_public_cli": {
+      "source": "Cargo.toml",
+      "source_sha256": "82334ddca88ac5fbeeb3371f68acd790f1366f7a8bbb10476aaa8292c05a6560",
+      "chars": 1192,
+      "load_exec_persist_final": "passed",
+      "native_judge_many_exit": 1,
+      "native_judge_many_status": "not_implemented",
+      "native_judge_many_diagnostic": "Traceback (most recent call last):\n  File \"<python-input-4>\", line 1, in <module>\n    judge_many([])\n    ~~~~~~~~~~~~~~\nRuntimeError: unknown external function: judge_many",
+      "ordinary_exec_after_probe": "passed",
+      "provider": "/usr/bin/false",
+      "inference_calls": 0
+    },
+    "skill_artifacts": {
+      "installed": true,
+      "source": "typesafe-ai/skills",
+      "skill_sha256": "71ea90d7906c6554c4f4c460ef7361b2d26f59116ccdae986dc6d997b9389f52"
+    },
+    "documentation_and_identity": {
+      "resolved_local_links": 44,
+      "review_hashes_matched": 15,
+      "secret_pattern_scan_files": 42,
+      "credential_pattern_matches": 0
+    },
+    "project_library_suite": {
+      "command": "cargo test --locked --offline --lib",
+      "background_task_id": "190579tcba",
+      "exit": 0,
+      "passed": 191,
+      "failed": 0,
+      "ignored": 1,
+      "filtered_out": 0,
+      "test_elapsed_seconds": 4.07,
+      "ignored_tests": [
+        "lexical_relevance_tests::lexical_relevance_release_stress_16m"
+      ],
+      "ignored_list_command": "cargo test --locked --offline --lib -- --ignored --list",
+      "ignored_list_exit": 0,
+      "scope": "Actual project library suite. Excludes the ignored stress test, all-target/release packaging, other operating systems and live provider calls."
+    },
+    "heartbeat_process": {
+      "requested_interval_minutes": 30,
+      "latest_recorded_schedule_id": "sched_92cf941a",
+      "latest_creation_found_in_conversation_history": true,
+      "active_jev_schedules_at_check": 0,
+      "active_schedule_check_at": "2026-09-16T20:47:31Z",
+      "unrelated_schedules_modified": false,
+      "scope": "Retrospective operational check, not a preregistered semantic or quality gate."
+    }
+  },
+  "reconciled_at": "2026-09-16T20:46:21.921804+00:00",
+  "environment": {
+    "os": "macOS",
+    "architecture": "aarch64",
+    "python": "3.14.5",
+    "rustc": "1.95.0 (59807616e 2026-04-14)",
+    "cargo": "1.95.0 (f2d3ce0bd 2026-03-21)",
+    "worktree_scope": "Source revision is a base identifier, not a clean-tree claim. Existing unrelated modifications were retained. Library tests exercised the current local worktree. The CLI binary is identified separately by its hash."
+  },
+  "requirement_outcomes": {
+    "A1": {
+      "status": "setup_and_skill_use_observed",
+      "checks": [
+        "skill_artifacts"
+      ]
+    },
+    "A2": {
+      "status": "optional_ordinary_path_passed",
+      "checks": [
+        "default_experiment_cli",
+        "ordinary_azdaja_public_cli"
+      ]
+    },
+    "A3": {
+      "status": "native_capability_not_implemented",
+      "checks": [
+        "ordinary_azdaja_public_cli"
+      ]
+    },
+    "A4": {
+      "status": "staged_synthetic_workflow_validated",
+      "checks": [
+        "engine_public_cli"
+      ]
+    },
+    "A5": {
+      "status": "historical_live_acceptance_blocked",
+      "checks": [
+        "frozen_live_receipt_public_audits"
+      ]
+    },
+    "A6": {
+      "status": "offline_incomplete_receipt_projection_passed",
+      "checks": [
+        "frozen_live_receipt_public_audits"
+      ]
+    },
+    "A7": {
+      "status": "offline_boundary_and_stop_controls_passed",
+      "checks": [
+        "original_suite",
+        "engine_public_cli"
+      ]
+    },
+    "A8": {
+      "status": "reuse_ablation_passed_no_exclusive_rlm_advantage",
+      "checks": [
+        "engine_public_cli"
+      ]
+    },
+    "A9": {
+      "status": "applications_proposed_not_evaluated",
+      "checks": [
+        "documentation_and_identity",
+        "ordinary_azdaja_public_cli"
+      ]
+    },
+    "A10": {
+      "status": "research_and_promotion_bars_reconciled_not_empirically_met",
+      "checks": [
+        "documentation_and_identity",
+        "engine_public_cli"
+      ]
+    },
+    "A11": {
+      "status": "recorded_hashes_consistent_finite_pattern_scan_clean",
+      "checks": [
+        "documentation_and_identity",
+        "frozen_live_receipt_public_audits",
+        "engine_public_cli"
+      ]
+    },
+    "A12": {
+      "status": "local_regression_passed_with_explicit_exclusion",
+      "checks": [
+        "project_library_suite",
+        "ordinary_azdaja_public_cli"
+      ]
+    },
+    "A13": {
+      "status": "documented_commands_observed_receipt_collision_detection_is_late",
+      "checks": [
+        "default_experiment_cli",
+        "original_suite",
+        "engine_public_cli",
+        "engine_receipt_no_overwrite",
+        "frozen_live_receipt_public_audits",
+        "documentation_and_identity"
+      ]
+    },
+    "A14": {
+      "status": "live_quality_cost_latency_advantage_not_established",
+      "checks": [
+        "frozen_live_receipt_public_audits",
+        "engine_public_cli"
+      ]
+    },
+    "A15": {
+      "status": "heartbeat_process_reconciled_no_unattended_campaign",
+      "checks": [
+        "heartbeat_process"
+      ],
+      "supplemental_retrospective_check": true
+    }
+  },
+  "final_integrity_check": {
+    "checked_at": "2026-09-16T20:49:30.182112+00:00",
+    "requirements_with_mapped_outcomes": 15,
+    "resolved_local_links": 47,
+    "independent_review_hashes_matched": 15,
+    "additional_frozen_artifact_hashes_matched": {
+      "bench/jev/fixtures.json": "3fe530372fefe2dd62e823bad9eeec8aad10a1783328a502805851ebd733929f",
+      "docs/research/jev-experiment-protocol-20260916.md": "70a784fe2206278e6fd539630e47ef354d97c4c073590614a8800d8a2ff9e5d3"
+    },
+    "credential_pattern_scanned_files": 45,
+    "credential_pattern_matches": 0,
+    "acceptance_document_sha256": "f628910b1294619c3cf8ab5f998ff9aad3f2f6a3ec10542263cf667a1c58b748",
+    "scope": "Integrity and traceability only. Does not change the recorded native/live acceptance failures."
+  }
+}
