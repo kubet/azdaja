@@ -6,6 +6,8 @@ The TypeSafe skill is installed project-locally at `.agents/skills/typesafe-ai/`
 
 **Use-case scope:** this prototype judges supplied claim/evidence packs. It does not implement semantic memory retrieval, discover repository dependencies, or establish evidence-pack completeness. The [request-to-evidence map and concrete memory hypothesis](../../docs/research/jev-request-evidence-map-20260916.md) distinguish those future applications from tested behavior.
 
+**Broader engine follow-up:** the user clarified that reranking is one application of a general optional capability exposed beside `llm`. The separate [engine laboratory](engine_lab/README.md) now demonstrates typed manifest execution in persistent Monty with 20 guarded provider-free tests. Read the [engine research and architecture](../../docs/research/jev-engine-design-20260916.md) for the multi-application direction, matched-Python equality, and deliberate semantic failure cases. This does not reopen the live campaign or install a native `judge` function.
+
 ## What exists
 
 - `adapter.py`: stdlib-only, explicit activation, typed Choice/Noul/Score validation, bounded fixed-origin transport, isolated killable worker, no retries, and sanitized failures.

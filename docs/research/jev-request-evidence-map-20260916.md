@@ -2,6 +2,8 @@
 
 2026-09-16. This is an offline continuation, not a reopened live experiment. The two original credentialed attempts remain stopped with zero validated judgments. Original fixtures, protocol, provider adapter/runner, and live receipts are unchanged.
 
+**Later scope clarification:** the memory direction below is one possible application, not the user's whole goal. The requested direction is a general optional typed Jev engine exposed beside Azdaja's `llm`/RLM, including reranking and other semantic computation/orchestration uses. The [engine research and mechanism study](jev-engine-design-20260916.md) supersedes any memory-only reading of this historical map. No live-efficacy status changed.
+
 ## Completion correction
 
 The delivered artifact is a researched, optional **claim-versus-supplied-evidence operator prototype** with tested control flow and local accounting. It is not a working memory-retrieval product, repository auditor, demonstrated semantic advantage, or moat. Broad goal completion and acceptance traceability were downgraded accordingly. A blocked provider contract is neither a semantic success nor evidence that Jev cannot perform the task.

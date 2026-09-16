@@ -1,0 +1,30 @@
+{
+  "origin": "authored_synthetic_mechanism_fixture_not_a_semantic_benchmark",
+  "factorization_contract": "For occurrence indices i<j, R(i,j) is true iff both records describe authorization-policy rejection, their exact day fields match, and their exact tenant fields differ. No diagonal. Duplicate occurrences remain distinct.",
+  "records": [
+    {"id":"r00","tenant":"alpha","day":1,"text":"Identity accepted. The policy engine refused the requested operation."},
+    {"id":"r01","tenant":"beta","day":1,"text":"The signed-in member cannot perform this operation because their role lacks permission."},
+    {"id":"r02","tenant":"gamma","day":1,"text":"Authentication failed because the supplied password was wrong. Authorization was never reached."},
+    {"id":"r03","tenant":"alpha","day":1,"text":"The authentication token expired before identity verification. No authorization decision occurred."},
+    {"id":"r04","tenant":"gamma","day":1,"text":"Identity verification succeeded, but the requested resource is outside the caller's permitted scope."},
+    {"id":"r05","tenant":"beta","day":2,"text":"The network connection failed before any authentication or authorization step."},
+    {"id":"r06","tenant":"delta","day":1,"text":"The authenticated caller's role was forbidden from starting the job, and the policy check denied it."},
+    {"id":"r07","tenant":"beta","day":1,"text":"Authentication and authorization both succeeded. The operation completed."},
+    {"id":"r08","tenant":"alpha","day":2,"text":"The caller was authenticated. An explicit access policy denied the attempted action."},
+    {"id":"r09","tenant":"gamma","day":2,"text":"The authenticated member lacked the required entitlement. The authorization service rejected the request."},
+    {"id":"r10","tenant":"delta","day":2,"text":"A verified user's operation was refused by a role-based authorization rule."},
+    {"id":"r11","tenant":"delta","day":1,"text":"A successful permitted operation was recorded. No request was rejected."},
+    {"id":"r12","tenant":"beta","day":2,"text":"The caller proved their identity, but the permissions service denied access to the selected resource."},
+    {"id":"r13","tenant":"alpha","day":2,"text":"The authenticated account was blocked from this action by an authorization policy."},
+    {"id":"r14","tenant":"gamma","day":2,"text":"After successful authorization, the data parser rejected a malformed payload. No access-policy rejection occurred."},
+    {"id":"r15","tenant":"beta","day":1,"text":"The user cancelled the operation before any request was submitted. No authorization decision occurred."}
+  ],
+  "base_occurrence_ids": ["r00","r01","r02","r03","r04","r05","r06","r07","r08","r09","r10","r11","r12","r13","r14","r15","r00","r13"],
+  "gold_features": {"r00":true,"r01":true,"r02":false,"r03":false,"r04":true,"r05":false,"r06":true,"r07":false,"r08":true,"r09":true,"r10":true,"r11":false,"r12":true,"r13":true,"r14":false,"r15":false},
+  "gold_positive_pairs": [["r00","r01"],["r00","r04"],["r00","r06"],["r01","r04"],["r01","r06"],["r04","r06"],["r08","r09"],["r08","r10"],["r08","r12"],["r09","r10"],["r09","r12"],["r09","r13"],["r10","r12"],["r10","r13"],["r12","r13"]],
+  "residual_policy": {"fast_abstained_ids":["r00"],"fast_semantic_unknown_ids":["r08"],"expert_semantic_unknown_ids":["r08"],"minimum_probability":0.9,"minimum_confidence":0.9},
+  "relation_cases": [
+    {"name":"supersedes_b","evidence":"Policy A explicitly replaces policy B. Policy C remains independently in force. There are no other replacement relations among A, B and C.","unary_features":["policy","policy","policy"],"gold_positive_pairs":[["a","b"]]},
+    {"name":"supersedes_c","evidence":"Policy A explicitly replaces policy C. Policy B remains independently in force. There are no other replacement relations among A, B and C.","unary_features":["policy","policy","policy"],"gold_positive_pairs":[["a","c"]]}
+  ]
+}

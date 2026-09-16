@@ -1,0 +1,86 @@
+{
+  "origin": "provider_free_synthetic_mechanism_controls",
+  "recorded_at": "2026-09-16T20:27:32.326159+00:00",
+  "python": "3.14.5 (main, May 10 2026, 10:21:34) [Clang 21.0.0 (clang-2100.0.123.102)]",
+  "platform": "darwin",
+  "tests": {
+    "run": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "passed": true,
+  "live_provider_calls": 0,
+  "semantic_efficacy_established": false,
+  "automatic_planning_established": false,
+  "native_judge_function_implemented": false,
+  "observations": {
+    "M2": {
+      "same_chosen_unary_features": true,
+      "pair_outputs_differ": true,
+      "sufficiency_of_these_chosen_unary_features": "falsified",
+      "fallback": "direct_pair_requests",
+      "fallback_questions": 6,
+      "automatic_collision_discovery": false
+    },
+    "M1_M4_M6": {
+      "occurrences": 72,
+      "unique_source_records": 16,
+      "pair_universe": 2556,
+      "positive_pairs": 336,
+      "matched_python_semantic_questions": 16,
+      "same_plan_python_equal": true,
+      "direct_pair_oracle_evaluations": 2556,
+      "cache_off": {
+        "backend_calls": 72,
+        "questions": 72,
+        "request_bytes": 47360,
+        "response_bytes": 14372,
+        "cache_hits": 0,
+        "completed_calls": 72
+      },
+      "cache_on_after_second_view": {
+        "backend_calls": 16,
+        "questions": 16,
+        "request_bytes": 10549,
+        "response_bytes": 3193,
+        "cache_hits": 128,
+        "completed_calls": 16
+      },
+      "full_ledger_bytes": 34739,
+      "root_summary_bytes": 29,
+      "automatic_plan_generation": false
+    },
+    "wrong_feature_falsifier": {
+      "unique_wrong_features": 1,
+      "wrong_pair_decisions": 96,
+      "structurally_complete": true,
+      "claim_that_exact_join_repairs_semantics": "falsified"
+    },
+    "M3": {
+      "residual_occurrence_ids": [
+        "0",
+        "8",
+        "16"
+      ],
+      "additional_unique_questions": 2,
+      "unknown_pairs_before": 9,
+      "unknown_pairs_after": 3,
+      "complete": false,
+      "real_generative_llm_called": false
+    }
+  },
+  "sha256": {
+    "__init__.py": "50962f22e7640082c9a133ac995ae274a3c19f3b8c421d87d40b9163d9263a51",
+    "kernel.py": "5e8c1a312a0585cfa06cc14eb218dcb7247e04ccbd0b95d39f55a44026f99de4",
+    "monty.py": "1e1e42b81136864b0c1a6f804d507cc6fb368c61e12e4141305cd0ee5ed74653",
+    "run.py": "98291890380135a0067b3fe3e5bf546c3d4ff661767767f260355a5e77dab994",
+    "scenarios.py": "a1c860b1a89366f28865f85157cf7531143495973d38c4e46364f3af74fa1ad0",
+    "tests.py": "7d39a8b98dc859a161f3e26862fcdac0947a00e9b60c958f5c285b15708491f1",
+    "fixtures.json": "81badd8e7d7914e10954989fce74a8685d53c88ef6dffadf29739703e5904489",
+    "adapter.py": "26fd3b4564db43b3469cffa1f8efee00e6c1237f7bfede13dbec8f5df0b6565d",
+    "bridge.py": "07843f9d7fad1a5d1cea0d504923c5d5f3e4ebb04b54169b5e934284cda6ca2d",
+    "azdaja": "74e74287c6824eeb2420d11191026e72956bee60e409bfbb5716ae85392bb84b",
+    "jev-engine-mechanism-protocol-20260916.md": "67a18386a5c70e9c08bc7be369ea19a090b23513ed8e45b3ae468f884ffac424"
+  }
+}
