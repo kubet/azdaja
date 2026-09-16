@@ -1,0 +1,295 @@
+{
+  "state": {
+    "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents."
+  },
+  "questions": {
+    "E01": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E01",
+          "path": "README.md",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 43,
+          "line_end": 47,
+          "git_blob_oid": "1aec0e9e5f8a42abfcee2f6cb4d5ee1344c45ee8",
+          "file_sha256": "a1e7f67ae612e915a8f53e1ab613392a32be32778c97098fe377cd382576dffb",
+          "excerpt_sha256": "abafb064edf9dad3a86b2e0cebe246672fd4f586f52fd2673b05fd65af723e13",
+          "text": "`azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.\n\n`az install` finds supported tools automatically. To target one tool, run `az install jcode`; to install every integration, run `az install all`. Then run the exact `az doctor` command printed by install before reloading the tool. See [edge cases and lifecycle details](docs/install.md) for platform checks, registry reloads, configuration paths, Cargo setup, and safe removal.\n\nThe Jcode integration also installs a byte-owned hook block in `JCODE_HOME/config.toml`. Broad repository reads receive a memory handoff: run the challenged `azdaja solo ... --repo .` command once after replacing `<user task>` with the current request, then continue from its answer. Do not retry the blocked broad read. Narrow reads, Git control, builds, tests, lint, and formatting remain available. Existing foreign hooks are never overwritten, and uninstall removes only the exact Azdaja-managed block.\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E02": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E02",
+          "path": "README.md",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 61,
+          "line_end": 63,
+          "git_blob_oid": "1aec0e9e5f8a42abfcee2f6cb4d5ee1344c45ee8",
+          "file_sha256": "a1e7f67ae612e915a8f53e1ab613392a32be32778c97098fe377cd382576dffb",
+          "excerpt_sha256": "ee7559ef9d978027bb3865702ca9c203d3c32557b3872b6ca1d14fa553dbe44f",
+          "text": "Run `azdaja` with no arguments in a terminal to print a static provider-free snapshot for the current folder. Its `scope` row makes that boundary visible. Its `new work` row describes this invocation's configured default model, runner, and thinking level. It is not an observed universal route. Every live session separately shows the default model persisted when that session was created, so simultaneous sessions can differ, and individual model calls can still override the session default. Use `az list --global` or `az map --global` when you intentionally want the user-global state root.\n\nNumeric source summaries are shown separately from live sessions. The `repeated ← … → varied` constellation uses only local aggregate numbers, never source text, and its `avg variety` label is a plain distributional summary rather than a quality score. Exact byte entropy is available only in measured details. Run `az map` for the optional full-screen view; narrow terminals fall back to the same static line-oriented snapshot.\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E03": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E03",
+          "path": "README.md",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 140,
+          "line_end": 147,
+          "git_blob_oid": "1aec0e9e5f8a42abfcee2f6cb4d5ee1344c45ee8",
+          "file_sha256": "a1e7f67ae612e915a8f53e1ab613392a32be32778c97098fe377cd382576dffb",
+          "excerpt_sha256": "a9a13c2ae0d0ca084466f22604b035544d7394c60432fb52048b28cf105414ad",
+          "text": "## Boundaries\n\n- Model-authored code can select source material for a model call; bounded context is not information-flow control.\n- The CLI reads user-supplied paths, and selected context can be sent to the configured provider.\n- Native host tools keep the user's permissions; stronger containment requires a separate trusted inference broker.\n- The Jcode memory handoff is a cooperative workflow guard, not a sandbox against a malicious same-user shell process.\n- Monty 0.0.21 is experimental and snapshot-format-bound. Snapshots are unencrypted owner-only files, and evaluator memory has no configured ceiling.\n- Use synthetic or sanitized issue reproductions. Never post raw inputs, traces, configuration, host paths, OAuth material, tokens, or secrets.\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E04": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E04",
+          "path": "README.md",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 161,
+          "line_end": 165,
+          "git_blob_oid": "1aec0e9e5f8a42abfcee2f6cb4d5ee1344c45ee8",
+          "file_sha256": "a1e7f67ae612e915a8f53e1ab613392a32be32778c97098fe377cd382576dffb",
+          "excerpt_sha256": "650ca1f132397e8969d16838042e1ed3b3e0d66021e2ee40cff75183884633e3",
+          "text": "## Optional Azdaja activation\n\nAzdaja is optional. Mentioning its name does not activate it, and installation of a hook does not activate it. Choose the narrowest scope explicitly for the current request, session, or repository by setting `AZDAJA_JCODE_ACTIVATION` to `request`, `session`, or `repository`. Unset or ambiguous activation leaves ordinary host-native behavior available.\n\nActivation is reversible and user-controlled. If an internal Azdaja route or memory handoff fails, the failure is reported as a failure and the host-native path remains available. Native `Read`, `Grep`, `Bash`, and equivalent tools retain their ambient host permissions. Azdaja is a cooperative workflow helper, not an OS sandbox or security boundary.\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E05": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E05",
+          "path": "assets/config.toml",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 1,
+          "line_end": 14,
+          "git_blob_oid": "629d587fd53bb5457bbb10accd0f71e5bb310bc5",
+          "file_sha256": "4f6b8203d1ecb8c68d8066819c40c877a307bbe792cb83cfceca0ec36f3063e4",
+          "excerpt_sha256": "4f6b8203d1ecb8c68d8066819c40c877a307bbe792cb83cfceca0ec36f3063e4",
+          "text": "# Provider boundary. \"jcode-api\" uses the stable daemon bridge and subscription OAuth.\n# Any other value is parsed as an argv command template and receives the prompt on stdin.\nsub_llm_cmd = \"jcode-api\"\ndefault_model = \"gpt-5.6-sol\"\njcode_provider = \"openai\"        # ChatGPT subscription, never openai-api\njcode_reasoning = \"low\"\noutput_cap = 8192\nmax_depth = 1\nsub_timeout = 300\nmax_sessions = 4\ncell_timeout = 60\nidle_timeout = 1800\nmax_calls_per_cell = 150\nclean_patterns = []\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E06": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E06",
+          "path": "assets/legacy/jcode-config-bc956890.toml",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 1,
+          "line_end": 12,
+          "git_blob_oid": "00aa81c77d8f04bfb14fbaaa739207aeb00e639e",
+          "file_sha256": "bc9568907891304d0861169b4b44e7560ea3bc28402eb17a89da8078a49d74eb",
+          "excerpt_sha256": "bc9568907891304d0861169b4b44e7560ea3bc28402eb17a89da8078a49d74eb",
+          "text": "sub_llm_cmd = \"jcode-api\"\ndefault_model = \"gpt-5.6-luna\"\noutput_cap = 8192\nmax_depth = 1\nsub_timeout = 300\nmax_sessions = 4\ncell_timeout = 60\nidle_timeout = 1800\nclean_patterns = []\njcode_provider = \"openai\"\njcode_reasoning = \"low\"\nmax_calls_per_cell = 150\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E07": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E07",
+          "path": "assets/legacy/README.md",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 1,
+          "line_end": 7,
+          "git_blob_oid": "3eb93497d17fce125b0fb4b88fa54466e0124447",
+          "file_sha256": "dea948c9ec17f9976243ed399624669ffb3f5e4afd807f900175c95d0381f961",
+          "excerpt_sha256": "c095c5797e4748940334d5094f403ec6257b0aebfc2e440a1c4102dece3a2aa8",
+          "text": "# Historical managed configs\n\nThese files are byte-for-byte `config.toml` outputs from provider-free, isolated\n`azdaja install <integration>` runs. They are migration custody fixtures. Do not\nregenerate them from current defaults or normalize their formatting. Azdaja only\nmigrates an installed config when every byte matches one of these fixtures.\nCustomized or one-byte-different configs remain untouched.\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E08": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E08",
+          "path": "docs/repo-local-memory.md",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 3,
+          "line_end": 15,
+          "git_blob_oid": "fba2af45623cb98c869c78218bab97794a26675c",
+          "file_sha256": "0df739849fe2f7884a7ad886a60e43aa3f42c9aeeba40dd178265d9e20fa58e5",
+          "excerpt_sha256": "5cb7398ee5d5f1b1e91b86d2f2735ebdadc2d59545d9ba5a7d3f237da7f1785a",
+          "text": "## Current behavior\n\nInside a Git worktree, leaving both `AZDAJA_PROJECT_MEMORY` and `AZDAJA_HOME` unset selects the repo-local `.azdaja` store. The directory is created only when memory is explicitly added. The repository-local `.azdaja/.gitignore` contains `*`, so ordinary Git staging ignores its contents.\n\n`AZDAJA_PROJECT_MEMORY` has three values:\n\n- `on` forces project mode and errors outside a Git worktree.\n- `off` refuses non-global memory operations without writing anything.\n- `legacy` retains the previous cwd-scoped personal store.\n\nWhen the switch is unset, an explicit `AZDAJA_HOME` retains legacy authoritative-root behavior. Explicit `on` takes precedence for project operations. `--global` always selects the personal-global store independently. Outside Git, the default retains the old scoped behavior. Same-repository subdirectories, `HOME` changes, and relocation preserve notes. Legacy storage displays a directory notice explaining that legacy access is explicit and that stores are not merged or migrated.\n\nOn Unix, newly created memory directories use mode `0700`; existing directories must belong to the current user and have no group or world permission bits. On Windows, directories inherit ACLs and reparse points are refused. This does not establish Windows ACL confidentiality.\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E09": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E09",
+          "path": "docs/repo-local-memory.md",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 17,
+          "line_end": 29,
+          "git_blob_oid": "fba2af45623cb98c869c78218bab97794a26675c",
+          "file_sha256": "0df739849fe2f7884a7ad886a60e43aa3f42c9aeeba40dd178265d9e20fa58e5",
+          "excerpt_sha256": "d4d39ac340aae2adbb3ed22895100e0ffd7234196254135a82610c708afb2057",
+          "text": "## What memory does not do\n\nThere is no automatic harvesting, synchronization, Git publication, extraction, embedding, compression, majority voting, automatic file-rename tracking, or provider call. File associations are initially convention-based ordinary tags, for example:\n\n```text\n--tag file:src/cache.rs\n```\n\nThey are not validated file anchors, and existing tag limits still apply.\n\nMemory records should capture explicit decisions, hypotheses, and failures, with links using `supports`, `supersedes`, `derived-from`, or `related-to`. Recall includes bounded one-hop linked context even when that context does not match the query. Omission counts are explicit; not every contrary note is guaranteed to fit.\n\nStorage and recall are bounded: at most 256 records and 512 KiB are stored; recall returns up to 4 primary and 8 contextual records, subject to a 64 KiB recall budget, with omissions possible.\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E11": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E11",
+          "path": "src/memory/recall.rs",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 12,
+          "line_end": 18,
+          "git_blob_oid": "a04f18d3af301821aa695f2bc901e9dbc9d49bdd",
+          "file_sha256": "bdc0988b32c59c0c33af22cca1b4319cacf217eaeea9d0a6e13241da8f288c7f",
+          "excerpt_sha256": "e403d21f3d8035fd828945b7bb75617316c2c4c3e7d260127f361a08e563ab93",
+          "text": "const MAX_QUERY_CHARS: usize = 256;\nconst MAX_TERMS: usize = 32;\nconst MAX_MATCHES: usize = 4;\nconst MAX_CONTEXT: usize = 8;\nconst MAX_OUTPUT_BYTES: usize = 64 * 1024;\n// Reserve room for the escaped query, keys, counters, caveat, and separators.\nconst ITEM_BUDGET_BYTES: usize = MAX_OUTPUT_BYTES - 4096;\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E12": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E12",
+          "path": "src/memory/recall.rs",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 130,
+          "line_end": 182,
+          "git_blob_oid": "a04f18d3af301821aa695f2bc901e9dbc9d49bdd",
+          "file_sha256": "bdc0988b32c59c0c33af22cca1b4319cacf217eaeea9d0a6e13241da8f288c7f",
+          "excerpt_sha256": "76647112d4af7b7a2734f508ce4da197cd00dfdace410d4e312884c79ac3ee53",
+          "text": "/// Recall from one validated ledger snapshot. No provider calls or writes.\n///\n/// Match distinct, case-insensitive Unicode alphanumeric words in text and tags.\n/// Ties prefer newer notes, then ascending IDs. Incoming and outgoing one-hop\n/// relationships remain inspectable without treating links as endorsements.\npub fn recall_at(root: &Path, scope_key: Option<&str>, query: &str) -> Result<MemoryRecallReport> {\n    let terms = query_terms(query)?;\n    let records = if ledger_present(root, scope_key)? {\n        list_at(root, scope_key)?\n    } else {\n        Vec::new()\n    };\n    let mut ranked: Vec<_> = records\n        .iter()\n        .filter_map(|record| {\n            let words = words(&format!(\"{} {}\", record.text, record.tags.join(\" \")));\n            let score = words.intersection(&terms).count();\n            (score > 0).then_some((score, record))\n        })\n        .collect();\n    ranked.sort_by(|(score_a, a), (score_b, b)| {\n        score_b\n            .cmp(score_a)\n            .then_with(|| b.created_unix.cmp(&a.created_unix))\n            .then_with(|| a.id.cmp(&b.id))\n    });\n\n    let mut report = MemoryRecallReport {\n        schema_version: 1,\n        method: \"lexical\",\n        scope: if scope_key.is_some() {\n            \"current\"\n        } else {\n            \"global\"\n        },\n        query: query.to_owned(),\n        matches: Vec::new(),\n        context: Vec::new(),\n        total_matches: ranked.len(),\n        omitted_matches: 0,\n        omitted_context: 0,\n        caveat: \"Manual notes and links are untrusted evidence, not verified truth, agent consensus, or semantic confidence. Context is one hop only.\",\n    };\n    let mut remaining = ITEM_BUDGET_BYTES;\n    for (_, record) in &ranked {\n        if report.matches.len() == MAX_MATCHES {\n            break;\n        }\n        let item = item_from_snapshot(record, &records);\n        if reserve_item(&item, &mut remaining)? {\n            report.matches.push(item);\n        }\n    }\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E13": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E13",
+          "path": "src/memory/recall.rs",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 183,
+          "line_end": 244,
+          "git_blob_oid": "a04f18d3af301821aa695f2bc901e9dbc9d49bdd",
+          "file_sha256": "bdc0988b32c59c0c33af22cca1b4319cacf217eaeea9d0a6e13241da8f288c7f",
+          "excerpt_sha256": "2e56dfc5d8831a75e75ed87a385c206642bfdffd5a9ff349ffc044a49af277e3",
+          "text": "    let selected: BTreeSet<_> = report\n        .matches\n        .iter()\n        .map(|item| item.record.id.as_str())\n        .collect();\n    let outgoing: BTreeSet<_> = report\n        .matches\n        .iter()\n        .flat_map(|item| item.record.links.iter().map(|link| link.target_id.as_str()))\n        .collect();\n    let mut context: Vec<_> = records\n        .iter()\n        .filter(|record| {\n            !selected.contains(record.id.as_str())\n                && (outgoing.contains(record.id.as_str())\n                    || record\n                        .links\n                        .iter()\n                        .any(|link| selected.contains(link.target_id.as_str())))\n        })\n        .collect();\n    // Prefer contrary notes and incoming supersession when context is bounded.\n    // This prioritizes inspection, not credibility, and never deletes history.\n    let priority = |record: &MemoryRecord| {\n        if record.kind == MemoryKind::Disagreement {\n            0\n        } else if record.links.iter().any(|link| {\n            link.relation == MemoryRelation::Supersedes\n                && selected.contains(link.target_id.as_str())\n        }) {\n            1\n        } else {\n            2\n        }\n    };\n    context.sort_by(|a, b| {\n        priority(a)\n            .cmp(&priority(b))\n            .then_with(|| b.created_unix.cmp(&a.created_unix))\n            .then_with(|| a.id.cmp(&b.id))\n    });\n    let context_count = context.len();\n    for record in context {\n        if report.context.len() == MAX_CONTEXT {\n            break;\n        }\n        let item = item_from_snapshot(record, &records);\n        if reserve_item(&item, &mut remaining)? {\n            report.context.push(item);\n        }\n    }\n    report.omitted_context = context_count - report.context.len();\n    let shown: BTreeSet<_> = report\n        .matches\n        .iter()\n        .chain(&report.context)\n        .map(|item| item.record.id.as_str())\n        .collect();\n    report.omitted_matches = ranked\n        .iter()\n        .filter(|(_, record)| !shown.contains(record.id.as_str()))\n        .count();\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E14": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E14",
+          "path": "docs/memory-export.md",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 1,
+          "line_end": 28,
+          "git_blob_oid": "6ba475866791aa7802c7162ac954139b041926e1",
+          "file_sha256": "ebae22bf232f952cc4f91888a4521f9f3d57067bf553ccf7a8c5d05280cf8cbf",
+          "excerpt_sha256": "2286fe8d105adeb8ea684c55afbadd0c3eb8720fc377706651e47e0363c7db29",
+          "text": "# Explicit curated-memory export\n\nThese instructions describe the current source build, not verified availability in an already published or previously installed binary.\n\n`az memory export <id>... [--with-context] [--global]` emits one compact JSON object to stdout. It accepts 1 through 16 unique, explicitly selected record IDs. Inspect the records locally before sharing the output.\n\nReplace `m0123456789abcdef` with a real ID obtained from `az memory list`, then inspect it with `az memory show <id>` before exporting:\n\n```sh\naz memory export m0123456789abcdef > reviewed-memory.json\naz memory export m0123456789abcdef --with-context > reviewed-connected-memory.json\n```\n\nShell redirection is your action and can create a file even when the CLI refuses. The CLI writes its result only to stdout. Do not automatically stage or publish the output. Authored fields may contain private paths, secrets or untrusted instructions. They are preserved, not scrubbed or executed. No automatic HOME, repository path, remote URL, author identity or transcript metadata is added.\n\nWithout `--with-context`, export refuses a selection whose complete relationship component contains additional records. It reports the need for consent without emitting a partial bundle. With that flag, export includes the complete transitive incoming/outgoing component across all supported relationship labels. Recall's four-primary/eight-context display limits do not truncate an export.\n\n## Integrity and privacy\n\nThe payload contains the format/version, sorted `selection`, sorted `context_ids`, and exact stored records in ID order. Text, timestamps, tags, links, IDs and asserted provenance are preserved. `payload_sha256` covers the emitted compact UTF-8 JSON payload without a trailing newline. The envelope states the digest encoding, complete-context policy, and trust caveat.\n\nThe digest is integrity evidence, not a signature or authenticated authorship. Manual notes and linked disagreements remain untrusted evidence, not verified truth or independent agent consensus. Review every selected and context record, including potentially private text, before deliberately moving the bundle.\n\nExport is read-only, including missing-state and invalid-input paths. It neither creates a sharing service nor stages, publishes, synchronizes, or imports notes. `--global` explicitly selects personal-global memory. Normal project/legacy routing and project-memory disable controls remain authoritative. Output is bounded to 1 MiB, while the source ledger remains bounded to 256 records and 512 KiB of JSONL.\n\n## Importing a reviewed bundle\n\nThe separate `az memory import reviewed-memory.json` command now provides a no-write preview. Only `--apply` requests a merge. See [Explicit curated-memory import](memory-import.md) for conflict refusal, idempotence, original-provenance caveats and atomic-writer behavior. The export envelope's statement that no import was performed describes the export operation itself, not the availability of the separate import command.\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E15": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E15",
+          "path": "docs/memory-import.md",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 1,
+          "line_end": 24,
+          "git_blob_oid": "c5ce8527187a65e28adf992d99c87d0631391321",
+          "file_sha256": "d0836eb324507b0c0f10618d698c667ced128bc9a02a815def54c861d428bc8f",
+          "excerpt_sha256": "12ec238b66cfcb85a4a0954fe49d7f1509464be2b5c2170281a70698229eb879",
+          "text": "# Explicit curated-memory import\n\nThis guide describes the current source build. It does not claim that an already published or previously installed binary includes this unreleased command.\n\n`az memory import <bundle-file>` previews a reviewed export without writing destination state. Add `--apply` to merge the records. Add `--global` only when the destination should be personal-global memory rather than the normal project or legacy store.\n\n```sh\naz memory import reviewed-memory.json\naz memory import reviewed-memory.json --apply\n```\n\nThe input is the complete compact JSON object emitted by `az memory export`, optionally followed by its single newline. Review both selected records and the explicitly consented connected context before applying it. Reformatting, duplicate JSON keys, unknown fields, unsupported versions, dangling links, invalid records, or a mismatched digest are refused. The input must be a bounded regular non-symlink file. Export and import do not publish or synchronize anything.\n\n## Merge behavior\n\n- The default preview validates the input and destination, reports counts, and creates no memory state.\n- `--apply` preserves existing records. An exact existing record with the same ID is counted as already present. A differing record with the same ID is a conflict, not an update or a vote.\n- New records are merged under the same writer lock as `memory add`. The destination and record/byte limits are checked again while holding that lock, then the ledger is replaced atomically.\n- A valid apply may initialize custody metadata before a later write failure. This is not the no-write guarantee of preview. Existing history must not be overwritten on conflict or a rejected capacity check.\n- An error does not by itself prove rollback: snapshot publication can succeed before a later validation fails. Preview the destination or retry the same unchanged bundle to determine whether its exact records are already present. Do not delete records or assume that every unsuccessful return left the old snapshot intact.\n- Reapplying an unchanged bundle is idempotent. No extra copy or new ID is created for an already present exact record.\n- Project controls and explicit `AZDAJA_HOME` precedence remain the same as other memory commands. `--global` never silently merges project and personal stores.\n\nThe receipt contains `action`, `scope`, `new_records`, `already_present`, `total_records`, `source_payload_sha256`, and a provenance caveat. It contains no record bodies or source filesystem path. Preview counts describe the snapshot it read, not a reservation against later writers.\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E16": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E16",
+          "path": "docs/memory-import.md",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 26,
+          "line_end": 38,
+          "git_blob_oid": "c5ce8527187a65e28adf992d99c87d0631391321",
+          "file_sha256": "d0836eb324507b0c0f10618d698c667ced128bc9a02a815def54c861d428bc8f",
+          "excerpt_sha256": "760652ee079a7a2196754fafa204be1c3db7d523124f4c2f6d28f68368d5588f",
+          "text": "## Trust and boundaries\n\nThe SHA-256 digest detects byte-level payload changes. It is not a signature and does not authenticate an author. Imported `provenance.origin` is preserved as an untrusted source assertion, not converted into verified truth, local authorship, or independent confirmation. Several copies of the same note do not constitute several independent agents agreeing.\n\nImport has a 1 MiB input limit. The merged store retains its existing 256-record and 512 KiB serialized-JSONL limits. Relationships must reference records inside the reviewed bundle, and its declared context must exactly match the complete connected component of the selected records.\n\nThe workflow intentionally requires a person or explicitly instructed agent to move and review the bundle. An ordinary Git clone excludes `.azdaja` notes. Import does not harvest transcripts, call a provider, infer wisdom, or track renamed files automatically.\n\n## Opened-file validation and platform limits\n\nImport validates the opened file handle as well as checking the path. Unix opens use `O_NOFOLLOW`; Windows opens use `FILE_FLAG_OPEN_REPARSE_POINT` and reject reparse attributes on the resulting handle. This closes the final-entry replacement window between the path check and the open.\n\n`changed_bundle_entry_is_refused_after_a_successful_regular_file_precheck` deterministically replaces a checked regular file with a symlink and then a directory, requires refusal without changing the target, and verifies regular-file recovery. It ran successfully on the native Unix host. Windows code and the Windows test branch compile under strict lint, but Windows runtime execution remains a separate CI gate. Windows reparse checks do not validate ACL exposure; Unix memory-store mode/ownership checks are not a Windows ACL guarantee.\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    },
+    "E17": {
+      "type": "noul",
+      "instructions": {
+        "task": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+        "candidate": {
+          "id": "E17",
+          "path": "docs/memory-import.md",
+          "revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+          "line_start": 55,
+          "line_end": 58,
+          "git_blob_oid": "c5ce8527187a65e28adf992d99c87d0631391321",
+          "file_sha256": "d0836eb324507b0c0f10618d698c667ced128bc9a02a815def54c861d428bc8f",
+          "excerpt_sha256": "a27164681e1c3458e2105d8ec1db72edd91e88ac2dcee87683eda5abcfbad06e",
+          "text": "| Real write failure, preserved history and released writer custody | Unix-only `import_write_failure_preserves_history_and_releases_custody_for_recovery` passed after an 8 KiB file-size limit forced an ordinary exit-2 write failure. All 9,970 original ledger bytes survived, and a later unrestricted import and exact re-export succeeded. |\n| Public help and the default no-write import contract | `public_help_explains_context_consent_and_no_write_import_default` passed. |\n\nThe final 18-case transfer suite and full optimized project suite, including 49 installer cases, passed. Native, Windows GNU, Linux and Intel macOS strict compile/lint checks also passed. The Unix fault case ran, rather than being counted as ignored. Foreign-target compilation is not foreign-platform runtime acceptance. Passing these functional tests is not evidence that memory improves model correctness or productivity.\n"
+        },
+        "question": "Does this exact candidate provide substantive evidence needed to answer at least one specific part of the task? Mere topical word overlap is not sufficient."
+      }
+    }
+  }
+}

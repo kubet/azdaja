@@ -1,0 +1,97 @@
+{
+  "type": "small_development_observation_not_general_efficacy",
+  "reviewers": [
+    {
+      "reviewer": 1,
+      "interpretation": "strict_frozen_checklist",
+      "totals": {
+        "draft": {
+          "successful_tasks": 1,
+          "tasks": 7,
+          "scores_total": 36,
+          "score_max": 42
+        },
+        "self-review": {
+          "successful_tasks": 1,
+          "tasks": 7,
+          "scores_total": 36,
+          "score_max": 42
+        },
+        "distribution-review": {
+          "successful_tasks": 1,
+          "tasks": 7,
+          "scores_total": 36,
+          "score_max": 42
+        }
+      }
+    },
+    {
+      "reviewer": 2,
+      "interpretation": "task_sufficiency_sensitivity",
+      "totals": {
+        "draft": {
+          "successful_tasks": 6,
+          "tasks": 7,
+          "scores_total": 41,
+          "score_max": 42
+        },
+        "self-review": {
+          "successful_tasks": 6,
+          "tasks": 7,
+          "scores_total": 41,
+          "score_max": 42
+        },
+        "distribution-review": {
+          "successful_tasks": 6,
+          "tasks": 7,
+          "scores_total": 41,
+          "score_max": 42
+        }
+      }
+    }
+  ],
+  "arms": {
+    "draft": {
+      "facts_correct": 32,
+      "facts_total": 32,
+      "mechanical_pass": true
+    },
+    "self-review": {
+      "facts_correct": 32,
+      "facts_total": 32,
+      "mechanical_pass": true
+    },
+    "distribution-review": {
+      "facts_correct": 32,
+      "facts_total": 32,
+      "mechanical_pass": true
+    }
+  },
+  "retrieval": {
+    "bm25": {
+      "top4": [
+        "E09",
+        "E15",
+        "E14",
+        "E03"
+      ],
+      "required_groups_covered": 2,
+      "required_groups_total": 4
+    },
+    "typed": {
+      "top4": [
+        "E13",
+        "E09",
+        "E14",
+        "E12"
+      ],
+      "required_groups_covered": 4,
+      "required_groups_total": 4
+    }
+  },
+  "blanket_review_promotion": false,
+  "rlm_advantage_over_python_established": false,
+  "shared_material_omission": "Q2: review all transitive exported context for private authored content before sharing, not merely before destination apply.",
+  "reviewer_disagreement": "Absolute completeness scoring differs (1/7 vs6/7), but both reviewers tie all arms and identify the same Q2 material omission. Keep strict preregistered score primary, sensitivity separate.",
+  "usage_validator_caveat": "Frozen d9922a7 accepted fractional token metadata. Actual retained usage fields were integers, exactly13848+10974 input and304+292 output. Fixed afterward offline with u64 validation/checked accumulation, not by rewriting or rerunning the live study."
+}

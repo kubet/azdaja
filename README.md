@@ -88,6 +88,8 @@ Commands: `help`, `solo`, `map`, `install`, `doctor`, `start`, `load`, `exec`, `
 
 See the [CLI reference](docs/cli.md) for signatures, process custody, signal behavior, temporary files, and configuration errors.
 
+**Optional typed judgments (development source):** `judge_many(state, questions)` can return TypeSafe Jev probabilities beside ordinary `llm` calls in the persistent evaluator. Both the `typesafe` build feature and host `[judge]` opt-in are required. It preserves distributions rather than enforcing a semantic confidence cutoff. See the [native interface, example, limits and practical use cases](docs/typed-judgments.md). Existing providers do not require it.
+
 ## Results
 
 ### Live model product suite

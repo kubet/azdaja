@@ -1,0 +1,205 @@
+{
+  "cached": {
+    "_azdaja": {
+      "billing": "not_inferred",
+      "cache_hit": true,
+      "elapsed_ms": 5,
+      "model_semantics": "provider_reported_identifier_not_immutable_weights",
+      "new_request_usage": null,
+      "original_usage": {
+        "input_tokens": 13848,
+        "output_tokens": 304
+      },
+      "provider_requests_this_call": 0,
+      "request_sha256": "ba9526806bf688c7023262fe285dc9bb524b65c72bfa40158fb4c195bc8c6022",
+      "usage_semantics": "original_observation_reused_no_new_request"
+    },
+    "answers": {
+      "Q1": {
+        "choice": "adequate",
+        "confidence": 0.71,
+        "probabilities": {
+          "adequate": 0.8,
+          "incomplete": 0.08,
+          "material_error": 0.12
+        },
+        "type": "choice"
+      },
+      "Q2": {
+        "choice": "adequate",
+        "confidence": 0.76,
+        "probabilities": {
+          "adequate": 0.84,
+          "incomplete": 0.1,
+          "material_error": 0.06
+        },
+        "type": "choice"
+      },
+      "Q3": {
+        "choice": "adequate",
+        "confidence": 0.94,
+        "probabilities": {
+          "adequate": 0.96,
+          "incomplete": 0.03,
+          "material_error": 0.01
+        },
+        "type": "choice"
+      },
+      "Q4": {
+        "choice": "adequate",
+        "confidence": 0.84,
+        "probabilities": {
+          "adequate": 0.89,
+          "incomplete": 0.07,
+          "material_error": 0.04
+        },
+        "type": "choice"
+      },
+      "Q5": {
+        "choice": "adequate",
+        "confidence": 0.93,
+        "probabilities": {
+          "adequate": 0.95,
+          "incomplete": 0.04,
+          "material_error": 0.01
+        },
+        "type": "choice"
+      },
+      "Q6": {
+        "choice": "adequate",
+        "confidence": 0.97,
+        "probabilities": {
+          "adequate": 0.97,
+          "incomplete": 0.02,
+          "material_error": 0.01
+        },
+        "type": "choice"
+      },
+      "Q7": {
+        "choice": "adequate",
+        "confidence": 0.96,
+        "probabilities": {
+          "adequate": 0.98,
+          "incomplete": 0.02,
+          "material_error": 0.0
+        },
+        "type": "choice"
+      }
+    },
+    "model": "jev-1.13.0",
+    "usage": {
+      "input_tokens": 13848,
+      "output_tokens": 304
+    }
+  },
+  "observation": {
+    "_azdaja": {
+      "billing": "not_inferred",
+      "cache_hit": false,
+      "elapsed_ms": 1199,
+      "model_semantics": "provider_reported_identifier_not_immutable_weights",
+      "new_request_usage": {
+        "input_tokens": 13848,
+        "output_tokens": 304
+      },
+      "original_usage": {
+        "input_tokens": 13848,
+        "output_tokens": 304
+      },
+      "provider_requests_this_call": 1,
+      "request_sha256": "ba9526806bf688c7023262fe285dc9bb524b65c72bfa40158fb4c195bc8c6022",
+      "usage_semantics": "original_provider_request"
+    },
+    "answers": {
+      "Q1": {
+        "choice": "adequate",
+        "confidence": 0.71,
+        "probabilities": {
+          "adequate": 0.8,
+          "incomplete": 0.08,
+          "material_error": 0.12
+        },
+        "type": "choice"
+      },
+      "Q2": {
+        "choice": "adequate",
+        "confidence": 0.76,
+        "probabilities": {
+          "adequate": 0.84,
+          "incomplete": 0.1,
+          "material_error": 0.06
+        },
+        "type": "choice"
+      },
+      "Q3": {
+        "choice": "adequate",
+        "confidence": 0.94,
+        "probabilities": {
+          "adequate": 0.96,
+          "incomplete": 0.03,
+          "material_error": 0.01
+        },
+        "type": "choice"
+      },
+      "Q4": {
+        "choice": "adequate",
+        "confidence": 0.84,
+        "probabilities": {
+          "adequate": 0.89,
+          "incomplete": 0.07,
+          "material_error": 0.04
+        },
+        "type": "choice"
+      },
+      "Q5": {
+        "choice": "adequate",
+        "confidence": 0.93,
+        "probabilities": {
+          "adequate": 0.95,
+          "incomplete": 0.04,
+          "material_error": 0.01
+        },
+        "type": "choice"
+      },
+      "Q6": {
+        "choice": "adequate",
+        "confidence": 0.97,
+        "probabilities": {
+          "adequate": 0.97,
+          "incomplete": 0.02,
+          "material_error": 0.01
+        },
+        "type": "choice"
+      },
+      "Q7": {
+        "choice": "adequate",
+        "confidence": 0.96,
+        "probabilities": {
+          "adequate": 0.98,
+          "incomplete": 0.02,
+          "material_error": 0.0
+        },
+        "type": "choice"
+      }
+    },
+    "model": "jev-1.13.0",
+    "usage": {
+      "input_tokens": 13848,
+      "output_tokens": 304
+    }
+  },
+  "stats": {
+    "attempts": 1,
+    "billing": "not_inferred",
+    "cache_hits": 1,
+    "cached_requests": 1,
+    "enabled": true,
+    "input_usage_complete": true,
+    "known_input_tokens": 13848.0,
+    "poisoned": false,
+    "provider_requests": 1,
+    "questions": 7,
+    "transport_available": true,
+    "unknown_input_usage_requests": 0
+  }
+}

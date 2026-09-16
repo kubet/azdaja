@@ -1,0 +1,120 @@
+[
+  {
+    "task_id": "Q1",
+    "answer": "No. Recall is a bounded lexical search, not proof that no counterevidence exists. It matches distinct case-insensitive Unicode alphanumeric words in note text and tags and selects at most four primary matches [E11][E12]. A contrary note can therefore be missed if it uses different terminology and is not linked to a selected record. Such a note never enters the ranked match or linked-context sets, so both omission counters can still be zero [E12][E13]. Context consists only of one-hop incoming or outgoing relationships around selected primary matches, with at most eight context records. When bounded, disagreement records are preferred first, followed by incoming records that supersede a selected record, then other linked records. This ordering prioritizes inspection, not credibility [E13]. Exporting a selected note with `--with-context` addresses relationship-component completeness instead: it includes the complete transitive incoming and outgoing component without recall's four-primary/eight-context truncation, but it still does not discover disconnected notes [E14]. Before approving removal, vary the lexical queries, inspect the ledger locally, and review relevant unlinked records rather than treating zero omissions as an exhaustive search.",
+    "sources": [
+      "E11",
+      "E12",
+      "E13",
+      "E14"
+    ],
+    "facts": {
+      "recall_proves_no_counterevidence": false,
+      "primary_cap": 4,
+      "context_cap": 8,
+      "export_context_hops": "transitive",
+      "export_covers_disconnected_notes": false
+    }
+  },
+  {
+    "task_id": "Q2",
+    "answer": "First verify that the commands are present in the binary being used, because these guides describe the current source build and explicitly do not establish availability in an older published or installed binary [E14][E15]. With a build that supports them, list and inspect the intended project records using `az memory list` and `az memory show <id>`, then export the explicitly reviewed IDs with `az memory export <id>... --with-context`. Manually transfer the resulting compact JSON object, have the teammate run `az memory import <bundle-file>` for a no-write preview, and use `az memory import <bundle-file> --apply` only after reviewing the selected records and connected context [E14][E15]. An ordinary clone does not carry `.azdaja` notes because the repository-local store is ignored, and export/import do not themselves publish or synchronize anything [E08][E16]. Recall output is not a substitute for the export bundle: recall is limited to four lexical primary records and eight one-hop context records, while export with context includes the complete transitive relationship component and the required integrity envelope [E11][E13][E14]. For the teammate's older binary, inspect its local help and update or use a compatible current-source build if the commands are absent. The pinned source documentation alone is not runtime proof that the installed binary supports them [E14][E15].",
+    "sources": [
+      "E08",
+      "E11",
+      "E13",
+      "E14",
+      "E15",
+      "E16"
+    ],
+    "facts": {
+      "clone_transfers_notes": false,
+      "preview_writes_memory": false,
+      "apply_flag": "--apply",
+      "installed_command_availability_verified": false
+    }
+  },
+  {
+    "task_id": "Q3",
+    "answer": "Reject the delete-before-retry design. Preview validates the bundle and destination without creating memory state, but its counts describe only the snapshot read and do not reserve capacity against later writers [E15]. During `--apply`, an exact existing record with the same ID is counted as already present. A different record with that ID is a conflict, not an update, and must not overwrite existing history. Reapplying the same unchanged bundle is idempotent and creates neither another copy nor a new ID [E15]. Atomic ledger replacement does not mean every unsuccessful return proves rollback. The documented defeating sequence is that snapshot publication can succeed and a later validation can then fail, producing an error after the exact records may already be present. A valid apply may also initialize custody metadata before a later write failure [E15]. Do not delete destination notes after an error. Preview the destination or retry the exact unchanged bundle to determine whether its records are already present [E15]. As runtime evidence, a Unix-only fault test forced an ordinary exit-2 write failure with an 8 KiB limit, preserved all 9,970 original ledger bytes, released writer custody, and allowed a later import and exact re-export [E17]. That proves the tested recovery case, not universal rollback, and the supplied corpus does not report runtime proof of the separate publication-then-late-error sequence.",
+    "sources": [
+      "E15",
+      "E17"
+    ],
+    "facts": {
+      "any_apply_error_proves_rollback": false,
+      "same_id_different_record_overwrites": false,
+      "unchanged_retry_idempotent": true,
+      "preview_reserves_capacity": false
+    }
+  },
+  {
+    "task_id": "Q4",
+    "answer": "Inside a Git worktree, the routing is: (a) with both variables unset, use the repository-local project store; (b) with `AZDAJA_HOME` set and the project switch unset, use the legacy authoritative-root store; (c) with `AZDAJA_PROJECT_MEMORY=on`, project mode takes precedence over `AZDAJA_HOME`; (d) with the switch set to `off` and no `--global`, refuse the non-global memory operation without writing; and (e) with `--global`, use the personal-global store independently of project routing [E08]. Moving into another subdirectory of the same repository preserves access to the same notes [E08]. Ordinary Git staging ignores repository-local `.azdaja` contents because its `.gitignore` contains `*`, and memory performs no automatic Git publication [E08][E09]. Inspecting the numeric constellation neither publishes nor validates notes. It uses local aggregate numbers rather than source text, and `avg variety` is a distributional summary rather than a quality or truth score [E02].",
+    "sources": [
+      "E02",
+      "E08",
+      "E09"
+    ],
+    "facts": {
+      "a_store": "project",
+      "b_store": "legacy",
+      "c_store": "project",
+      "d_store": "refused",
+      "e_store": "personal-global",
+      "constellation_is_note_truth_score": false
+    }
+  },
+  {
+    "task_id": "Q5",
+    "answer": "No. Installing the Jcode hook does not activate Azdaja. Activation must be explicitly selected for the current request, session, or repository by setting `AZDAJA_JCODE_ACTIVATION` to `request`, `session`, or `repository`. Unset or ambiguous activation leaves ordinary host-native behavior available [E04]. The broad-read instructions describe behavior when the integration is applicable: a challenged broad read receives a memory handoff, the specified `azdaja solo ... --repo .` command is run once, and that blocked broad read is not retried. Narrow reads, Git control, builds, tests, lint, and formatting remain available [E01]. Those workflow instructions do not make installation itself activation or justify permanent blocking. If an internal route or handoff fails, the failure must be reported and the host-native path must remain available [E04]. No OS-level security guarantee follows. Native tools retain ambient host permissions, and the handoff is a cooperative workflow guard rather than a sandbox against a malicious same-user shell process [E03][E04].",
+    "sources": [
+      "E01",
+      "E03",
+      "E04"
+    ],
+    "facts": {
+      "hook_installation_activates": false,
+      "activation_scopes": [
+        "request",
+        "session",
+        "repository"
+      ],
+      "failure_keeps_native_path": true,
+      "is_os_sandbox": false
+    }
+  },
+  {
+    "task_id": "Q6",
+    "answer": "The current bundled configuration sets `default_model` to `gpt-5.6-sol`; `gpt-5.6-luna` appears in a historical managed configuration fixture [E05][E06]. The legacy files are byte-for-byte outputs retained as migration custody fixtures, not normalization targets for all installed configurations [E07]. Migration is permitted only when every byte of the installed configuration exactly matches a recognized fixture. Parsed-TOML equivalence is insufficient, and a customized or one-byte-different configuration must remain untouched [E07]. The bundled default also does not establish the model used by every live call. Sessions retain the default persisted when each session was created, simultaneous sessions can differ, and individual model calls can override the session default [E02].",
+    "sources": [
+      "E02",
+      "E05",
+      "E06",
+      "E07"
+    ],
+    "facts": {
+      "current_default_model": "gpt-5.6-sol",
+      "legacy_fixture_model": "gpt-5.6-luna",
+      "migration_equality": "exact-bytes",
+      "one_byte_changed_config_migrated": false,
+      "all_live_calls_use_default": false
+    }
+  },
+  {
+    "task_id": "Q7",
+    "answer": "Do not sign off on those claims. The reported runtime evidence is native Unix execution: one test replaced a prechecked regular bundle with a symlink and then a directory, verified refusal without changing the target, and verified regular-file recovery. A separate Unix-only forced write-failure test also ran successfully [E16][E17]. Windows code and its test branch compiled under strict lint, and foreign-target compile/lint checks passed, but Windows runtime execution remains a separate CI gate. Foreign-target compilation is explicitly not foreign-platform runtime acceptance [E16][E17]. Windows confidentiality is also unestablished. Reparse-point checks do not validate ACL exposure, and Unix ownership and mode checks provide no Windows ACL guarantee [E08][E16]. SHA-256 detects byte-level payload changes but is not a signature and does not authenticate an author [E14][E16]. Imported `provenance.origin` remains an untrusted source assertion and is not converted into verified truth, local authorship, or independent confirmation [E16].",
+    "sources": [
+      "E08",
+      "E14",
+      "E16",
+      "E17"
+    ],
+    "facts": {
+      "windows_runtime_acceptance_established": false,
+      "windows_acl_confidentiality_established": false,
+      "digest_authenticates_author": false,
+      "imported_origin_verified": false
+    }
+  }
+]

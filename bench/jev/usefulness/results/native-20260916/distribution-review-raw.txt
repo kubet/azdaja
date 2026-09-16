@@ -1,0 +1,120 @@
+[
+  {
+    "task_id": "Q1",
+    "answer": "No. Recall is a bounded lexical search, not proof that no counterevidence exists. It matches distinct case-insensitive Unicode alphanumeric words in note text and tags and returns at most four primary matches [E11][E12]. A disagreement can therefore be missed when it is disconnected from the selected records and uses terminology that does not overlap the query, even if both omission counters are zero. Those counters concern omitted lexical matches and linked-context candidates, not semantically relevant notes that were never candidates [E12][E13]. Context consists only of records connected by one incoming or outgoing relationship hop to a selected primary match, with at most eight records. When context is bounded, disagreements are preferred first, then incoming records that supersede a selected record, then other linked records. This prioritizes inspection, not credibility [E13]. Exporting a selected note with `--with-context` addresses a different coverage problem: it includes the complete transitive incoming/outgoing relationship component without recall's four-primary/eight-context truncation, but it cannot discover disconnected notes outside that component [E14]. Before approving removal, vary the lexical queries, inspect the ledger locally, and review potentially relevant unlinked records.",
+    "sources": [
+      "E11",
+      "E12",
+      "E13",
+      "E14"
+    ],
+    "facts": {
+      "recall_proves_no_counterevidence": false,
+      "primary_cap": 4,
+      "context_cap": 8,
+      "export_context_hops": "transitive",
+      "export_covers_disconnected_notes": false
+    }
+  },
+  {
+    "task_id": "Q2",
+    "answer": "Use binaries known to provide the current source-build commands. List and inspect the intended project records with `az memory list` and `az memory show <id>`, export the explicitly reviewed IDs with `az memory export <id>... --with-context`, deliberately transfer the resulting compact JSON file, run `az memory import <bundle-file>` at the destination for a no-write preview, and use `az memory import <bundle-file> --apply` only after reviewing the selected records and connected context [E14][E15]. An ordinary clone does not transfer the notes because repository-local `.azdaja` contents are ignored, and export/import do not themselves publish or synchronize anything [E08][E14][E16]. Recall output is not a substitute for an export bundle: recall is limited to four lexical primary matches and eight one-hop context records, while export with context carries the complete transitive relationship component, exact stored records, and an integrity envelope [E11][E13][E14]. These are documented behaviors of the current source build. The corpus does not verify that the teammate's older installed binary contains either command, so command availability must be established or the installation updated before relying on this workflow [E14][E15].",
+    "sources": [
+      "E08",
+      "E11",
+      "E13",
+      "E14",
+      "E15",
+      "E16"
+    ],
+    "facts": {
+      "clone_transfers_notes": false,
+      "preview_writes_memory": false,
+      "apply_flag": "--apply",
+      "installed_command_availability_verified": false
+    }
+  },
+  {
+    "task_id": "Q3",
+    "answer": "Reject the delete-before-retry design. Preview validates the input and destination without creating memory state, but its counts describe only the snapshot read and do not reserve capacity against later writers [E15]. During `--apply`, an exact existing record with the same ID is counted as already present. A differing record with that ID is a conflict, not an update, vote, or overwrite. Reapplying the same unchanged bundle is idempotent and creates neither another copy nor a new ID [E15]. Atomic replacement does not mean every error proves rollback: snapshot publication can succeed before a later validation fails, producing an unsuccessful return after the exact records have become present. A valid apply may also initialize custody metadata before a later write failure [E15]. After an error, do not delete destination notes. Preview the destination or retry the exact unchanged bundle to determine whether the records are already present. As runtime proof of one narrower recovery case, a Unix-only test forced an ordinary exit-2 write failure with an 8 KiB file-size limit; all 9,970 original ledger bytes survived, writer custody was released, and a later unrestricted import and exact re-export succeeded. That observed test does not establish universal rollback for every possible error [E17].",
+    "sources": [
+      "E15",
+      "E17"
+    ],
+    "facts": {
+      "any_apply_error_proves_rollback": false,
+      "same_id_different_record_overwrites": false,
+      "unchanged_retry_idempotent": true,
+      "preview_reserves_capacity": false
+    }
+  },
+  {
+    "task_id": "Q4",
+    "answer": "Inside a Git worktree: (a) with both variables unset, use the repository-local project store; (b) with `AZDAJA_HOME` set and the project switch unset, use the legacy authoritative-root store; (c) with `AZDAJA_PROJECT_MEMORY=on`, project mode takes precedence over `AZDAJA_HOME`; (d) with the project switch set to `off` and no `--global`, refuse the non-global operation without writing; and (e) with `--global`, use the personal-global store independently of project routing [E08]. Moving into another subdirectory of the same repository preserves access to the same notes. Ordinary Git staging ignores the repository-local `.azdaja` contents because its `.gitignore` contains `*`, and memory performs no automatic Git publication [E08][E09]. Inspecting the numeric constellation neither publishes nor validates notes: it uses local aggregate numbers rather than source text, and `avg variety` is a distributional summary, not a quality or truth score [E02].",
+    "sources": [
+      "E02",
+      "E08",
+      "E09"
+    ],
+    "facts": {
+      "a_store": "project",
+      "b_store": "legacy",
+      "c_store": "project",
+      "d_store": "refused",
+      "e_store": "personal-global",
+      "constellation_is_note_truth_score": false
+    }
+  },
+  {
+    "task_id": "Q5",
+    "answer": "No. Installing the Jcode hook does not activate Azdaja. Activation must be explicitly selected for the current request, session, or repository by setting `AZDAJA_JCODE_ACTIVATION` to `request`, `session`, or `repository`; unset or ambiguous activation leaves ordinary host-native behavior available [E04]. The earlier broad-read instructions describe the cooperative workflow used when the integration has been activated and a broad read is challenged: run the specified `azdaja solo ... --repo .` handoff once, do not retry that blocked broad read, and continue from the answer. Narrow reads, Git control, builds, tests, lint, and formatting remain available [E01]. Those instructions do not override the explicit activation and failure rules. If an internal route or handoff fails, the failure must be reported and the host-native path must remain available, rather than being permanently blocked [E04]. No OS security boundary is justified: native tools retain ambient host permissions, and the handoff is a cooperative workflow guard rather than a sandbox against a malicious same-user shell process [E03][E04].",
+    "sources": [
+      "E01",
+      "E03",
+      "E04"
+    ],
+    "facts": {
+      "hook_installation_activates": false,
+      "activation_scopes": [
+        "request",
+        "session",
+        "repository"
+      ],
+      "failure_keeps_native_path": true,
+      "is_os_sandbox": false
+    }
+  },
+  {
+    "task_id": "Q6",
+    "answer": "The current bundled configuration sets `default_model` to `gpt-5.6-sol`; `gpt-5.6-luna` appears in a historical managed-config fixture [E05][E06]. The legacy files are byte-for-byte outputs retained as migration custody fixtures, not target templates for normalizing all installed configurations. Migration is permitted only when every byte of the installed configuration exactly matches a recognized fixture. Parsed-TOML equivalence is insufficient, and a customized or even one-byte-different configuration must remain untouched [E07]. The bundled default also does not establish the model used by every live call. Sessions preserve the default that existed when each session was created, simultaneous sessions can differ, and individual calls can override the session default [E02].",
+    "sources": [
+      "E02",
+      "E05",
+      "E06",
+      "E07"
+    ],
+    "facts": {
+      "current_default_model": "gpt-5.6-sol",
+      "legacy_fixture_model": "gpt-5.6-luna",
+      "migration_equality": "exact-bytes",
+      "one_byte_changed_config_migrated": false,
+      "all_live_calls_use_default": false
+    }
+  },
+  {
+    "task_id": "Q7",
+    "answer": "Do not sign off on those claims. The documented runtime proof is native Unix execution: one test replaced a prechecked regular input with a symlink and then a directory, required refusal without changing the target, and verified regular-file recovery. A separate Unix write-failure recovery test also ran successfully [E16][E17]. Windows code and its test branch compiled under strict lint, and foreign-target compile/lint checks passed, but Windows runtime execution remains a separate CI gate. Foreign-target compilation is explicitly not foreign-platform runtime acceptance [E16][E17]. Windows confidentiality is also unestablished: reparse-point checks do not validate ACL exposure, and Unix ownership and mode checks provide no Windows ACL guarantee [E08][E16]. SHA-256 detects byte-level payload changes, but it is not a signature and does not authenticate an author. Imported `provenance.origin` remains an untrusted source assertion and is not converted into verified truth, local authorship, or independent confirmation [E14][E16].",
+    "sources": [
+      "E08",
+      "E14",
+      "E16",
+      "E17"
+    ],
+    "facts": {
+      "windows_runtime_acceptance_established": false,
+      "windows_acl_confidentiality_established": false,
+      "digest_authenticates_author": false,
+      "imported_origin_verified": false
+    }
+  }
+]

@@ -1,0 +1,125 @@
+{
+  "status": "completed_outputs_pending_blind_quality_review",
+  "started_at_unix": 1789596194.0915232,
+  "binary_sha256": "f75eaca70da9b72d3e5a0510ed057d2d8e7aa35e41ea49744767578ed03b483d",
+  "inputs": {
+    "corpus.json": "0a60662e873f9ca0ad545f1ee09d20095418e2110d207592cc9735dfa1cf621c",
+    "tasks.json": "db7f0cb90857b008e4e4cfec63f2909a56b3510215ed23ae499d07ade1bfd61b",
+    "LIVE_PLAN.md": "5d4e24234952a3c5532100c482fcb596a18c45372221db72564c481eab3bfc83",
+    "run_live.py": "b63811ce7f7d9534078688f5d2dead5b89a2be0ff83831f88b8f6ffe564df2c9"
+  },
+  "requested_root_model": "gpt-5.6-sol",
+  "requested_judge_model": "jev-latest",
+  "events": [
+    {
+      "command": "start",
+      "exit": 0,
+      "seconds": 0.013723707990720868
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.010009333956986666
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 36.245593999978155
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.007081834017299116
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.008492583001498133
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 32.31015841703629
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.008103083004243672
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.009056667040567845
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 1.2206479590386152
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.007155792030971497
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.009142499999143183
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.005781999963801354
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.0091514170053415
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 36.35662829101784
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.009068833023775369
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.009711958991829306
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.9592841669800691
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.005826290987897664
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.007889000000432134
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.00531379203312099
+    }
+  ],
+  "logical_llm_calls": 3,
+  "typed_attempts": 2,
+  "typed_questions": 23,
+  "known_typed_input_tokens": 24822.0,
+  "unknown_typed_usage_requests": 0,
+  "confirmed_typed_requests": 2,
+  "quality_pass": null,
+  "billing": "not_inferred",
+  "automatic_plan_discovery": false,
+  "elapsed_seconds": 107.29136754199862
+}

@@ -89,7 +89,7 @@ pub struct JudgeEngine {
     attempts: usize,
     questions: usize,
     cache_hits: usize,
-    known_input_tokens: f64,
+    known_input_tokens: u64,
     unknown_input_usage_requests: usize,
     poisoned: bool,
     transport_available: bool,
@@ -120,7 +120,7 @@ impl JudgeEngine {
             attempts: 0,
             questions: 0,
             cache_hits: 0,
-            known_input_tokens: 0.0,
+            known_input_tokens: 0,
             unknown_input_usage_requests: 0,
             poisoned: false,
             transport_available: true,
@@ -196,7 +196,7 @@ impl JudgeEngine {
             "judge: question limit exceeded"
         );
         ensure!(
-            self.known_input_tokens < self.config.max_input_tokens_per_cell as f64,
+            self.known_input_tokens < self.config.max_input_tokens_per_cell,
             "judge: input token limit exhausted"
         );
         self.remaining_timeout()?;
@@ -235,10 +235,13 @@ impl JudgeEngine {
         );
         let input_usage = validate_usage(body.get("usage"))?;
         if let Some(input) = input_usage {
-            self.known_input_tokens += input;
+            self.known_input_tokens = self
+                .known_input_tokens
+                .checked_add(input)
+                .ok_or_else(|| anyhow::anyhow!("judge: input token accounting overflow"))?;
             self.unknown_input_usage_requests -= 1;
             ensure!(
-                self.known_input_tokens <= self.config.max_input_tokens_per_cell as f64,
+                self.known_input_tokens <= self.config.max_input_tokens_per_cell,
                 "judge: reported input token limit exceeded"
             );
         }
@@ -417,15 +420,27 @@ fn probability(value: &Value) -> Result<f64> {
     ensure!(n <= 1.0, "judge: probability out of range");
     Ok(n)
 }
-fn validate_usage(usage: Option<&Value>) -> Result<Option<f64>> {
+fn token_count(value: &Value) -> Result<Option<u64>> {
+    if value.is_null() {
+        return Ok(None);
+    }
+    value
+        .as_u64()
+        .map(Some)
+        .ok_or_else(|| anyhow::anyhow!("judge: expected nonnegative integer token count"))
+}
+fn validate_usage(usage: Option<&Value>) -> Result<Option<u64>> {
     match usage {
         None | Some(Value::Null) => Ok(None),
         Some(value) => {
             let usage = object(value)?;
             for value in usage.values() {
-                number(value)?;
+                token_count(value)?;
             }
-            usage.get("input_tokens").map(number).transpose()
+            match usage.get("input_tokens") {
+                None => Ok(None),
+                Some(value) => token_count(value),
+            }
         }
     }
 }
@@ -594,7 +609,7 @@ mod tests {
         assert_eq!(second["usage"], first["usage"]);
         assert_eq!(second["_azdaja"]["original_usage"], first["usage"]);
         assert!(second["_azdaja"]["new_request_usage"].is_null());
-        assert_eq!(e.stats()["known_input_tokens"], 10.0);
+        assert_eq!(e.stats()["known_input_tokens"], 10);
         assert_eq!((credentials.get(), calls.get()), (1, 1));
         let mut q = questions();
         q["n"]["instructions"] = json!("Changed");
@@ -704,7 +719,7 @@ mod tests {
         let (mut e, _, calls) = fixture(&c, response());
         e.evaluate(json!("first"), questions()).unwrap();
         assert!(e.evaluate(json!("second"), questions()).is_err());
-        assert_eq!(e.stats()["known_input_tokens"], 20.0);
+        assert_eq!(e.stats()["known_input_tokens"], 20);
         assert_eq!(e.stats()["unknown_input_usage_requests"], 0);
         assert_eq!(e.stats()["attempts"], 2);
         assert_eq!(e.stats()["questions"], 6);
@@ -767,6 +782,57 @@ mod tests {
             assert!(e.evaluate(json!("state"), questions()).is_err());
             assert!(e.poisoned);
         }
+    }
+    #[test]
+    fn token_counts_are_integers_and_null_is_unknown_not_zero() {
+        for field in ["input_tokens", "output_tokens"] {
+            for value in [json!(0.5), json!(1.0), json!(true), json!(-1), json!("10")] {
+                let mut body = response();
+                body["usage"][field] = value;
+                let (mut e, _, calls) = fixture(&config(), body);
+                assert_eq!(
+                    e.evaluate(json!("state"), questions())
+                        .unwrap_err()
+                        .to_string(),
+                    "judge: expected nonnegative integer token count"
+                );
+                assert!(e.poisoned);
+                assert!(e.cache.is_empty());
+                assert_eq!(calls.get(), 1);
+                assert_eq!(e.stats()["unknown_input_usage_requests"], 1);
+            }
+        }
+        let mut body = response();
+        body["usage"] = json!({"input_tokens":null, "output_tokens":null});
+        let (mut e, _, _) = fixture(&config(), body);
+        let result = e.evaluate(json!("state"), questions()).unwrap();
+        assert!(result["usage"]["input_tokens"].is_null());
+        assert_eq!(e.stats()["known_input_tokens"], 0);
+        assert_eq!(e.stats()["unknown_input_usage_requests"], 1);
+        assert_eq!(e.stats()["input_usage_complete"], false);
+    }
+    #[test]
+    fn integer_token_budget_crossing_and_overflow_stay_terminal() {
+        let mut body = response();
+        body["usage"]["input_tokens"] = json!(u64::MAX);
+        let (mut e, _, _) = fixture(&config(), body.clone());
+        let error = e.evaluate(json!("state"), questions()).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "judge: reported input token limit exceeded"
+        );
+        assert_eq!(e.stats()["known_input_tokens"].as_u64(), Some(u64::MAX));
+        assert!(e.poisoned);
+        let (mut e, _, _) = fixture(&config(), body);
+        e.known_input_tokens = 1;
+        assert_eq!(
+            e.evaluate(json!("state"), questions())
+                .unwrap_err()
+                .to_string(),
+            "judge: input token accounting overflow"
+        );
+        assert_eq!(e.stats()["unknown_input_usage_requests"], 1);
+        assert!(e.poisoned);
     }
     #[test]
     fn request_cap_allows_cache_without_new_credential_or_observation() {
@@ -864,7 +930,7 @@ mod tests {
         assert!(err.to_string().contains("deadline"));
         assert!(e.poisoned);
         assert!(e.cache.is_empty());
-        assert_eq!(e.stats()["known_input_tokens"], 10.0);
+        assert_eq!(e.stats()["known_input_tokens"], 10);
     }
     #[cfg(not(feature = "typesafe"))]
     #[test]

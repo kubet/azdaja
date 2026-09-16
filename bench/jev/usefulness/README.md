@@ -2,6 +2,8 @@
 
 **Purpose:** can an answer help a developer avoid a wrong implementation or release decision, with the right evidence and caveats? This is seven nonrepresentative development examples, not a generality proof, quality benchmark, or evidence that Jev improves work. No model responses existed when these tasks were curated.
 
+**Observed native run:** [results, final-answer quality, one-query retrieval gain and limitations](RESULTS.md). The blanket answer-review policy did not outperform full-context self-review.
+
 ## Inputs and practical angles
 
 Give every arm only `corpus.json` and `tasks.json`. Keep `evaluation.json`, this rubric and `grade.py` out of model inputs. Corpus: 16 verbatim excerpts, 27,296 UTF-8 bytes including JSON/provenance, from public tracked files at `d851113`. Every item pins full revision, file, inclusive line range, Git blob OID, file SHA-256 and excerpt SHA-256. Hashes apply to exact UTF-8 bytes including retained line endings. No local memory, private notes, research/jev papers, or synthetic benchmark fixture statements are included.

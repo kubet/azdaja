@@ -4,8 +4,11 @@ use std::{
     io::Write,
     path::PathBuf,
     process::{Command, Output, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
+
+static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
 struct Session {
     dir: PathBuf,
@@ -17,12 +20,13 @@ impl Session {
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
         let dir = base.join(format!(
-            "az-judge-cli-{}-{}",
+            "az-judge-cli-{}-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("config.toml"), format!("sub_llm_cmd = \"/usr/bin/false\"\ncell_timeout = 3\n[judge]\nkey_env = \"AZDAJA_TEST_MUST_NOT_HAVE_A_KEY\"\n{judge}\n")).unwrap();
@@ -159,9 +163,14 @@ fn native_judgment_config_roundtrips_without_a_secret() {
 #[test]
 fn native_judgment_key_is_not_forwarded_to_custom_generative_provider() {
     let s = Session::new("enabled = true");
-    let mut cfg = azdaja::Config::default();
-    cfg.sub_llm_cmd = "/bin/sh -c 'if [ -n \"$TYPESAFE_API_KEY$AZDAJA_CUSTOM_JUDGE_TEST\" ]; then printf leaked; else printf isolated; fi'".into();
-    cfg.judge.key_env = "AZDAJA_CUSTOM_JUDGE_TEST".into();
+    let cfg = azdaja::Config {
+        sub_llm_cmd: "/bin/sh -c 'if [ -n \"$TYPESAFE_API_KEY$AZDAJA_CUSTOM_JUDGE_TEST\" ]; then printf leaked; else printf isolated; fi'".into(),
+        judge: azdaja::judge::JudgeConfig {
+            key_env: "AZDAJA_CUSTOM_JUDGE_TEST".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
     fs::write(s.dir.join("config.toml"), toml::to_string(&cfg).unwrap()).unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_azdaja"))
         .args(["exec", &s.id])

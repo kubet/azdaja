@@ -1,0 +1,201 @@
+{
+  "rows": [
+    {
+      "arm": "A",
+      "task_id": "Q1",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly rejects exhaustive-counterevidence inference and supplies a concrete disconnected, nonmatching-terminology witness class without inventing note contents. E12 admits only records with positive query-word overlap, and E13 limits context to incoming/outgoing one-hop neighbors of selected matches, so zero omissions cannot exclude that class. E11 supports caps 4 and 8. E13 supports disagreement-first, incoming-supersession-next inspection priority, not credibility. E14 supports complete transitive export context, not discovery of disconnected notes. Wider lexical searches and inspection of unlinked records are actionable for the requested coverage question. No deduction for not expressly adding a current-code review instruction: the task asks whether the note search is sufficient, and the answer neither approves removal nor claims that its proposed further note search proves removal safe. All requested typed facts are correct."
+    },
+    {
+      "arm": "A",
+      "task_id": "Q2",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 1,
+      "success": false,
+      "reason": "Material safety omission, not an incorrect command or version claim. Disputed workflow passage: \"deliberately transfer the resulting compact JSON file, run `az memory import <bundle-file>` at the destination for a no-write preview, and use `az memory import <bundle-file> --apply` only after reviewing the selected records and connected context\". The earlier inspection covers intended/explicitly selected IDs, but complete connected-context review is only required here before apply, after the bundle has already been shared. E14 requires: \"Review every selected and context record, including potentially private text, before deliberately moving the bundle.\" E14 also warns: \"Authored fields may contain private paths, secrets or untrusted instructions. They are preserved, not scrubbed or executed.\" The answer gives neither that preservation/privacy warning nor an unambiguous requirement to inspect all transitively included context before disclosure. The distinction matters because --with-context can add records beyond the selected reviewed IDs. This is an actually missing safe-transfer safeguard, not a demand for identical wording. Accuracy and evidence remain 2 because the stated mechanics, current-source/older-installation distinction, clone exclusion, recall/export distinction, no-write preview, and explicit apply are correct and supported by E08/E11/E13/E14/E15/E16. Transfer of the resulting compact JSON is accepted as a valid unchanged-bundle workflow, without requiring the literal word unchanged. All requested typed facts are correct. Add pre-transfer review/consent for every selected and context record and explicitly warn that private authored fields are preserved."
+    },
+    {
+      "arm": "A",
+      "task_id": "Q3",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly rejects deleting destination history and distinguishes no-write preview, nonreserved preview counts, conflict refusal, exact-record idempotence, and apply custody side effects, all supported by E15. The publication-then-later-validation-failure sequence directly defeats transaction-wide rollback. The Unix 8 KiB/exit-2/9,970-byte recovery result is supported by E17 and explicitly limited to that tested case rather than presented as universal rollback proof. Previewing the destination or retrying the identical bundle is the documented recovery path. Omission of the writer-lock implementation detail is not a material failure to answer the requested recovery decision. All requested typed facts are correct."
+    },
+    {
+      "arm": "A",
+      "task_id": "Q4",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "All five routing outcomes match E08, including explicit-home legacy precedence, project-on override, project-off refusal, and independent personal-global selection. Same-repository subdirectory continuity and ordinary staging behavior are correctly supported by E08, with no automatic publication supported by E09. E02 supports aggregate-only constellation data and distributional rather than quality/truth scoring. No deduction for omitting lazy directory creation: it does not change the requested routing or publication/validation decisions. The answer expressly limits its staging claim to ordinary staging and does not claim an absolute security barrier. All requested typed facts are correct."
+    },
+    {
+      "arm": "A",
+      "task_id": "Q5",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Addresses both apparently conflicting sections rather than silently selecting one: E01 supplies the challenged broad-read handoff and no-retry instruction, while E04 supplies explicit request/session/repository activation and retention of the native path on failure. Rejects activation by installation and permanent native blocking. E03 and E04 support ambient host permissions and the absence of an OS sandbox or malicious-same-user containment guarantee. This is a defensible reconciliation of documented intent, not a claim of inspected hook implementation or observed runtime enforcement. Narrowest/reversible wording would add detail but its absence does not materially undermine the requested integration decision. All requested typed facts are correct."
+    },
+    {
+      "arm": "A",
+      "task_id": "Q6",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly distinguishes current bundled gpt-5.6-sol in E05 from historical gpt-5.6-luna in E06. E07 supports migration-custody purpose, exact-byte matching, and preserving customized or one-byte-different files despite parsed-TOML equivalence. The answer rejects normalization to the historical fixture rather than confusing it with the current target. E02 supports persisted session defaults and individual-call overrides, defeating universal live-call inference. All requested typed facts are correct."
+    },
+    {
+      "arm": "A",
+      "task_id": "Q7",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly refuses the proposed sign-off. E16 supports the reported native-Unix replacement/refusal/recovery test, Windows compile/lint status, and still-separate Windows runtime gate. E17 supports the Unix fault test and explicitly rejects foreign compilation as runtime acceptance. E08/E16 distinguish reparse checks and Unix permissions from Windows ACL confidentiality. E14/E16 support digest integrity without authenticated authorship and preservation of origin as untrusted assertion, not verified truth or independent confirmation. The answer does not claim that functional testing proves model quality or productivity, so omission of an unrelated productivity disclaimer is not a material failure. All requested typed facts are correct."
+    },
+    {
+      "arm": "B",
+      "task_id": "Q1",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly rejects exhaustive-counterevidence inference and supplies a concrete disconnected, nonmatching-terminology witness class without inventing note contents. E12 admits only records with positive query-word overlap, and E13 limits context to incoming/outgoing one-hop neighbors of selected matches, so zero omissions cannot exclude that class. E11 supports caps 4 and 8. E13 supports disagreement-first, incoming-supersession-next inspection priority, not credibility. E14 supports complete transitive export context, not discovery of disconnected notes. Wider lexical searches and inspection of unlinked records are actionable for the requested coverage question. No deduction for not expressly adding a current-code review instruction: the task asks whether the note search is sufficient, and the answer neither approves removal nor claims that its proposed further note search proves removal safe. All requested typed facts are correct."
+    },
+    {
+      "arm": "B",
+      "task_id": "Q2",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 1,
+      "success": false,
+      "reason": "Material safety omission, not an incorrect command or version claim. Disputed workflow passage: \"Manually transfer the resulting compact JSON object, have the teammate run `az memory import <bundle-file>` for a no-write preview, and use `az memory import <bundle-file> --apply` only after reviewing the selected records and connected context\". The earlier inspection covers intended/explicitly selected IDs, but complete connected-context review is only required here before apply, after the bundle has already been shared. E14 requires: \"Review every selected and context record, including potentially private text, before deliberately moving the bundle.\" E14 also warns: \"Authored fields may contain private paths, secrets or untrusted instructions. They are preserved, not scrubbed or executed.\" The answer gives neither that preservation/privacy warning nor an unambiguous requirement to inspect all transitively included context before disclosure. The distinction matters because --with-context can add records beyond the selected reviewed IDs. This is an actually missing safe-transfer safeguard, not a demand for identical wording. Accuracy and evidence remain 2 because the stated mechanics, current-source/older-installation distinction, clone exclusion, recall/export distinction, no-write preview, and explicit apply are correct and supported by E08/E11/E13/E14/E15/E16. Transfer of the resulting compact JSON is accepted as a valid unchanged-bundle workflow, without requiring the literal word unchanged. All requested typed facts are correct. Add pre-transfer review/consent for every selected and context record and explicitly warn that private authored fields are preserved."
+    },
+    {
+      "arm": "B",
+      "task_id": "Q3",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly rejects deleting destination history and distinguishes no-write preview, nonreserved preview counts, conflict refusal, exact-record idempotence, and apply custody side effects, all supported by E15. The publication-then-later-validation-failure sequence directly defeats transaction-wide rollback. The Unix 8 KiB/exit-2/9,970-byte recovery result is supported by E17 and explicitly limited to that tested case rather than presented as universal rollback proof. Previewing the destination or retrying the identical bundle is the documented recovery path. Omission of the writer-lock implementation detail is not a material failure to answer the requested recovery decision. All requested typed facts are correct."
+    },
+    {
+      "arm": "B",
+      "task_id": "Q4",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "All five routing outcomes match E08, including explicit-home legacy precedence, project-on override, project-off refusal, and independent personal-global selection. Same-repository subdirectory continuity and ordinary staging behavior are correctly supported by E08, with no automatic publication supported by E09. E02 supports aggregate-only constellation data and distributional rather than quality/truth scoring. No deduction for omitting lazy directory creation: it does not change the requested routing or publication/validation decisions. The answer expressly limits its staging claim to ordinary staging and does not claim an absolute security barrier. All requested typed facts are correct."
+    },
+    {
+      "arm": "B",
+      "task_id": "Q5",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Addresses both apparently conflicting sections rather than silently selecting one: E01 supplies the challenged broad-read handoff and no-retry instruction, while E04 supplies explicit request/session/repository activation and retention of the native path on failure. Rejects activation by installation and permanent native blocking. E03 and E04 support ambient host permissions and the absence of an OS sandbox or malicious-same-user containment guarantee. This is a defensible reconciliation of documented intent, not a claim of inspected hook implementation or observed runtime enforcement. Narrowest/reversible wording would add detail but its absence does not materially undermine the requested integration decision. All requested typed facts are correct."
+    },
+    {
+      "arm": "B",
+      "task_id": "Q6",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly distinguishes current bundled gpt-5.6-sol in E05 from historical gpt-5.6-luna in E06. E07 supports migration-custody purpose, exact-byte matching, and preserving customized or one-byte-different files despite parsed-TOML equivalence. The answer rejects normalization to the historical fixture rather than confusing it with the current target. E02 supports persisted session defaults and individual-call overrides, defeating universal live-call inference. All requested typed facts are correct."
+    },
+    {
+      "arm": "B",
+      "task_id": "Q7",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly refuses the proposed sign-off. E16 supports the reported native-Unix replacement/refusal/recovery test, Windows compile/lint status, and still-separate Windows runtime gate. E17 supports the Unix fault test and explicitly rejects foreign compilation as runtime acceptance. E08/E16 distinguish reparse checks and Unix permissions from Windows ACL confidentiality. E14/E16 support digest integrity without authenticated authorship and preservation of origin as untrusted assertion, not verified truth or independent confirmation. The answer does not claim that functional testing proves model quality or productivity, so omission of an unrelated productivity disclaimer is not a material failure. All requested typed facts are correct."
+    },
+    {
+      "arm": "C",
+      "task_id": "Q1",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly rejects exhaustive-counterevidence inference and supplies a concrete disconnected, nonmatching-terminology witness class without inventing note contents. E12 admits only records with positive query-word overlap, and E13 limits context to incoming/outgoing one-hop neighbors of selected matches, so zero omissions cannot exclude that class. E11 supports caps 4 and 8. E13 supports disagreement-first, incoming-supersession-next inspection priority, not credibility. E14 supports complete transitive export context, not discovery of disconnected notes. Wider lexical searches and inspection of unlinked records are actionable for the requested coverage question. No deduction for not expressly adding a current-code review instruction: the task asks whether the note search is sufficient, and the answer neither approves removal nor claims that its proposed further note search proves removal safe. All requested typed facts are correct."
+    },
+    {
+      "arm": "C",
+      "task_id": "Q2",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 1,
+      "success": false,
+      "reason": "Material safety omission, not an incorrect command or version claim. Disputed workflow passage: \"manually transfer the resulting compact JSON file, have the teammate run `az memory import <bundle-file>` for a no-write preview, and only then run `az memory import <bundle-file> --apply` after reviewing the selected and connected context\". The earlier inspection covers intended/explicitly selected IDs, but complete connected-context review is only required here before apply, after the bundle has already been shared. E14 requires: \"Review every selected and context record, including potentially private text, before deliberately moving the bundle.\" E14 also warns: \"Authored fields may contain private paths, secrets or untrusted instructions. They are preserved, not scrubbed or executed.\" The answer gives neither that preservation/privacy warning nor an unambiguous requirement to inspect all transitively included context before disclosure. The distinction matters because --with-context can add records beyond the selected reviewed IDs. This is an actually missing safe-transfer safeguard, not a demand for identical wording. Accuracy and evidence remain 2 because the stated mechanics, current-source/older-installation distinction, clone exclusion, recall/export distinction, no-write preview, and explicit apply are correct and supported by E08/E11/E13/E14/E15/E16. Transfer of the resulting compact JSON is accepted as a valid unchanged-bundle workflow, without requiring the literal word unchanged. All requested typed facts are correct. Add pre-transfer review/consent for every selected and context record and explicitly warn that private authored fields are preserved."
+    },
+    {
+      "arm": "C",
+      "task_id": "Q3",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly rejects deleting destination history and distinguishes no-write preview, nonreserved preview counts, conflict refusal, exact-record idempotence, and apply custody side effects, all supported by E15. The publication-then-later-validation-failure sequence directly defeats transaction-wide rollback. The Unix 8 KiB/exit-2/9,970-byte recovery result is supported by E17 and explicitly limited to that tested case rather than presented as universal rollback proof. Previewing the destination or retrying the identical bundle is the documented recovery path. Omission of the writer-lock implementation detail is not a material failure to answer the requested recovery decision. All requested typed facts are correct."
+    },
+    {
+      "arm": "C",
+      "task_id": "Q4",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "All five routing outcomes match E08, including explicit-home legacy precedence, project-on override, project-off refusal, and independent personal-global selection. Same-repository subdirectory continuity and ordinary staging behavior are correctly supported by E08, with no automatic publication supported by E09. E02 supports aggregate-only constellation data and distributional rather than quality/truth scoring. No deduction for omitting lazy directory creation: it does not change the requested routing or publication/validation decisions. The answer expressly limits its staging claim to ordinary staging and does not claim an absolute security barrier. All requested typed facts are correct."
+    },
+    {
+      "arm": "C",
+      "task_id": "Q5",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Addresses both apparently conflicting sections rather than silently selecting one: E01 supplies the challenged broad-read handoff and no-retry instruction, while E04 supplies explicit request/session/repository activation and retention of the native path on failure. Rejects activation by installation and permanent native blocking. E03 and E04 support ambient host permissions and the absence of an OS sandbox or malicious-same-user containment guarantee. This is a defensible reconciliation of documented intent, not a claim of inspected hook implementation or observed runtime enforcement. Narrowest/reversible wording would add detail but its absence does not materially undermine the requested integration decision. All requested typed facts are correct. The phrase \"the user runs the specified `azdaja solo ... --repo .` command once\" is imprecise about the executor relative to E01, which simply says to run the command. It does not materially alter the activation or fallback recommendation and is not scored as a substantive error."
+    },
+    {
+      "arm": "C",
+      "task_id": "Q6",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly distinguishes current bundled gpt-5.6-sol in E05 from historical gpt-5.6-luna in E06. E07 supports migration-custody purpose, exact-byte matching, and preserving customized or one-byte-different files despite parsed-TOML equivalence. The answer rejects normalization to the historical fixture rather than confusing it with the current target. E02 supports persisted session defaults and individual-call overrides, defeating universal live-call inference. All requested typed facts are correct."
+    },
+    {
+      "arm": "C",
+      "task_id": "Q7",
+      "accuracy": 2,
+      "evidence": 2,
+      "usefulness": 2,
+      "success": true,
+      "reason": "Correctly refuses the proposed sign-off. E16 supports the reported native-Unix replacement/refusal/recovery test, Windows compile/lint status, and still-separate Windows runtime gate. E17 supports the Unix fault test and explicitly rejects foreign compilation as runtime acceptance. E08/E16 distinguish reparse checks and Unix permissions from Windows ACL confidentiality. E14/E16 support digest integrity without authenticated authorship and preservation of origin as untrusted assertion, not verified truth or independent confirmation. The answer does not claim that functional testing proves model quality or productivity, so omission of an unrelated productivity disclaimer is not a material failure. All requested typed facts are correct."
+    }
+  ],
+  "caveats": [
+    "Independent blind source-based adjudication of all 21 final answer-task pairs. Only corpus.json, tasks.json, evaluation.json, A.json, B.json, and C.json at the authorized directory were read. No repository/history, arm identification, live service calls, spawned reviewers, or shared reviewer judgments were used. A delivery-only notice that the input directory was populated was received after initial missing-file errors. The earlier blocked artifact is superseded by this completed audit.",
+    "Scores use 0 for materially incorrect/unsupported/unusable, 1 for partial satisfaction with a material defect, and 2 for task-sufficient correctness/evidence/usefulness. A true success requires 2/2/2 and every requested typed fact correct. All 21 fact objects match the expected values and JSON types. The three Q2 deductions are usefulness deductions for a safety-critical omitted disclosure safeguard, not false factual assertions.",
+    "The evaluator checklist was treated as guidance tied to the actual task rather than as a requirement to reproduce every listed detail. No deductions for source count, verbosity, confidence, valid alternate wording, or equivalent supporting sources. In particular, omitted lazy creation in Q4, explicit writer-lock wording in Q3, and productivity disclaimers in Q7 are not material defects for their questions.",
+    "Q2 is a judgment-sensitive boundary: every answer requests review before apply, but none unambiguously requires review of all connected context before moving the bundle or warns that authored private content is preserved. I treat this as material to the expressly requested safe transfer workflow. Selected-ID review alone does not cover additional transitive context.",
+    "Reported runtime checks are evidence contained in the supplied excerpts, not checks independently rerun by this reviewer. The corpus establishes documented behavior and limited reported tests, not installed-binary availability, Windows runtime/ACL acceptance, universal rollback, exhaustive counterevidence, or model/productivity benefit.",
+    "This is a fallible model quality adjudication, not human or statistical proof. No arm identity, causal comparison, significance, or general-quality inference is made."
+  ]
+}
