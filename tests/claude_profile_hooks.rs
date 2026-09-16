@@ -7,6 +7,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -17,16 +18,29 @@ struct Profile {
     plugin: PathBuf,
     commands: BTreeMap<String, String>,
 }
+
+fn profile_root(stamp: u128) -> PathBuf {
+    static NEXT_PROFILE: AtomicU64 = AtomicU64::new(0);
+    let sequence = NEXT_PROFILE.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "azdaja-claude-profile-{}-{stamp}-{sequence}",
+        std::process::id()
+    ))
+}
+
+#[test]
+fn profiles_created_in_the_same_clock_tick_have_distinct_roots() {
+    assert_ne!(profile_root(123), profile_root(123));
+}
+
 impl Profile {
     fn new() -> Self {
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "azdaja-claude-profile-{}-{stamp}",
-            std::process::id()
-        ));
+        let root = profile_root(stamp);
+        fs::create_dir(&root).expect("test profiles must never reuse an existing root");
         let home = root.join("home with spaces");
         let state = root.join("state");
         fs::create_dir_all(&home).unwrap();
