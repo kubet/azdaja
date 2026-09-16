@@ -1,0 +1,110 @@
+{
+  "recorded_at": "2026-09-16T20:54:47.155876+00:00",
+  "origin": "fresh_public_command_outcome_comparison_not_live_efficacy",
+  "prior_acceptance_commit": "143e8eb",
+  "prior_acceptance_receipt_sha256": "128b4a69e81f0b9a96372191171f3a070133d87b4a68f82d7585cd11ab385e3a",
+  "binary_sha256": "74e74287c6824eeb2420d11191026e72956bee60e409bfbb5716ae85392bb84b",
+  "comparison_checks": {
+    "engine_tests_equal_record": true,
+    "all_mechanism_observations_equal_record": true,
+    "all_engine_dependency_hashes_equal_record": true,
+    "default_disabled_behavior_equal_record": true,
+    "persistent_source_result_equal_record": true,
+    "native_absence_equal_record": true,
+    "ordinary_recovery_equal_record": true
+  },
+  "all_comparisons_matched": true,
+  "engine_command": "python3 -B -m bench.jev.engine_lab.run",
+  "engine_exit": 0,
+  "engine_tests": {
+    "run": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "engine_observations": {
+    "M2": {
+      "same_chosen_unary_features": true,
+      "pair_outputs_differ": true,
+      "sufficiency_of_these_chosen_unary_features": "falsified",
+      "fallback": "direct_pair_requests",
+      "fallback_questions": 6,
+      "automatic_collision_discovery": false
+    },
+    "M1_M4_M6": {
+      "occurrences": 72,
+      "unique_source_records": 16,
+      "pair_universe": 2556,
+      "positive_pairs": 336,
+      "matched_python_semantic_questions": 16,
+      "same_plan_python_equal": true,
+      "direct_pair_oracle_evaluations": 2556,
+      "cache_off": {
+        "backend_calls": 72,
+        "questions": 72,
+        "request_bytes": 47360,
+        "response_bytes": 14372,
+        "cache_hits": 0,
+        "completed_calls": 72
+      },
+      "cache_on_after_second_view": {
+        "backend_calls": 16,
+        "questions": 16,
+        "request_bytes": 10549,
+        "response_bytes": 3193,
+        "cache_hits": 128,
+        "completed_calls": 16
+      },
+      "full_ledger_bytes": 34739,
+      "root_summary_bytes": 29,
+      "automatic_plan_generation": false
+    },
+    "wrong_feature_falsifier": {
+      "unique_wrong_features": 1,
+      "wrong_pair_decisions": 96,
+      "structurally_complete": true,
+      "claim_that_exact_join_repairs_semantics": "falsified"
+    },
+    "M3": {
+      "residual_occurrence_ids": [
+        "0",
+        "8",
+        "16"
+      ],
+      "additional_unique_questions": 2,
+      "unknown_pairs_before": 9,
+      "unknown_pairs_after": 3,
+      "complete": false,
+      "real_generative_llm_called": false
+    }
+  },
+  "normal_cli_sequence": [
+    "start",
+    "load Cargo.toml",
+    "exec save source identity",
+    "exec FINAL",
+    "final",
+    "exec judge_many([])",
+    "exec FINAL",
+    "final",
+    "kill"
+  ],
+  "normal_cli_source_result": {
+    "chars": 1192,
+    "source_sha256": "82334ddca88ac5fbeeb3371f68acd790f1366f7a8bbb10476aaa8292c05a6560"
+  },
+  "native_probe_exit": 1,
+  "native_probe_status": "not_implemented",
+  "ordinary_execution_after_native_probe": "passed",
+  "false_claim_controls": {
+    "fabricated_native_implementation_rejected": true,
+    "fabricated_exact_join_semantic_repair_rejected": true
+  },
+  "what_improved": "Reporting now has a fresh public-command comparison, not only retained test totals. Corrected handoff failures are covered by the rerun engine suite. Exact reuse is better than cache-off in the supplied-plan control, but not better than matched Python.",
+  "what_did_not_improve": "No product implementation changed in this reconciliation. Native exposure, automatic planning and live quality/cost advantage remain unestablished. The comparison verifies the report, not superiority of the engine.",
+  "interpretation_correction": "The 107 experimental tests are 87 original experiment tests plus 20 staged-engine tests, not 107 tests of the staged engine alone. Only the 20 engine tests and named public commands were rerun in this additional check.",
+  "new_live_inference_calls": 0,
+  "overall_engine_usefulness_goal_satisfied": false,
+  "report_accuracy_requirement_satisfied": true,
+  "no_unattended_campaign_started": true
+}
