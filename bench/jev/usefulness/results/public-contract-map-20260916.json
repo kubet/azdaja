@@ -1,0 +1,1129 @@
+{
+  "schema_version": 1,
+  "scope": "explicit requirement and changed public interface/output traceability; mapping is not proof every hoped-for outcome succeeded",
+  "runtime_source": "ed0403baea72d0f2656e405a2e7454dd4393f24e",
+  "checked_worktree_commit": "c36d88d723890eba63ab3228d17953a2abd39476",
+  "new_provider_calls": 0,
+  "every_enumerated_public_field_bound": true,
+  "public_bindings_count": 62,
+  "all_requirements_satisfied": false,
+  "publication_cleared": false,
+  "requirements": [
+    {
+      "id": "R01",
+      "requirement": "Install one TypeSafe skill method and use it",
+      "check": "Original installer success receipt reports1skill; project-local SKILL.md read and current API.md fetched on this task",
+      "observed": "non-Claude npx installation retained, skill used, no reinstallation"
+    },
+    {
+      "id": "R02",
+      "requirement": "Deep primary-source research, not a novelty assertion",
+      "check": "Primary-evidence/design documents and R1",
+      "observed": "Existing semantic-operator systems and matched Python counterfactual considered; novelty/RLM superiority not established"
+    },
+    {
+      "id": "R03",
+      "requirement": "Optional native Jev beside llm without vendor lock on ordinary use",
+      "check": "N1,N2,N3,N5,P1,P4,P5,L1",
+      "observed": "Default disabled, feature opt-in, ordinary native/generative paths usable; typed backend currently TypeSafe only"
+    },
+    {
+      "id": "R04",
+      "requirement": "Host-only API key",
+      "check": "U6,U11,U14,N5,P4; retained live input/receipt custody",
+      "observed": "Named env selected, no default-key fallback, invalid-key preflight and custom child isolation passed; no real key used in follow-up"
+    },
+    {
+      "id": "R05",
+      "requirement": "Preserve entropy/alternatives, no arbitrary semantic cutoff",
+      "check": "U1,U4,D1,P2,P3",
+      "observed": "All7Choice distributions and16Noul answers retained exactly, with all16source records available; representation/resource validation is not semantic acceptance"
+    },
+    {
+      "id": "R06",
+      "requirement": "Bounded progressive hard tests and early stops",
+      "check": "Frozen failed pilot receipts, fixed live plan, U3-U13 and original engine independent review",
+      "observed": "Earlier pilots stay stopped; malformed/over-budget work remains failed/unknown; no new provider calls or score-driven reruns"
+    },
+    {
+      "id": "R07",
+      "requirement": "Determine real final-work improvement",
+      "check": "L1 and frozen blinded answer reviews",
+      "observed": "No improvement observed on7source-backed tasks; both reviewers tied arms, same material privacy omission"
+    },
+    {
+      "id": "R08",
+      "requirement": "Investigate reranking plus other engine/RLM angles",
+      "check": "R1, counterfactual evaluation, C1",
+      "observed": "Q1compact-selection signal survives specific lexical controls; wider normalized retrieval covers all18groups/all7tasks; other-angle efficacy and autonomous planning unproved"
+    },
+    {
+      "id": "R09",
+      "requirement": "30-minute active-work reassessment",
+      "check": "Session-owned schedule create/cancel receipts, latest sched_5e64ec41",
+      "observed": "Active follow-ups schedule30-minute reminders and cancel at completion, not permanent unattended work"
+    },
+    {
+      "id": "R10",
+      "requirement": "Safely reconcile released v0.1.17",
+      "check": "Git ancestry,25-file byte/mode manifest, installed Claude event replay and prior full source acceptance",
+      "observed": "Released main is ancestor; original work preserved; no push or user install mutation; notice/publication gate still failed"
+    },
+    {
+      "id": "R11",
+      "requirement": "Verify public commands and integration boundaries",
+      "check": "N1-N5,P1-P5,D1,C1 and counterfactual public verification",
+      "observed": "Actual native public CLI in both feature modes, installed-binary state/reentry and fresh retrieve->evaluate->native chain passed; not a new inference-quality result"
+    }
+  ],
+  "public_field_checks": {
+    "Rust.JudgeEngine.new": [
+      "U1",
+      "U6",
+      "U14",
+      "N1",
+      "N3"
+    ],
+    "Rust.JudgeEngine.evaluate": [
+      "U1",
+      "U6",
+      "U14",
+      "N1",
+      "N3"
+    ],
+    "Rust.JudgeEngine.stats": [
+      "U1",
+      "U6",
+      "U14",
+      "N1",
+      "N3"
+    ],
+    "Rust.JudgeEngine.set_deadline": [
+      "U12",
+      "U13"
+    ],
+    "REPL.judge_many": [
+      "N1",
+      "N2",
+      "N3",
+      "P1",
+      "P4",
+      "L1"
+    ],
+    "REPL.judge_stats": [
+      "N1",
+      "N2",
+      "P1",
+      "P4",
+      "P5",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10"
+    ],
+    "config.enabled": [
+      "U6",
+      "U15",
+      "N1",
+      "N4",
+      "P1",
+      "P4"
+    ],
+    "config.model": [
+      "U2",
+      "U3",
+      "L1"
+    ],
+    "config.expected_model": [
+      "U2",
+      "U3",
+      "L1"
+    ],
+    "config.key_env": [
+      "N4",
+      "N5",
+      "P4",
+      "U11"
+    ],
+    "config.timeout_secs": [
+      "U12",
+      "U13",
+      "U15"
+    ],
+    "config.max_requests_per_cell": [
+      "U10",
+      "U15"
+    ],
+    "config.max_questions_per_cell": [
+      "U6",
+      "U10",
+      "U15"
+    ],
+    "config.max_request_bytes": [
+      "U6",
+      "U15"
+    ],
+    "config.max_response_bytes": [
+      "U15",
+      "S1"
+    ],
+    "config.max_input_tokens_per_cell": [
+      "U5",
+      "U8",
+      "U9",
+      "U15"
+    ],
+    "response.model": [
+      "U2",
+      "U3",
+      "D1"
+    ],
+    "response.answers": [
+      "U1",
+      "U3",
+      "U4",
+      "D1"
+    ],
+    "response.usage": [
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "D1"
+    ],
+    "response._azdaja": [
+      "U1",
+      "U7",
+      "D1"
+    ],
+    "answer.noul.type": [
+      "U1",
+      "U3",
+      "U4",
+      "D1"
+    ],
+    "answer.noul.noul": [
+      "U1",
+      "U3",
+      "U4",
+      "D1"
+    ],
+    "answer.choice.type": [
+      "U1",
+      "U3",
+      "U4",
+      "D1"
+    ],
+    "answer.choice.choice": [
+      "U1",
+      "U3",
+      "U4",
+      "D1"
+    ],
+    "answer.choice.probabilities": [
+      "U1",
+      "U3",
+      "U4",
+      "D1"
+    ],
+    "answer.choice.confidence": [
+      "U1",
+      "U3",
+      "U4",
+      "D1"
+    ],
+    "answer.score.type": [
+      "U1",
+      "U3",
+      "U4"
+    ],
+    "answer.score.score": [
+      "U1",
+      "U3",
+      "U4"
+    ],
+    "answer.score.legend": [
+      "U1",
+      "U3",
+      "U4"
+    ],
+    "answer.score.probabilities": [
+      "U1",
+      "U3",
+      "U4"
+    ],
+    "answer.score.confidence": [
+      "U1",
+      "U3",
+      "U4"
+    ],
+    "_azdaja.request_sha256": [
+      "U1",
+      "U7",
+      "D1"
+    ],
+    "_azdaja.cache_hit": [
+      "U1",
+      "U7",
+      "D1"
+    ],
+    "_azdaja.provider_requests_this_call": [
+      "U1",
+      "U7",
+      "D1"
+    ],
+    "_azdaja.elapsed_ms": [
+      "U1",
+      "U7",
+      "D1"
+    ],
+    "_azdaja.original_usage": [
+      "U1",
+      "U7",
+      "D1"
+    ],
+    "_azdaja.usage_semantics": [
+      "U1",
+      "U7",
+      "D1"
+    ],
+    "_azdaja.new_request_usage": [
+      "U1",
+      "U7",
+      "D1"
+    ],
+    "_azdaja.model_semantics": [
+      "U1",
+      "U7",
+      "D1"
+    ],
+    "_azdaja.billing": [
+      "U1",
+      "U7",
+      "D1"
+    ],
+    "stats.enabled": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "stats.poisoned": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "stats.transport_available": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "stats.provider_requests": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "stats.attempts": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "stats.questions": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "stats.cache_hits": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "stats.cached_requests": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "stats.known_input_tokens": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "stats.unknown_input_usage_requests": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "stats.input_usage_complete": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "stats.billing": [
+      "P1",
+      "P4",
+      "U1",
+      "U5",
+      "U7",
+      "U8",
+      "U9",
+      "U10",
+      "U13"
+    ],
+    "Rust.JudgeConfig.default": [
+      "U15",
+      "N4",
+      "P1"
+    ],
+    "Rust.JudgeConfig.validate": [
+      "U15",
+      "N4"
+    ],
+    "TOML.judge": [
+      "N4",
+      "P1",
+      "P4"
+    ],
+    "Cargo.feature.typesafe": [
+      "U14",
+      "N1",
+      "N3"
+    ],
+    "input.state": [
+      "U1",
+      "U2",
+      "U6",
+      "N2",
+      "L1"
+    ],
+    "input.questions": [
+      "U1",
+      "U3",
+      "U6",
+      "N2",
+      "N3"
+    ],
+    "question.id": [
+      "U3",
+      "U6"
+    ],
+    "question.type": [
+      "U1",
+      "U3",
+      "U6"
+    ],
+    "question.instructions": [
+      "U1",
+      "U6",
+      "L1"
+    ],
+    "question.criteria": [
+      "U1",
+      "U4",
+      "U6"
+    ]
+  },
+  "check_catalog": {
+    "U1": {
+      "test": "all_primitives_cache_and_question_mutation",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U2": {
+      "test": "model_alias_concrete_and_explicit_expectation",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U3": {
+      "test": "malformed_duplicate_extra_missing_ids_and_types",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U4": {
+      "test": "invalid_probabilities_argmax_score_and_legend",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U5": {
+      "test": "budgets_are_debited_and_crossing_retains_usage_without_answers",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U6": {
+      "test": "preflight_limits_and_invalid_arguments_do_not_read_credentials",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U7": {
+      "test": "unknown_usage_is_not_zero_billing_and_bad_usage_poisoned",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U8": {
+      "test": "token_counts_are_integers_and_null_is_unknown_not_zero",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U9": {
+      "test": "integer_token_budget_crossing_and_overflow_stay_terminal",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U10": {
+      "test": "request_cap_allows_cache_without_new_credential_or_observation",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U11": {
+      "test": "secret_safe_errors_and_poisoned_transport_failure",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U12": {
+      "test": "deadline_preflight_and_transport_timeout",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U13": {
+      "test": "elapsed_transport_deadline_poisoned_but_usage_retained",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "U14": {
+      "test": "unavailable_feature_never_reads_credentials",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok"
+      }
+    },
+    "U15": {
+      "test": "response_size_http_status_and_config_validation",
+      "evidence_kind": "injected-transport unit",
+      "observed": {
+        "engine_default": "ok",
+        "engine_feature": "ok"
+      }
+    },
+    "N1": {
+      "test": "native_judgments_default_disabled_and_regular_repl_recovers",
+      "evidence_kind": "actual public CLI/config test",
+      "observed": {
+        "native_default": "ok",
+        "native_feature": "ok"
+      }
+    },
+    "N2": {
+      "test": "native_judgment_argument_errors_do_not_enter_provider",
+      "evidence_kind": "actual public CLI/config test",
+      "observed": {
+        "native_default": "ok",
+        "native_feature": "ok"
+      }
+    },
+    "N3": {
+      "test": "native_judgment_valid_named_arguments_fail_before_network_without_key",
+      "evidence_kind": "actual public CLI/config test",
+      "observed": {
+        "native_default": "ok",
+        "native_feature": "ok"
+      }
+    },
+    "N4": {
+      "test": "native_judgment_config_roundtrips_without_a_secret",
+      "evidence_kind": "actual public CLI/config test",
+      "observed": {
+        "native_default": "ok",
+        "native_feature": "ok"
+      }
+    },
+    "N5": {
+      "test": "native_judgment_key_is_not_forwarded_to_custom_generative_provider",
+      "evidence_kind": "actual public CLI/config test",
+      "observed": {
+        "native_default": "ok",
+        "native_feature": "ok"
+      }
+    },
+    "P1": {
+      "check": "default_disabled_full_stats_schema",
+      "evidence_kind": "actual installed public CLI",
+      "observed": {
+        "passed": true,
+        "actual": {
+          "failure": "judge_many is disabled; the host must explicitly enable [judge]",
+          "stats": {
+            "attempts": 0,
+            "billing": "not_inferred",
+            "cache_hits": 0,
+            "cached_requests": 0,
+            "enabled": false,
+            "input_usage_complete": true,
+            "known_input_tokens": 0,
+            "poisoned": false,
+            "provider_requests": 0,
+            "questions": 0,
+            "transport_available": true,
+            "unknown_input_usage_requests": 0
+          }
+        }
+      }
+    },
+    "P2": {
+      "check": "counterfactual_to_actual_native_repl",
+      "evidence_kind": "actual installed public CLI",
+      "observed": {
+        "passed": true,
+        "tasks": 7,
+        "full_source_count_retained": 16,
+        "q1_selected": [
+          "E09",
+          "E14",
+          "E15",
+          "E16",
+          "E08",
+          "E03",
+          "E12",
+          "E13"
+        ],
+        "q1_source_records_exact": true,
+        "retained_observation_exact": true,
+        "new_provider_requests": 0,
+        "fresh_inference": false
+      }
+    },
+    "P3": {
+      "check": "cross_exec_reentry_without_new_inference",
+      "evidence_kind": "actual installed public CLI",
+      "observed": {
+        "passed": true,
+        "source_count": 16,
+        "all_typed_probabilities_preserved": true,
+        "new_provider_requests": 0
+      }
+    },
+    "P4": {
+      "check": "host_key_env_selection_without_transport",
+      "evidence_kind": "actual installed public CLI",
+      "observed": {
+        "passed": true,
+        "missing_named_key_error": "judge: credential unavailable",
+        "invalid_named_key_error": "judge: invalid credential syntax",
+        "new_provider_requests": 0,
+        "no_default_key_fallback": true,
+        "only_invalid_synthetic_tokens_used": true
+      }
+    },
+    "P5": {
+      "check": "ordinary_exec_recovers_after_preflight_failure",
+      "evidence_kind": "actual installed public CLI",
+      "observed": {
+        "passed": true,
+        "answer": 42
+      }
+    },
+    "D1": {
+      "check": "retained_live_metadata_and_full_distribution_reentry",
+      "evidence_kind": "retained live plus actual public CLI",
+      "observed": {
+        "scope": "Actual public REPL re-entry of retained live observations, not fresh inference",
+        "events": [
+          {
+            "command": "start",
+            "exit": 0
+          },
+          {
+            "command": "load",
+            "exit": 0
+          },
+          {
+            "command": "exec",
+            "exit": 0
+          },
+          {
+            "command": "final",
+            "exit": 0
+          },
+          {
+            "command": "exec",
+            "exit": 0
+          },
+          {
+            "command": "final",
+            "exit": 0
+          },
+          {
+            "command": "kill",
+            "exit": 0
+          }
+        ],
+        "retained_live_metadata": {
+          "typed-review": {
+            "request_digest_recomputed": true,
+            "all_metadata_fields_checked": true,
+            "answers_unchanged_on_cache": true,
+            "answer_count": 7,
+            "request_sha256": "ba9526806bf688c7023262fe285dc9bb524b65c72bfa40158fb4c195bc8c6022"
+          },
+          "rerank": {
+            "request_digest_recomputed": true,
+            "all_metadata_fields_checked": true,
+            "answers_unchanged_on_cache": true,
+            "answer_count": 16,
+            "request_sha256": "ca5b8c624d84e352f8a9fdb1b3eaf29e8608fc4e0f8d2f479a9e3800aca45a35"
+          }
+        },
+        "choice_distributions_retained": 7,
+        "noul_answers_retained": 16,
+        "every_observation_field_equal_after_reentry": true,
+        "new_provider_requests": 0,
+        "source_binary_sha256": "0aefe8e63c385b6f926d0f4264440b308d3eaca5c30c9cce6d1d4b0493a7f237",
+        "program_sha256": {
+          "reentry.py": "c243f915bd957c2ef6a75bdbcbf9096fe4e54956dc885a59e8ffe47ff768ef5a",
+          "first.py": "c6f88998ea31617dd0109cbb61550a4d4b1f52f87b3fda5c80a499ecf6171ef0"
+        }
+      }
+    },
+    "C1": {
+      "check": "fresh_retrieval_to_installed_native_repl",
+      "evidence_kind": "actual chained public commands",
+      "observed": {
+        "workflow": "fresh retrieve CLI -> evaluate CLI -> actual installed Azdaja start/load/exec/final -> persistent exec/final -> kill",
+        "events": [
+          {
+            "program": "python3.14",
+            "operation": "-B",
+            "exit": 0
+          },
+          {
+            "program": "python3.14",
+            "operation": "-B",
+            "exit": 0
+          },
+          {
+            "program": "azdaja",
+            "operation": "start",
+            "exit": 0
+          },
+          {
+            "program": "azdaja",
+            "operation": "load",
+            "exit": 0
+          },
+          {
+            "program": "azdaja",
+            "operation": "load",
+            "exit": 0
+          },
+          {
+            "program": "azdaja",
+            "operation": "load",
+            "exit": 0
+          },
+          {
+            "program": "azdaja",
+            "operation": "exec",
+            "exit": 0
+          },
+          {
+            "program": "azdaja",
+            "operation": "final",
+            "exit": 0
+          },
+          {
+            "program": "azdaja",
+            "operation": "exec",
+            "exit": 0
+          },
+          {
+            "program": "azdaja",
+            "operation": "final",
+            "exit": 0
+          },
+          {
+            "program": "azdaja",
+            "operation": "kill",
+            "exit": 0
+          }
+        ],
+        "all_7_rankings_materialized_exactly": true,
+        "all_16_sources_retained": true,
+        "q1_group_coverage": {
+          "covered": 4,
+          "total": 4,
+          "selected_sources": 8
+        },
+        "retained_observation_preserved_on_reentry": true,
+        "new_provider_requests": 0,
+        "final_answer_quality_measured": false,
+        "scope": "real public integration with existing retained judgments, not new inference or autonomous planning",
+        "binary_sha256": "0aefe8e63c385b6f926d0f4264440b308d3eaca5c30c9cce6d1d4b0493a7f237",
+        "fresh_rankings_sha256": "152a3561265c67b9ada5bd7b614498f889fc25b4d1710ba5d604460d3fffbbf6"
+      }
+    },
+    "S1": {
+      "check": "production HTTP builder policy",
+      "evidence_kind": "source inspection and feature compilation, not hostile native HTTP transport execution",
+      "observed": "fixed HTTPS origin, no proxy, redirects or retries, bounded timeout and max_response_bytes+1 read"
+    },
+    "L1": {
+      "check": "frozen live study",
+      "evidence_kind": "retained actual model workflow",
+      "observed": "2 typed requests,23 questions,3 generative calls; no final-answer improvement; never rerun in this follow-up"
+    },
+    "R1": {
+      "check": "research and application portfolio",
+      "evidence_kind": "primary-source research and bounded comparisons, not application-wide efficacy",
+      "observed": "seven application angles documented; matched Python mechanism uses same16semantic questions; automatic-planning/other-angle quality unproved"
+    }
+  },
+  "rust_runs": {
+    "engine_default": {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--lib",
+        "judge::tests"
+      ],
+      "exit": 0,
+      "tests": [
+        {
+          "name": "judge::tests::integer_token_budget_crossing_and_overflow_stay_terminal",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::malformed_duplicate_extra_missing_ids_and_types",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::invalid_probabilities_argmax_score_and_legend",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::preflight_limits_and_invalid_arguments_do_not_read_credentials",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::deadline_preflight_and_transport_timeout",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::request_cap_allows_cache_without_new_credential_or_observation",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::budgets_are_debited_and_crossing_retains_usage_without_answers",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::unavailable_feature_never_reads_credentials",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::all_primitives_cache_and_question_mutation",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::model_alias_concrete_and_explicit_expectation",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::response_size_http_status_and_config_validation",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::secret_safe_errors_and_poisoned_transport_failure",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::unknown_usage_is_not_zero_billing_and_bad_usage_poisoned",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::token_counts_are_integers_and_null_is_unknown_not_zero",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::elapsed_transport_deadline_poisoned_but_usage_retained",
+          "result": "ok"
+        }
+      ],
+      "seconds": 0.7752932499861345,
+      "log_sha256": "fbfc316815e63dea4946bf4c8e67547c9e5ed19583e31ad9cd7f64f0bd9fa985"
+    },
+    "native_default": {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--test",
+        "judge_native"
+      ],
+      "exit": 0,
+      "tests": [
+        {
+          "name": "native_judgment_config_roundtrips_without_a_secret",
+          "result": "ok"
+        },
+        {
+          "name": "native_judgment_valid_named_arguments_fail_before_network_without_key",
+          "result": "ok"
+        },
+        {
+          "name": "native_judgment_key_is_not_forwarded_to_custom_generative_provider",
+          "result": "ok"
+        },
+        {
+          "name": "native_judgments_default_disabled_and_regular_repl_recovers",
+          "result": "ok"
+        },
+        {
+          "name": "native_judgment_argument_errors_do_not_enter_provider",
+          "result": "ok"
+        }
+      ],
+      "seconds": 0.3297972909640521,
+      "log_sha256": "63c7e959df52b6083950bdc7e2c10820db4a7d6991dc1bad730f80daa2cf5f25"
+    },
+    "engine_feature": {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--lib",
+        "judge::tests"
+      ],
+      "exit": 0,
+      "tests": [
+        {
+          "name": "judge::tests::integer_token_budget_crossing_and_overflow_stay_terminal",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::malformed_duplicate_extra_missing_ids_and_types",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::invalid_probabilities_argmax_score_and_legend",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::deadline_preflight_and_transport_timeout",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::preflight_limits_and_invalid_arguments_do_not_read_credentials",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::request_cap_allows_cache_without_new_credential_or_observation",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::budgets_are_debited_and_crossing_retains_usage_without_answers",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::all_primitives_cache_and_question_mutation",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::response_size_http_status_and_config_validation",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::secret_safe_errors_and_poisoned_transport_failure",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::unknown_usage_is_not_zero_billing_and_bad_usage_poisoned",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::model_alias_concrete_and_explicit_expectation",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::token_counts_are_integers_and_null_is_unknown_not_zero",
+          "result": "ok"
+        },
+        {
+          "name": "judge::tests::elapsed_transport_deadline_poisoned_but_usage_retained",
+          "result": "ok"
+        }
+      ],
+      "seconds": 0.25271783396601677,
+      "log_sha256": "c753ca8bfb1e15b99e5982c80634f4a2471b47f76e7b4903b74e2fc3f03e0055"
+    },
+    "native_feature": {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "judge_native"
+      ],
+      "exit": 0,
+      "tests": [
+        {
+          "name": "native_judgment_config_roundtrips_without_a_secret",
+          "result": "ok"
+        },
+        {
+          "name": "native_judgment_valid_named_arguments_fail_before_network_without_key",
+          "result": "ok"
+        },
+        {
+          "name": "native_judgment_key_is_not_forwarded_to_custom_generative_provider",
+          "result": "ok"
+        },
+        {
+          "name": "native_judgments_default_disabled_and_regular_repl_recovers",
+          "result": "ok"
+        },
+        {
+          "name": "native_judgment_argument_errors_do_not_enter_provider",
+          "result": "ok"
+        }
+      ],
+      "seconds": 0.34221437497762963,
+      "log_sha256": "54b6f8a2b6fab07309e8323b16b45a00d8ea08516f8f19fa91c291724904bd82"
+    }
+  },
+  "api_docs_checked": "https://docs.typesafe.ai/api.md",
+  "api_docs_checked_date": "2026-09-16",
+  "limitations": [
+    "Score is not live-tested",
+    "Hostile native HTTP redirect/proxy/status behavior is inspected/injected, not live fault-tested",
+    "The current-source reentry uses retained observations, not fresh model calls",
+    "Other application efficacy and automatic planning are not established",
+    "Final answers were not improved",
+    "Publication notice gate remains failed"
+  ],
+  "source_sha256": {
+    "src/judge.rs": "66ef48205e1cc1b5c9f641b49902b6da79952548776c556fbced6349a43086e6",
+    "src/lib.rs": "301e9bc37bcca09123733dc5834517957110feedc42f05658cc6a0b02b292558"
+  },
+  "executed_programs": {
+    "custom-key-invalid.py": "failure = None\ntry:\n    judge_many(state=\"public state\", questions={\"n\":{\"type\":\"noul\",\"instructions\":\"Does the source state X?\"}})\nexcept Exception as error:\n    failure = str(error)\nFINAL({\"failure\":failure,\"stats\":judge_stats()})\n",
+    "persistent-reentry.py": "FINAL({\"source_count\":len(source_by_id),\"selected_ids\":selected_ids,\"observation\":recorded_observation,\"stats\":judge_stats()})\n",
+    "materialized-evidence.py": "corpus = json.loads(corpus_json)[\"items\"]\nranked = json.loads(rankings_json)[\"tasks\"]\nsource_by_id = {}\nfor source in corpus:\n    source_by_id[source[\"id\"]] = source\nselected_ids = {}\nfor task in ranked:\n    selected_ids[task[\"task_id\"]] = task[\"rankings\"][\"normalized_bm25\"][:8]\nq1_evidence = []\nfor source_id in selected_ids[\"Q1\"]:\n    q1_evidence.append(source_by_id[source_id])\nrecorded_observation = json.loads(retained_json)[\"observation\"]\nFINAL({\"selected_ids\":selected_ids,\"q1_evidence\":q1_evidence,\"all_source_ids\":sorted(source_by_id),\"retained_observation\":recorded_observation,\"observation_origin\":\"retained prior live artifact, not new inference\",\"stats\":judge_stats()})\n",
+    "ordinary-recovery.py": "FINAL({\"answer\":6*7,\"stats\":judge_stats()})\n",
+    "custom-key-missing.py": "failure = None\ntry:\n    judge_many(state=\"public state\", questions={\"n\":{\"type\":\"noul\",\"instructions\":\"Does the source state X?\"}})\nexcept Exception as error:\n    failure = str(error)\nFINAL({\"failure\":failure,\"stats\":judge_stats()})\n",
+    "disabled.py": "failure = None\ntry:\n    judge_many(state=\"public state\", questions={\"n\":{\"type\":\"noul\",\"instructions\":\"Does the source state X?\"}})\nexcept Exception as error:\n    failure = str(error)\nFINAL({\"failure\":failure,\"stats\":judge_stats()})\n",
+    "reentry.py": "FINAL({\"observations\":saved_observations,\"stats\":judge_stats(),\"fresh_inference\":False})\n",
+    "first.py": "saved_observations = json.loads(observations_json)\nFINAL({\"observations\":saved_observations,\"stats\":judge_stats(),\"fresh_inference\":False})\n"
+  }
+}
