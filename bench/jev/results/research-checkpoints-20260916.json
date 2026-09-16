@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "checkpoints": [
+    {
+      "at": "2026-09-16T18:33:55Z",
+      "angle": "Evidence-addressed optional semantic operators, not root replacement or a vendor-wrapper moat",
+      "evidence": "34 independently verified adapter/runner tests, but ambiguous gold and actual evaluator custody blockers remained",
+      "decision": "Keep live inference held, repair falsified checks and labels, then attempt only the preregistered smoke screen"
+    },
+    {
+      "at": "2026-09-16T19:03:55Z",
+      "angle": "Unchanged systems hypothesis, still no measured semantic advantage",
+      "evidence": "Two credentialed live attempts stopped at setup/model identity, zero validated judgments. 67 local experiment tests pass. Actual failed-receipt projection preserves 68 unjudged occurrences and remains incomplete",
+      "decision": "No further live requests. Finish independent post-pilot review, preserve failures, commit scoped changes and deliver a no-promotion decision",
+      "hopeless_active_inference_cancelled": "None running. Both campaigns already stopped automatically on their first failing attempt"
+    }
+  ]
+}

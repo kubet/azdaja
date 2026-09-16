@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-09-16T18:45:52.063381+00:00",
+  "fixture_sha256": "3fe530372fefe2dd62e823bad9eeec8aad10a1783328a502805851ebd733929f",
+  "policy_sha256": "054700b91b57d2400ae56fc1d19ec78ded81718852aae968aeab23cc06694113",
+  "protocol_sha256": "70a784fe2206278e6fd539630e47ef354d97c4c073590614a8800d8a2ff9e5d3",
+  "requested_model": "jev-latest",
+  "fixture_scope": "synthetic independently authored pilot, not production benchmark",
+  "source_revision": "0b6bf328a5af85a3e7fad18521362d3b01c3bd0f",
+  "source_dirty": true,
+  "implementation_sha256": {
+    "run.py": "a4b068552e415a492e35ed599bd7b2f60ddd0114689bac8f0c14e2f49ea9f7ae",
+    "adapter.py": "f694a771d85ddf9ac572e72821bdaca06f02b6e32f2a236c2abb261704cc452a"
+  },
+  "acceptance_policy": {
+    "selected_probability_min": 0.98,
+    "confidence_min": 0.9
+  },
+  "production_promotion": false,
+  "status": "stopped",
+  "calls": [
+    {
+      "index": 1,
+      "variant": "ordinary",
+      "case_ids": [
+        "s01"
+      ],
+      "state_sha256": "05a3fb029f12da693a26f9e7d3f5ca11ff23f71361192c56b27e4c72fd1fc0db",
+      "questions_sha256": "9e8ef1623ff6cb993a4a80ff276feda0b0d79654c0cdb9b0d81404a770049bdf",
+      "status": "failed",
+      "error_code": "response_model_mismatch",
+      "metrics": {
+        "attempt": 1,
+        "request_bytes": 1057,
+        "response_bytes": 218,
+        "estimated_input_tokens": 1057,
+        "request_sha256": "43788d0ffce8101d2d85e992cc1c4bb7d10188d3e93394c896ef1d9297d74e3b",
+        "worker_source_sha256": "f694a771d85ddf9ac572e72821bdaca06f02b6e32f2a236c2abb261704cc452a",
+        "response_sha256": "e2dbe4445da1fc22be82115ad58874deb14356bdb09941c2ba6ac26cc533e603",
+        "latency_ms": 829.951
+      }
+    }
+  ],
+  "stages": [
+    {
+      "name": "smoke",
+      "status": "blocked",
+      "planned": 6,
+      "summary": {
+        "planned": 6,
+        "observed": 0,
+        "unobserved": 6,
+        "correct": 0,
+        "errors": 0,
+        "accuracy_observed": null,
+        "accepted": 0,
+        "accepted_errors": 0,
+        "coverage_observed": null,
+        "accepted_error_rate_observed": null,
+        "accepted_error_upper_95_iid": null,
+        "brier_multiclass_observed": null,
+        "confusion": {
+          "supported": {
+            "supported": 0,
+            "contradicted": 0,
+            "insufficient": 0
+          },
+          "contradicted": {
+            "supported": 0,
+            "contradicted": 0,
+            "insufficient": 0
+          },
+          "insufficient": {
+            "supported": 0,
+            "contradicted": 0,
+            "insufficient": 0
+          }
+        },
+        "families": {},
+        "per_label": {
+          "supported": {
+            "precision": null,
+            "recall": null,
+            "f1": 0.0
+          },
+          "contradicted": {
+            "precision": null,
+            "recall": null,
+            "f1": 0.0
+          },
+          "insufficient": {
+            "precision": null,
+            "recall": null,
+            "f1": 0.0
+          }
+        },
+        "macro_f1_observed": null,
+        "unsupported_entailment_rate_observed": null,
+        "contradiction_miss_rate_observed": null,
+        "confidence_bound_valid_for_sampling_design": false,
+        "caveat": "Synthetic, small, clustered nonrandom panel with outcome-dependent early stopping. Binomial bound is an IID fixed-sample reference calculation, not valid deployment certification for this sampling design. Unobserved cases are not passes."
+      },
+      "stop_reason": "adapter_error"
+    }
+  ],
+  "baseline": {
+    "status": "not_run",
+    "reason": "requires semantic and invariance gates plus an authorized comparable route"
+  },
+  "stop_reason": "adapter_error",
+  "error_code": "response_model_mismatch",
+  "elapsed_seconds": 0.8309193750028498,
+  "reported_input_tokens": 0,
+  "reported_output_tokens": 0,
+  "usage_complete": false,
+  "input_cost_estimate_usd_vendor_rate": 0.0,
+  "cost_caveat": "Not an invoice. Estimate uses vendor-advertised $0.042/M input only. Output pricing and account billing not independently verified. Failed or missing usage can be unaccounted. No measured baseline cost/speed claim."
+}

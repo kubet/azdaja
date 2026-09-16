@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-16T19:02:44.304521+00:00",
+  "scope": "Observed local checks, not live semantic efficacy or a provider-authenticated attestation",
+  "implementation_sha256": {
+    "adapter.py": "26fd3b4564db43b3469cffa1f8efee00e6c1237f7bfede13dbec8f5df0b6565d",
+    "run.py": "7dd60ca25a5f96f80c0297522766bfa9464885d7251c385c273af61ab90e83ab",
+    "bridge.py": "07843f9d7fad1a5d1cea0d504923c5d5f3e4ebb04b54169b5e934284cda6ca2d",
+    "audit.py": "e5d6047f28249bc7eae583ac4cc467e936ff666192372e5c1bbdbd1375549b14",
+    "test_adapter.py": "d9bd4c1e0815b0198c72d7394eb7117202229ba190e3810acba10216685972fd",
+    "test_run.py": "5511158e601a892a46a5baded2fabdd671dacf9bd630312164d190aa10f937b6",
+    "test_bridge.py": "46f5ef85967ee54c7354b3502c66857c63cfc1950e77ef91f8082a18b0a9b390",
+    "test_model_resolution.py": "d30a86e554d132a1f05654433fb6d0d18c3bc8960200820126a99041a206dddf",
+    "test_audit.py": "117622b95c086234cc58ed2b2a44ca29660763e21838dfa28f6ba5171057f840",
+    "fixtures.json": "3fe530372fefe2dd62e823bad9eeec8aad10a1783328a502805851ebd733929f"
+  },
+  "azdaja_binary_sha256": "74e74287c6824eeb2420d11191026e72956bee60e409bfbb5716ae85392bb84b",
+  "checks": [
+    {
+      "name": "offline_experiment_suite",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s bench/jev -p 'test_*.py' -q",
+      "passed": 67,
+      "failed": 0,
+      "skipped": 0,
+      "coverage": [
+        "disabled and credential preflight",
+        "strict typed contracts",
+        "actual child timeout and abnormal-exit cleanup",
+        "progressive stop falsifiers",
+        "real Monty hashes and occurrence counts",
+        "explicit alias pin and drift rejection",
+        "frozen failed receipt replay and tamper rejection"
+      ]
+    },
+    {
+      "name": "existing_core_library",
+      "command": "cargo test --locked --offline --lib -q",
+      "passed": 191,
+      "failed": 0,
+      "ignored": 1,
+      "ignored_test": "lexical_relevance_tests::lexical_relevance_release_stress_16m"
+    },
+    {
+      "name": "default_cli",
+      "command": "python3 -B bench/jev/run.py",
+      "status": "offline_plan",
+      "network_calls": 0,
+      "requested_model": null
+    },
+    {
+      "name": "local_document_links",
+      "documents": 8,
+      "missing": 0
+    },
+    {
+      "name": "failed_receipt_actual_evaluator_projection",
+      "artifact": "custody-alias-20260916.json",
+      "complete": false,
+      "source_occurrences": 68,
+      "unique_judged": 0,
+      "unjudged_occurrences": 68,
+      "strict_missing_coverage_rejected": true
+    }
+  ],
+  "live_summary": {
+    "credentialed_inference_attempts": 2,
+    "metadata_get_requests": 1,
+    "validated_judgments": 0,
+    "semantic_screen": "blocked",
+    "usage": "unknown",
+    "baseline": "not_run",
+    "production_promotion": false
+  }
+}

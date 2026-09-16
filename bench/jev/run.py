@@ -357,15 +357,22 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--live", action="store_true", help="explicitly send synthetic fixtures to TypeSafe")
     parser.add_argument("--fixtures", type=Path, default=HERE / "fixtures.json")
-    parser.add_argument("--model", default="jev-1.12")
+    parser.add_argument("--model", help="explicit account-available model identifier, required for live runs")
+    parser.add_argument("--allow-resolved-model", action="append", default=None,
+                        help="future-study opt-in: predeclared concrete response identity for a requested alias; repeat for a small allowlist")
     parser.add_argument("--key-file", type=Path, help="private host file, never a key value")
     parser.add_argument("--receipt", type=Path, help="new nonexisting path for a checkpointed receipt")
     args = parser.parse_args(argv)
+    if args.live and args.model is None:
+        parser.error("--live requires an explicit account-available --model")
     fixtures, fixture_hash = load_fixtures(args.fixtures)
     protocol_hash = hashlib.sha256(PROTOCOL.read_bytes()).hexdigest()
     meta = {"schema_version": 1, "created_at": datetime.now(timezone.utc).isoformat(),
             "fixture_sha256": fixture_hash, "policy_sha256": digest(POLICY),
             "protocol_sha256": protocol_hash, "requested_model": args.model,
+            "resolved_model_allowlist": args.allow_resolved_model,
+            "model_resolution_policy_sha256": digest({"requested_model": args.model,
+                "allowlist": args.allow_resolved_model, "policy": "exact-default-or-allowlisted-first-budget-eligible-pin-v1"}),
             "fixture_scope": "synthetic independently authored pilot, not production benchmark",
             "source_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=HERE, text=True).strip(),
             "source_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=HERE)),
@@ -381,7 +388,8 @@ def main(argv=None) -> int:
     key = read_key(args.key_file)
     if not key:
         parser.error("--live requires TYPESAFE_API_KEY or a private --key-file")
-    client = Client(api_key=key, enabled=True, model=args.model)
+    client = Client(api_key=key, enabled=True, model=args.model,
+                    resolved_model_allowlist=tuple(args.allow_resolved_model) if args.allow_resolved_model is not None else None)
     checkpoint = checkpoint_writer(args.receipt)
     started = time.monotonic()
     previous_handlers = {}

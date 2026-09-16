@@ -23,6 +23,8 @@ from typing import Any, Callable
 HOST = "api.typesafe.ai"
 API_PATH = "/v1/systemone"
 MAX_WORKER_INPUT = 100_000
+MODEL_ID = re.compile(r"jev-[A-Za-z0-9.-]{1,64}\Z")
+MODEL_ALIASES = {"jev-latest", "jev-preview"}
 # Capture once at module import. A concurrently edited working tree cannot change
 # the fresh worker's implementation halfway through a live campaign.
 WORKER_SOURCE = Path(__file__).read_text(encoding="utf-8") if "__file__" in globals() else ""
@@ -224,12 +226,28 @@ def _terminate(proc):
 
 
 class Client:
-    def __init__(self, api_key: str | None, enabled=False, model="jev-1.12", limits=None, transport: Callable | None = None):
-        if (api_key is not None and (not isinstance(api_key, str) or not 1 <= len(api_key) <= 512
-                                    or any(ord(c) < 33 or ord(c) > 126 for c in api_key))):
+    def __init__(self, api_key: str | None, enabled=False, model="jev-1.12", limits=None,
+                 transport: Callable | None = None, resolved_model_allowlist: tuple[str, ...] | None = None):
+        # TypeSafe token syntax and test tokens need no JSON-escaping characters.
+        # Reject quotes/backslashes rather than let serialized containment miss them.
+        if (api_key is not None and (not isinstance(api_key, str)
+                                    or not re.fullmatch(r"[A-Za-z0-9_-]{1,512}", api_key))):
             raise AdapterError("invalid_api_key")
-        if type(enabled) is not bool or not isinstance(model, str) or not re.fullmatch(r"jev-[A-Za-z0-9.-]{1,64}", model):
+        if type(enabled) is not bool or not isinstance(model, str) or not MODEL_ID.fullmatch(model):
             raise AdapterError("invalid_client_configuration")
+        if model in MODEL_ALIASES and resolved_model_allowlist is None:
+            raise AdapterError("model_alias_requires_explicit_resolution_policy")
+        if resolved_model_allowlist is not None:
+            if (model not in MODEL_ALIASES or not isinstance(resolved_model_allowlist, tuple)
+                    or not 1 <= len(resolved_model_allowlist) <= 8
+                    or any(not isinstance(m, str) or not MODEL_ID.fullmatch(m) or m in MODEL_ALIASES
+                           for m in resolved_model_allowlist)
+                    or len(set(resolved_model_allowlist)) != len(resolved_model_allowlist)):
+                raise AdapterError("invalid_model_resolution_policy")
+        # Future-study option only. Exact requested/returned identity remains default.
+        # An allowlist must be declared before results, never learned from correctness.
+        self.resolved_model_allowlist = resolved_model_allowlist
+        self.resolved_model = None
         self.api_key, self.enabled, self.model = api_key, enabled, model
         self.limits = limits if limits is not None else Limits()
         validate_limits(self.limits)
@@ -309,7 +327,19 @@ class Client:
             if self.api_key.encode() in raw:
                 raise AdapterError("response_contains_credential")
             response = strict_json_loads(raw)
-            validate_response(response, questions, self.model)
+            if self.api_key.encode() in canonical_bytes(response):
+                raise AdapterError("response_contains_credential")
+            returned_model = response.get("model") if isinstance(response, dict) else None
+            if isinstance(returned_model, str) and MODEL_ID.fullmatch(returned_model):
+                metrics["returned_model"] = returned_model
+            expected_model = self.model
+            if self.resolved_model_allowlist is not None:
+                if not isinstance(returned_model, str) or returned_model not in self.resolved_model_allowlist:
+                    raise AdapterError("response_model_not_allowlisted")
+                if self.resolved_model is not None and returned_model != self.resolved_model:
+                    raise AdapterError("response_model_changed")
+                expected_model = returned_model
+            validate_response(response, questions, expected_model)
             reported = response["usage"]["input_tokens"]
             if reported is not None:
                 self._reported_input += reported
@@ -319,6 +349,10 @@ class Client:
                 raise AdapterError("reported_token_budget_exceeded", response=response, metrics=metrics)
             if time.monotonic() - self._started > self.limits.max_elapsed_seconds:
                 raise AdapterError("campaign_deadline_exceeded", response=response, metrics=metrics)
+            if self.resolved_model_allowlist is not None:
+                # Pin only after the complete response AND post-response budgets pass.
+                self.resolved_model = returned_model
+                metrics["resolved_model_pin"] = returned_model
             return {"response": response, "metrics": metrics}
         except BaseException as exc:
             self._poisoned = True
