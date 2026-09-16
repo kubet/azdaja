@@ -1,7 +1,7 @@
 {
   "name": "azdaja",
   "displayName": "Azdaja",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Virtual memory for language models with a bounded model-facing surface",
   "author": {
     "name": "kubet",
