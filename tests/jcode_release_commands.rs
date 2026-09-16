@@ -270,10 +270,16 @@ fn source_install_hook_blocking_requires_explicit_session_activation() {
     let pending = snapshot(&fixture.0);
     for (tool, input) in [
         ("read", broad),
-        ("bash", json!({"command":"npx playwright screenshot http://localhost:3000/live arena.png"})),
+        (
+            "bash",
+            json!({"command":"npx playwright screenshot http://localhost:3000/live arena.png"}),
+        ),
     ] {
         let inactive = fixture.event_with_activation(tool, input, None);
-        assert!(inactive.status.success(), "pending challenge blocked inactive hook: {inactive:?}");
+        assert!(
+            inactive.status.success(),
+            "pending challenge blocked inactive hook: {inactive:?}"
+        );
         assert!(inactive.stdout.is_empty() && inactive.stderr.is_empty());
     }
     assert_eq!(pending, snapshot(&fixture.0));

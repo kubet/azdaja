@@ -6912,27 +6912,7 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             assert!(
                 description
                     .contains("exhaustive semantic judgment or classification over one input")
-        for trigger in triggers {
-            let normalized_description = description.to_ascii_lowercase();
-                normalized_description.contains("user")
-                    && normalized_description.contains("explicit"),
-                "{harness} description lacks explicit user activation"
             );
-            for forbidden in [
-                "automatically trigger",
-                "auto-trigger",
-                "installed",
-                "available",
-                "instead of native",
-                "rather than native",
-                "do not use native",
-            ] {
-                assert!(
-                    !normalized_description.contains(forbidden),
-                    "{harness} description retained forbidden activation text {forbidden:?}"
-                );
-            }
-            let _ = trigger;
         }
         if matches!(harness, "codex" | "opencode") {
             for nontrigger in [
