@@ -28,6 +28,26 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
+def json_size_lower_bound(value):
+    """A structural lower bound, not a reconstruction of the discarded body.
+
+    Count decoded string characters, not UTF-8 bytes, to remain conservative for
+    Unicode and alternative JSON encodings. Any numeric literal needs >=1 byte.
+    """
+    if value is None or isinstance(value, bool):
+        return len(canonical_bytes(value))
+    if isinstance(value, str):
+        return len(value) + 2
+    if isinstance(value, (int, float)):
+        return 1
+    if isinstance(value, list):
+        return 2 + max(0, len(value) - 1) + sum(map(json_size_lower_bound, value))
+    if isinstance(value, dict):
+        return 2 + max(0, len(value) - 1) + sum(
+            json_size_lower_bound(key) + 1 + json_size_lower_bound(item) for key, item in value.items())
+    raise ValueError("invalid retained JSON value")
+
+
 def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
     if not isinstance(receipt, dict) or type(receipt.get("schema_version")) is not int or receipt["schema_version"] != 1:
         raise ValueError("invalid receipt schema")
@@ -39,6 +59,9 @@ def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
         raise ValueError("receipt acceptance policy mismatch")
     if receipt.get("protocol_sha256") != sha(run.PROTOCOL.read_bytes()):
         raise ValueError("receipt protocol identity mismatch")
+    requested = receipt.get("requested_model")
+    if not isinstance(requested, str) or not MODEL_ID.fullmatch(requested):
+        raise ValueError("invalid receipt requested model")
     allowed = receipt.get("resolved_model_allowlist")
     if allowed is not None and (not isinstance(allowed, list) or not 1 <= len(allowed) <= 8
             or receipt.get("requested_model") not in MODEL_ALIASES
@@ -64,6 +87,10 @@ def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
     calls = receipt.get("calls")
     if not isinstance(calls, list) or len(calls) > 96:
         raise ValueError("invalid receipt calls")
+    # The frozen alias failure predates opt-in resolution. Preserve that negative
+    # evidence, but never use legacy compatibility to release unpinned judgments.
+    if requested in MODEL_ALIASES and allowed is None and any("response" in event for event in calls):
+        raise ValueError("unresolved alias cannot expose retained judgments")
 
     class Replay:
         index = 0
@@ -71,6 +98,7 @@ def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
         reported_input = 0
         total_request = 0
         total_estimated = 0
+        latency_lower_bound_ms = 0
 
         def evaluate(self, state, questions):
             if self.index >= len(calls):
@@ -111,6 +139,9 @@ def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
                         raise ValueError("receipt response evidence missing")
                 self.total_request += len(payload)
                 self.total_estimated += len(payload) * len(questions)
+                # Per-call latency is rounded to .001 ms and evaluations are
+                # sequential. Their sum minus rounding is a campaign lower bound.
+                self.latency_lower_bound_ms += max(0, latency - 0.0005)
             if "response" in event:
                 expected_model = receipt["requested_model"]
                 allowlist = receipt.get("resolved_model_allowlist")
@@ -120,7 +151,8 @@ def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
                         raise ValueError("receipt resolved model mismatch")
                 validate_response(event["response"], questions, expected_model)
                 self.reported_input += event["response"]["usage"]["input_tokens"] or 0
-                if (metrics.get("response_bytes") is None or metrics["response_bytes"] <= 0
+                if (metrics.get("response_bytes") is None
+                        or metrics["response_bytes"] < json_size_lower_bound(event["response"])
                         or type(metrics.get("cumulative_reported_input_tokens")) is not int
                         or metrics["cumulative_reported_input_tokens"] != self.reported_input):
                     raise ValueError("receipt response accounting mismatch")
@@ -131,7 +163,8 @@ def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
                         len(payload) > limits.max_request_bytes or len(questions) > limits.max_questions
                         or self.total_request > limits.max_total_request_bytes
                         or self.total_estimated > limits.max_total_estimated_tokens
-                        or self.reported_input > limits.max_input_tokens):
+                        or self.reported_input > limits.max_input_tokens
+                        or self.latency_lower_bound_ms > limits.max_elapsed_seconds * 1000 + 1e-6):
                     raise ValueError("completed receipt exceeds resource envelope")
                 if event["status"] == "completed" and allowlist is not None:
                     if metrics.get("resolved_model_pin") != expected_model:

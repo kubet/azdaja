@@ -147,6 +147,24 @@ class CompleteReceiptTests(unittest.TestCase):
         self.assertEqual({event["metrics"]["resolved_model_pin"] for event in receipt["calls"]}, {"jev-offline-control"})
         self.assertTrue(self.project(path)["evaluation"]["complete"])
 
+    def test_legacy_unresolved_alias_compatibility_cannot_expose_judgments(self):
+        _, _, receipt = self.control_receipt(alias=True)
+        receipt["resolved_model_allowlist"] = None
+        receipt["model_resolution_policy_sha256"] = run.digest({
+            "requested_model": "jev-latest", "allowlist": None,
+            "policy": "exact-default-or-allowlisted-first-budget-eligible-pin-v1"})
+        for event in receipt["calls"]:
+            event["response"]["model"] = "jev-latest"
+            body = adapter.canonical_bytes(event["response"])
+            event["metrics"].update(returned_model="jev-latest", response_bytes=len(body), response_sha256=audit.sha(body))
+            event["metrics"].pop("resolved_model_pin")
+        for keep_new_policy_marker in (True, False):
+            changed = copy.deepcopy(receipt)
+            if not keep_new_policy_marker:
+                changed.pop("model_resolution_policy_sha256")
+            with self.subTest(marker=keep_new_policy_marker), self.assertRaisesRegex(ValueError, "^unresolved alias cannot expose retained judgments$"):
+                audit.verify(changed, self.fixtures, self.fixture_hash)
+
     def test_semantic_stop_preserves_wrong_label_without_oracle_repair(self):
         case = next(case for case in self.fixtures["cases"] if case["id"] == "c01")
         wrong = next(label for label in run.LABELS if label != case["expected"])
@@ -245,6 +263,7 @@ class CompleteReceiptTests(unittest.TestCase):
             ({"latency_ms": float("nan")}, "invalid receipt transport metrics"),
             ({"response_sha256": "invalid"}, "receipt response evidence missing"),
             ({"response_bytes": None}, "receipt response accounting mismatch"),
+            ({"response_bytes": 1}, "receipt response accounting mismatch"),
             ({"cumulative_reported_input_tokens": 0}, "receipt response accounting mismatch"),
             ({"returned_model": "jev-another-control"}, "receipt returned model mismatch"),
         ]
@@ -253,6 +272,63 @@ class CompleteReceiptTests(unittest.TestCase):
             changed["calls"][0]["metrics"].update(fields)
             with self.subTest(fields=fields), self.assertRaisesRegex(ValueError, "^" + code + "$"):
                 audit.verify(changed, self.fixtures, self.fixture_hash)
+
+    def test_impossible_single_or_cumulative_campaign_latency_is_not_eligible(self):
+        _, _, receipt = self.control_receipt()
+        for latencies in ([1201000] + [0] * 78, [20000] * 79):
+            changed = copy.deepcopy(receipt)
+            for event, latency in zip(changed["calls"], latencies):
+                event["metrics"]["latency_ms"] = latency
+            changed["elapsed_seconds"] = sum(latencies) / 1000 + 1
+            with self.subTest(first=latencies[0]), self.assertRaisesRegex(ValueError, "^completed receipt exceeds resource envelope$"):
+                audit.verify(changed, self.fixtures, self.fixture_hash)
+
+    def test_alias_cannot_bind_on_a_response_past_the_campaign_deadline(self):
+        _, _, receipt = self.control_receipt(alias=True)
+        receipt["calls"][0]["metrics"]["latency_ms"] = 1201000
+        receipt["elapsed_seconds"] = 1202
+        with self.assertRaisesRegex(ValueError, "^completed receipt exceeds resource envelope$"):
+            audit.verify(receipt, self.fixtures, self.fixture_hash)
+
+    def test_latency_lower_bound_accounts_for_per_call_rounding_and_final_bookkeeping(self):
+        _, _, receipt = self.control_receipt()
+        # 62 values rounded to .001 ms sum to 1,200,000.018 ms, but their
+        # conservative lower bound is 1,199,999.987 ms. Do not falsely reject.
+        for index, event in enumerate(receipt["calls"]):
+            event["metrics"]["latency_ms"] = 19354.839 if index < 62 else 0
+        # Final checkpoint serialization can extend beyond the last evaluation.
+        receipt["elapsed_seconds"] = 1201
+        self.assertEqual(audit.verify(receipt, self.fixtures, self.fixture_hash)["status"], "semantic_screen_passed")
+
+    def test_invalid_model_is_rejected_even_with_self_consistent_hashes(self):
+        _, _, receipt = self.control_receipt()
+        invalid = "not-a-jev-model"
+        receipt["requested_model"] = invalid
+        receipt["model_resolution_policy_sha256"] = run.digest({
+            "requested_model": invalid, "allowlist": None,
+            "policy": "exact-default-or-allowlisted-first-budget-eligible-pin-v1"})
+        cases = {case["id"]: case for case in self.fixtures["cases"]}
+        for event in receipt["calls"]:
+            state, questions = run.request_for([cases[name] for name in event["case_ids"]], event["variant"])
+            payload = adapter.canonical_bytes({"state": state, "model": invalid, "questions": questions})
+            event["response"]["model"] = invalid
+            body = adapter.canonical_bytes(event["response"])
+            event["metrics"].update(request_sha256=audit.sha(payload), request_bytes=len(payload),
+                estimated_input_tokens=len(payload) * len(questions), returned_model=invalid,
+                response_sha256=audit.sha(body), response_bytes=len(body))
+        with self.assertRaisesRegex(ValueError, "^invalid receipt requested model$"):
+            audit.verify(receipt, self.fixtures, self.fixture_hash)
+
+    def test_response_size_lower_bound_is_conservative_across_json_encodings(self):
+        examples = [None, True, False, 0, -1000000, 0.00000001, "", "a\\\"\n",
+                    "日本語🙂", [], {}, {"str": "日本語🙂", "nested": [True, None, 0.000001]}]
+        for value in examples:
+            bound = audit.json_size_lower_bound(value)
+            for ensure_ascii in (True, False):
+                text = json.dumps(value, ensure_ascii=ensure_ascii, separators=(",", ":"))
+                for encoding in ("utf-8", "utf-16", "utf-32"):
+                    with self.subTest(value=value, ascii=ensure_ascii, encoding=encoding):
+                        self.assertLessEqual(bound, len(text.encode(encoding)))
 
     def test_failed_http_receipt_cannot_erase_its_attempted_transport_evidence(self):
         receipt = json.loads((run.HERE / "results/pilot-alias-20260916.json").read_text())
