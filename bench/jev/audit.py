@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -16,11 +17,11 @@ import subprocess
 
 try:
     from . import bridge, run
-    from .adapter import AdapterError, MODEL_ALIASES, MODEL_ID, canonical_bytes, strict_json_loads, validate_response
+    from .adapter import AdapterError, Limits, MODEL_ALIASES, MODEL_ID, canonical_bytes, strict_json_loads, validate_response
 except ImportError:
     import bridge
     import run
-    from adapter import AdapterError, MODEL_ALIASES, MODEL_ID, canonical_bytes, strict_json_loads, validate_response
+    from adapter import AdapterError, Limits, MODEL_ALIASES, MODEL_ID, canonical_bytes, strict_json_loads, validate_response
 
 
 def sha(raw):
@@ -28,10 +29,14 @@ def sha(raw):
 
 
 def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
+    if not isinstance(receipt, dict) or type(receipt.get("schema_version")) is not int or receipt["schema_version"] != 1:
+        raise ValueError("invalid receipt schema")
     if receipt.get("fixture_sha256") != fixture_hash:
         raise ValueError("receipt fixture identity mismatch")
     if receipt.get("policy_sha256") != run.digest(run.POLICY):
         raise ValueError("receipt policy identity mismatch")
+    if receipt.get("acceptance_policy") != {key: run.POLICY[key] for key in ("selected_probability_min", "confidence_min")}:
+        raise ValueError("receipt acceptance policy mismatch")
     if receipt.get("protocol_sha256") != sha(run.PROTOCOL.read_bytes()):
         raise ValueError("receipt protocol identity mismatch")
     allowed = receipt.get("resolved_model_allowlist")
@@ -50,7 +55,10 @@ def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
         raise ValueError("invalid receipt revision")
     for filename in ("adapter.py", "run.py"):
         raw = subprocess.check_output(["git", "show", f"{revision}:bench/jev/{filename}"],
-                                      cwd=run.HERE, timeout=10, stderr=subprocess.DEVNULL)
+                                      cwd=run.HERE, timeout=10, stderr=subprocess.DEVNULL,
+                                      env={"PATH": os.defpath, "GIT_NO_LAZY_FETCH": "1",
+                                           "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1",
+                                           "GIT_CONFIG_GLOBAL": os.devnull})
         if sha(raw) != receipt.get("implementation_sha256", {}).get(filename):
             raise ValueError("historical implementation identity mismatch")
     calls = receipt.get("calls")
@@ -60,6 +68,9 @@ def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
     class Replay:
         index = 0
         resolved_model = None
+        reported_input = 0
+        total_request = 0
+        total_estimated = 0
 
         def evaluate(self, state, questions):
             if self.index >= len(calls):
@@ -68,13 +79,38 @@ def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
             self.index += 1
             if event["state_sha256"] != run.digest(state) or event["questions_sha256"] != run.digest(questions):
                 raise ValueError("receipt request identity mismatch")
-            metrics = event.get("metrics", {})
+            metrics = event.get("metrics")
             payload = canonical_bytes({"state": state, "model": receipt["requested_model"], "questions": questions})
-            if metrics and (metrics.get("request_sha256") != sha(payload)
-                            or metrics.get("request_bytes") != len(payload)
-                            or metrics.get("attempt") != self.index
-                            or metrics.get("worker_source_sha256") != receipt["implementation_sha256"]["adapter.py"]):
-                raise ValueError("receipt transport request mismatch")
+            preflight_codes = {"adapter_poisoned", "adapter_disabled_or_missing_key", "invalid_questions",
+                               "invalid_question", "invalid_criteria", "invalid_state", "invalid_json_value",
+                               "credential_in_request_state", "resource_budget_exceeded"}
+            no_transport_evidence_expected = (event["status"] == "interrupted" or
+                (event["status"] == "failed" and event.get("error_code") in preflight_codes)) and "response" not in event
+            if metrics is None and "metrics" not in event and no_transport_evidence_expected:
+                metrics = {}
+            else:
+                required = {"attempt", "request_bytes", "response_bytes", "estimated_input_tokens",
+                            "request_sha256", "worker_source_sha256", "latency_ms"}
+                if not isinstance(metrics, dict) or not required <= set(metrics):
+                    raise ValueError("receipt transport evidence missing")
+                if (type(metrics["attempt"]) is not int or metrics["attempt"] != self.index
+                        or type(metrics["request_bytes"]) is not int or metrics["request_bytes"] != len(payload)
+                        or type(metrics["estimated_input_tokens"]) is not int
+                        or metrics["estimated_input_tokens"] != len(payload) * len(questions)
+                        or metrics["request_sha256"] != sha(payload)
+                        or metrics["worker_source_sha256"] != receipt["implementation_sha256"]["adapter.py"]):
+                    raise ValueError("receipt transport request mismatch")
+                latency, size = metrics["latency_ms"], metrics["response_bytes"]
+                if (isinstance(latency, bool) or not isinstance(latency, (int, float))
+                        or not math.isfinite(latency) or latency < 0
+                        or (size is not None and (type(size) is not int or not 0 <= size <= Limits().max_response_bytes))):
+                    raise ValueError("invalid receipt transport metrics")
+                if size is not None:
+                    response_hash = metrics.get("response_sha256")
+                    if not isinstance(response_hash, str) or not re.fullmatch(r"[a-f0-9]{64}", response_hash):
+                        raise ValueError("receipt response evidence missing")
+                self.total_request += len(payload)
+                self.total_estimated += len(payload) * len(questions)
             if "response" in event:
                 expected_model = receipt["requested_model"]
                 allowlist = receipt.get("resolved_model_allowlist")
@@ -83,6 +119,20 @@ def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
                     if expected_model not in allowlist or self.resolved_model not in (None, expected_model):
                         raise ValueError("receipt resolved model mismatch")
                 validate_response(event["response"], questions, expected_model)
+                self.reported_input += event["response"]["usage"]["input_tokens"] or 0
+                if (metrics.get("response_bytes") is None or metrics["response_bytes"] <= 0
+                        or type(metrics.get("cumulative_reported_input_tokens")) is not int
+                        or metrics["cumulative_reported_input_tokens"] != self.reported_input):
+                    raise ValueError("receipt response accounting mismatch")
+                if "returned_model" in metrics and metrics["returned_model"] != expected_model:
+                    raise ValueError("receipt returned model mismatch")
+                limits = Limits()  # The recorded CLI uses this default envelope, not custom Client limits.
+                if event["status"] == "completed" and (
+                        len(payload) > limits.max_request_bytes or len(questions) > limits.max_questions
+                        or self.total_request > limits.max_total_request_bytes
+                        or self.total_estimated > limits.max_total_estimated_tokens
+                        or self.reported_input > limits.max_input_tokens):
+                    raise ValueError("completed receipt exceeds resource envelope")
                 if event["status"] == "completed" and allowlist is not None:
                     if metrics.get("resolved_model_pin") != expected_model:
                         raise ValueError("receipt resolved model pin missing")
@@ -102,7 +152,7 @@ def verify(receipt: dict, fixtures: dict, fixture_hash: str) -> dict:
     rebuilt = run.run_campaign(replay, fixtures, {})
     if replay.index != len(calls):
         raise ValueError("receipt contains calls after stopping condition")
-    for field in ("status", "stop_reason", "calls", "stages", "baseline", "error_code"):
+    for field in ("status", "stop_reason", "calls", "stages", "baseline", "custody", "error_code"):
         if rebuilt.get(field) != receipt.get(field):
             raise ValueError("receipt replay disagrees with recorded result")
     usages = [c["response"]["usage"] for c in calls if "response" in c]
