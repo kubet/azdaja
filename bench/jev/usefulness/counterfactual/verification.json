@@ -1,0 +1,32 @@
+{
+  "public_cli_reproduction": [
+    {
+      "script": "retrieve.py",
+      "exit": 0
+    },
+    {
+      "script": "evaluate.py",
+      "exit": 0
+    },
+    {
+      "exclusive_output_rejections": 2,
+      "bytes_preserved": true
+    }
+  ],
+  "rankings_identical_ignoring_timing": true,
+  "all_coverage_rows_identical": true,
+  "original_files_preserved": 25,
+  "frozen_live_inputs_outputs_and_runtime_source_unchanged_since_437f298": true,
+  "new_jev_or_answer_model_calls": 0,
+  "source_only_public_interface_not_final_answer_quality": true,
+  "source_sha256": {
+    "PLAN.md": "e37c0e38d848e35dd5fa708bf3e68c52329a76fe4c51168501e8375b0875d9f5",
+    "retrieve.py": "d6f3d5cc3eb23b0c9a26305cae385c72e044ee66a7d5bda8d0ccb6e8d4c93e58",
+    "rankings.json": "03fcdaeed10c5d3fc8e44d39a6ac50d5f500be4f8e913c70458b6eb9b48db889",
+    "evaluate.py": "8107c89af139967dd4efd1a742dfdcacf4b5a197356419bb6740ea595b78375a",
+    "test_retrieve.py": "e05ead742fc3a9399296496c2ed8e7f6ce4f41ee73810b21e2b7744732088139",
+    "test_evaluate.py": "215d218049fadfb2cb5d5d794b530bdebd92ae64dfc494eba84090b6df16e903",
+    "evaluation-results.json": "3d41714c4de06503a4cba3a039b5ec366ed2ef62e584087f3ce3a0c3e636a6dc",
+    "README.md": "85891a5ee6501467a3935141bb1ab97ca192f71c4115862b820b0e0def3126ec"
+  }
+}

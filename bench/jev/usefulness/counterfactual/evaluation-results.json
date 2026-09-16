@@ -1,0 +1,2982 @@
+{
+  "all_seven_jev_comparison": null,
+  "all_seven_lexical": {
+    "mmr_diverse": {
+      "1": {
+        "covered_groups": 7,
+        "fully_covered_tasks": 1,
+        "macro_group_coverage": 0.4761904761904762,
+        "mean_selected_text_bytes": 1416.857142857143,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "16": {
+        "covered_groups": 18,
+        "fully_covered_tasks": 7,
+        "macro_group_coverage": 1.0,
+        "mean_selected_text_bytes": 19635.0,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "2": {
+        "covered_groups": 11,
+        "fully_covered_tasks": 3,
+        "macro_group_coverage": 0.6904761904761905,
+        "mean_selected_text_bytes": 3321.5714285714284,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "4": {
+        "covered_groups": 13,
+        "fully_covered_tasks": 3,
+        "macro_group_coverage": 0.7738095238095238,
+        "mean_selected_text_bytes": 6543.714285714285,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "8": {
+        "covered_groups": 17,
+        "fully_covered_tasks": 6,
+        "macro_group_coverage": 0.9642857142857143,
+        "mean_selected_text_bytes": 11771.857142857143,
+        "tasks": 7,
+        "total_groups": 18
+      }
+    },
+    "normalized_bm25": {
+      "1": {
+        "covered_groups": 7,
+        "fully_covered_tasks": 1,
+        "macro_group_coverage": 0.4761904761904762,
+        "mean_selected_text_bytes": 1416.857142857143,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "16": {
+        "covered_groups": 18,
+        "fully_covered_tasks": 7,
+        "macro_group_coverage": 1.0,
+        "mean_selected_text_bytes": 19635.0,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "2": {
+        "covered_groups": 11,
+        "fully_covered_tasks": 3,
+        "macro_group_coverage": 0.6904761904761905,
+        "mean_selected_text_bytes": 3321.5714285714284,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "4": {
+        "covered_groups": 13,
+        "fully_covered_tasks": 3,
+        "macro_group_coverage": 0.7738095238095238,
+        "mean_selected_text_bytes": 6733.428571428572,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "8": {
+        "covered_groups": 18,
+        "fully_covered_tasks": 7,
+        "macro_group_coverage": 1.0,
+        "mean_selected_text_bytes": 12336.57142857143,
+        "tasks": 7,
+        "total_groups": 18
+      }
+    },
+    "passage_rrf": {
+      "1": {
+        "covered_groups": 6,
+        "fully_covered_tasks": 1,
+        "macro_group_coverage": 0.42857142857142855,
+        "mean_selected_text_bytes": 1111.857142857143,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "16": {
+        "covered_groups": 18,
+        "fully_covered_tasks": 7,
+        "macro_group_coverage": 1.0,
+        "mean_selected_text_bytes": 19635.0,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "2": {
+        "covered_groups": 11,
+        "fully_covered_tasks": 3,
+        "macro_group_coverage": 0.6904761904761905,
+        "mean_selected_text_bytes": 3321.5714285714284,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "4": {
+        "covered_groups": 13,
+        "fully_covered_tasks": 3,
+        "macro_group_coverage": 0.7738095238095238,
+        "mean_selected_text_bytes": 6694.571428571428,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "8": {
+        "covered_groups": 18,
+        "fully_covered_tasks": 7,
+        "macro_group_coverage": 1.0,
+        "mean_selected_text_bytes": 12226.142857142857,
+        "tasks": 7,
+        "total_groups": 18
+      }
+    },
+    "raw_bm25": {
+      "1": {
+        "covered_groups": 7,
+        "fully_covered_tasks": 1,
+        "macro_group_coverage": 0.4761904761904762,
+        "mean_selected_text_bytes": 1416.857142857143,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "16": {
+        "covered_groups": 18,
+        "fully_covered_tasks": 7,
+        "macro_group_coverage": 1.0,
+        "mean_selected_text_bytes": 19635.0,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "2": {
+        "covered_groups": 9,
+        "fully_covered_tasks": 3,
+        "macro_group_coverage": 0.619047619047619,
+        "mean_selected_text_bytes": 3335.714285714286,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "4": {
+        "covered_groups": 13,
+        "fully_covered_tasks": 3,
+        "macro_group_coverage": 0.7738095238095238,
+        "mean_selected_text_bytes": 6793.857142857143,
+        "tasks": 7,
+        "total_groups": 18
+      },
+      "8": {
+        "covered_groups": 16,
+        "fully_covered_tasks": 6,
+        "macro_group_coverage": 0.9285714285714286,
+        "mean_selected_text_bytes": 12038.57142857143,
+        "tasks": 7,
+        "total_groups": 18
+      }
+    }
+  },
+  "by_task": {
+    "Q1": {
+      "jev_retained": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.25,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E14"
+            ],
+            [
+              "E09",
+              "E11"
+            ]
+          ],
+          "selected_ids": [
+            "E13"
+          ],
+          "selected_text_bytes": 2098,
+          "total_groups": 4
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E13",
+            "E09",
+            "E14",
+            "E12",
+            "E16",
+            "E03",
+            "E15",
+            "E02",
+            "E07",
+            "E11",
+            "E08",
+            "E01",
+            "E17",
+            "E04",
+            "E05",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 4
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E14"
+            ]
+          ],
+          "selected_ids": [
+            "E13",
+            "E09"
+          ],
+          "selected_text_bytes": 3005,
+          "total_groups": 4
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E13",
+            "E09",
+            "E14",
+            "E12"
+          ],
+          "selected_text_bytes": 8016,
+          "total_groups": 4
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E13",
+            "E09",
+            "E14",
+            "E12",
+            "E16",
+            "E03",
+            "E15",
+            "E02"
+          ],
+          "selected_text_bytes": 14225,
+          "total_groups": 4
+        }
+      },
+      "mmr_diverse": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.25,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ],
+            [
+              "E14"
+            ]
+          ],
+          "selected_ids": [
+            "E09"
+          ],
+          "selected_text_bytes": 907,
+          "total_groups": 4
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E08",
+            "E16",
+            "E03",
+            "E12",
+            "E02",
+            "E13",
+            "E11",
+            "E01",
+            "E17",
+            "E04",
+            "E07",
+            "E05",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 4
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E14"
+          ],
+          "selected_text_bytes": 3949,
+          "total_groups": 4
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E08"
+          ],
+          "selected_text_bytes": 7871,
+          "total_groups": 4
+        },
+        "8": {
+          "complete": false,
+          "coverage_fraction": 0.75,
+          "covered_groups": 3,
+          "missing_groups": [
+            [
+              "E13"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E08",
+            "E16",
+            "E03",
+            "E12",
+            "E02"
+          ],
+          "selected_text_bytes": 13437,
+          "total_groups": 4
+        }
+      },
+      "normalized_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.25,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ],
+            [
+              "E14"
+            ]
+          ],
+          "selected_ids": [
+            "E09"
+          ],
+          "selected_text_bytes": 907,
+          "total_groups": 4
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E16",
+            "E08",
+            "E03",
+            "E12",
+            "E13",
+            "E02",
+            "E01",
+            "E11",
+            "E17",
+            "E04",
+            "E07",
+            "E05",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 4
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E14"
+          ],
+          "selected_text_bytes": 3949,
+          "total_groups": 4
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E16"
+          ],
+          "selected_text_bytes": 8370,
+          "total_groups": 4
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E16",
+            "E08",
+            "E03",
+            "E12",
+            "E13"
+          ],
+          "selected_text_bytes": 14505,
+          "total_groups": 4
+        }
+      },
+      "passage_rrf": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.25,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ],
+            [
+              "E14"
+            ]
+          ],
+          "selected_ids": [
+            "E09"
+          ],
+          "selected_text_bytes": 907,
+          "total_groups": 4
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E16",
+            "E03",
+            "E08",
+            "E13",
+            "E12",
+            "E02",
+            "E01",
+            "E11",
+            "E04",
+            "E17",
+            "E07",
+            "E05",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 4
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E14"
+          ],
+          "selected_text_bytes": 3949,
+          "total_groups": 4
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E16"
+          ],
+          "selected_text_bytes": 8370,
+          "total_groups": 4
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E16",
+            "E03",
+            "E08",
+            "E13",
+            "E12"
+          ],
+          "selected_text_bytes": 14505,
+          "total_groups": 4
+        }
+      },
+      "raw_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.25,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ],
+            [
+              "E14"
+            ]
+          ],
+          "selected_ids": [
+            "E09"
+          ],
+          "selected_text_bytes": 907,
+          "total_groups": 4
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E09",
+            "E15",
+            "E14",
+            "E03",
+            "E16",
+            "E08",
+            "E02",
+            "E01",
+            "E13",
+            "E12",
+            "E04",
+            "E11",
+            "E07",
+            "E17",
+            "E05",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 4
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.25,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ],
+            [
+              "E14"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E15"
+          ],
+          "selected_text_bytes": 3519,
+          "total_groups": 4
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E15",
+            "E14",
+            "E03"
+          ],
+          "selected_text_bytes": 7319,
+          "total_groups": 4
+        },
+        "8": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E12"
+            ],
+            [
+              "E13"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E15",
+            "E14",
+            "E03",
+            "E16",
+            "E08",
+            "E02",
+            "E01"
+          ],
+          "selected_text_bytes": 12478,
+          "total_groups": 4
+        }
+      }
+    },
+    "Q2": {
+      "mmr_diverse": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.3333333333333333,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E15"
+            ],
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E14"
+          ],
+          "selected_text_bytes": 3042,
+          "total_groups": 3
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 3,
+          "missing_groups": [],
+          "selected_ids": [
+            "E14",
+            "E09",
+            "E15",
+            "E02",
+            "E03",
+            "E16",
+            "E07",
+            "E12",
+            "E17",
+            "E01",
+            "E08",
+            "E11",
+            "E05",
+            "E13",
+            "E04",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 3
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.3333333333333333,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E15"
+            ],
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E14",
+            "E09"
+          ],
+          "selected_text_bytes": 3949,
+          "total_groups": 3
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.6666666666666666,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E14",
+            "E09",
+            "E15",
+            "E02"
+          ],
+          "selected_text_bytes": 7591,
+          "total_groups": 3
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 3,
+          "missing_groups": [],
+          "selected_ids": [
+            "E14",
+            "E09",
+            "E15",
+            "E02",
+            "E03",
+            "E16",
+            "E07",
+            "E12"
+          ],
+          "selected_text_bytes": 12535,
+          "total_groups": 3
+        }
+      },
+      "normalized_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.3333333333333333,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E15"
+            ],
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E14"
+          ],
+          "selected_text_bytes": 3042,
+          "total_groups": 3
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 3,
+          "missing_groups": [],
+          "selected_ids": [
+            "E14",
+            "E09",
+            "E15",
+            "E02",
+            "E03",
+            "E16",
+            "E17",
+            "E08",
+            "E01",
+            "E12",
+            "E07",
+            "E13",
+            "E11",
+            "E04",
+            "E06",
+            "E05"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 3
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.3333333333333333,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E15"
+            ],
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E14",
+            "E09"
+          ],
+          "selected_text_bytes": 3949,
+          "total_groups": 3
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.6666666666666666,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E14",
+            "E09",
+            "E15",
+            "E02"
+          ],
+          "selected_text_bytes": 7591,
+          "total_groups": 3
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 3,
+          "missing_groups": [],
+          "selected_ids": [
+            "E14",
+            "E09",
+            "E15",
+            "E02",
+            "E03",
+            "E16",
+            "E17",
+            "E08"
+          ],
+          "selected_text_bytes": 12369,
+          "total_groups": 3
+        }
+      },
+      "passage_rrf": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.0,
+          "covered_groups": 0,
+          "missing_groups": [
+            [
+              "E14"
+            ],
+            [
+              "E15"
+            ],
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E09"
+          ],
+          "selected_text_bytes": 907,
+          "total_groups": 3
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 3,
+          "missing_groups": [],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E02",
+            "E03",
+            "E16",
+            "E17",
+            "E07",
+            "E01",
+            "E08",
+            "E12",
+            "E13",
+            "E11",
+            "E04",
+            "E06",
+            "E05"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 3
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.3333333333333333,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E15"
+            ],
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E14"
+          ],
+          "selected_text_bytes": 3949,
+          "total_groups": 3
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.6666666666666666,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E02"
+          ],
+          "selected_text_bytes": 7591,
+          "total_groups": 3
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 3,
+          "missing_groups": [],
+          "selected_ids": [
+            "E09",
+            "E14",
+            "E15",
+            "E02",
+            "E03",
+            "E16",
+            "E17",
+            "E07"
+          ],
+          "selected_text_bytes": 11467,
+          "total_groups": 3
+        }
+      },
+      "raw_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.3333333333333333,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E15"
+            ],
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E14"
+          ],
+          "selected_text_bytes": 3042,
+          "total_groups": 3
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 3,
+          "missing_groups": [],
+          "selected_ids": [
+            "E14",
+            "E09",
+            "E15",
+            "E02",
+            "E08",
+            "E03",
+            "E16",
+            "E07",
+            "E01",
+            "E04",
+            "E17",
+            "E12",
+            "E13",
+            "E05",
+            "E11",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 3
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.3333333333333333,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E15"
+            ],
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E14",
+            "E09"
+          ],
+          "selected_text_bytes": 3949,
+          "total_groups": 3
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.6666666666666666,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E14",
+            "E09",
+            "E15",
+            "E02"
+          ],
+          "selected_text_bytes": 7591,
+          "total_groups": 3
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 3,
+          "missing_groups": [],
+          "selected_ids": [
+            "E14",
+            "E09",
+            "E15",
+            "E02",
+            "E08",
+            "E03",
+            "E16",
+            "E07"
+          ],
+          "selected_text_bytes": 11876,
+          "total_groups": 3
+        }
+      }
+    },
+    "Q3": {
+      "mmr_diverse": {
+        "1": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15"
+          ],
+          "selected_text_bytes": 2612,
+          "total_groups": 1
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E17",
+            "E02",
+            "E01",
+            "E05",
+            "E13",
+            "E04",
+            "E03",
+            "E09",
+            "E08",
+            "E07",
+            "E11",
+            "E12",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 1
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14"
+          ],
+          "selected_text_bytes": 5654,
+          "total_groups": 1
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E17"
+          ],
+          "selected_text_bytes": 8364,
+          "total_groups": 1
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E17",
+            "E02",
+            "E01",
+            "E05",
+            "E13"
+          ],
+          "selected_text_bytes": 12983,
+          "total_groups": 1
+        }
+      },
+      "normalized_bm25": {
+        "1": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15"
+          ],
+          "selected_text_bytes": 2612,
+          "total_groups": 1
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E17",
+            "E02",
+            "E01",
+            "E13",
+            "E09",
+            "E12",
+            "E03",
+            "E04",
+            "E05",
+            "E08",
+            "E07",
+            "E06",
+            "E11"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 1
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14"
+          ],
+          "selected_text_bytes": 5654,
+          "total_groups": 1
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E17"
+          ],
+          "selected_text_bytes": 8364,
+          "total_groups": 1
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E17",
+            "E02",
+            "E01",
+            "E13",
+            "E09"
+          ],
+          "selected_text_bytes": 13409,
+          "total_groups": 1
+        }
+      },
+      "passage_rrf": {
+        "1": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15"
+          ],
+          "selected_text_bytes": 2612,
+          "total_groups": 1
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E17",
+            "E02",
+            "E01",
+            "E13",
+            "E09",
+            "E04",
+            "E03",
+            "E12",
+            "E05",
+            "E08",
+            "E07",
+            "E06",
+            "E11"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 1
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14"
+          ],
+          "selected_text_bytes": 5654,
+          "total_groups": 1
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E17"
+          ],
+          "selected_text_bytes": 8364,
+          "total_groups": 1
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E17",
+            "E02",
+            "E01",
+            "E13",
+            "E09"
+          ],
+          "selected_text_bytes": 13409,
+          "total_groups": 1
+        }
+      },
+      "raw_bm25": {
+        "1": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15"
+          ],
+          "selected_text_bytes": 2612,
+          "total_groups": 1
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E02",
+            "E08",
+            "E17",
+            "E01",
+            "E09",
+            "E05",
+            "E04",
+            "E03",
+            "E13",
+            "E12",
+            "E07",
+            "E11",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 1
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14"
+          ],
+          "selected_text_bytes": 5654,
+          "total_groups": 1
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E02"
+          ],
+          "selected_text_bytes": 8493,
+          "total_groups": 1
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 1,
+          "missing_groups": [],
+          "selected_ids": [
+            "E15",
+            "E14",
+            "E16",
+            "E02",
+            "E08",
+            "E17",
+            "E01",
+            "E09"
+          ],
+          "selected_text_bytes": 12621,
+          "total_groups": 1
+        }
+      }
+    },
+    "Q4": {
+      "mmr_diverse": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08"
+          ],
+          "selected_text_bytes": 1310,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E01",
+            "E04",
+            "E02",
+            "E13",
+            "E15",
+            "E17",
+            "E09",
+            "E03",
+            "E11",
+            "E05",
+            "E12",
+            "E07",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08",
+            "E14"
+          ],
+          "selected_text_bytes": 4352,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E01"
+          ],
+          "selected_text_bytes": 7171,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E01",
+            "E04",
+            "E02",
+            "E13",
+            "E15"
+          ],
+          "selected_text_bytes": 13649,
+          "total_groups": 2
+        }
+      },
+      "normalized_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08"
+          ],
+          "selected_text_bytes": 1310,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E01",
+            "E04",
+            "E15",
+            "E02",
+            "E13",
+            "E12",
+            "E09",
+            "E17",
+            "E03",
+            "E07",
+            "E05",
+            "E06",
+            "E11"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08",
+            "E14"
+          ],
+          "selected_text_bytes": 4352,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E01"
+          ],
+          "selected_text_bytes": 7171,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E01",
+            "E04",
+            "E15",
+            "E02",
+            "E13"
+          ],
+          "selected_text_bytes": 13649,
+          "total_groups": 2
+        }
+      },
+      "passage_rrf": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08"
+          ],
+          "selected_text_bytes": 1310,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E04",
+            "E01",
+            "E15",
+            "E02",
+            "E13",
+            "E09",
+            "E12",
+            "E17",
+            "E03",
+            "E07",
+            "E05",
+            "E06",
+            "E11"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08",
+            "E14"
+          ],
+          "selected_text_bytes": 4352,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E04"
+          ],
+          "selected_text_bytes": 6899,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E04",
+            "E01",
+            "E15",
+            "E02",
+            "E13"
+          ],
+          "selected_text_bytes": 13649,
+          "total_groups": 2
+        }
+      },
+      "raw_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08"
+          ],
+          "selected_text_bytes": 1310,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E15",
+            "E04",
+            "E01",
+            "E02",
+            "E12",
+            "E17",
+            "E09",
+            "E03",
+            "E13",
+            "E07",
+            "E05",
+            "E11",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08",
+            "E14"
+          ],
+          "selected_text_bytes": 4352,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E15"
+          ],
+          "selected_text_bytes": 8773,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E08",
+            "E14",
+            "E16",
+            "E15",
+            "E04",
+            "E01",
+            "E02",
+            "E12"
+          ],
+          "selected_text_bytes": 13520,
+          "total_groups": 2
+        }
+      }
+    },
+    "Q5": {
+      "mmr_diverse": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E01"
+            ]
+          ],
+          "selected_ids": [
+            "E04"
+          ],
+          "selected_text_bytes": 738,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E15",
+            "E03",
+            "E07",
+            "E02",
+            "E12",
+            "E06",
+            "E16",
+            "E17",
+            "E09",
+            "E14",
+            "E08",
+            "E11",
+            "E13",
+            "E05"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01"
+          ],
+          "selected_text_bytes": 1748,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E15",
+            "E03"
+          ],
+          "selected_text_bytes": 5118,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E15",
+            "E03",
+            "E07",
+            "E02",
+            "E12",
+            "E06"
+          ],
+          "selected_text_bytes": 8782,
+          "total_groups": 2
+        }
+      },
+      "normalized_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E01"
+            ]
+          ],
+          "selected_ids": [
+            "E04"
+          ],
+          "selected_text_bytes": 738,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E15",
+            "E03",
+            "E07",
+            "E14",
+            "E16",
+            "E02",
+            "E12",
+            "E17",
+            "E13",
+            "E09",
+            "E05",
+            "E06",
+            "E08",
+            "E11"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01"
+          ],
+          "selected_text_bytes": 1748,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E15",
+            "E03"
+          ],
+          "selected_text_bytes": 5118,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E15",
+            "E03",
+            "E07",
+            "E14",
+            "E16",
+            "E02"
+          ],
+          "selected_text_bytes": 11407,
+          "total_groups": 2
+        }
+      },
+      "passage_rrf": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E01"
+            ]
+          ],
+          "selected_ids": [
+            "E04"
+          ],
+          "selected_text_bytes": 738,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E03",
+            "E15",
+            "E07",
+            "E14",
+            "E16",
+            "E02",
+            "E12",
+            "E13",
+            "E17",
+            "E06",
+            "E09",
+            "E05",
+            "E08",
+            "E11"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01"
+          ],
+          "selected_text_bytes": 1748,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E03",
+            "E15"
+          ],
+          "selected_text_bytes": 5118,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E03",
+            "E15",
+            "E07",
+            "E14",
+            "E16",
+            "E02"
+          ],
+          "selected_text_bytes": 11407,
+          "total_groups": 2
+        }
+      },
+      "raw_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E01"
+            ]
+          ],
+          "selected_ids": [
+            "E04"
+          ],
+          "selected_text_bytes": 738,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E15",
+            "E02",
+            "E03",
+            "E14",
+            "E16",
+            "E07",
+            "E17",
+            "E08",
+            "E09",
+            "E12",
+            "E05",
+            "E13",
+            "E06",
+            "E11"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01"
+          ],
+          "selected_text_bytes": 1748,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E15",
+            "E02"
+          ],
+          "selected_text_bytes": 5390,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E04",
+            "E01",
+            "E15",
+            "E02",
+            "E03",
+            "E14",
+            "E16",
+            "E07"
+          ],
+          "selected_text_bytes": 11407,
+          "total_groups": 2
+        }
+      }
+    },
+    "Q6": {
+      "mmr_diverse": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.25,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E05"
+            ],
+            [
+              "E06"
+            ],
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E07"
+          ],
+          "selected_text_bytes": 408,
+          "total_groups": 4
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E07",
+            "E05",
+            "E01",
+            "E02",
+            "E06",
+            "E15",
+            "E17",
+            "E03",
+            "E09",
+            "E14",
+            "E12",
+            "E08",
+            "E16",
+            "E11",
+            "E04",
+            "E13"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 4
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E06"
+            ],
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E07",
+            "E05"
+          ],
+          "selected_text_bytes": 889,
+          "total_groups": 4
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.75,
+          "covered_groups": 3,
+          "missing_groups": [
+            [
+              "E06"
+            ]
+          ],
+          "selected_ids": [
+            "E07",
+            "E05",
+            "E01",
+            "E02"
+          ],
+          "selected_text_bytes": 2929,
+          "total_groups": 4
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E07",
+            "E05",
+            "E01",
+            "E02",
+            "E06",
+            "E15",
+            "E17",
+            "E03"
+          ],
+          "selected_text_bytes": 7457,
+          "total_groups": 4
+        }
+      },
+      "normalized_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.25,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E05"
+            ],
+            [
+              "E06"
+            ],
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E07"
+          ],
+          "selected_text_bytes": 408,
+          "total_groups": 4
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E07",
+            "E05",
+            "E01",
+            "E06",
+            "E02",
+            "E15",
+            "E17",
+            "E03",
+            "E14",
+            "E09",
+            "E08",
+            "E12",
+            "E16",
+            "E13",
+            "E04",
+            "E11"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 4
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E06"
+            ],
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E07",
+            "E05"
+          ],
+          "selected_text_bytes": 889,
+          "total_groups": 4
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.75,
+          "covered_groups": 3,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E07",
+            "E05",
+            "E01",
+            "E06"
+          ],
+          "selected_text_bytes": 2156,
+          "total_groups": 4
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E07",
+            "E05",
+            "E01",
+            "E06",
+            "E02",
+            "E15",
+            "E17",
+            "E03"
+          ],
+          "selected_text_bytes": 7457,
+          "total_groups": 4
+        }
+      },
+      "passage_rrf": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.25,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E05"
+            ],
+            [
+              "E06"
+            ],
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E07"
+          ],
+          "selected_text_bytes": 408,
+          "total_groups": 4
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E07",
+            "E05",
+            "E01",
+            "E06",
+            "E02",
+            "E03",
+            "E17",
+            "E15",
+            "E09",
+            "E14",
+            "E08",
+            "E12",
+            "E16",
+            "E13",
+            "E04",
+            "E11"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 4
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 2,
+          "missing_groups": [
+            [
+              "E06"
+            ],
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E07",
+            "E05"
+          ],
+          "selected_text_bytes": 889,
+          "total_groups": 4
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.75,
+          "covered_groups": 3,
+          "missing_groups": [
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E07",
+            "E05",
+            "E01",
+            "E06"
+          ],
+          "selected_text_bytes": 2156,
+          "total_groups": 4
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E07",
+            "E05",
+            "E01",
+            "E06",
+            "E02",
+            "E03",
+            "E17",
+            "E15"
+          ],
+          "selected_text_bytes": 7457,
+          "total_groups": 4
+        }
+      },
+      "raw_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.25,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E05"
+            ],
+            [
+              "E06"
+            ],
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E07"
+          ],
+          "selected_text_bytes": 408,
+          "total_groups": 4
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E07",
+            "E01",
+            "E02",
+            "E05",
+            "E15",
+            "E06",
+            "E09",
+            "E14",
+            "E03",
+            "E17",
+            "E04",
+            "E08",
+            "E16",
+            "E12",
+            "E13",
+            "E11"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 4
+        },
+        "2": {
+          "complete": false,
+          "coverage_fraction": 0.25,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E05"
+            ],
+            [
+              "E06"
+            ],
+            [
+              "E02"
+            ]
+          ],
+          "selected_ids": [
+            "E07",
+            "E01"
+          ],
+          "selected_text_bytes": 1418,
+          "total_groups": 4
+        },
+        "4": {
+          "complete": false,
+          "coverage_fraction": 0.75,
+          "covered_groups": 3,
+          "missing_groups": [
+            [
+              "E06"
+            ]
+          ],
+          "selected_ids": [
+            "E07",
+            "E01",
+            "E02",
+            "E05"
+          ],
+          "selected_text_bytes": 2929,
+          "total_groups": 4
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 4,
+          "missing_groups": [],
+          "selected_ids": [
+            "E07",
+            "E01",
+            "E02",
+            "E05",
+            "E15",
+            "E06",
+            "E09",
+            "E14"
+          ],
+          "selected_text_bytes": 9747,
+          "total_groups": 4
+        }
+      }
+    },
+    "Q7": {
+      "mmr_diverse": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E17"
+          ],
+          "selected_text_bytes": 901,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E01",
+            "E08",
+            "E09",
+            "E15",
+            "E12",
+            "E04",
+            "E11",
+            "E03",
+            "E02",
+            "E13",
+            "E05",
+            "E07",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16"
+          ],
+          "selected_text_bytes": 2710,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E01"
+          ],
+          "selected_text_bytes": 6762,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E01",
+            "E08",
+            "E09",
+            "E15",
+            "E12"
+          ],
+          "selected_text_bytes": 13560,
+          "total_groups": 2
+        }
+      },
+      "normalized_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E17"
+          ],
+          "selected_text_bytes": 901,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E15",
+            "E01",
+            "E09",
+            "E08",
+            "E12",
+            "E13",
+            "E04",
+            "E03",
+            "E11",
+            "E02",
+            "E05",
+            "E06",
+            "E07"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16"
+          ],
+          "selected_text_bytes": 2710,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E15"
+          ],
+          "selected_text_bytes": 8364,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E15",
+            "E01",
+            "E09",
+            "E08",
+            "E12"
+          ],
+          "selected_text_bytes": 13560,
+          "total_groups": 2
+        }
+      },
+      "passage_rrf": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E17"
+          ],
+          "selected_text_bytes": 901,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E15",
+            "E09",
+            "E01",
+            "E08",
+            "E13",
+            "E12",
+            "E04",
+            "E03",
+            "E11",
+            "E02",
+            "E05",
+            "E06",
+            "E07"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16"
+          ],
+          "selected_text_bytes": 2710,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E15"
+          ],
+          "selected_text_bytes": 8364,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E15",
+            "E09",
+            "E01",
+            "E08",
+            "E13"
+          ],
+          "selected_text_bytes": 13689,
+          "total_groups": 2
+        }
+      },
+      "raw_bm25": {
+        "1": {
+          "complete": false,
+          "coverage_fraction": 0.5,
+          "covered_groups": 1,
+          "missing_groups": [
+            [
+              "E16"
+            ]
+          ],
+          "selected_ids": [
+            "E17"
+          ],
+          "selected_text_bytes": 901,
+          "total_groups": 2
+        },
+        "16": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E08",
+            "E01",
+            "E09",
+            "E15",
+            "E02",
+            "E04",
+            "E12",
+            "E03",
+            "E11",
+            "E07",
+            "E05",
+            "E13",
+            "E06"
+          ],
+          "selected_text_bytes": 19635,
+          "total_groups": 2
+        },
+        "2": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16"
+          ],
+          "selected_text_bytes": 2710,
+          "total_groups": 2
+        },
+        "4": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E08"
+          ],
+          "selected_text_bytes": 7062,
+          "total_groups": 2
+        },
+        "8": {
+          "complete": true,
+          "coverage_fraction": 1.0,
+          "covered_groups": 2,
+          "missing_groups": [],
+          "selected_ids": [
+            "E17",
+            "E16",
+            "E14",
+            "E08",
+            "E01",
+            "E09",
+            "E15",
+            "E02"
+          ],
+          "selected_text_bytes": 12621,
+          "total_groups": 2
+        }
+      }
+    }
+  },
+  "file_sha256": {
+    "corpus": "0a60662e873f9ca0ad545f1ee09d20095418e2110d207592cc9735dfa1cf621c",
+    "evaluation": "93029e861b76ed4a2b85dc8e8ae258ede630f44c599139d8504e02a0217f314f",
+    "evaluator": "8107c89af139967dd4efd1a742dfdcacf4b5a197356419bb6740ea595b78375a",
+    "rankings": "03fcdaeed10c5d3fc8e44d39a6ac50d5f500be4f8e913c70458b6eb9b48db889",
+    "retained_live_diagnostic": "7e6e8c7590feb2696ae5a1c8c0d075c9a3ecb36332a4ae2f4726905fb78dc66f",
+    "tasks": "db7f0cb90857b008e4e4cfec63f2909a56b3510215ed23ae499d07ade1bfd61b"
+  },
+  "held_out": false,
+  "inferential_guarantee": false,
+  "jev_tasks_measured": [
+    "Q1"
+  ],
+  "new_provider_calls": 0,
+  "raw_reference_exact_order_reproduced": true,
+  "shortlist_conditioned_final_answer_quality": null
+}
