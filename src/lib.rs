@@ -3264,26 +3264,36 @@ fn claude_hook_is_managed_transaction(command: &str) -> bool {
         .is_some_and(|binary| claude_hook_is_managed_transaction_for(command, &binary))
 }
 
+fn claude_hook_same_binary(candidate: &Path, binary: &Path) -> bool {
+    if candidate == binary {
+        return true;
+    }
+    // A symlinked home or skill directory names the same file differently from
+    // `current_exe`; only a proven identical file counts.
+    match (fs::canonicalize(candidate), fs::canonicalize(binary)) {
+        (Ok(candidate), Ok(binary)) => candidate == binary,
+        _ => false,
+    }
+}
+
 fn claude_hook_is_managed_transaction_for(command: &str, binary: &Path) -> bool {
     const SETUP: &str = "set -euo pipefail";
     const SID: &str = "sid=";
     const CLEANUP: &str = "cleanup() {";
     const CLEANUP_GUARD: &str = "if [[ -n \"$sid\" ]]; then";
-    const KILL: &str = "\"$AZ\" kill \"$sid\" >/dev/null 2>&1 || true";
     const CLEANUP_END: &str = "fi";
     const FUNCTION_END: &str = "}";
     const TRAP: &str = "trap cleanup EXIT";
-    const START: &str = "sid=\"$(\"$AZ\" start)\"";
-    const LOAD_PREFIX: &str = "\"$AZ\" load \"$sid\" ";
     const LOAD_SUFFIX: &str = " source >/dev/null";
-    const FINAL: &str = "\"$AZ\" final \"$sid\"";
+    const START_PREFIX: &str = "sid=\"$(";
+    const START_SUFFIX: &str = " start)\"";
 
     if command.len() > 128 * 1024 || command.contains('\0') || command.contains('\r') {
         return false;
     }
     let raw_lines = command.lines().collect::<Vec<_>>();
     let lines = raw_lines.iter().map(|line| line.trim()).collect::<Vec<_>>();
-    if lines.len() < 15 {
+    if lines.len() < 14 {
         return false;
     }
 
@@ -3293,16 +3303,43 @@ fn claude_hook_is_managed_transaction_for(command: &str, binary: &Path) -> bool 
     }
     cursor += 1;
 
-    let Some(assignment) = lines.get(cursor).and_then(|line| line.strip_prefix("AZ=")) else {
-        return false;
+    // The wrapper names the managed binary either once through `AZ=<literal>`
+    // and then as "$AZ", or on every line as the one quoted literal path that
+    // the installed SKILL.md renders. Either way it must be this exact binary,
+    // written as a single safe literal word.
+    let az = match lines.get(cursor).and_then(|line| line.strip_prefix("AZ=")) {
+        Some(assignment) => {
+            let Some(assigned_binary) = claude_hook_safe_literal_word(assignment) else {
+                return false;
+            };
+            if !claude_hook_same_binary(Path::new(&assigned_binary), binary) {
+                return false;
+            }
+            cursor += 1;
+            "\"$AZ\"".to_owned()
+        }
+        None => {
+            let Some(word) = lines
+                .get(cursor + 7)
+                .and_then(|line| line.strip_prefix(START_PREFIX))
+                .and_then(|line| line.strip_suffix(START_SUFFIX))
+            else {
+                return false;
+            };
+            let Some(literal_binary) = claude_hook_safe_literal_word(word) else {
+                return false;
+            };
+            if !claude_hook_same_binary(Path::new(&literal_binary), binary) {
+                return false;
+            }
+            word.to_owned()
+        }
     };
-    let Some(assigned_binary) = claude_hook_safe_literal_word(assignment) else {
-        return false;
-    };
-    if Path::new(&assigned_binary) != binary {
-        return false;
-    }
-    cursor += 1;
+    let kill = format!("{az} kill \"$sid\" >/dev/null 2>&1 || true");
+    let start = format!("{START_PREFIX}{az}{START_SUFFIX}");
+    let load_prefix = format!("{az} load \"$sid\" ");
+    let exec_prefix = format!("{az} exec \"$sid\" >/dev/null <<'");
+    let final_line = format!("{az} final \"$sid\"");
 
     if lines.get(cursor) != Some(&SID)
         || lines.get(cursor + 1) != Some(&CLEANUP)
@@ -3312,7 +3349,7 @@ fn claude_hook_is_managed_transaction_for(command: &str, binary: &Path) -> bool 
     }
     cursor += 3;
 
-    if lines.get(cursor) != Some(&KILL) {
+    if lines.get(cursor).copied() != Some(kill.as_str()) {
         return false;
     }
     cursor += 1;
@@ -3325,14 +3362,14 @@ fn claude_hook_is_managed_transaction_for(command: &str, binary: &Path) -> bool 
     }
     cursor += 3;
 
-    if lines.get(cursor) != Some(&START) {
+    if lines.get(cursor).copied() != Some(start.as_str()) {
         return false;
     }
     cursor += 1;
 
     let Some(raw_input) = lines
         .get(cursor)
-        .and_then(|line| line.strip_prefix(LOAD_PREFIX))
+        .and_then(|line| line.strip_prefix(load_prefix.as_str()))
         .and_then(|line| line.strip_suffix(LOAD_SUFFIX))
     else {
         return false;
@@ -3348,7 +3385,7 @@ fn claude_hook_is_managed_transaction_for(command: &str, binary: &Path) -> bool 
     let Some(exec_line) = lines.get(cursor) else {
         return false;
     };
-    let Some(delimiter) = claude_hook_managed_heredoc(exec_line) else {
+    let Some(delimiter) = claude_hook_managed_heredoc(exec_line, &exec_prefix) else {
         return false;
     };
     cursor += 1;
@@ -3371,7 +3408,7 @@ fn claude_hook_is_managed_transaction_for(command: &str, binary: &Path) -> bool 
     }
     cursor = heredoc_end + 1;
 
-    lines.len() == cursor + 1 && lines[cursor] == FINAL
+    lines.len() == cursor + 1 && lines[cursor] == final_line
 }
 
 fn claude_hook_safe_literal_word(raw: &str) -> Option<String> {
@@ -3412,10 +3449,8 @@ fn claude_hook_shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-fn claude_hook_managed_heredoc(line: &str) -> Option<&str> {
-    let delimiter = line
-        .strip_prefix("\"$AZ\" exec \"$sid\" >/dev/null <<'")?
-        .strip_suffix('\'')?;
+fn claude_hook_managed_heredoc<'a>(line: &'a str, exec_prefix: &str) -> Option<&'a str> {
+    let delimiter = line.strip_prefix(exec_prefix)?.strip_suffix('\'')?;
     if delimiter.is_empty()
         || !delimiter.chars().all(|character| {
             character.is_ascii_uppercase() || character.is_ascii_digit() || character == '_'
@@ -12613,10 +12648,28 @@ PY
         let valid = managed_transaction();
         assert!(claude_hook_is_managed_transaction(&valid));
         let assignment = format!("AZ={}\n", test_shell_quote(&env::current_exe().unwrap()));
-        let literal = valid
-            .replace(&assignment, "")
-            .replace("\"$AZ\"", &test_shell_quote(&env::current_exe().unwrap()));
-        assert!(!claude_hook_is_managed_transaction(&literal));
+        // The installed SKILL.md renders the binary as one quoted literal on every
+        // line instead of an AZ= assignment. That is the wrapper Claude actually
+        // runs, so it must be recognized exactly like the AZ= form.
+        let quoted = test_shell_quote(&env::current_exe().unwrap());
+        let literal = valid.replace(&assignment, "").replace("\"$AZ\"", &quoted);
+        assert!(claude_hook_is_managed_transaction(&literal));
+        for invalid in [
+            literal.replacen(&quoted, "'/different/azdaja'", 1),
+            literal.replace(&format!("{quoted} final"), "'/different/azdaja' final"),
+            literal.replace(&format!("{quoted} final"), "\"$AZ\" final"),
+            literal.replace(
+                &format!("sid=\"$({quoted} start)\""),
+                "sid=\"$(\"$AZ\" start)\"",
+            ),
+            literal.replace(&quoted, &quoted.replace('\'', "\"")),
+            format!("{literal}\necho escaped"),
+        ] {
+            assert!(
+                !claude_hook_is_managed_transaction(&invalid),
+                "accepted smuggled literal transaction:\n{invalid}"
+            );
+        }
 
         let special_binary = Path::new("/tmp/az'daja-$literal");
         let special = valid.replacen(

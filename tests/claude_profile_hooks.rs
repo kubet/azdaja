@@ -120,6 +120,27 @@ impl Profile {
             );
         }
     }
+    /// The managed wrapper exactly as the installed SKILL.md instructs Claude to
+    /// run it, with only `<input-path>` and the Python cell substituted.
+    fn installed_wrapper(&self, input: &Path) -> String {
+        let skill = fs::read_to_string(self.plugin.join("SKILL.md")).unwrap();
+        let fence = "```bash\nset -euo pipefail\n";
+        let start = skill
+            .find(fence)
+            .expect("installed SKILL.md carries the managed wrapper")
+            + "```bash\n".len();
+        let end = start + skill[start..].find("\n```").unwrap();
+        let wrapper = &skill[start..end];
+        assert!(wrapper.contains("'<input-path>'"), "{wrapper}");
+        assert!(
+            wrapper.contains("<one compact Python cell ending in FINAL(...)>"),
+            "{wrapper}"
+        );
+        let quoted = format!("'{}'", input.to_string_lossy().replace('\'', "'\\''"));
+        wrapper
+            .replace("'<input-path>'", &quoted)
+            .replace("<one compact Python cell ending in FINAL(...)>", "FINAL(1)")
+    }
     fn markers(&self) -> BTreeMap<String, Vec<u8>> {
         let directory = self.state.join("claude-hook-markers");
         if !directory.exists() {
@@ -304,4 +325,78 @@ fn installed_claude_hooks_execute_actual_commands_and_recover_without_tool_monop
         profile.event("SessionEnd", "", json!({}), Some(activation), false);
     }
     assert!(Path::new(&profile.plugin).join("SKILL.md").exists());
+}
+
+#[test]
+fn installed_claude_skill_wrapper_is_recognized_by_installed_hook() {
+    let profile = Profile::new();
+    let wrapper = profile.installed_wrapper(&profile.root.join("large.jsonl"));
+    let binary = profile.plugin.join("azdaja").to_string_lossy().into_owned();
+    assert!(wrapper.contains(&binary), "{wrapper}");
+    let foreign = wrapper.replace(&binary, "/different/azdaja");
+    for activation in ["request", "session", "repository"] {
+        profile.event(
+            "UserPromptSubmit",
+            "",
+            json!({"prompt":"Classify every record in large.jsonl."}),
+            Some(activation),
+            false,
+        );
+        profile.event(
+            "PostToolUse",
+            "Skill",
+            json!({"skill":"azdaja"}),
+            Some(activation),
+            false,
+        );
+        // Negative control: the same wrapper naming another binary is broad access.
+        profile.event(
+            "PreToolUse",
+            "Bash",
+            json!({"command":foreign.clone()}),
+            Some(activation),
+            true,
+        );
+        // The wrapper the skill dictates must pass and claim the transaction lease.
+        profile.event(
+            "PreToolUse",
+            "Bash",
+            json!({"command":wrapper.clone()}),
+            Some(activation),
+            false,
+        );
+        assert!(
+            profile
+                .markers()
+                .keys()
+                .any(|name| name.ends_with(".transaction")),
+            "{:?}",
+            profile.markers().keys().collect::<Vec<_>>()
+        );
+        // A second lifecycle inside the same prompt is refused as in flight.
+        profile.event(
+            "PreToolUse",
+            "Bash",
+            json!({"command":wrapper.clone()}),
+            Some(activation),
+            true,
+        );
+        // Success releases the prompt for ordinary follow-up work.
+        profile.event(
+            "PostToolUse",
+            "Bash",
+            json!({"command":wrapper.clone()}),
+            Some(activation),
+            false,
+        );
+        assert!(profile.markers().is_empty());
+        profile.event(
+            "PreToolUse",
+            "Read",
+            json!({"file_path":profile.root.join("large.jsonl")}),
+            Some(activation),
+            false,
+        );
+        profile.event("SessionEnd", "", json!({}), Some(activation), false);
+    }
 }
