@@ -6959,15 +6959,9 @@ fn managed_skill_is_rendered_consistently_for_every_harness() {
             "## Managed-skill awareness",
             "Optional; use only after explicit user choice.",
             "On absence or failure, leave host-native tools available.",
-            "user",
-            "Never claim ignorance of Azdaja",
         ] {
             assert!(
-                if matches!(awareness, "user" | "Never claim ignorance of Azdaja") {
-                    skill.to_ascii_lowercase().contains("explicit")
-                } else {
-                    skill.contains(awareness)
-                },
+                skill.contains(awareness),
                 "{harness} skill is missing awareness text {awareness:?}"
             );
         }
