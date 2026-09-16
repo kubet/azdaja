@@ -59,11 +59,11 @@ Define an internal Rust-only adapter, conceptually:
 ```text
 JevSystemOneRequest {
   state: bounded string, object, or array,
-  model: concrete version string, e.g. "jev-1.12",
+  model: explicit account-available request identity, not a guessed version,
   questions: ordered map<question_id, tagged Noul/Choice/Score declaration>,
 }
 JevSystemOneResponse {
-  model: concrete version string,
+  model: bounded returned identity checked against the declared resolution policy,
   answers: map<question_id, tagged validated answer>,
   usage: { input_tokens: integer | null, output_tokens: integer | null },
 }

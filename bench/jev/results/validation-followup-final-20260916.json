@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-16T19:42:20.653163+00:00",
+  "source_revision": "7b3d5eda95ad79f95a6c959e228a0e71ac1d397e",
+  "scope": "Final provider-free follow-up. Successful and partial campaign outputs use an explicit synthetic oracle transport, not Jev inference.",
+  "implementation_sha256": {
+    "adapter.py": "26fd3b4564db43b3469cffa1f8efee00e6c1237f7bfede13dbec8f5df0b6565d",
+    "run.py": "7dd60ca25a5f96f80c0297522766bfa9464885d7251c385c273af61ab90e83ab",
+    "bridge.py": "07843f9d7fad1a5d1cea0d504923c5d5f3e4ebb04b54169b5e934284cda6ca2d",
+    "audit.py": "6b48c57125aa1135cc6510a14b615afbbf05bde997c3d4ee7b608858752211c0",
+    "test_adapter.py": "d9bd4c1e0815b0198c72d7394eb7117202229ba190e3810acba10216685972fd",
+    "test_run.py": "5511158e601a892a46a5baded2fabdd671dacf9bd630312164d190aa10f937b6",
+    "test_bridge.py": "46f5ef85967ee54c7354b3502c66857c63cfc1950e77ef91f8082a18b0a9b390",
+    "test_model_resolution.py": "d30a86e554d132a1f05654433fb6d0d18c3bc8960200820126a99041a206dddf",
+    "test_audit.py": "117622b95c086234cc58ed2b2a44ca29660763e21838dfa28f6ba5171057f840",
+    "fixtures.json": "3fe530372fefe2dd62e823bad9eeec8aad10a1783328a502805851ebd733929f",
+    "test_complete_audit.py": "02ea00ae651ea4bb55f9235b94f869f7379351b833c7cac24003763cd41ced03"
+  },
+  "azdaja_binary_sha256": "74e74287c6824eeb2420d11191026e72956bee60e409bfbb5716ae85392bb84b",
+  "previous_validation_sha256": "5ef7c05ce3426cb72bdf70ac8eff0fe091197edf1cf09b1a61c1be57952143be",
+  "frozen_receipt_sha256": {
+    "pilot-20260916.json": "1041260d6de17ba26d0bbbbfc9cb4f3a35d2fc7a50ed45d1a96504d180c8ddaa",
+    "pilot-alias-20260916.json": "f0b01dd126147b6332e56254610f4a720a77387553ccb24fba6d5477d4a126a4",
+    "model-discovery-20260916.json": "835f40489a9c2ef170978bfecfef750f840ce197b677e3e680d6284d99a1d929"
+  },
+  "checks": {
+    "modules": {
+      "test_adapter": 17,
+      "test_run": 20,
+      "test_bridge": 12,
+      "test_model_resolution": 13,
+      "test_audit": 5,
+      "test_complete_audit": 20
+    },
+    "tests_run": 87,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "equivalent_command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=bench/jev python3 -B -m unittest test_adapter test_run test_bridge test_model_resolution test_audit test_complete_audit -v",
+    "environment": "Cleared inherited environment, only explicit safe paths, Git no-lazy-fetch/noninteractive settings, and known local evaluator binary.",
+    "new_checks": [
+      "Complete exact-model synthetic campaign: 79 evaluations, 66 unique judgments, 68 occurrences, exact mixed label counts.",
+      "Mixed acceptance: 68 judged occurrences, 34 accepted, no replacement of abstentions with acceptance.",
+      "Complete synthetic alias-policy campaign retains the alias on wire and pins one declared test ID.",
+      "Semantic-stop projection preserves the wrong recorded label rather than substituting gold.",
+      "Actual adapter crossing at 1,200,000 reported tokens retains usage but excludes the crossing judgment from projection.",
+      "Erased, missing, falsy, and malformed transport metrics fail at named checks.",
+      "A forged completed over-budget body is rejected before eligibility or alias binding. Exactly 1,000,000 tokens remains eligible.",
+      "A real preflight credential-containment failure with zero transport calls needs no fabricated metrics.",
+      "Threshold and custody metadata contradictions are rejected.",
+      "Historical Git reads receive a minimal environment with lazy fetching disabled.",
+      "Impossible first-call or cumulative campaign durations fail before eligibility and alias binding, with per-call rounding tolerance.",
+      "Post-final-call bookkeeping duration and conservative duration lower-bound boundary do not cause false rejection.",
+      "Requested model grammar is checked even when hashes have been recomputed consistently.",
+      "Legacy unresolved alias failures remain replayable but cannot expose retained judgments, with or without new policy metadata.",
+      "Conservative JSON structural response-size bounds reject impossible bodies and are checked across Unicode and UTF-8/16/32 encodings."
+    ]
+  },
+  "earlier_core_check": {
+    "rerun_in_this_followup": false,
+    "passed": 191,
+    "failed": 0,
+    "ignored": 1,
+    "source": "validation-20260916.json"
+  },
+  "followup_live_inference_calls": 0,
+  "live_summary": {
+    "credentialed_inference_attempts": 2,
+    "metadata_get_requests": 1,
+    "validated_judgments": 0,
+    "semantic_screen": "blocked",
+    "usage": "unknown",
+    "baseline": "not_run",
+    "production_promotion": false
+  },
+  "semantic_efficacy_established": false,
+  "limitations": [
+    "Synthetic oracle controls do not establish TypeSafe compatibility, semantic quality, calibration, throughput, billing, or competitive advantage.",
+    "Replay checks declared local internal consistency and the default CLI resource envelope. Time and serialized-size lower bounds only reject certain impossible claims. They do not authenticate metrics or reconstruct missing raw bodies and wall-clock gaps.",
+    "Historical code hashes are checked, not reexecuted. Legacy unresolved aliases with retained judgments are intentionally unsupported.",
+    "No memory relevance experiment or repository auditor has been implemented or evaluated by this claim-support pilot."
+  ],
+  "memory_boundary_inspection": {
+    "method": "actual Azdaja start/load/exec/final on src/memory/recall.rs, provider /usr/bin/false, followed by targeted source reads",
+    "semantic_model_calls": 0,
+    "source_sha256": {
+      "src/memory.rs": "4b0446484178b64d9cb2fe091c0cefe9179b9562191bb0d3a0404d131fba986a",
+      "src/memory/recall.rs": "bdc0988b32c59c0c33af22cca1b4319cacf217eaeea9d0a6e13241da8f288c7f"
+    },
+    "observations": [
+      "Current recalled candidates require positive word overlap in text/tags before the four-match cut.",
+      "Linked disagreement and incoming supersession context is separately prioritized and bounded.",
+      "No Jev memory path or memory mutation was added."
+    ]
+  }
+}

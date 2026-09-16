@@ -4,6 +4,8 @@
 
 The TypeSafe skill is installed project-locally at `.agents/skills/typesafe-ai/`. Existing `llm`, `llm_batch`, hooks, and core Rust behavior are unchanged by this work.
 
+**Use-case scope:** this prototype judges supplied claim/evidence packs. It does not implement semantic memory retrieval, discover repository dependencies, or establish evidence-pack completeness. The [request-to-evidence map and concrete memory hypothesis](../../docs/research/jev-request-evidence-map-20260916.md) distinguish those future applications from tested behavior.
+
 ## What exists
 
 - `adapter.py`: stdlib-only, explicit activation, typed Choice/Noul/Score validation, bounded fixed-origin transport, isolated killable worker, no retries, and sanitized failures.
@@ -11,6 +13,8 @@ The TypeSafe skill is installed project-locally at `.agents/skills/typesafe-ai/`
 - `bridge.py`: real Azdaja CLI execution with an offline provider. Monty recomputes hashes, checks every occurrence, and reduces exact counts. This is not a semantic oracle.
 - `audit.py`: no-network replay of saved judgments/failures through current deterministic policy, historical implementation-hash checks against Git, and source-bound projection through the real evaluator. It does not replay HTTP calls or authenticate provider provenance.
 - Tests: hostile contracts, exact error assertions, actual child timeout/reaping, source/gold separation, early stops, alias drift, receipt tampering, and real evaluator custody.
+
+The follow-up adds complete and partially accepted synthetic campaign replay. Its [final validation receipt](results/validation-followup-final-20260916.json) records 87 offline tests, with no failures or skips. The 67- and 81-test receipts remain historical snapshots. Injected oracle outputs test plumbing, not Jev quality. Replay rejects missing transport evidence, impossible declared resource/timing bounds and unresolved aliases with retained judgments. Its duration and response-size checks are conservative consistency bounds, not authenticated raw-body or wall-clock reconstruction.
 
 ## Recorded live outcome
 

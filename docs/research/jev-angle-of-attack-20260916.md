@@ -2,6 +2,8 @@
 
 2026-09-16. Design analysis, not a measured capability claim. Companion: [frozen pilot protocol](jev-experiment-protocol-20260916.md), [primary evidence](jev-primary-evidence-20260916.md), [runtime boundaries](jev-runtime-boundaries-20260916.md).
 
+Later scope clarification: the implemented experiment tests supplied claim/evidence packs, not memory retrieval or automatic repository evidence construction. See the [request-to-evidence map and concrete memory use-case boundary](jev-request-evidence-map-20260916.md). The product bet below remains a hypothesis, not delivered product behavior.
+
 ## The actual product bet
 
 **Azdaja plans and executes evidence-complete work over large local sources. Jev is one replaceable implementation of a typed semantic operator. Exact code owns identity, multiplicity, aggregation, budgets, and escalation.**
