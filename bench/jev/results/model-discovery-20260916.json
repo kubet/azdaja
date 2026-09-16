@@ -1,0 +1,15 @@
+{
+  "created_at": "2026-09-16T18:44:35.456885+00:00",
+  "operation": "GET /v1/models",
+  "inference": false,
+  "automatic_retries": 0,
+  "endpoint_source": "typesafe-sdk 0.6.0 _core/constants.py",
+  "http_status": 200,
+  "model_names": [
+    "jev-latest",
+    "jev-preview"
+  ],
+  "response_sha256": "7fbe8d7d66e3d1c9560506fd514b47dee5308246139de38f61a685b715362d60",
+  "response_bytes": 311,
+  "elapsed_seconds": 0.654
+}
