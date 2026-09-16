@@ -3537,6 +3537,19 @@ fn claude_hook_with_root(input: &str, root: &Path) -> Result<Option<String>> {
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or_default();
             let tool_input = event.get("tool_input").unwrap_or(&serde_json::Value::Null);
+            // Claude Code emits PreToolUse for the Skill tool but no PostToolUse for
+            // it, so the skill invocation itself is the activation signal. Hosts that
+            // do emit PostToolUse for Skill are handled above as well.
+            if tool == "Skill"
+                && tool_input
+                    .get("skill")
+                    .or_else(|| tool_input.get("name"))
+                    .and_then(serde_json::Value::as_str)
+                    == Some("azdaja")
+            {
+                claude_hook_write_marker(&active)?;
+                return Ok(None);
+            }
             // A loaded skill is not a tool monopoly. Only recognize the managed
             // transaction here; ordinary tools still use the narrow access classifier.
             if tool == "Bash"

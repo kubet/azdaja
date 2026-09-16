@@ -80,9 +80,53 @@ impl Profile {
         if name == "UserPromptSubmit" {
             value["prompt"] = value["tool_input"]["prompt"].clone();
         }
+        self.raw_event(value, activation, deny);
+    }
+    /// One hook event payload exactly as Claude Code 2.1.273 emits it (captured
+    /// from a live session on 2026-09-16). Field names are the host contract.
+    fn captured(&self, name: &str, tool: Option<&str>, input: Value, extra: Value) -> Value {
+        let mut value = json!({
+            "session_id": "0d3f1c3e-captured",
+            "transcript_path": self.root.join("transcript.jsonl"),
+            "cwd": self.root,
+            "hook_event_name": name,
+        });
+        if name != "SessionEnd" {
+            value["prompt_id"] = json!("550e8400-e29b-41d4-a716-446655440000");
+            value["permission_mode"] = json!("default");
+        }
+        if let Some(tool) = tool {
+            value["tool_name"] = json!(tool);
+            value["tool_input"] = input;
+            value["tool_use_id"] = json!("toolu_01CapturedToolUse");
+        } else if name == "UserPromptSubmit" {
+            value["prompt"] = input;
+        } else {
+            value["reason"] = json!("other");
+        }
+        if let Some(extra) = extra.as_object() {
+            for (key, item) in extra {
+                value[key] = item.clone();
+            }
+        }
+        value
+    }
+    /// Run the wrapper exactly as Claude's Bash tool would, against the installed binary.
+    fn run_wrapper(&self, wrapper: &str) -> std::process::Output {
+        Command::new("bash")
+            .args(["-c", wrapper])
+            .current_dir(&self.root)
+            .env("HOME", &self.home)
+            .env("AZDAJA_HOME", &self.state)
+            .env_remove("AZDAJA_CONFIG")
+            .output()
+            .unwrap()
+    }
+    fn raw_event(&self, value: Value, activation: Option<&str>, deny: bool) {
+        let name = value["hook_event_name"].as_str().unwrap().to_owned();
         let mut command = Command::new("sh");
         command
-            .args(["-c", &self.commands[name]])
+            .args(["-c", &self.commands[&name]])
             .current_dir(&self.root)
             .env("CLAUDE_PLUGIN_ROOT", &self.plugin)
             .env("HOME", &self.home)
@@ -399,4 +443,196 @@ fn installed_claude_skill_wrapper_is_recognized_by_installed_hook() {
         );
         profile.event("SessionEnd", "", json!({}), Some(activation), false);
     }
+}
+
+/// Claude Code emits PreToolUse for the Skill tool and never PostToolUse for it.
+/// The installed hook must route the exact captured sequence: deny the large
+/// read, accept the skill invocation as activation, admit the dictated wrapper,
+/// let it really run, and release the prompt on the captured success event.
+#[test]
+fn installed_hook_routes_the_captured_claude_code_sequence_without_post_tool_use_skill() {
+    let profile = Profile::new();
+    let large = profile.root.join("large.jsonl");
+    let wrapper = profile
+        .installed_wrapper(&large)
+        .replace("FINAL(1)", "FINAL(len(source))");
+    let bash =
+        |command: &str| json!({"command": command, "description": "Run the Azdaja lifecycle"});
+    for activation in ["request", "session", "repository"] {
+        let on = Some(activation);
+        profile.raw_event(
+            profile.captured(
+                "UserPromptSubmit",
+                None,
+                json!("Classify every record in large.jsonl by sentiment."),
+                json!({}),
+            ),
+            on,
+            false,
+        );
+        profile.raw_event(
+            profile.captured(
+                "PreToolUse",
+                Some("Read"),
+                json!({"file_path": large}),
+                json!({}),
+            ),
+            on,
+            true,
+        );
+        profile.raw_event(
+            profile.captured(
+                "PreToolUse",
+                Some("Skill"),
+                json!({"skill": "azdaja"}),
+                json!({}),
+            ),
+            on,
+            false,
+        );
+        assert!(
+            profile
+                .markers()
+                .keys()
+                .any(|name| name.ends_with(".active")),
+            "{:?}",
+            profile.markers().keys().collect::<Vec<_>>()
+        );
+        profile.raw_event(
+            profile.captured("PreToolUse", Some("Bash"), bash(&wrapper), json!({})),
+            on,
+            false,
+        );
+        assert!(
+            profile
+                .markers()
+                .keys()
+                .any(|name| name.ends_with(".transaction"))
+        );
+        let output = profile.run_wrapper(&wrapper);
+        assert!(
+            output.status.success(),
+            "dictated wrapper failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            (2 * 1024 * 1024).to_string(),
+            "wrapper must answer from the loaded input"
+        );
+        profile.raw_event(
+            profile.captured(
+                "PostToolUse",
+                Some("Bash"),
+                bash(&wrapper),
+                json!({"tool_response": {"stdout": "2097152", "stderr": "", "interrupted": false,
+                    "isImage": false, "noOutputExpected": false}}),
+            ),
+            on,
+            false,
+        );
+        assert!(
+            profile.markers().is_empty(),
+            "success must release the prompt"
+        );
+        profile.raw_event(
+            profile.captured(
+                "PreToolUse",
+                Some("Read"),
+                json!({"file_path": large}),
+                json!({}),
+            ),
+            on,
+            false,
+        );
+        profile.raw_event(
+            profile.captured("SessionEnd", None, json!(null), json!({})),
+            on,
+            false,
+        );
+    }
+}
+
+/// A lifecycle that really fails must release the prompt on the captured
+/// PostToolUseFailure event so ordinary tools come back without another wrapper.
+#[test]
+fn installed_hook_releases_the_prompt_after_a_captured_failed_lifecycle() {
+    let profile = Profile::new();
+    let large = profile.root.join("large.jsonl");
+    let wrapper = profile
+        .installed_wrapper(&large)
+        .replace("FINAL(1)", "FINAL(undefined_name)");
+    let bash =
+        |command: &str| json!({"command": command, "description": "Run the Azdaja lifecycle"});
+    let on = Some("session");
+    profile.raw_event(
+        profile.captured(
+            "UserPromptSubmit",
+            None,
+            json!("Label every record in large.jsonl."),
+            json!({}),
+        ),
+        on,
+        false,
+    );
+    profile.raw_event(
+        profile.captured(
+            "PreToolUse",
+            Some("Skill"),
+            json!({"skill": "azdaja"}),
+            json!({}),
+        ),
+        on,
+        false,
+    );
+    profile.raw_event(
+        profile.captured("PreToolUse", Some("Bash"), bash(&wrapper), json!({})),
+        on,
+        false,
+    );
+    let output = profile.run_wrapper(&wrapper);
+    assert!(
+        !output.status.success(),
+        "the broken cell must fail the lifecycle"
+    );
+    profile.raw_event(
+        profile.captured(
+            "PostToolUseFailure",
+            Some("Bash"),
+            bash(&wrapper),
+            json!({"error": String::from_utf8_lossy(&output.stderr), "is_interrupt": false,
+                "duration_ms": 12}),
+        ),
+        on,
+        false,
+    );
+    assert!(
+        profile.markers().is_empty(),
+        "failure must release the prompt"
+    );
+    profile.raw_event(
+        profile.captured(
+            "PreToolUse",
+            Some("Read"),
+            json!({"file_path": large}),
+            json!({}),
+        ),
+        on,
+        false,
+    );
+    profile.raw_event(
+        profile.captured(
+            "PreToolUse",
+            Some("Bash"),
+            bash("wc -l large.jsonl"),
+            json!({}),
+        ),
+        on,
+        false,
+    );
+    profile.raw_event(
+        profile.captured("SessionEnd", None, json!(null), json!({})),
+        on,
+        false,
+    );
 }
