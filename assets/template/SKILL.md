@@ -52,6 +52,27 @@ Use exactly one inline heredoc cell. Never create a temporary script, add anothe
 
 Ordinary `exec` provides `llm`, ordered `llm_batch`, `FINAL`, and `FINAL_VAR`; state persists. Reject `azdaja_error`. Monty has no host I/O. Use preloaded `os`, `re`, `json`, `math`, `collections`, `datetime`, loops/maps, and f-strings; no imports, generators, `next`, `eval`, `exec`, or introspection.
 
+### Optional native typed judgments
+
+In ordinary `exec`, `judge_many(state, questions)` returns a typed dictionary and
+`judge_stats()` reports this cell's separate request/question/cache/usage counters.
+The host must build with the `typesafe` Cargo feature and explicitly enable
+`[judge]`. A host environment variable supplies the key. Never request or place
+the key in a cell, state, question, note, or prompt. Disabled is the default.
+There is no automatic fallback from `llm`, and this capability does not replace
+the mandatory semantic gate above or `solo`'s semantic-manifest contract.
+
+Each question is an independent `noul`, `choice`, or `score` with self-contained
+instructions. IDs are plumbing, not instructions. Pass only the evidence the
+question needs. The runtime validates structure, not truth or calibration.
+Keep raw probabilities and source IDs. Do not turn an uncertain judgment into
+a verified fact, silently discard unjudged records, or infer exhaustive coverage
+from a shortlist. Deterministic code should parse, join, count, and preserve
+occurrences. Use `llm` for explanations or unresolved cases. Exact repeated
+requests within a cell use cached observations, not new independent evidence.
+Assigned results persist in the REPL, but automatic cache and budgets reset on
+each `exec`. Returned model strings are recorded, not backend-weight attestations.
+
 ## Other-host `solo` lane
 
 Use `solo` once only when its exact-line or semantic helpers are required. Classify complete instances, preserve order and every occurrence, initialize zero-count labels, and verify domain, coverage, multiplicity, reductions, hashes, and schema before `FINAL`. Missing, malformed, failed, or disputed semantic output is an error. The runtime may make at most three root repair turns only before unsafe child-calling failures; the outer agent must never retry `solo` or switch lanes.

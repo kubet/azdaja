@@ -31,6 +31,7 @@ use std::{
 use std::io::{BufRead, BufReader};
 
 pub mod jcode_gate;
+pub mod judge;
 pub mod memory;
 pub mod observability;
 pub mod repo_source;
@@ -671,6 +672,7 @@ pub struct Config {
     pub jcode_reasoning: String,
     pub jcode_repair_model: Option<String>,
     pub max_calls_per_cell: usize,
+    pub judge: judge::JudgeConfig,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -688,6 +690,7 @@ impl Default for Config {
             jcode_reasoning: "medium".into(),
             jcode_repair_model: None,
             max_calls_per_cell: MAX_CALLS_PER_CELL,
+            judge: judge::JudgeConfig::default(),
         }
     }
 }
@@ -766,6 +769,7 @@ impl Config {
         for p in &self.clean_patterns {
             Regex::new(p).with_context(|| format!("invalid clean pattern: {p}"))?;
         }
+        self.judge.validate()?;
         Ok(self)
     }
 }
@@ -5034,6 +5038,7 @@ struct ExternalState<'a> {
     semantic_adjudication_call_count: &'a mut usize,
     exact_line_ledgers: &'a mut ExactLineLedgerRegistry,
     record_coverage: &'a mut RecordCoverageRegistry,
+    judge: &'a mut judge::JudgeEngine,
 }
 
 type RunCellOutcome = (
@@ -5733,6 +5738,34 @@ fn monty_json_value(value: &MontyObject) -> Result<serde_json::Value> {
     })
 }
 
+fn json_monty_value(value: serde_json::Value) -> Result<MontyObject> {
+    Ok(match value {
+        serde_json::Value::Null => MontyObject::None,
+        serde_json::Value::Bool(v) => MontyObject::Bool(v),
+        serde_json::Value::Number(v) => {
+            if let Some(v) = v.as_i64() {
+                MontyObject::Int(v)
+            } else if let Some(v) = v.as_u64() {
+                MontyObject::BigInt(v.into())
+            } else {
+                MontyObject::Float(v.as_f64().ok_or_else(|| anyhow!("invalid JSON number"))?)
+            }
+        }
+        serde_json::Value::String(v) => MontyObject::String(v),
+        serde_json::Value::Array(v) => MontyObject::List(
+            v.into_iter()
+                .map(json_monty_value)
+                .collect::<Result<Vec<_>>>()?,
+        ),
+        serde_json::Value::Object(v) => MontyObject::Dict(
+            v.into_iter()
+                .map(|(k, v)| Ok((MontyObject::String(k), json_monty_value(v)?)))
+                .collect::<Result<Vec<_>>>()?
+                .into(),
+        ),
+    })
+}
+
 fn final_output_text(value: &MontyObject) -> Result<String> {
     if let MontyObject::String(value) = value {
         return Ok(value.clone());
@@ -5759,6 +5792,42 @@ fn external(
     state: ExternalState<'_>,
 ) -> Result<MontyObject> {
     match name {
+        "judge_many" => {
+            if !cfg.judge.enabled {
+                bail!("judge_many is disabled; the host must explicitly enable [judge]")
+            }
+            if provider_interrupted() {
+                bail!("judge_many interrupted before request")
+            }
+            if args.len() > 2 {
+                bail!("judge_many requires state and questions")
+            }
+            let mut values: [Option<&MontyObject>; 2] = [args.first(), args.get(1)];
+            for (key, value) in kwargs {
+                let index = match key {
+                    MontyObject::String(k) if k == "state" => 0,
+                    MontyObject::String(k) if k == "questions" => 1,
+                    _ => bail!("judge_many accepts only state and questions"),
+                };
+                if values[index].replace(value).is_some() {
+                    bail!("judge_many received a duplicate argument")
+                }
+            }
+            let source =
+                monty_json_value(values[0].ok_or_else(|| anyhow!("judge_many requires state"))?)
+                    .map_err(|_| anyhow!("judge_many state must be JSON representable"))?;
+            let questions = monty_json_value(
+                values[1].ok_or_else(|| anyhow!("judge_many requires questions"))?,
+            )
+            .map_err(|_| anyhow!("judge_many questions must be JSON representable"))?;
+            json_monty_value(state.judge.evaluate(source, questions)?)
+        }
+        "judge_stats" => {
+            if !args.is_empty() || !kwargs.is_empty() {
+                bail!("judge_stats takes no arguments")
+            }
+            json_monty_value(state.judge.stats())
+        }
         "FINAL" => {
             let v = args
                 .first()
@@ -6111,6 +6180,8 @@ fn run_cell(
         "llm",
         "llm_batch",
         "llm_batch_fresh",
+        "judge_many",
+        "judge_stats",
         "sha256",
         "FINAL",
         "FINAL_VAR",
@@ -6151,6 +6222,8 @@ fn run_cell(
     let mut semantic_adjudication_call_count = 0usize;
     let mut exact_line_ledgers = ExactLineLedgerRegistry::default();
     let mut record_coverage = RecordCoverageRegistry::default();
+    let mut judge = judge::JudgeEngine::new(&cfg.judge);
+    judge.set_deadline(Instant::now() + Duration::from_secs(cfg.cell_timeout));
     let mut progress = match repl.feed_start(code, inputs, PrintWriter::Callback(&mut printed)) {
         Ok(p) => p,
         Err(e) => {
@@ -6224,6 +6297,7 @@ fn run_cell(
                         semantic_adjudication_call_count: &mut semantic_adjudication_call_count,
                         exact_line_ledgers: &mut exact_line_ledgers,
                         record_coverage: &mut record_coverage,
+                        judge: &mut judge,
                     },
                 )
                 .map_err(MontyException::runtime_error);
@@ -10149,6 +10223,11 @@ fn call_model_inner(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     configure_provider_environment(&mut command, depth, isolate_environment);
+    // The optional typed provider's credential is host-only, even when a custom
+    // generative command otherwise inherits the ordinary process environment.
+    command
+        .env_remove(&cfg.judge.key_env)
+        .env_remove("TYPESAFE_API_KEY");
     if let Some(sandbox_path) = sandbox_path {
         command
             .current_dir(sandbox_path)

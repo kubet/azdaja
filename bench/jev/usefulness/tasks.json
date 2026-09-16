@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "base_revision": "d851113d6bafd1451f2f23f0ef4265df76a9f186",
+  "instructions": "Answer using only supplied corpus at the pinned revision. Cite source IDs beside material claims. Distinguish documented behavior from observed runtime proof. Return one object per task with task_id, answer (source-cited prose), sources (unique source IDs used), facts (requested keys with typed values). Do not infer actual private note contents or claim these development examples prove general quality.",
+  "tasks": [
+    {
+      "id": "Q1",
+      "question": "A developer wants to approve removal of a compatibility path because memory recall returned no disagreement and both omission counters are zero. Is that a sufficient search for counterevidence? Explain a concrete class of notes that can still be missed, how linked context is chosen, and whether exporting a selected note with --with-context solves the same coverage problem. Do not invent actual note contents.",
+      "requested_facts": {
+        "recall_proves_no_counterevidence": "boolean",
+        "primary_cap": "integer",
+        "context_cap": "integer",
+        "export_context_hops": "one of: one, transitive",
+        "export_covers_disconnected_notes": "boolean"
+      }
+    },
+    {
+      "id": "Q2",
+      "question": "You need to hand reviewed project decisions and their contrary linked context to a teammate in another clone. They have an older installed binary. Recommend a safe supported transfer workflow, explain why cloning or copying recall output is insufficient, and say what this source snapshot can and cannot establish about that installed binary.",
+      "requested_facts": {
+        "clone_transfers_notes": "boolean",
+        "preview_writes_memory": "boolean",
+        "apply_flag": "string",
+        "installed_command_availability_verified": "boolean"
+      }
+    },
+    {
+      "id": "Q3",
+      "question": "An automation wrapper receives an error from memory import --apply and plans to delete destination notes before retrying, assuming atomic replacement guarantees rollback on every error. Review this recovery design. Contrast preview, apply, same-ID conflicts and exact retries, and give the source-backed failure sequence that defeats the rollback assumption.",
+      "requested_facts": {
+        "any_apply_error_proves_rollback": "boolean",
+        "same_id_different_record_overwrites": "boolean",
+        "unchanged_retry_idempotent": "boolean",
+        "preview_reserves_capacity": "boolean"
+      }
+    },
+    {
+      "id": "Q4",
+      "question": "For a tool wrapper running inside a Git worktree, choose the memory store for each configuration: (a) neither AZDAJA_HOME nor AZDAJA_PROJECT_MEMORY set, (b) AZDAJA_HOME set and project switch unset, (c) AZDAJA_HOME set and project switch on, (d) project switch off without --global, (e) project switch off with --global. Would moving into a repository subdirectory, ordinary staging, or inspecting the numeric constellation publish or validate these notes?",
+      "requested_facts": {
+        "a_store": "one of: project, legacy, personal-global, refused",
+        "b_store": "same choices",
+        "c_store": "same choices",
+        "d_store": "same choices",
+        "e_store": "same choices",
+        "constellation_is_note_truth_score": "boolean"
+      }
+    },
+    {
+      "id": "Q5",
+      "question": "An integration change would activate Azdaja whenever its hook is installed, and would permanently block native reads if the internal handoff fails. Is that consistent with this snapshot? Reconcile the earlier Jcode broad-read instructions with the later optional-activation section, enumerate activation scopes, and explain what security guarantee remains unjustified.",
+      "requested_facts": {
+        "hook_installation_activates": "boolean",
+        "activation_scopes": "array of strings",
+        "failure_keeps_native_path": "boolean",
+        "is_os_sandbox": "boolean"
+      }
+    },
+    {
+      "id": "Q6",
+      "question": "While updating the Jcode installer, a developer finds a legacy managed config naming gpt-5.6-luna and proposes normalizing all installed configs to it whenever their parsed TOML matches a known template. What model is in the current bundled default at this snapshot, what is the legacy file for, and what exact criterion permits migration? Can the default tell us the model used by every live call?",
+      "requested_facts": {
+        "current_default_model": "string",
+        "legacy_fixture_model": "string",
+        "migration_equality": "one of: parsed-values, exact-bytes",
+        "one_byte_changed_config_migrated": "boolean",
+        "all_live_calls_use_default": "boolean"
+      }
+    },
+    {
+      "id": "Q7",
+      "question": "A release checklist claims Windows memory import is runtime-validated and confidential because Unix tests passed, foreign-target lint compiled, and imported bundles have SHA-256 digests. Should we sign off? Separate what was actually checked from the missing platform/security evidence, and state what a digest and imported provenance establish.",
+      "requested_facts": {
+        "windows_runtime_acceptance_established": "boolean",
+        "windows_acl_confidentiality_established": "boolean",
+        "digest_authenticates_author": "boolean",
+        "imported_origin_verified": "boolean"
+      }
+    }
+  ]
+}

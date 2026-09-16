@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "warning": "Evaluator-only. Never include this file or grader internals in model inputs.",
+  "tasks": [
+    {
+      "task_id": "Q1",
+      "expected_facts": {
+        "recall_proves_no_counterevidence": false,
+        "primary_cap": 4,
+        "context_cap": 8,
+        "export_context_hops": "transitive",
+        "export_covers_disconnected_notes": false
+      },
+      "required_evidence_groups": [
+        [
+          "E12"
+        ],
+        [
+          "E13"
+        ],
+        [
+          "E14"
+        ],
+        [
+          "E09",
+          "E11"
+        ]
+      ],
+      "human_required_points": [
+        "Zero counters cover lexical candidates and one-hop context, not every possible contrary note. A disconnected note with no shared query word is a counterexample class even with zero omissions.",
+        "Matching uses distinct case-insensitive Unicode alphanumeric words in text/tags, not semantic truth. Context is incoming/outgoing one hop; disagreements and incoming supersession get inspection priority, not credibility.",
+        "Export with consent includes a complete transitive relationship component beyond recall caps, but does not discover disconnected contrary notes. Approval still needs current-source review and a wider evidence search."
+      ],
+      "angle": "Candidate-coverage trap and source-grounded witness class; combines implementation and transfer contract"
+    },
+    {
+      "task_id": "Q2",
+      "expected_facts": {
+        "clone_transfers_notes": false,
+        "preview_writes_memory": false,
+        "apply_flag": "--apply",
+        "installed_command_availability_verified": false
+      },
+      "required_evidence_groups": [
+        [
+          "E14"
+        ],
+        [
+          "E15"
+        ],
+        [
+          "E16"
+        ]
+      ],
+      "human_required_points": [
+        "Inspect explicit selected IDs and all connected records, export with --with-context after consent, deliberately move the unchanged reviewed JSON, preview import then use --apply only after review.",
+        "Ordinary clone excludes .azdaja; recall is bounded one-hop display, not the complete export envelope. Authored private content is preserved, not scrubbed.",
+        "Documentation is source-build scoped and does not verify availability in the older installation. Check its capability/version or use a built source version before promising the workflow. No automatic synchronization."
+      ],
+      "angle": "Multi-source implementation workflow with scope/version caveat"
+    },
+    {
+      "task_id": "Q3",
+      "expected_facts": {
+        "any_apply_error_proves_rollback": false,
+        "same_id_different_record_overwrites": false,
+        "unchanged_retry_idempotent": true,
+        "preview_reserves_capacity": false
+      },
+      "required_evidence_groups": [
+        [
+          "E15"
+        ]
+      ],
+      "human_required_points": [
+        "Snapshot publication may succeed before later validation fails, so error does not prove old state survived. Do not delete destination history. Preview destination or retry the same unchanged bundle to determine exact records present.",
+        "Preview creates no memory state and counts are not a reservation. Apply can initialize custody metadata before later failure; checks rerun under writer lock.",
+        "Differing same-ID record is a refused conflict, exact existing record is already present and unchanged retries are idempotent. Atomic publication does not mean transaction-wide rollback."
+      ],
+      "angle": "Counterexample to a plausible but dangerous transactional inference"
+    },
+    {
+      "task_id": "Q4",
+      "expected_facts": {
+        "a_store": "project",
+        "b_store": "legacy",
+        "c_store": "project",
+        "d_store": "refused",
+        "e_store": "personal-global",
+        "constellation_is_note_truth_score": false
+      },
+      "required_evidence_groups": [
+        [
+          "E08"
+        ],
+        [
+          "E02"
+        ]
+      ],
+      "human_required_points": [
+        "Default .azdaja is lazy-created only by explicit addition and its .gitignore contains *. Ordinary staging ignores contents, not an absolute security barrier against forced publication.",
+        "Explicit home selects legacy when switch unset; on wins for project operations; off refuses non-global writes; global independently selects personal-global. Same-repository subdirectories preserve notes.",
+        "Constellation uses local numeric aggregates, not source text, and avg variety is distributional, not quality or verified truth. Do not confuse similarly named measured-memory/UI scope with ledger policy."
+      ],
+      "angle": "Routing decision matrix with plausible keyword-heavy measured-memory distractor"
+    },
+    {
+      "task_id": "Q5",
+      "expected_facts": {
+        "hook_installation_activates": false,
+        "activation_scopes": [
+          "request",
+          "session",
+          "repository"
+        ],
+        "failure_keeps_native_path": true,
+        "is_os_sandbox": false
+      },
+      "required_evidence_groups": [
+        [
+          "E01"
+        ],
+        [
+          "E04"
+        ]
+      ],
+      "human_required_points": [
+        "Identify tension: earlier broad-read handoff says do not retry blocked broad read, but later explicit optional activation says mentioning/installing does not activate and native route remains on failure. Do not silently cite only one section.",
+        "Use narrowest explicit request/session/repository activation via AZDAJA_JCODE_ACTIVATION. Unset or ambiguous activation permits ordinary host-native behavior; reversible and user-controlled.",
+        "Cooperative workflow helper, not OS sandbox or malicious same-user containment. These excerpts establish documented intent, not an implementation audit proving actual enforcement."
+      ],
+      "angle": "Contradictory-looking documentation and insufficiency of docs for runtime proof"
+    },
+    {
+      "task_id": "Q6",
+      "expected_facts": {
+        "current_default_model": "gpt-5.6-sol",
+        "legacy_fixture_model": "gpt-5.6-luna",
+        "migration_equality": "exact-bytes",
+        "one_byte_changed_config_migrated": false,
+        "all_live_calls_use_default": false
+      },
+      "required_evidence_groups": [
+        [
+          "E05"
+        ],
+        [
+          "E06"
+        ],
+        [
+          "E07"
+        ],
+        [
+          "E02"
+        ]
+      ],
+      "human_required_points": [
+        "Current bundled Sol differs from historical Luna fixture. Preserve byte-for-byte historical migration custody fixtures rather than regenerate or normalize them.",
+        "Migration only when every installed byte matches a recognized fixture. Customized or one-byte-different configs remain untouched, even if parsed TOML is equivalent.",
+        "Configured default for new work is not universal observed route: sessions persist creation defaults and calls can override them. No inference that every existing user installation uses bundled default."
+      ],
+      "angle": "Current-vs-historical distractor and multi-source installer safety decision"
+    },
+    {
+      "task_id": "Q7",
+      "expected_facts": {
+        "windows_runtime_acceptance_established": false,
+        "windows_acl_confidentiality_established": false,
+        "digest_authenticates_author": false,
+        "imported_origin_verified": false
+      },
+      "required_evidence_groups": [
+        [
+          "E16"
+        ],
+        [
+          "E17"
+        ]
+      ],
+      "human_required_points": [
+        "Do not sign off those claims. Opened-file validation/reparse refusal is described; native Unix replacement checks ran. Windows branch compiles under strict lint but Windows runtime is a separate CI gate.",
+        "Unix mode/ownership checks are not Windows ACL confidentiality. Reparse refusal does not validate ACL exposure; require Windows runtime tests and ACL evidence separately.",
+        "SHA-256 checks byte-level integrity, not signatures/authorship. Imported origin remains untrusted assertion, copies do not create independent agreement. Functional acceptance is not evidence of model/productivity benefit."
+      ],
+      "angle": "Missing evidence detection across platform, confidentiality and provenance scopes"
+    }
+  ]
+}
