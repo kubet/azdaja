@@ -1,0 +1,22 @@
+# Counterfactual retrieval stress test plan
+
+Frozen before any ranking execution. This is a deterministic, provider-free lexical sensitivity check, not answer validation or score optimization.
+
+## Inputs and digests
+- `../corpus.json`: SHA-256 `0a60662e873f9ca0ad545f1ee09d20095418e2110d207592cc9735dfa1cf621c`
+- `../tasks.json`: SHA-256 `db7f0cb90857b008e4e4cfec63f2909a56b3510215ed23ae499d07ade1bfd61b`
+- Source fields used: corpus item `id` and `text`; task `id` and `question`. Corpus metadata, source IDs, paths, revisions, line ranges, hashes, requested facts, and instructions are not ranking inputs.
+- Exact task question strings are loaded as JSON Unicode strings and hashed as their UTF-8 bytes (no normalization or trimming).
+
+## Frozen methods
+1. **raw_bm25**: Unicode word tokens using Python `re` equivalent to `\w+` with Unicode semantics, lowercased; raw text only. BM25 uses `k1=1.2`, `b=0.75`, Robertson IDF `log(1 + (N-df+0.5)/(df+0.5))`, document length in raw tokens, and standard TF saturation. Scores sort descending, then ID ascending.
+2. **normalized_bm25**: Start with the same original Unicode word tokens, then add camelCase boundaries and underscore/hyphen parts (deduplicated only by normal BM25 term frequency, not by set). Lowercase. Stoplist is exactly: `a an and are as at be by for from has have in is it its of on or that the their these this to was were will with`. Negation terms (`no`, `not`, `never`, `without`, `neither`, `nor`, `cannot`, `can't`) are retained. Scores use the same BM25 constants and tie-breaking.
+3. **passage_rrf**: Uses normalized query/document tokens. Document list is normalized BM25 score. Passages are fixed 128-token windows with stride 64, starting at token offsets 0,64,...; a final shorter window is included only when its start is before document length and is not already covered by a prior start. A document's passage score is its maximum passage BM25 score. Each list is rank-based RRF `1/(60+rank)` with rank 1, equal weight, and final ID tie-break. No query expansion.
+4. **mmr_diverse**: Candidate relevance is normalized BM25 score divided by the maximum candidate score, or zero when all scores are zero. Similarity is cosine over normalized document term-frequency vectors. Select the entire candidate set greedily using `0.75*relevance - 0.25*max_similarity_to_selected`; ties are resolved by ascending ID at every selection. The first four are the fixed top-four diversity boundary, while full output preserves the complete greedy sequence.
+
+Malformed JSON/schema, missing or duplicate IDs, non-string required fields, or empty IDs fail. All methods rank identical corpus candidates. Timing is explicitly one local run and is not production latency.
+
+## Frozen boundaries
+- Passage windows are token-index windows `[start, start+128)` with Python slicing, with starts at multiples of 64 while `start < len(tokens)`.
+- Unicode tokenization uses `re.findall(r"\\w+", text, flags=re.UNICODE)`. Camel boundaries split lower/digit-to-upper and acronym-to-capital transitions; `_` and `-` are separators, and original whole words remain alongside parts.
+- JSON is read as bytes then decoded by `json.load`; no Unicode normalization is applied. Output is source-only rankings and method metadata, with no gold/evaluation fields.

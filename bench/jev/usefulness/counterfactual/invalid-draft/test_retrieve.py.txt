@@ -1,0 +1,28 @@
+import json, tempfile, unittest
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+import retrieve
+
+class RetrievalTests(unittest.TestCase):
+    def test_bm25_literal_expected_and_tie(self):
+        ids=['b','a','c']; docs=[['rare'],['common'],['rare']]
+        self.assertEqual([ids[i] for i in retrieve.order(ids, retrieve.bm25(['rare'], docs))], ['b','c','a'])
+        self.assertEqual([ids[i] for i in retrieve.order(ids, retrieve.bm25(['missing'], docs))], ['a','b','c'])
+    def test_tie_order_invariant(self):
+        self.assertEqual(retrieve.order(['z','a'], [0,0]), [1,0])
+        self.assertEqual(retrieve.order(['a','z'], [0,0]), [0,1])
+    def test_punctuation_and_negation(self):
+        self.assertIn('not', retrieve.norm_words('not-safe'))
+        self.assertIn('safe', retrieve.norm_words('not-safe'))
+        self.assertNotIn('the', retrieve.norm_words('the safe'))
+    def test_duplicate_ids(self):
+        with self.assertRaises(ValueError): retrieve.validate({'items':[{'id':'x','text':'a'},{'id':'x','text':'b'}]}, {'tasks':[]})
+    def test_passage_boundary_and_mmr_coverage(self):
+        d=list('a '*127 .split()) if False else ['x']*127+['needle']+['y']*63+['needle']
+        self.assertEqual([len(x) for x in retrieve.passages(d)], [128,128,64])
+        ids=['a','b','c','d']; docs=[['same']*5,['same']*5,['other'],['third']]
+        ranked=retrieve.rank(ids,docs,docs,['same'])['mmr_diverse']
+        self.assertEqual(len(ranked),4); self.assertEqual(set(ranked[:4]),set(ids))
+
+if __name__ == '__main__': unittest.main()

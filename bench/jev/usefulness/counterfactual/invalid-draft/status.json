@@ -1,0 +1,16 @@
+{
+  "status": "invalid_implementation_not_scored",
+  "reason": [
+    "raw reference used normalized query",
+    "passage BM25 received token strings as documents",
+    "MMR ties used input index not source ID",
+    "MMR test did not exercise diversity selection"
+  ],
+  "file_sha256": {
+    "PLAN.md": "9c98c5206950a35f91c3dd1069bb0a398ac3719070ea2f970296c022b972b1ab",
+    "retrieve.py": "4607216a00474de39e10c8738c851b252f3d902f34b13dff35c4d2371ea02626",
+    "test_retrieve.py": "81c6b265137bfb7c3346b632a5032e878b54dc7e3318bc83f3a6e38a244d3111",
+    "rankings.json": "061c2516d99d12da86ea89972b268708f7bbf80039d5b4c2991351ab8681c8c6"
+  },
+  "outcome_driven_parameter_tuning": false
+}

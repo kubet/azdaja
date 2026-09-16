@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+import argparse, hashlib, json, math, re, sys, time
+from collections import Counter, defaultdict
+from pathlib import Path
+
+K1, B, RRF_K, MMR_LAMBDA = 1.2, .75, 60, .75
+STOP = set('a an and are as at be by for from has have in is it its of on or that the their these this to was were will with'.split())
+WORD = re.compile(r'\w+', re.UNICODE)
+CAMEL = re.compile(r'(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
+
+def digest(p): return hashlib.sha256(p.read_bytes()).hexdigest()
+def words(s): return [x.lower() for x in WORD.findall(s)]
+def norm_words(s):
+    out=[]
+    for w in WORD.findall(s):
+        parts=[]
+        for q in re.split(r'[_-]', w): parts.extend(CAMEL.split(q))
+        out.extend([w.lower()] + [p.lower() for p in parts if p])
+    return [x for x in out if x not in STOP]
+def validate(corpus, tasks):
+    if not isinstance(corpus, dict) or not isinstance(tasks, dict) or not isinstance(corpus.get('items'), list) or not isinstance(tasks.get('tasks'), list): raise ValueError('malformed schema')
+    def check(xs, key, textkey):
+        ids=[]
+        for x in xs:
+            if not isinstance(x,dict) or not isinstance(x.get(key),str) or not x[key] or not isinstance(x.get(textkey),str): raise ValueError('malformed schema')
+            ids.append(x[key])
+        if len(ids)!=len(set(ids)): raise ValueError('duplicate IDs')
+    check(corpus['items'],'id','text'); check(tasks['tasks'],'id','question')
+def bm25(query, docs):
+    n=len(docs); lens=[len(d) for d in docs]; avg=sum(lens)/n if n else 0
+    df=Counter(t for d in docs for t in set(d)); q=sorted(set(query)); scores=[]
+    for d,dl in zip(docs,lens):
+        tf=Counter(d); s=0.0
+        for term in q:
+            if not tf[term]: continue
+            idf=math.log(1+(n-df[term]+.5)/(df[term]+.5))
+            s += idf*(tf[term]*(K1+1))/(tf[term]+K1*(1-B+B*dl/avg)) if avg else 0
+        scores.append(s)
+    return scores
+def order(ids, scores): return sorted(range(len(ids)), key=lambda i:(-scores[i],ids[i]))
+def passages(d): return [d[i:i+128] for i in range(0,len(d),64)] or [[]]
+def cosine(a,b):
+    if not a or not b:return 0.0
+    dot=sum(v*b.get(k,0) for k,v in a.items()); na=sum(v*v for v in a.values()); nb=sum(v*v for v in b.values())
+    return dot/math.sqrt(na*nb) if na and nb else 0.0
+def rank(ids, raw, norm, q):
+    raw_s=bm25(q,raw); norm_s=bm25(q,norm); raw_o=order(ids,raw_s); norm_o=order(ids,norm_s)
+    pmax=[]
+    for d in norm: pmax.append(max(bm25(q,passage)[0] for passage in passages(d)))
+    # Fuse document and maximum-passage rank lists with equal RRF weight.
+    rrfd=[0.0]*len(ids)
+    for r,i in enumerate(order(ids,pmax)): rrfd[i]+=1/(RRF_K+r+1)
+    for r,i in enumerate(norm_o): rrfd[i]+=1/(RRF_K+r+1)
+    mx=max(norm_s,default=0); rel=[x/mx if mx else 0 for x in norm_s]; vec=[Counter(d) for d in norm]
+    chosen=[]; remaining=set(range(len(ids)))
+    while remaining:
+        vals=[(MMR_LAMBDA*rel[i]-(1-MMR_LAMBDA)*max((cosine(vec[i],vec[j]) for j in chosen),default=0),ids[i],i) for i in remaining]
+        top_score=max(s for s,_,_ in vals); best_i=min(i for s,ident,i in vals if s==top_score)
+        chosen.append(best_i); remaining.remove(best_i)
+    mmr=chosen
+    return {'raw_bm25':[ids[i] for i in raw_o],'normalized_bm25':[ids[i] for i in norm_o],'passage_rrf':[ids[i] for i in order(ids,rrfd)],'mmr_diverse':[ids[i] for i in mmr]}
+def main():
+    ap=argparse.ArgumentParser(); ap.add_argument('--corpus',default='../corpus.json'); ap.add_argument('--tasks',default='../tasks.json'); ap.add_argument('--output',default='rankings.json'); a=ap.parse_args()
+    cp,tp=Path(a.corpus),Path(a.tasks); c=json.loads(cp.read_bytes()); t=json.loads(tp.read_bytes()); validate(c,t)
+    ids=[x['id'] for x in c['items']]; raw=[words(x['text']) for x in c['items']]; norm=[norm_words(x['text']) for x in c['items']]
+    start=time.perf_counter(); results=[]
+    for task in t['tasks']:
+        q=task['question']; results.append({'task_id':task['id'],'question_sha256':hashlib.sha256(q.encode()).hexdigest(),'rankings':rank(ids,raw,norm,norm_words(q))})
+    elapsed=time.perf_counter()-start
+    out={'schema_version':1,'source_only':True,'inputs':{'corpus_sha256':digest(cp),'tasks_sha256':digest(tp)},'methods':{'raw_bm25':{'k1':K1,'b':B},'normalized_bm25':{'k1':K1,'b':B,'stoplist':sorted(STOP)},'passage_rrf':{'rrf_k':RRF_K,'window':128,'stride':64,'weight':'equal'},'mmr_diverse':{'lambda':MMR_LAMBDA,'top_k':4,'similarity':'term-frequency cosine'}},'timing':{'scope':'one local run','seconds':elapsed,'not_production_latency':True},'tasks':results}
+    Path(a.output).write_text(json.dumps(out,ensure_ascii=False,sort_keys=True,indent=2)+'\n')
+if __name__=='__main__': main()
