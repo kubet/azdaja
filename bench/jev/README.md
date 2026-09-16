@@ -1,8 +1,10 @@
-# Optional Jev research prototype
+# Historical optional Jev research prototype
 
-**Status: experimental, opt-in, not integrated into Azdaja's production model path. The live semantic screen is blocked, not passed or semantically failed.** See the [decision and evidence](../../docs/research/jev-decision-20260916.md).
+**This page documents the earlier prototype and its frozen, blocked live screen.** Its two old receipts remain blocked, not passed or semantically failed. See the [historical decision and evidence](../../docs/research/jev-decision-20260916.md).
 
-The TypeSafe skill is installed project-locally at `.agents/skills/typesafe-ai/`. Existing `llm`, `llm_batch`, hooks, and core Rust behavior are unchanged by this work.
+**Native follow-up now exists:** ordinary `exec` exposes optional `judge_many` beside `llm`, with full distributions and no semantic confidence cutoff. See the [interface](../../docs/typed-judgments.md) and [actual native workflow outcomes](usefulness/RESULTS.md). The new run found a narrow retrieval gain but no benefit from blanket answer review. Current provider-free native interface checks are `cargo test --locked --features typesafe --test judge_native` and `cargo test --locked --features typesafe --lib judge::tests`. They do not read a real key or call a provider.
+
+The TypeSafe skill is installed project-locally at `.agents/skills/typesafe-ai/`. Existing `llm`, `llm_batch`, hooks, and core Rust behavior were unchanged by this earlier prototype. The later native feature is separate and default-disabled.
 
 **Use-case scope:** this prototype judges supplied claim/evidence packs. It does not implement semantic memory retrieval, discover repository dependencies, or establish evidence-pack completeness. The [request-to-evidence map and concrete memory hypothesis](../../docs/research/jev-request-evidence-map-20260916.md) distinguish those future applications from tested behavior.
 
@@ -53,21 +55,21 @@ python3 -B bench/jev/audit.py \
 
 Omit `--audit-only` to require complete judgment coverage. The recorded failed receipts must then fail, not produce a passing result. Source retention proves custody of selected packs, not completeness of a broader task or model attention.
 
-## Reproduce the delivered acceptance paths
+## Reproduce the historical pre-native acceptance paths
 
-The public acceptance command runs the real entry points rather than relying on the retained test totals:
+This older public acceptance command deliberately checks that `judge_many` is absent. It reproduces the pre-native snapshot, not acceptance of the current native feature. Use a separately built pre-native evaluator (for example from `d851113` in an isolated checkout), not a current feature build. The old script and receipts remain unchanged:
 
 ```bash
 # Use an existing private scratch directory and a NEW receipt path.
 python3 -B bench/jev/acceptance_cli.py \
   --scratch "$JCODE_SCRATCH_DIR" \
-  --azdaja target/debug/azdaja \
+  --azdaja /absolute/path/to/pre-native/azdaja \
   --receipt "$JCODE_SCRATCH_DIR/jev-public-acceptance.json"
 ```
 
 If your environment does not supply `JCODE_SCRATCH_DIR`, pass another existing private directory. The script also works from outside the repository when invoked by absolute path. Use an absolute `--azdaja` path in that case. Python, the already built local evaluator, `/usr/bin/false`, Git and the retained source revisions are required. This is a Unix local workflow. It does not install anything, build the evaluator, or run live inference.
 
-It executes the offline default, the original experiment suite, the separate engine command, both saved-receipt audit and strict paths, and ordinary Azdaja `start/load/exec/final/kill` on the actual `Cargo.toml`. It probes the currently absent native `judge_many` capability and verifies that ordinary execution still works afterward. Existing output files and symlinks are rejected **before** any tests run. A creation race cannot overwrite a file either. Failed checks exit 2 and cannot emit a passed receipt. Strict-mode parser/startup diagnostics are rejected, but the legacy audit CLI's fixed failure message does not distinguish every internal cause. The original suite separately exercises the real strict projection API.
+It executes the offline default, the original experiment suite, the separate engine command, both saved-receipt audit and strict paths, and ordinary Azdaja `start/load/exec/final/kill` on the actual `Cargo.toml`. It probes the then-absent native `judge_many` capability and verifies that ordinary execution still works afterward. Existing output files and symlinks are rejected **before** any tests run. A creation race cannot overwrite a file either. Failed checks exit 2 and cannot emit a passed receipt. Strict-mode parser/startup diagnostics are rejected, but the legacy audit CLI's fixed failure message does not distinguish every internal cause. The original suite separately exercises the real strict projection API.
 
 **A pass means these experimental/public-interface behaviors reproduced. It does not mean native integration or live usefulness passed.** The original experiment has 87 tests and the staged engine has 20, not 107 engine tests. Backend answers remain synthetic. Both old live receipts must stay incomplete. The command compares experimental source hashes with the retained acceptance reference. A differently built evaluator is recorded as such and must satisfy the same behavioral checks, without inheriting the old binary's review verdict. The audit tests now honor the explicitly selected evaluator instead of silently using the default path. The host, local binary and repository are trusted.
 

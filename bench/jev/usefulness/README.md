@@ -4,6 +4,8 @@
 
 **Observed native run:** [results, final-answer quality, one-query retrieval gain and limitations](RESULTS.md). The blanket answer-review policy did not outperform full-context self-review.
 
+The original broader design below calls for human grading and a matched Python arm. The specific [predeclared native run](LIVE_PLAN.md) instead compared two review policies from a common draft and used blinded model adjudication. It does not satisfy those broader human/Python comparison requirements and makes no RLM-specific superiority claim.
+
 ## Inputs and practical angles
 
 Give every arm only `corpus.json` and `tasks.json`. Keep `evaluation.json`, this rubric and `grade.py` out of model inputs. Corpus: 16 verbatim excerpts, 27,296 UTF-8 bytes including JSON/provenance, from public tracked files at `d851113`. Every item pins full revision, file, inclusive line range, Git blob OID, file SHA-256 and excerpt SHA-256. Hashes apply to exact UTF-8 bytes including retained line endings. No local memory, private notes, research/jev papers, or synthetic benchmark fixture statements are included.
