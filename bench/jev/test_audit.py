@@ -15,7 +15,7 @@ class ReceiptAuditTests(unittest.TestCase):
         self.fixtures, self.fixture_hash = run.load_fixtures(self.fixture_path)
         self.receipt_path = run.HERE / "results/pilot-alias-20260916.json"
         self.receipt = json.loads(self.receipt_path.read_text())
-        self.binary = Path("target/debug/azdaja")
+        self.binary = Path(os.environ.get("AZDAJA_BINARY", "target/debug/azdaja")).resolve()
         self.scratch = Path(os.environ.get("JCODE_SCRATCH_DIR", str(Path.home() / ".jcode/scratch")))
         for target in ("socket.create_connection", "adapter.Client.evaluate"):
             guard = patch(target, side_effect=AssertionError("live inference forbidden"))

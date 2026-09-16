@@ -1,0 +1,112 @@
+{
+  "recorded_at": "2026-09-16T21:10:59.456507+00:00",
+  "origin": "actual_public_acceptance_command_packaging_and_boundary_checks",
+  "checks": {
+    "envelope_tests": {
+      "passed": 11,
+      "skipped": 0
+    },
+    "readme_command": {
+      "exit": 0,
+      "status": "passed",
+      "stages": [
+        "default_offline",
+        "engine_public_cli",
+        "frozen_public_audits",
+        "ordinary_public_cli",
+        "original_suite"
+      ],
+      "receipt_matches_stdout": true
+    },
+    "existing_receipt": {
+      "exit": 2,
+      "error_code": "receipt_exists",
+      "unchanged": true,
+      "stage": "preflight"
+    },
+    "outside_repository_renamed_evaluator": {
+      "exit": 0,
+      "status": "passed",
+      "identical_observed_checks": true,
+      "scope": "Same executable bytes at a different path and filename, not a new build or OS."
+    },
+    "missing_binary": {
+      "exit": 2,
+      "error_code": "evaluator_missing_or_not_executable",
+      "success_receipt_created": false
+    },
+    "wrong_executable": {
+      "exit": 2,
+      "status": "failed",
+      "error_code": "original_suite:unexpected_exit",
+      "failed_not_passed_receipt": true
+    },
+    "no_live_switch": {
+      "exit": 2,
+      "rejected": true
+    },
+    "project_library_suite": {
+      "command": "cargo test --locked --offline --lib",
+      "background_task_id": "0370644yd9",
+      "exit": 0,
+      "passed": 191,
+      "failed": 0,
+      "ignored": 1,
+      "test_elapsed_seconds": 4.09,
+      "ignored_tests": [
+        "lexical_relevance_tests::lexical_relevance_release_stress_16m"
+      ],
+      "scope": "Separate actual local project library regression, not part of the Python acceptance command."
+    }
+  },
+  "sha256": {
+    "bench/jev/acceptance_cli.py": "e307c4f58a89e69f7d460bde4c6f2b1b8ed670da204e8f4a66ce8e725e8dd32d",
+    "bench/jev/acceptance_cli_tests.py": "c3ff882f480e8d07020545c861c4c356b07fd949a4528f95a00d1a983eab1d4c",
+    "bench/jev/test_audit.py": "b626b22470f1edb197b0699e8b54fdc82cf1b84f795bfe8ba52b03d4ae53b981",
+    "bench/jev/README.md": "2c97310a8100b3f7979a9ddf2b292df332507fd0dcf789618a4b0594674413ac"
+  },
+  "retained_public_receipt_sha256": "b3bafa7986ccf02827acfea42766ae8922be32a70fbe5f11f242686d3c0f79c3",
+  "live_provider_calls": 0,
+  "semantic_efficacy_established": false,
+  "native_judge_function_implemented": false,
+  "scope": "Delivered public command and real local evaluator behavior, not Jev quality or automatic planning. Envelope tests use mocks only for failure gates; successful and wrong-executable workflows invoke actual commands.",
+  "improvement_evidence": {
+    "reproducibility": "One-off acceptance drivers are now a documented public command. The exact entry point passed both from the repository and from another directory with a renamed copy of the real evaluator.",
+    "false_acceptance_fixed": "Independent review constructed an exit-2 argparse failure that the first runner incorrectly counted as a valid strict rejection. The fixed diagnostic gate rejects it and startup diagnostics, with exact regression assertions.",
+    "binary_selection_fixed": "The original audit tests ignored AZDAJA_BINARY. They now honor it, verified in a fresh process and the complete public workflow with an explicitly selected executable.",
+    "receipt_preservation": "The new acceptance entry point rejects an existing output before running checks. The old separate engine CLI still detects its own receipt collision after its tests, as historically recorded.",
+    "limits": "No model quality, native engine capability or automatic planning improved in this change. The legacy audit failure envelope cannot identify every internal rejection cause. A passed verification receipt is not a semantic pass."
+  },
+  "boundary_requirements": {
+    "public_command_runs": "readme_command",
+    "cwd_and_selected_binary_are_respected": "outside_repository_renamed_evaluator",
+    "existing_evidence_not_overwritten": "existing_receipt",
+    "absent_dependency_fails_before_work": "missing_binary",
+    "wrong_executable_cannot_pass": "wrong_executable",
+    "no_accidental_live_switch": "no_live_switch",
+    "parser_failure_and_write_race_regressions": "envelope_tests",
+    "existing_project_regression": "project_library_suite"
+  },
+  "final_integrity": {
+    "checked_at": "2026-09-16T21:13:46.494226+00:00",
+    "frozen_review_artifact_hashes_matched": 15,
+    "local_links_resolved": 48,
+    "credential_pattern_files_scanned": 48,
+    "credential_pattern_matches": 0,
+    "earlier_receipts_unchanged": true
+  },
+  "independent_review": {
+    "reviewer": "mouse",
+    "final_public_run_time_utc": "2026-09-16T21:09Z",
+    "runner_sha256_confirmed": "e307c4f58a89e69f7d460bde4c6f2b1b8ed670da204e8f4a66ce8e725e8dd32d",
+    "public_command_passed": true,
+    "original_tests_passed": 87,
+    "engine_tests_passed": 20,
+    "separate_envelope_tests_passed": 11,
+    "findings_fixed": [
+      "strict argparse failure falsely accepted as intended rejection",
+      "audit tests ignored the selected evaluator path"
+    ],
+    "scope": "Read-only independent verification, no file edits or provider calls. The earlier 1fa073db run is a separate snapshot. This verdict does not establish live efficacy."
+  }
+}

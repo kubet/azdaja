@@ -53,6 +53,32 @@ python3 -B bench/jev/audit.py \
 
 Omit `--audit-only` to require complete judgment coverage. The recorded failed receipts must then fail, not produce a passing result. Source retention proves custody of selected packs, not completeness of a broader task or model attention.
 
+## Reproduce the delivered acceptance paths
+
+The public acceptance command runs the real entry points rather than relying on the retained test totals:
+
+```bash
+# Use an existing private scratch directory and a NEW receipt path.
+python3 -B bench/jev/acceptance_cli.py \
+  --scratch "$JCODE_SCRATCH_DIR" \
+  --azdaja target/debug/azdaja \
+  --receipt "$JCODE_SCRATCH_DIR/jev-public-acceptance.json"
+```
+
+If your environment does not supply `JCODE_SCRATCH_DIR`, pass another existing private directory. The script also works from outside the repository when invoked by absolute path. Use an absolute `--azdaja` path in that case. Python, the already built local evaluator, `/usr/bin/false`, Git and the retained source revisions are required. This is a Unix local workflow. It does not install anything, build the evaluator, or run live inference.
+
+It executes the offline default, the original experiment suite, the separate engine command, both saved-receipt audit and strict paths, and ordinary Azdaja `start/load/exec/final/kill` on the actual `Cargo.toml`. It probes the currently absent native `judge_many` capability and verifies that ordinary execution still works afterward. Existing output files and symlinks are rejected **before** any tests run. A creation race cannot overwrite a file either. Failed checks exit 2 and cannot emit a passed receipt. Strict-mode parser/startup diagnostics are rejected, but the legacy audit CLI's fixed failure message does not distinguish every internal cause. The original suite separately exercises the real strict projection API.
+
+**A pass means these experimental/public-interface behaviors reproduced. It does not mean native integration or live usefulness passed.** The original experiment has 87 tests and the staged engine has 20, not 107 engine tests. Backend answers remain synthetic. Both old live receipts must stay incomplete. The command compares experimental source hashes with the retained acceptance reference. A differently built evaluator is recorded as such and must satisfy the same behavioral checks, without inheriting the old binary's review verdict. The audit tests now honor the explicitly selected evaluator instead of silently using the default path. The host, local binary and repository are trusted.
+
+Envelope tests, which do not replace the public workflow above:
+
+```bash
+python3 -B -m unittest bench.jev.acceptance_cli_tests -v
+```
+
+The real Rust library regression command remains separate: `cargo test --locked --offline --lib`. Its last retained result is 191 passed and one explicitly ignored stress test. See the [whole-result acceptance map](../../docs/research/jev-whole-result-acceptance-20260916.md) for the requirement-by-requirement limits.
+
 ## Future live use is a new study
 
 Do not replay the old live commands as a recovery loop. First establish an account-available request model and its allowed returned identity with the provider. `jev-1.12` is a historical experiment assumption, not an advertised available model for this account.
