@@ -63,7 +63,10 @@ Exact frozen source is bench/oolong/context-1048576.txt, SHA256
 78e61364029606a211e8d6fced3fefea42f37651bc2c4b84ef54856e1e70f4fe.
 Every Date record is an occurrence; duplicates are not collapsed. All records,
 not a month subset, receive one Noul. No official labels or aggregate answer enter
-prompts. Preserve prior ham definition and ordering. Code parses, batches and
+prompts. Preserve prior ham definition and source-ordered contiguous pack membership.
+The occurrence ledger retains source order. Native canonical JSON objects use
+lexicographic ID order, including r10000 before r9913 in a crossing pack. Binding
+and reduction use exact IDs, never object position. Code parses, batches and
 reduces; the model supplies only semantic leaves. Report full-source bytes and
 dataset's constructed context_len separately from actually billed model tokens.
 
@@ -78,6 +81,14 @@ presented as matched causal speedups. Record actual native end-to-end wall time,
 per-call latency, request bytes, input/output tokens, known input price estimate,
 retained state and final deterministic reduction. Exact task failure can coexist
 with a useful second-reader diagnostic, but is never renamed task success.
+
+Final declared run envelope: 112 sequential requests for all 17,469 occurrences,
+at most 255 questions/request, 70,000 canonical state bytes, 90,000 full request
+bytes, 4,000,000 known input tokens and 1,200 seconds. No retries. Byte/3 and
+byte/4 estimates are disclosed heuristics, not token limits or provider guarantees.
+Native per-cell limits tighten to the remaining campaign input budget. Offline
+preflight also executes a labeled synthetic 17,469-row reduction through the same
+public CLI. Synthetic results are not semantic or provider evidence.
 
 ## Three-phrasing experiment
 
