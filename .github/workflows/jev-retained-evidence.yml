@@ -26,7 +26,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
-      JCODE_SCRATCH_DIR: ${{ runner.temp }}
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -36,12 +35,16 @@ jobs:
         with:
           python-version: "3.9"
       - name: Estimator and portable evidence boundary tests
+        env:
+          JCODE_SCRATCH_DIR: ${{ runner.temp }}
         run: >-
           python3 -B -m unittest
           bench.jev.audit_sampling.test_estimator
           bench.jev.audit_sampling.test_replay
           bench.jev.audit_sampling.test_portable -v
       - name: Replay all 6000 fixed audits without the author's binary or paths
+        env:
+          JCODE_SCRATCH_DIR: ${{ runner.temp }}
         run: >-
           python3 -B -m bench.jev.audit_sampling.replay
           --output "$RUNNER_TEMP/jev-portable-replay.json"
