@@ -1,0 +1,1218 @@
+{
+  "rows": [
+    {
+      "byte_end": 17,
+      "byte_start": 11,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 17,
+      "id": "s01",
+      "path": "Cargo.toml",
+      "source_sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+      "start": 11,
+      "status": "selected",
+      "value": "0.1.17"
+    },
+    {
+      "byte_end": 20,
+      "byte_start": 16,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 20,
+      "id": "s02",
+      "path": "Cargo.toml",
+      "source_sha256": "b0c3e7bfae90e88a3c7420b0f38e679cbef04c19e30046e15d9711089f694a73",
+      "start": 16,
+      "status": "selected",
+      "value": "1.95"
+    },
+    {
+      "byte_end": 30,
+      "byte_start": 12,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 30,
+      "id": "s03",
+      "path": "README.md",
+      "source_sha256": "d16a52791f8e67e904989360e0edb590235e951f033c10ebbee02b9f3ab317b8",
+      "start": 12,
+      "status": "selected",
+      "value": "azdaja.dev/install"
+    },
+    {
+      "byte_end": 69,
+      "byte_start": 62,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 69,
+      "id": "s04",
+      "path": "README.md",
+      "source_sha256": "444b8a324b315ae2b4b4341b9fc6b8e03a86a8977ea76d9b846fffbe68a068f2",
+      "start": 62,
+      "status": "selected",
+      "value": "v0.1.17"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "no_match",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s05",
+      "path": "Cargo.toml",
+      "source_sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+      "start": null,
+      "status": "no_match",
+      "value": null
+    },
+    {
+      "byte_end": 206,
+      "byte_start": 202,
+      "choice": "c001",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 206,
+      "id": "s06",
+      "path": "Cargo.toml",
+      "source_sha256": "758a75188f19a450388f4ac56404b51731c97f21332b82b618689a755b886487",
+      "start": 202,
+      "status": "selected",
+      "value": "1.95"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s07",
+      "path": "README.md",
+      "source_sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s08",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s09",
+      "path": "README.md",
+      "source_sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s10",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s11",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": 138,
+      "byte_start": 134,
+      "choice": "c005",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 138,
+      "id": "s12",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": 134,
+      "status": "selected",
+      "value": "PATH"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "no_match",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s13",
+      "path": "assets/config.toml",
+      "source_sha256": "088a6586beab66eee8a15fef5da4883044aa916cf7c4bf511f0792c6d8231a56",
+      "start": null,
+      "status": "no_match",
+      "value": null
+    },
+    {
+      "byte_end": 28,
+      "byte_start": 17,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 28,
+      "id": "s14",
+      "path": "assets/config.toml",
+      "source_sha256": "12e1d317ea7e4108a9a0fd167db106c7c96f2a5caa5585dbdcbb2bdc4019a453",
+      "start": 17,
+      "status": "selected",
+      "value": "gpt-5.6-sol"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s15",
+      "path": "docs/install.md",
+      "source_sha256": "ea1019e47a2acc0af7395616809331ef80ea549eaabc52fece0025ed9102bfea",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s16",
+      "path": "README.md",
+      "source_sha256": "9e07dee661e6e82d8ce49503a87e1f49873bde4546f21f8774b0dd9e02a54508",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s17",
+      "path": "docs/install.md",
+      "source_sha256": "00c3cc1ad4cbaf556dcdca0617d2c66b477a8855de62b26578202fcce371f166",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s18",
+      "path": "docs/install.md",
+      "source_sha256": "00c3cc1ad4cbaf556dcdca0617d2c66b477a8855de62b26578202fcce371f166",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    }
+  ],
+  "selections": {
+    "s01": "c000",
+    "s02": "c000",
+    "s03": "c000",
+    "s04": "c000",
+    "s05": "no_match",
+    "s06": "c001",
+    "s07": "ambiguous",
+    "s08": "ambiguous",
+    "s09": "ambiguous",
+    "s10": "ambiguous",
+    "s11": "ambiguous",
+    "s12": "c005",
+    "s13": "no_match",
+    "s14": "c000",
+    "s15": "ambiguous",
+    "s16": "ambiguous",
+    "s17": "ambiguous",
+    "s18": "ambiguous"
+  },
+  "source_pool": {
+    "tasks": [
+      {
+        "candidates": [
+          {
+            "byte_end": 17,
+            "byte_start": 11,
+            "end": 17,
+            "id": "c000",
+            "start": 11,
+            "text": "0.1.17"
+          }
+        ],
+        "id": "s01",
+        "question": "Package version?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 3,
+          "path": "Cargo.toml",
+          "sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+          "start_line": 3,
+          "text": "version = \"0.1.17\"\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 20,
+            "byte_start": 16,
+            "end": 20,
+            "id": "c000",
+            "start": 16,
+            "text": "1.95"
+          }
+        ],
+        "id": "s02",
+        "question": "Required Rust version?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 8,
+          "path": "Cargo.toml",
+          "sha256": "b0c3e7bfae90e88a3c7420b0f38e679cbef04c19e30046e15d9711089f694a73",
+          "start_line": 8,
+          "text": "rust-version = \"1.95\"\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 30,
+            "byte_start": 12,
+            "end": 30,
+            "id": "c000",
+            "start": 12,
+            "text": "azdaja.dev/install"
+          },
+          {
+            "byte_end": 135,
+            "byte_start": 125,
+            "end": 135,
+            "id": "c001",
+            "start": 125,
+            "text": "azdaja.dev"
+          },
+          {
+            "byte_end": 169,
+            "byte_start": 159,
+            "end": 169,
+            "id": "c002",
+            "start": 159,
+            "text": "SHA256SUMS"
+          }
+        ],
+        "id": "s03",
+        "question": "Which URL is the stable current installer?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 33,
+          "path": "README.md",
+          "sha256": "d16a52791f8e67e904989360e0edb590235e951f033c10ebbee02b9f3ab317b8",
+          "start_line": 33,
+          "text": "The stable `azdaja.dev/install` URL serves the current published installer. Its versioned release payloads are fetched from `azdaja.dev` and verified against `SHA256SUMS` before installation.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 69,
+            "byte_start": 62,
+            "end": 69,
+            "id": "c000",
+            "start": 62,
+            "text": "v0.1.17"
+          }
+        ],
+        "id": "s04",
+        "question": "Which exact release-tag token follows --tag?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 38,
+          "path": "README.md",
+          "sha256": "444b8a324b315ae2b4b4341b9fc6b8e03a86a8977ea76d9b846fffbe68a068f2",
+          "start_line": 38,
+          "text": "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.17 --locked\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 17,
+            "byte_start": 11,
+            "end": 17,
+            "id": "c000",
+            "start": 11,
+            "text": "0.1.17"
+          }
+        ],
+        "id": "s05",
+        "question": "Which license identifier is explicitly stated in this excerpt?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 3,
+          "path": "Cargo.toml",
+          "sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+          "start_line": 3,
+          "text": "version = \"0.1.17\"\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 17,
+            "byte_start": 11,
+            "end": 17,
+            "id": "c000",
+            "start": 11,
+            "text": "0.1.17"
+          },
+          {
+            "byte_end": 206,
+            "byte_start": 202,
+            "end": 206,
+            "id": "c001",
+            "start": 202,
+            "text": "1.95"
+          }
+        ],
+        "id": "s06",
+        "question": "The caller asks for one version value but has not specified whether it wants the package version or the minimum Rust version. Which single value does that underspecified request determine?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 8,
+          "path": "Cargo.toml",
+          "sha256": "758a75188f19a450388f4ac56404b51731c97f21332b82b618689a755b886487",
+          "start_line": 3,
+          "text": "version = \"0.1.17\"\nedition = \"2024\"\nlicense = \"MIT\"\ndescription = \"Virtual memory for language models with a bounded model-facing surface\"\nrepository = \"https://github.com/kubet/azdaja\"\nrust-version = \"1.95\"\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 7,
+            "byte_start": 1,
+            "end": 7,
+            "id": "c000",
+            "start": 1,
+            "text": "azdaja"
+          },
+          {
+            "byte_end": 62,
+            "byte_start": 60,
+            "end": 62,
+            "id": "c001",
+            "start": 60,
+            "text": "az"
+          },
+          {
+            "byte_end": 115,
+            "byte_start": 109,
+            "end": 115,
+            "id": "c002",
+            "start": 109,
+            "text": "azdaja"
+          }
+        ],
+        "id": "s07",
+        "question": "Copy the command-name occurrence in the sentence that explicitly calls it the canonical command.",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 41,
+          "path": "README.md",
+          "sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+          "start_line": 41,
+          "text": "`azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 31,
+            "byte_start": 26,
+            "end": 31,
+            "id": "c000",
+            "start": 26,
+            "text": "jcode"
+          },
+          {
+            "byte_end": 41,
+            "byte_start": 35,
+            "end": 41,
+            "id": "c001",
+            "start": 35,
+            "text": "claude"
+          },
+          {
+            "byte_end": 50,
+            "byte_start": 45,
+            "end": 50,
+            "id": "c002",
+            "start": 45,
+            "text": "codex"
+          },
+          {
+            "byte_end": 60,
+            "byte_start": 54,
+            "end": 60,
+            "id": "c003",
+            "start": 54,
+            "text": "gemini"
+          },
+          {
+            "byte_end": 76,
+            "byte_start": 68,
+            "end": 76,
+            "id": "c004",
+            "start": 68,
+            "text": "opencode"
+          },
+          {
+            "byte_end": 138,
+            "byte_start": 134,
+            "end": 138,
+            "id": "c005",
+            "start": 134,
+            "text": "PATH"
+          },
+          {
+            "byte_end": 427,
+            "byte_start": 422,
+            "end": 427,
+            "id": "c006",
+            "start": 422,
+            "text": "found"
+          },
+          {
+            "byte_end": 440,
+            "byte_start": 431,
+            "end": 440,
+            "id": "c007",
+            "start": 431,
+            "text": "not found"
+          },
+          {
+            "byte_end": 463,
+            "byte_start": 444,
+            "end": 463,
+            "id": "c008",
+            "start": 444,
+            "text": "integration present"
+          },
+          {
+            "byte_end": 483,
+            "byte_start": 471,
+            "end": 483,
+            "id": "c009",
+            "start": 471,
+            "text": "needs repair"
+          },
+          {
+            "byte_end": 494,
+            "byte_start": 487,
+            "end": 494,
+            "id": "c010",
+            "start": 487,
+            "text": "present"
+          },
+          {
+            "byte_end": 531,
+            "byte_start": 525,
+            "end": 531,
+            "id": "c011",
+            "start": 525,
+            "text": "active"
+          },
+          {
+            "byte_end": 806,
+            "byte_start": 801,
+            "end": 806,
+            "id": "c012",
+            "start": 801,
+            "text": "--all"
+          },
+          {
+            "byte_end": 911,
+            "byte_start": 900,
+            "end": 911,
+            "id": "c013",
+            "start": 900,
+            "text": "jcode,codex"
+          }
+        ],
+        "id": "s08",
+        "question": "Which first supported tool name is listed?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 11,
+          "path": "docs/install.md",
+          "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+          "start_line": 11,
+          "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 7,
+            "byte_start": 1,
+            "end": 7,
+            "id": "c000",
+            "start": 1,
+            "text": "azdaja"
+          },
+          {
+            "byte_end": 62,
+            "byte_start": 60,
+            "end": 62,
+            "id": "c001",
+            "start": 60,
+            "text": "az"
+          },
+          {
+            "byte_end": 115,
+            "byte_start": 109,
+            "end": 115,
+            "id": "c002",
+            "start": 109,
+            "text": "azdaja"
+          }
+        ],
+        "id": "s09",
+        "question": "Copy the command-name occurrence in the clause Cargo installs ... only, not an earlier mention of the same name.",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 41,
+          "path": "README.md",
+          "sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+          "start_line": 41,
+          "text": "`azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 31,
+            "byte_start": 26,
+            "end": 31,
+            "id": "c000",
+            "start": 26,
+            "text": "jcode"
+          },
+          {
+            "byte_end": 41,
+            "byte_start": 35,
+            "end": 41,
+            "id": "c001",
+            "start": 35,
+            "text": "claude"
+          },
+          {
+            "byte_end": 50,
+            "byte_start": 45,
+            "end": 50,
+            "id": "c002",
+            "start": 45,
+            "text": "codex"
+          },
+          {
+            "byte_end": 60,
+            "byte_start": 54,
+            "end": 60,
+            "id": "c003",
+            "start": 54,
+            "text": "gemini"
+          },
+          {
+            "byte_end": 76,
+            "byte_start": 68,
+            "end": 76,
+            "id": "c004",
+            "start": 68,
+            "text": "opencode"
+          },
+          {
+            "byte_end": 138,
+            "byte_start": 134,
+            "end": 138,
+            "id": "c005",
+            "start": 134,
+            "text": "PATH"
+          },
+          {
+            "byte_end": 427,
+            "byte_start": 422,
+            "end": 427,
+            "id": "c006",
+            "start": 422,
+            "text": "found"
+          },
+          {
+            "byte_end": 440,
+            "byte_start": 431,
+            "end": 440,
+            "id": "c007",
+            "start": 431,
+            "text": "not found"
+          },
+          {
+            "byte_end": 463,
+            "byte_start": 444,
+            "end": 463,
+            "id": "c008",
+            "start": 444,
+            "text": "integration present"
+          },
+          {
+            "byte_end": 483,
+            "byte_start": 471,
+            "end": 483,
+            "id": "c009",
+            "start": 471,
+            "text": "needs repair"
+          },
+          {
+            "byte_end": 494,
+            "byte_start": 487,
+            "end": 494,
+            "id": "c010",
+            "start": 487,
+            "text": "present"
+          },
+          {
+            "byte_end": 531,
+            "byte_start": 525,
+            "end": 531,
+            "id": "c011",
+            "start": 525,
+            "text": "active"
+          },
+          {
+            "byte_end": 806,
+            "byte_start": 801,
+            "end": 806,
+            "id": "c012",
+            "start": 801,
+            "text": "--all"
+          },
+          {
+            "byte_end": 911,
+            "byte_start": 900,
+            "end": 911,
+            "id": "c013",
+            "start": 900,
+            "text": "jcode,codex"
+          }
+        ],
+        "id": "s10",
+        "question": "Which tool name is last in the supported list?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 11,
+          "path": "docs/install.md",
+          "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+          "start_line": 11,
+          "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 31,
+            "byte_start": 26,
+            "end": 31,
+            "id": "c000",
+            "start": 26,
+            "text": "jcode"
+          },
+          {
+            "byte_end": 41,
+            "byte_start": 35,
+            "end": 41,
+            "id": "c001",
+            "start": 35,
+            "text": "claude"
+          },
+          {
+            "byte_end": 50,
+            "byte_start": 45,
+            "end": 50,
+            "id": "c002",
+            "start": 45,
+            "text": "codex"
+          },
+          {
+            "byte_end": 60,
+            "byte_start": 54,
+            "end": 60,
+            "id": "c003",
+            "start": 54,
+            "text": "gemini"
+          },
+          {
+            "byte_end": 76,
+            "byte_start": 68,
+            "end": 76,
+            "id": "c004",
+            "start": 68,
+            "text": "opencode"
+          },
+          {
+            "byte_end": 138,
+            "byte_start": 134,
+            "end": 138,
+            "id": "c005",
+            "start": 134,
+            "text": "PATH"
+          },
+          {
+            "byte_end": 427,
+            "byte_start": 422,
+            "end": 427,
+            "id": "c006",
+            "start": 422,
+            "text": "found"
+          },
+          {
+            "byte_end": 440,
+            "byte_start": 431,
+            "end": 440,
+            "id": "c007",
+            "start": 431,
+            "text": "not found"
+          },
+          {
+            "byte_end": 463,
+            "byte_start": 444,
+            "end": 463,
+            "id": "c008",
+            "start": 444,
+            "text": "integration present"
+          },
+          {
+            "byte_end": 483,
+            "byte_start": 471,
+            "end": 483,
+            "id": "c009",
+            "start": 471,
+            "text": "needs repair"
+          },
+          {
+            "byte_end": 494,
+            "byte_start": 487,
+            "end": 494,
+            "id": "c010",
+            "start": 487,
+            "text": "present"
+          },
+          {
+            "byte_end": 531,
+            "byte_start": 525,
+            "end": 531,
+            "id": "c011",
+            "start": 525,
+            "text": "active"
+          },
+          {
+            "byte_end": 806,
+            "byte_start": 801,
+            "end": 806,
+            "id": "c012",
+            "start": 801,
+            "text": "--all"
+          },
+          {
+            "byte_end": 911,
+            "byte_start": 900,
+            "end": 911,
+            "id": "c013",
+            "start": 900,
+            "text": "jcode,codex"
+          }
+        ],
+        "id": "s11",
+        "question": "Which supported container-engine integration is explicitly named docker in this excerpt?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 11,
+          "path": "docs/install.md",
+          "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+          "start_line": 11,
+          "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 31,
+            "byte_start": 26,
+            "end": 31,
+            "id": "c000",
+            "start": 26,
+            "text": "jcode"
+          },
+          {
+            "byte_end": 41,
+            "byte_start": 35,
+            "end": 41,
+            "id": "c001",
+            "start": 35,
+            "text": "claude"
+          },
+          {
+            "byte_end": 50,
+            "byte_start": 45,
+            "end": 50,
+            "id": "c002",
+            "start": 45,
+            "text": "codex"
+          },
+          {
+            "byte_end": 60,
+            "byte_start": 54,
+            "end": 60,
+            "id": "c003",
+            "start": 54,
+            "text": "gemini"
+          },
+          {
+            "byte_end": 76,
+            "byte_start": 68,
+            "end": 76,
+            "id": "c004",
+            "start": 68,
+            "text": "opencode"
+          },
+          {
+            "byte_end": 138,
+            "byte_start": 134,
+            "end": 138,
+            "id": "c005",
+            "start": 134,
+            "text": "PATH"
+          },
+          {
+            "byte_end": 427,
+            "byte_start": 422,
+            "end": 427,
+            "id": "c006",
+            "start": 422,
+            "text": "found"
+          },
+          {
+            "byte_end": 440,
+            "byte_start": 431,
+            "end": 440,
+            "id": "c007",
+            "start": 431,
+            "text": "not found"
+          },
+          {
+            "byte_end": 463,
+            "byte_start": 444,
+            "end": 463,
+            "id": "c008",
+            "start": 444,
+            "text": "integration present"
+          },
+          {
+            "byte_end": 483,
+            "byte_start": 471,
+            "end": 483,
+            "id": "c009",
+            "start": 471,
+            "text": "needs repair"
+          },
+          {
+            "byte_end": 494,
+            "byte_start": 487,
+            "end": 494,
+            "id": "c010",
+            "start": 487,
+            "text": "present"
+          },
+          {
+            "byte_end": 531,
+            "byte_start": 525,
+            "end": 531,
+            "id": "c011",
+            "start": 525,
+            "text": "active"
+          },
+          {
+            "byte_end": 806,
+            "byte_start": 801,
+            "end": 806,
+            "id": "c012",
+            "start": 801,
+            "text": "--all"
+          },
+          {
+            "byte_end": 911,
+            "byte_start": 900,
+            "end": 911,
+            "id": "c013",
+            "start": 900,
+            "text": "jcode,codex"
+          }
+        ],
+        "id": "s12",
+        "question": "Which ONE supported host integration should the caller explicitly request? The caller has not specified a host tool, and no PATH or executable-detection result is supplied.",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 11,
+          "path": "docs/install.md",
+          "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+          "start_line": 11,
+          "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 24,
+            "byte_start": 15,
+            "end": 24,
+            "id": "c000",
+            "start": 15,
+            "text": "jcode-api"
+          }
+        ],
+        "id": "s13",
+        "question": "Which provider boundary command is configured?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 3,
+          "path": "assets/config.toml",
+          "sha256": "088a6586beab66eee8a15fef5da4883044aa916cf7c4bf511f0792c6d8231a56",
+          "start_line": 3,
+          "text": "sub_llm_cmd = \"jcode-api\"\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 28,
+            "byte_start": 17,
+            "end": 28,
+            "id": "c000",
+            "start": 17,
+            "text": "gpt-5.6-sol"
+          }
+        ],
+        "id": "s14",
+        "question": "Which default model literal is configured?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 4,
+          "path": "assets/config.toml",
+          "sha256": "12e1d317ea7e4108a9a0fd167db106c7c96f2a5caa5585dbdcbb2bdc4019a453",
+          "start_line": 4,
+          "text": "default_model = \"gpt-5.6-sol\"\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 168,
+            "byte_start": 144,
+            "end": 168,
+            "id": "c000",
+            "start": 144,
+            "text": "getconf GNU_LIBC_VERSION"
+          },
+          {
+            "byte_end": 222,
+            "byte_start": 215,
+            "end": 222,
+            "id": "c001",
+            "start": 215,
+            "text": "getconf"
+          },
+          {
+            "byte_end": 285,
+            "byte_start": 281,
+            "end": 285,
+            "id": "c002",
+            "start": 281,
+            "text": "HOME"
+          }
+        ],
+        "id": "s15",
+        "question": "Which quoted probe command is named for Linux preflight?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 5,
+          "path": "docs/install.md",
+          "sha256": "ea1019e47a2acc0af7395616809331ef80ea549eaabc52fece0025ed9102bfea",
+          "start_line": 5,
+          "text": "The standalone installer accepts macOS 11 or newer on Apple Silicon and Intel, plus x86-64 Linux with glibc 2.35 or newer. On Linux, it parses `getconf GNU_LIBC_VERSION` and refuses musl, an older glibc, a missing `getconf`, or an invalid result before download or mutation under `HOME`. Use a newer glibc host or build with Rust 1.95 when that preflight fails.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 11,
+            "byte_start": 1,
+            "end": 11,
+            "id": "c000",
+            "start": 1,
+            "text": "az install"
+          },
+          {
+            "byte_end": 91,
+            "byte_start": 75,
+            "end": 91,
+            "id": "c001",
+            "start": 75,
+            "text": "az install jcode"
+          },
+          {
+            "byte_end": 143,
+            "byte_start": 129,
+            "end": 143,
+            "id": "c002",
+            "start": 129,
+            "text": "az install all"
+          },
+          {
+            "byte_end": 175,
+            "byte_start": 166,
+            "end": 175,
+            "id": "c003",
+            "start": 166,
+            "text": "az doctor"
+          }
+        ],
+        "id": "s16",
+        "question": "Which command is the explicit Jcode install target?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 43,
+          "path": "README.md",
+          "sha256": "9e07dee661e6e82d8ce49503a87e1f49873bde4546f21f8774b0dd9e02a54508",
+          "start_line": 43,
+          "text": "`az install` finds supported tools automatically. To target one tool, run `az install jcode`; to install every integration, run `az install all`. Then run the exact `az doctor` command printed by install before reloading the tool. See [edge cases and lifecycle details](docs/install.md) for platform checks, registry reloads, configuration paths, Cargo setup, and safe removal.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 22,
+            "byte_start": 7,
+            "end": 22,
+            "id": "c000",
+            "start": 7,
+            "text": "XDG_CONFIG_HOME"
+          },
+          {
+            "byte_end": 40,
+            "byte_start": 26,
+            "end": 40,
+            "id": "c001",
+            "start": 26,
+            "text": "XDG_STATE_HOME"
+          },
+          {
+            "byte_end": 60,
+            "byte_start": 47,
+            "end": 60,
+            "id": "c002",
+            "start": 47,
+            "text": "XDG_DATA_HOME"
+          },
+          {
+            "byte_end": 171,
+            "byte_start": 167,
+            "end": 171,
+            "id": "c003",
+            "start": 167,
+            "text": "HOME"
+          }
+        ],
+        "id": "s17",
+        "question": "What absolute XDG cache path is supplied?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 7,
+          "path": "docs/install.md",
+          "sha256": "00c3cc1ad4cbaf556dcdca0617d2c66b477a8855de62b26578202fcce371f166",
+          "start_line": 7,
+          "text": "A set `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, or `XDG_DATA_HOME` must be absolute. Empty or relative XDG config and state values fall back to the corresponding absolute `HOME` paths; an invalid data root fails closed.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 22,
+            "byte_start": 7,
+            "end": 22,
+            "id": "c000",
+            "start": 7,
+            "text": "XDG_CONFIG_HOME"
+          },
+          {
+            "byte_end": 40,
+            "byte_start": 26,
+            "end": 40,
+            "id": "c001",
+            "start": 26,
+            "text": "XDG_STATE_HOME"
+          },
+          {
+            "byte_end": 60,
+            "byte_start": 47,
+            "end": 60,
+            "id": "c002",
+            "start": 47,
+            "text": "XDG_DATA_HOME"
+          },
+          {
+            "byte_end": 171,
+            "byte_start": 167,
+            "end": 171,
+            "id": "c003",
+            "start": 167,
+            "text": "HOME"
+          }
+        ],
+        "id": "s18",
+        "question": "Which ONE XDG home variable should be used for a file when its category, configuration versus state versus data, has not been specified?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 7,
+          "path": "docs/install.md",
+          "sha256": "00c3cc1ad4cbaf556dcdca0617d2c66b477a8855de62b26578202fcce371f166",
+          "start_line": 7,
+          "text": "A set `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, or `XDG_DATA_HOME` must be absolute. Empty or relative XDG config and state values fall back to the corresponding absolute `HOME` paths; an invalid data root fails closed.\n"
+        }
+      }
+    ]
+  }
+}

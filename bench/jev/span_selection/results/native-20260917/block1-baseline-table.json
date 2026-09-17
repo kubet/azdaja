@@ -1,0 +1,250 @@
+{
+  "rows": [
+    {
+      "byte_end": 17,
+      "byte_start": 11,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 17,
+      "id": "s01",
+      "path": "Cargo.toml",
+      "source_sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+      "start": 11,
+      "status": "selected",
+      "value": "0.1.17"
+    },
+    {
+      "byte_end": 20,
+      "byte_start": 16,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 20,
+      "id": "s02",
+      "path": "Cargo.toml",
+      "source_sha256": "b0c3e7bfae90e88a3c7420b0f38e679cbef04c19e30046e15d9711089f694a73",
+      "start": 16,
+      "status": "selected",
+      "value": "1.95"
+    },
+    {
+      "byte_end": 30,
+      "byte_start": 12,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 30,
+      "id": "s03",
+      "path": "README.md",
+      "source_sha256": "d16a52791f8e67e904989360e0edb590235e951f033c10ebbee02b9f3ab317b8",
+      "start": 12,
+      "status": "selected",
+      "value": "azdaja.dev/install"
+    },
+    {
+      "byte_end": 69,
+      "byte_start": 62,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 69,
+      "id": "s04",
+      "path": "README.md",
+      "source_sha256": "444b8a324b315ae2b4b4341b9fc6b8e03a86a8977ea76d9b846fffbe68a068f2",
+      "start": 62,
+      "status": "selected",
+      "value": "v0.1.17"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "no_match",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s05",
+      "path": "Cargo.toml",
+      "source_sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+      "start": null,
+      "status": "no_match",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s06",
+      "path": "Cargo.toml",
+      "source_sha256": "758a75188f19a450388f4ac56404b51731c97f21332b82b618689a755b886487",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    }
+  ],
+  "selections": {
+    "s01": "c000",
+    "s02": "c000",
+    "s03": "c000",
+    "s04": "c000",
+    "s05": "no_match",
+    "s06": "ambiguous"
+  },
+  "source_pool": {
+    "tasks": [
+      {
+        "candidates": [
+          {
+            "byte_end": 17,
+            "byte_start": 11,
+            "end": 17,
+            "id": "c000",
+            "start": 11,
+            "text": "0.1.17"
+          }
+        ],
+        "id": "s01",
+        "question": "Package version?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 3,
+          "path": "Cargo.toml",
+          "sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+          "start_line": 3,
+          "text": "version = \"0.1.17\"\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 20,
+            "byte_start": 16,
+            "end": 20,
+            "id": "c000",
+            "start": 16,
+            "text": "1.95"
+          }
+        ],
+        "id": "s02",
+        "question": "Required Rust version?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 8,
+          "path": "Cargo.toml",
+          "sha256": "b0c3e7bfae90e88a3c7420b0f38e679cbef04c19e30046e15d9711089f694a73",
+          "start_line": 8,
+          "text": "rust-version = \"1.95\"\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 30,
+            "byte_start": 12,
+            "end": 30,
+            "id": "c000",
+            "start": 12,
+            "text": "azdaja.dev/install"
+          },
+          {
+            "byte_end": 135,
+            "byte_start": 125,
+            "end": 135,
+            "id": "c001",
+            "start": 125,
+            "text": "azdaja.dev"
+          },
+          {
+            "byte_end": 169,
+            "byte_start": 159,
+            "end": 169,
+            "id": "c002",
+            "start": 159,
+            "text": "SHA256SUMS"
+          }
+        ],
+        "id": "s03",
+        "question": "Which URL is the stable current installer?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 33,
+          "path": "README.md",
+          "sha256": "d16a52791f8e67e904989360e0edb590235e951f033c10ebbee02b9f3ab317b8",
+          "start_line": 33,
+          "text": "The stable `azdaja.dev/install` URL serves the current published installer. Its versioned release payloads are fetched from `azdaja.dev` and verified against `SHA256SUMS` before installation.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 69,
+            "byte_start": 62,
+            "end": 69,
+            "id": "c000",
+            "start": 62,
+            "text": "v0.1.17"
+          }
+        ],
+        "id": "s04",
+        "question": "Which exact release-tag token follows --tag?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 38,
+          "path": "README.md",
+          "sha256": "444b8a324b315ae2b4b4341b9fc6b8e03a86a8977ea76d9b846fffbe68a068f2",
+          "start_line": 38,
+          "text": "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.17 --locked\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 17,
+            "byte_start": 11,
+            "end": 17,
+            "id": "c000",
+            "start": 11,
+            "text": "0.1.17"
+          }
+        ],
+        "id": "s05",
+        "question": "Which license identifier is explicitly stated in this excerpt?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 3,
+          "path": "Cargo.toml",
+          "sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+          "start_line": 3,
+          "text": "version = \"0.1.17\"\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 17,
+            "byte_start": 11,
+            "end": 17,
+            "id": "c000",
+            "start": 11,
+            "text": "0.1.17"
+          },
+          {
+            "byte_end": 206,
+            "byte_start": 202,
+            "end": 206,
+            "id": "c001",
+            "start": 202,
+            "text": "1.95"
+          }
+        ],
+        "id": "s06",
+        "question": "The caller asks for one version value but has not specified whether it wants the package version or the minimum Rust version. Which single value does that underspecified request determine?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 8,
+          "path": "Cargo.toml",
+          "sha256": "758a75188f19a450388f4ac56404b51731c97f21332b82b618689a755b886487",
+          "start_line": 3,
+          "text": "version = \"0.1.17\"\nedition = \"2024\"\nlicense = \"MIT\"\ndescription = \"Virtual memory for language models with a bounded model-facing surface\"\nrepository = \"https://github.com/kubet/azdaja\"\nrust-version = \"1.95\"\n"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,674 @@
+{
+  "rows": [
+    {
+      "byte_end": 7,
+      "byte_start": 1,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 7,
+      "id": "s07",
+      "path": "README.md",
+      "source_sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+      "start": 1,
+      "status": "selected",
+      "value": "azdaja"
+    },
+    {
+      "byte_end": 31,
+      "byte_start": 26,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 31,
+      "id": "s08",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": 26,
+      "status": "selected",
+      "value": "jcode"
+    },
+    {
+      "byte_end": 115,
+      "byte_start": 109,
+      "choice": "c002",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 115,
+      "id": "s09",
+      "path": "README.md",
+      "source_sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+      "start": 109,
+      "status": "selected",
+      "value": "azdaja"
+    },
+    {
+      "byte_end": 76,
+      "byte_start": 68,
+      "choice": "c004",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 76,
+      "id": "s10",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": 68,
+      "status": "selected",
+      "value": "opencode"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "no_match",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s11",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": null,
+      "status": "no_match",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s12",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    }
+  ],
+  "selections": {
+    "s07": "c000",
+    "s08": "c000",
+    "s09": "c002",
+    "s10": "c004",
+    "s11": "no_match",
+    "s12": "ambiguous"
+  },
+  "source_pool": {
+    "tasks": [
+      {
+        "candidates": [
+          {
+            "byte_end": 7,
+            "byte_start": 1,
+            "end": 7,
+            "id": "c000",
+            "start": 1,
+            "text": "azdaja"
+          },
+          {
+            "byte_end": 62,
+            "byte_start": 60,
+            "end": 62,
+            "id": "c001",
+            "start": 60,
+            "text": "az"
+          },
+          {
+            "byte_end": 115,
+            "byte_start": 109,
+            "end": 115,
+            "id": "c002",
+            "start": 109,
+            "text": "azdaja"
+          }
+        ],
+        "id": "s07",
+        "question": "Copy the command-name occurrence in the sentence that explicitly calls it the canonical command.",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 41,
+          "path": "README.md",
+          "sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+          "start_line": 41,
+          "text": "`azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 31,
+            "byte_start": 26,
+            "end": 31,
+            "id": "c000",
+            "start": 26,
+            "text": "jcode"
+          },
+          {
+            "byte_end": 41,
+            "byte_start": 35,
+            "end": 41,
+            "id": "c001",
+            "start": 35,
+            "text": "claude"
+          },
+          {
+            "byte_end": 50,
+            "byte_start": 45,
+            "end": 50,
+            "id": "c002",
+            "start": 45,
+            "text": "codex"
+          },
+          {
+            "byte_end": 60,
+            "byte_start": 54,
+            "end": 60,
+            "id": "c003",
+            "start": 54,
+            "text": "gemini"
+          },
+          {
+            "byte_end": 76,
+            "byte_start": 68,
+            "end": 76,
+            "id": "c004",
+            "start": 68,
+            "text": "opencode"
+          },
+          {
+            "byte_end": 138,
+            "byte_start": 134,
+            "end": 138,
+            "id": "c005",
+            "start": 134,
+            "text": "PATH"
+          },
+          {
+            "byte_end": 427,
+            "byte_start": 422,
+            "end": 427,
+            "id": "c006",
+            "start": 422,
+            "text": "found"
+          },
+          {
+            "byte_end": 440,
+            "byte_start": 431,
+            "end": 440,
+            "id": "c007",
+            "start": 431,
+            "text": "not found"
+          },
+          {
+            "byte_end": 463,
+            "byte_start": 444,
+            "end": 463,
+            "id": "c008",
+            "start": 444,
+            "text": "integration present"
+          },
+          {
+            "byte_end": 483,
+            "byte_start": 471,
+            "end": 483,
+            "id": "c009",
+            "start": 471,
+            "text": "needs repair"
+          },
+          {
+            "byte_end": 494,
+            "byte_start": 487,
+            "end": 494,
+            "id": "c010",
+            "start": 487,
+            "text": "present"
+          },
+          {
+            "byte_end": 531,
+            "byte_start": 525,
+            "end": 531,
+            "id": "c011",
+            "start": 525,
+            "text": "active"
+          },
+          {
+            "byte_end": 806,
+            "byte_start": 801,
+            "end": 806,
+            "id": "c012",
+            "start": 801,
+            "text": "--all"
+          },
+          {
+            "byte_end": 911,
+            "byte_start": 900,
+            "end": 911,
+            "id": "c013",
+            "start": 900,
+            "text": "jcode,codex"
+          }
+        ],
+        "id": "s08",
+        "question": "Which first supported tool name is listed?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 11,
+          "path": "docs/install.md",
+          "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+          "start_line": 11,
+          "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 7,
+            "byte_start": 1,
+            "end": 7,
+            "id": "c000",
+            "start": 1,
+            "text": "azdaja"
+          },
+          {
+            "byte_end": 62,
+            "byte_start": 60,
+            "end": 62,
+            "id": "c001",
+            "start": 60,
+            "text": "az"
+          },
+          {
+            "byte_end": 115,
+            "byte_start": 109,
+            "end": 115,
+            "id": "c002",
+            "start": 109,
+            "text": "azdaja"
+          }
+        ],
+        "id": "s09",
+        "question": "Copy the command-name occurrence in the clause Cargo installs ... only, not an earlier mention of the same name.",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 41,
+          "path": "README.md",
+          "sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+          "start_line": 41,
+          "text": "`azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 31,
+            "byte_start": 26,
+            "end": 31,
+            "id": "c000",
+            "start": 26,
+            "text": "jcode"
+          },
+          {
+            "byte_end": 41,
+            "byte_start": 35,
+            "end": 41,
+            "id": "c001",
+            "start": 35,
+            "text": "claude"
+          },
+          {
+            "byte_end": 50,
+            "byte_start": 45,
+            "end": 50,
+            "id": "c002",
+            "start": 45,
+            "text": "codex"
+          },
+          {
+            "byte_end": 60,
+            "byte_start": 54,
+            "end": 60,
+            "id": "c003",
+            "start": 54,
+            "text": "gemini"
+          },
+          {
+            "byte_end": 76,
+            "byte_start": 68,
+            "end": 76,
+            "id": "c004",
+            "start": 68,
+            "text": "opencode"
+          },
+          {
+            "byte_end": 138,
+            "byte_start": 134,
+            "end": 138,
+            "id": "c005",
+            "start": 134,
+            "text": "PATH"
+          },
+          {
+            "byte_end": 427,
+            "byte_start": 422,
+            "end": 427,
+            "id": "c006",
+            "start": 422,
+            "text": "found"
+          },
+          {
+            "byte_end": 440,
+            "byte_start": 431,
+            "end": 440,
+            "id": "c007",
+            "start": 431,
+            "text": "not found"
+          },
+          {
+            "byte_end": 463,
+            "byte_start": 444,
+            "end": 463,
+            "id": "c008",
+            "start": 444,
+            "text": "integration present"
+          },
+          {
+            "byte_end": 483,
+            "byte_start": 471,
+            "end": 483,
+            "id": "c009",
+            "start": 471,
+            "text": "needs repair"
+          },
+          {
+            "byte_end": 494,
+            "byte_start": 487,
+            "end": 494,
+            "id": "c010",
+            "start": 487,
+            "text": "present"
+          },
+          {
+            "byte_end": 531,
+            "byte_start": 525,
+            "end": 531,
+            "id": "c011",
+            "start": 525,
+            "text": "active"
+          },
+          {
+            "byte_end": 806,
+            "byte_start": 801,
+            "end": 806,
+            "id": "c012",
+            "start": 801,
+            "text": "--all"
+          },
+          {
+            "byte_end": 911,
+            "byte_start": 900,
+            "end": 911,
+            "id": "c013",
+            "start": 900,
+            "text": "jcode,codex"
+          }
+        ],
+        "id": "s10",
+        "question": "Which tool name is last in the supported list?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 11,
+          "path": "docs/install.md",
+          "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+          "start_line": 11,
+          "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 31,
+            "byte_start": 26,
+            "end": 31,
+            "id": "c000",
+            "start": 26,
+            "text": "jcode"
+          },
+          {
+            "byte_end": 41,
+            "byte_start": 35,
+            "end": 41,
+            "id": "c001",
+            "start": 35,
+            "text": "claude"
+          },
+          {
+            "byte_end": 50,
+            "byte_start": 45,
+            "end": 50,
+            "id": "c002",
+            "start": 45,
+            "text": "codex"
+          },
+          {
+            "byte_end": 60,
+            "byte_start": 54,
+            "end": 60,
+            "id": "c003",
+            "start": 54,
+            "text": "gemini"
+          },
+          {
+            "byte_end": 76,
+            "byte_start": 68,
+            "end": 76,
+            "id": "c004",
+            "start": 68,
+            "text": "opencode"
+          },
+          {
+            "byte_end": 138,
+            "byte_start": 134,
+            "end": 138,
+            "id": "c005",
+            "start": 134,
+            "text": "PATH"
+          },
+          {
+            "byte_end": 427,
+            "byte_start": 422,
+            "end": 427,
+            "id": "c006",
+            "start": 422,
+            "text": "found"
+          },
+          {
+            "byte_end": 440,
+            "byte_start": 431,
+            "end": 440,
+            "id": "c007",
+            "start": 431,
+            "text": "not found"
+          },
+          {
+            "byte_end": 463,
+            "byte_start": 444,
+            "end": 463,
+            "id": "c008",
+            "start": 444,
+            "text": "integration present"
+          },
+          {
+            "byte_end": 483,
+            "byte_start": 471,
+            "end": 483,
+            "id": "c009",
+            "start": 471,
+            "text": "needs repair"
+          },
+          {
+            "byte_end": 494,
+            "byte_start": 487,
+            "end": 494,
+            "id": "c010",
+            "start": 487,
+            "text": "present"
+          },
+          {
+            "byte_end": 531,
+            "byte_start": 525,
+            "end": 531,
+            "id": "c011",
+            "start": 525,
+            "text": "active"
+          },
+          {
+            "byte_end": 806,
+            "byte_start": 801,
+            "end": 806,
+            "id": "c012",
+            "start": 801,
+            "text": "--all"
+          },
+          {
+            "byte_end": 911,
+            "byte_start": 900,
+            "end": 911,
+            "id": "c013",
+            "start": 900,
+            "text": "jcode,codex"
+          }
+        ],
+        "id": "s11",
+        "question": "Which supported container-engine integration is explicitly named docker in this excerpt?",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 11,
+          "path": "docs/install.md",
+          "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+          "start_line": 11,
+          "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n"
+        }
+      },
+      {
+        "candidates": [
+          {
+            "byte_end": 31,
+            "byte_start": 26,
+            "end": 31,
+            "id": "c000",
+            "start": 26,
+            "text": "jcode"
+          },
+          {
+            "byte_end": 41,
+            "byte_start": 35,
+            "end": 41,
+            "id": "c001",
+            "start": 35,
+            "text": "claude"
+          },
+          {
+            "byte_end": 50,
+            "byte_start": 45,
+            "end": 50,
+            "id": "c002",
+            "start": 45,
+            "text": "codex"
+          },
+          {
+            "byte_end": 60,
+            "byte_start": 54,
+            "end": 60,
+            "id": "c003",
+            "start": 54,
+            "text": "gemini"
+          },
+          {
+            "byte_end": 76,
+            "byte_start": 68,
+            "end": 76,
+            "id": "c004",
+            "start": 68,
+            "text": "opencode"
+          },
+          {
+            "byte_end": 138,
+            "byte_start": 134,
+            "end": 138,
+            "id": "c005",
+            "start": 134,
+            "text": "PATH"
+          },
+          {
+            "byte_end": 427,
+            "byte_start": 422,
+            "end": 427,
+            "id": "c006",
+            "start": 422,
+            "text": "found"
+          },
+          {
+            "byte_end": 440,
+            "byte_start": 431,
+            "end": 440,
+            "id": "c007",
+            "start": 431,
+            "text": "not found"
+          },
+          {
+            "byte_end": 463,
+            "byte_start": 444,
+            "end": 463,
+            "id": "c008",
+            "start": 444,
+            "text": "integration present"
+          },
+          {
+            "byte_end": 483,
+            "byte_start": 471,
+            "end": 483,
+            "id": "c009",
+            "start": 471,
+            "text": "needs repair"
+          },
+          {
+            "byte_end": 494,
+            "byte_start": 487,
+            "end": 494,
+            "id": "c010",
+            "start": 487,
+            "text": "present"
+          },
+          {
+            "byte_end": 531,
+            "byte_start": 525,
+            "end": 531,
+            "id": "c011",
+            "start": 525,
+            "text": "active"
+          },
+          {
+            "byte_end": 806,
+            "byte_start": 801,
+            "end": 806,
+            "id": "c012",
+            "start": 801,
+            "text": "--all"
+          },
+          {
+            "byte_end": 911,
+            "byte_start": 900,
+            "end": 911,
+            "id": "c013",
+            "start": 900,
+            "text": "jcode,codex"
+          }
+        ],
+        "id": "s12",
+        "question": "Which ONE supported host integration should the caller explicitly request? The caller has not specified a host tool, and no PATH or executable-detection result is supplied.",
+        "source": {
+          "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+          "end_line": 11,
+          "path": "docs/install.md",
+          "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+          "start_line": 11,
+          "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n"
+        }
+      }
+    ]
+  }
+}

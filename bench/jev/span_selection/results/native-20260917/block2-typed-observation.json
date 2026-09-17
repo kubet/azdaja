@@ -1,0 +1,309 @@
+{
+  "cached": {
+    "_azdaja": {
+      "billing": "not_inferred",
+      "cache_hit": true,
+      "elapsed_ms": 3,
+      "model_semantics": "provider_reported_identifier_not_immutable_weights",
+      "new_request_usage": null,
+      "original_usage": {
+        "input_tokens": 9466,
+        "output_tokens": 896
+      },
+      "provider_requests_this_call": 0,
+      "request_sha256": "a74c4c261f468460225550c2af83476776345ea5ede05b7081b193dc194419aa",
+      "usage_semantics": "original_observation_reused_no_new_request"
+    },
+    "answers": {
+      "s07": {
+        "choice": "c000",
+        "confidence": 0.99,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.99,
+          "c001": 0.0,
+          "c002": 0.0,
+          "no_match": 0.0,
+          "not_covered": 0.01
+        },
+        "type": "choice"
+      },
+      "s08": {
+        "choice": "c000",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 1.0,
+          "c001": 0.0,
+          "c002": 0.0,
+          "c003": 0.0,
+          "c004": 0.0,
+          "c005": 0.0,
+          "c006": 0.0,
+          "c007": 0.0,
+          "c008": 0.0,
+          "c009": 0.0,
+          "c010": 0.0,
+          "c011": 0.0,
+          "c012": 0.0,
+          "c013": 0.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s09": {
+        "choice": "c002",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.0,
+          "c001": 0.0,
+          "c002": 1.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s10": {
+        "choice": "c004",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.0,
+          "c001": 0.0,
+          "c002": 0.0,
+          "c003": 0.0,
+          "c004": 1.0,
+          "c005": 0.0,
+          "c006": 0.0,
+          "c007": 0.0,
+          "c008": 0.0,
+          "c009": 0.0,
+          "c010": 0.0,
+          "c011": 0.0,
+          "c012": 0.0,
+          "c013": 0.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s11": {
+        "choice": "no_match",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.0,
+          "c001": 0.0,
+          "c002": 0.0,
+          "c003": 0.0,
+          "c004": 0.0,
+          "c005": 0.0,
+          "c006": 0.0,
+          "c007": 0.0,
+          "c008": 0.0,
+          "c009": 0.0,
+          "c010": 0.0,
+          "c011": 0.0,
+          "c012": 0.0,
+          "c013": 0.0,
+          "no_match": 1.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s12": {
+        "choice": "ambiguous",
+        "confidence": 0.39,
+        "probabilities": {
+          "ambiguous": 0.44,
+          "c000": 0.01,
+          "c001": 0.0,
+          "c002": 0.0,
+          "c003": 0.0,
+          "c004": 0.0,
+          "c005": 0.0,
+          "c006": 0.0,
+          "c007": 0.0,
+          "c008": 0.0,
+          "c009": 0.0,
+          "c010": 0.0,
+          "c011": 0.0,
+          "c012": 0.13,
+          "c013": 0.01,
+          "no_match": 0.37,
+          "not_covered": 0.04
+        },
+        "type": "choice"
+      }
+    },
+    "model": "jev-1.13.0",
+    "usage": {
+      "input_tokens": 9466,
+      "output_tokens": 896
+    }
+  },
+  "observation": {
+    "_azdaja": {
+      "billing": "not_inferred",
+      "cache_hit": false,
+      "elapsed_ms": 1003,
+      "model_semantics": "provider_reported_identifier_not_immutable_weights",
+      "new_request_usage": {
+        "input_tokens": 9466,
+        "output_tokens": 896
+      },
+      "original_usage": {
+        "input_tokens": 9466,
+        "output_tokens": 896
+      },
+      "provider_requests_this_call": 1,
+      "request_sha256": "a74c4c261f468460225550c2af83476776345ea5ede05b7081b193dc194419aa",
+      "usage_semantics": "original_provider_request"
+    },
+    "answers": {
+      "s07": {
+        "choice": "c000",
+        "confidence": 0.99,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.99,
+          "c001": 0.0,
+          "c002": 0.0,
+          "no_match": 0.0,
+          "not_covered": 0.01
+        },
+        "type": "choice"
+      },
+      "s08": {
+        "choice": "c000",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 1.0,
+          "c001": 0.0,
+          "c002": 0.0,
+          "c003": 0.0,
+          "c004": 0.0,
+          "c005": 0.0,
+          "c006": 0.0,
+          "c007": 0.0,
+          "c008": 0.0,
+          "c009": 0.0,
+          "c010": 0.0,
+          "c011": 0.0,
+          "c012": 0.0,
+          "c013": 0.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s09": {
+        "choice": "c002",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.0,
+          "c001": 0.0,
+          "c002": 1.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s10": {
+        "choice": "c004",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.0,
+          "c001": 0.0,
+          "c002": 0.0,
+          "c003": 0.0,
+          "c004": 1.0,
+          "c005": 0.0,
+          "c006": 0.0,
+          "c007": 0.0,
+          "c008": 0.0,
+          "c009": 0.0,
+          "c010": 0.0,
+          "c011": 0.0,
+          "c012": 0.0,
+          "c013": 0.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s11": {
+        "choice": "no_match",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.0,
+          "c001": 0.0,
+          "c002": 0.0,
+          "c003": 0.0,
+          "c004": 0.0,
+          "c005": 0.0,
+          "c006": 0.0,
+          "c007": 0.0,
+          "c008": 0.0,
+          "c009": 0.0,
+          "c010": 0.0,
+          "c011": 0.0,
+          "c012": 0.0,
+          "c013": 0.0,
+          "no_match": 1.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s12": {
+        "choice": "ambiguous",
+        "confidence": 0.39,
+        "probabilities": {
+          "ambiguous": 0.44,
+          "c000": 0.01,
+          "c001": 0.0,
+          "c002": 0.0,
+          "c003": 0.0,
+          "c004": 0.0,
+          "c005": 0.0,
+          "c006": 0.0,
+          "c007": 0.0,
+          "c008": 0.0,
+          "c009": 0.0,
+          "c010": 0.0,
+          "c011": 0.0,
+          "c012": 0.13,
+          "c013": 0.01,
+          "no_match": 0.37,
+          "not_covered": 0.04
+        },
+        "type": "choice"
+      }
+    },
+    "model": "jev-1.13.0",
+    "usage": {
+      "input_tokens": 9466,
+      "output_tokens": 896
+    }
+  },
+  "stats": {
+    "attempts": 1,
+    "billing": "not_inferred",
+    "cache_hits": 1,
+    "cached_requests": 1,
+    "enabled": true,
+    "input_usage_complete": true,
+    "known_input_tokens": 9466,
+    "poisoned": false,
+    "provider_requests": 1,
+    "questions": 6,
+    "transport_available": true,
+    "unknown_input_usage_requests": 0
+  }
+}

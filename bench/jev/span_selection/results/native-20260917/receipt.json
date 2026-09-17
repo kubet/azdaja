@@ -1,0 +1,1399 @@
+{
+  "automatic_planning": false,
+  "baseline_grade": {
+    "correct": 18,
+    "observed": 18,
+    "rows": [
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s01",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s02",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s03",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s04",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s05",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s06",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s07",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s08",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s09",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s10",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s11",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s12",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s13",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s14",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s15",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s16",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s17",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s18",
+        "provenance_correct": true,
+        "value_correct": true
+      }
+    ],
+    "unjudged": 0
+  },
+  "baseline_observed": 18,
+  "baseline_rows": [
+    {
+      "byte_end": 17,
+      "byte_start": 11,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 17,
+      "id": "s01",
+      "path": "Cargo.toml",
+      "source_sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+      "start": 11,
+      "status": "selected",
+      "value": "0.1.17"
+    },
+    {
+      "byte_end": 20,
+      "byte_start": 16,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 20,
+      "id": "s02",
+      "path": "Cargo.toml",
+      "source_sha256": "b0c3e7bfae90e88a3c7420b0f38e679cbef04c19e30046e15d9711089f694a73",
+      "start": 16,
+      "status": "selected",
+      "value": "1.95"
+    },
+    {
+      "byte_end": 30,
+      "byte_start": 12,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 30,
+      "id": "s03",
+      "path": "README.md",
+      "source_sha256": "d16a52791f8e67e904989360e0edb590235e951f033c10ebbee02b9f3ab317b8",
+      "start": 12,
+      "status": "selected",
+      "value": "azdaja.dev/install"
+    },
+    {
+      "byte_end": 69,
+      "byte_start": 62,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 69,
+      "id": "s04",
+      "path": "README.md",
+      "source_sha256": "444b8a324b315ae2b4b4341b9fc6b8e03a86a8977ea76d9b846fffbe68a068f2",
+      "start": 62,
+      "status": "selected",
+      "value": "v0.1.17"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "no_match",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s05",
+      "path": "Cargo.toml",
+      "source_sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+      "start": null,
+      "status": "no_match",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s06",
+      "path": "Cargo.toml",
+      "source_sha256": "758a75188f19a450388f4ac56404b51731c97f21332b82b618689a755b886487",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": 7,
+      "byte_start": 1,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 7,
+      "id": "s07",
+      "path": "README.md",
+      "source_sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+      "start": 1,
+      "status": "selected",
+      "value": "azdaja"
+    },
+    {
+      "byte_end": 31,
+      "byte_start": 26,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 31,
+      "id": "s08",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": 26,
+      "status": "selected",
+      "value": "jcode"
+    },
+    {
+      "byte_end": 115,
+      "byte_start": 109,
+      "choice": "c002",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 115,
+      "id": "s09",
+      "path": "README.md",
+      "source_sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+      "start": 109,
+      "status": "selected",
+      "value": "azdaja"
+    },
+    {
+      "byte_end": 76,
+      "byte_start": 68,
+      "choice": "c004",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 76,
+      "id": "s10",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": 68,
+      "status": "selected",
+      "value": "opencode"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "no_match",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s11",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": null,
+      "status": "no_match",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s12",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": 24,
+      "byte_start": 15,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 24,
+      "id": "s13",
+      "path": "assets/config.toml",
+      "source_sha256": "088a6586beab66eee8a15fef5da4883044aa916cf7c4bf511f0792c6d8231a56",
+      "start": 15,
+      "status": "selected",
+      "value": "jcode-api"
+    },
+    {
+      "byte_end": 28,
+      "byte_start": 17,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 28,
+      "id": "s14",
+      "path": "assets/config.toml",
+      "source_sha256": "12e1d317ea7e4108a9a0fd167db106c7c96f2a5caa5585dbdcbb2bdc4019a453",
+      "start": 17,
+      "status": "selected",
+      "value": "gpt-5.6-sol"
+    },
+    {
+      "byte_end": 168,
+      "byte_start": 144,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 168,
+      "id": "s15",
+      "path": "docs/install.md",
+      "source_sha256": "ea1019e47a2acc0af7395616809331ef80ea549eaabc52fece0025ed9102bfea",
+      "start": 144,
+      "status": "selected",
+      "value": "getconf GNU_LIBC_VERSION"
+    },
+    {
+      "byte_end": 91,
+      "byte_start": 75,
+      "choice": "c001",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 91,
+      "id": "s16",
+      "path": "README.md",
+      "source_sha256": "9e07dee661e6e82d8ce49503a87e1f49873bde4546f21f8774b0dd9e02a54508",
+      "start": 75,
+      "status": "selected",
+      "value": "az install jcode"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "no_match",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s17",
+      "path": "docs/install.md",
+      "source_sha256": "00c3cc1ad4cbaf556dcdca0617d2c66b477a8855de62b26578202fcce371f166",
+      "start": null,
+      "status": "no_match",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s18",
+      "path": "docs/install.md",
+      "source_sha256": "00c3cc1ad4cbaf556dcdca0617d2c66b477a8855de62b26578202fcce371f166",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    }
+  ],
+  "baseline_unjudged": 0,
+  "billing": "not_inferred",
+  "binary_sha256": "0aefe8e63c385b6f926d0f4264440b308d3eaca5c30c9cce6d1d4b0493a7f237",
+  "block_seconds": {
+    "baseline": [
+      2.981993291003164,
+      2.5048173340037465,
+      2.529266249970533
+    ],
+    "typed": [
+      1.1526826249901205,
+      1.4038592500146478,
+      1.161640541977249
+    ]
+  },
+  "cleanup_exit": 0,
+  "comparison": {
+    "billing": "not_inferred",
+    "complete_panel": true,
+    "general_advantage_established": false,
+    "median_block_latency_ratio": 0.4592796594628117,
+    "observed_benefit_bar_passed": false,
+    "quality_bar_passed": false,
+    "typed_lost_task_ids": [
+      "s18"
+    ]
+  },
+  "confirmed_typed_requests": 3,
+  "elapsed_seconds": 12.355201750004198,
+  "events": [
+    {
+      "command": "start",
+      "exit": 0,
+      "seconds": 0.013439457979984581,
+      "stderr_bytes": 0,
+      "stdout_bytes": 17
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.01086508302250877,
+      "stderr_bytes": 0,
+      "stdout_bytes": 54
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.009946790989488363,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.007044708007015288,
+      "stderr_bytes": 0,
+      "stdout_bytes": 339
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.00933683302719146,
+      "stderr_bytes": 0,
+      "stdout_bytes": 56
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.016118999978061765,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.007293624978046864,
+      "stderr_bytes": 0,
+      "stdout_bytes": 24185
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.012021000031381845,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006862792011816055,
+      "stderr_bytes": 0,
+      "stdout_bytes": 24185
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.010939916013740003,
+      "stderr_bytes": 0,
+      "stdout_bytes": 56
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 2.6950072500039823,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006828625046182424,
+      "stderr_bytes": 0,
+      "stdout_bytes": 88
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.010286792006809264,
+      "stderr_bytes": 0,
+      "stdout_bytes": 55
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.0133156250230968,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.007090084021911025,
+      "stderr_bytes": 0,
+      "stdout_bytes": 4918
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.010690208000596613,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006592791993170977,
+      "stderr_bytes": 0,
+      "stdout_bytes": 4918
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.011212790966965258,
+      "stderr_bytes": 0,
+      "stdout_bytes": 51
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.7888407499995083,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.007023000041954219,
+      "stderr_bytes": 0,
+      "stdout_bytes": 3004
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.011662792006973177,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006516916968394071,
+      "stderr_bytes": 0,
+      "stdout_bytes": 1368
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.011313624971080571,
+      "stderr_bytes": 0,
+      "stdout_bytes": 55
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.014527667022775859,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006583958980627358,
+      "stderr_bytes": 0,
+      "stdout_bytes": 4918
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.01170662499498576,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006653500022366643,
+      "stderr_bytes": 0,
+      "stdout_bytes": 4918
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.012190958019345999,
+      "stderr_bytes": 0,
+      "stdout_bytes": 51
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 1.028856624965556,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.007805875036865473,
+      "stderr_bytes": 0,
+      "stdout_bytes": 4179
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.012823749973904341,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006460415956098586,
+      "stderr_bytes": 0,
+      "stdout_bytes": 1956
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.01317975000711158,
+      "stderr_bytes": 0,
+      "stdout_bytes": 56
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.018087749951519072,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006794249988161027,
+      "stderr_bytes": 0,
+      "stdout_bytes": 12921
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.014473457995336503,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.007068958017043769,
+      "stderr_bytes": 0,
+      "stdout_bytes": 12921
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.014094999991357327,
+      "stderr_bytes": 0,
+      "stdout_bytes": 56
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 2.1988744999980554,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.008551749982871115,
+      "stderr_bytes": 0,
+      "stdout_bytes": 88
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.014108458010014147,
+      "stderr_bytes": 0,
+      "stdout_bytes": 56
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.018564291996881366,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006454250018578023,
+      "stderr_bytes": 0,
+      "stdout_bytes": 12921
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.01568966603372246,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006538249959703535,
+      "stderr_bytes": 0,
+      "stdout_bytes": 12921
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.014718124992214143,
+      "stderr_bytes": 0,
+      "stdout_bytes": 56
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 2.223866624990478,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.007074374996591359,
+      "stderr_bytes": 0,
+      "stdout_bytes": 88
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.01499020797200501,
+      "stderr_bytes": 0,
+      "stdout_bytes": 55
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.018189541005995125,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006199458963237703,
+      "stderr_bytes": 0,
+      "stdout_bytes": 6402
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.017334875010419637,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006251458020415157,
+      "stderr_bytes": 0,
+      "stdout_bytes": 6402
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.015147500031162053,
+      "stderr_bytes": 0,
+      "stdout_bytes": 51
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.7811677920399234,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.007278000004589558,
+      "stderr_bytes": 0,
+      "stdout_bytes": 3200
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.014988749986514449,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.00652279204223305,
+      "stderr_bytes": 0,
+      "stdout_bytes": 1466
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.015331458009313792,
+      "stderr_bytes": 0,
+      "stdout_bytes": 55
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.018065417010802776,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006523832969833165,
+      "stderr_bytes": 0,
+      "stdout_bytes": 6399
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.015257166000083089,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.007177791965659708,
+      "stderr_bytes": 0,
+      "stdout_bytes": 6399
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.026104583987034857,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.0068779170396737754,
+      "stderr_bytes": 0,
+      "stdout_bytes": 96729
+    }
+  ],
+  "expected_typed_model": "jev-1.13.0",
+  "generative_trace": {
+    "entered_turns": 3,
+    "failed_identity_unknown_events": 0,
+    "logical_request_ids": 3,
+    "observed_models": [
+      "gpt-5.6-sol"
+    ],
+    "observed_providers": [
+      "OpenAI"
+    ],
+    "outcomes": [
+      "succeeded",
+      "succeeded",
+      "succeeded"
+    ],
+    "physical_attempt_events": 3,
+    "setup_attempts": 0
+  },
+  "input_hashes": {
+    "PLAN.md": "7f8676f8c6ede12a2bcfb7133ccb42ff8f8ab91cb5dc6922703e4f69d70a924a",
+    "fixtures/gold.json": "e3f5310da620da284803e283e97b47ce862af16ea65f48c03f587958f0fac2d9",
+    "fixtures/inputs.json": "d6759090b2f116fe856a19044bd65f82b65a3f9fca31978d8f75740e29e7bbbc",
+    "kernel.py": "babd42293ee39e4b86b9c995973ae578010cfd80d8532dceec98489304c102d8",
+    "run.py": "dd13b5a4942d19abfc26b3bc923aec254501c5a74aeff94f2a113728a42deb85"
+  },
+  "known_typed_input_tokens": 18128,
+  "lexical_projection": {
+    "correct": 7,
+    "observed": 18,
+    "rows": [
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s01",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s02",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s03",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s04",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s05",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": true,
+        "id": "s06",
+        "provenance_correct": false,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s07",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s08",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s09",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s10",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s11",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": true,
+        "id": "s12",
+        "provenance_correct": false,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s13",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s14",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s15",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s16",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s17",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s18",
+        "provenance_correct": true,
+        "value_correct": true
+      }
+    ],
+    "unjudged": 0
+  },
+  "logical_llm_calls": 3,
+  "mode": "live",
+  "requested_generative_model": "gpt-5.6-sol",
+  "requested_typed_model": "jev-latest",
+  "schema_version": 1,
+  "status": "completed",
+  "typed_attempts_with_unknown_usage": 0,
+  "typed_cells_started": 3,
+  "typed_grade": {
+    "correct": 17,
+    "observed": 18,
+    "rows": [
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s01",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s02",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s03",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s04",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s05",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s06",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s07",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s08",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s09",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s10",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s11",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s12",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s13",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s14",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s15",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s16",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s17",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s18",
+        "provenance_correct": true,
+        "value_correct": false
+      }
+    ],
+    "unjudged": 0
+  },
+  "typed_observed": 18,
+  "typed_questions": 18,
+  "typed_rows": [
+    {
+      "byte_end": 17,
+      "byte_start": 11,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 17,
+      "id": "s01",
+      "path": "Cargo.toml",
+      "source_sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+      "start": 11,
+      "status": "selected",
+      "value": "0.1.17"
+    },
+    {
+      "byte_end": 20,
+      "byte_start": 16,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 20,
+      "id": "s02",
+      "path": "Cargo.toml",
+      "source_sha256": "b0c3e7bfae90e88a3c7420b0f38e679cbef04c19e30046e15d9711089f694a73",
+      "start": 16,
+      "status": "selected",
+      "value": "1.95"
+    },
+    {
+      "byte_end": 30,
+      "byte_start": 12,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 30,
+      "id": "s03",
+      "path": "README.md",
+      "source_sha256": "d16a52791f8e67e904989360e0edb590235e951f033c10ebbee02b9f3ab317b8",
+      "start": 12,
+      "status": "selected",
+      "value": "azdaja.dev/install"
+    },
+    {
+      "byte_end": 69,
+      "byte_start": 62,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 69,
+      "id": "s04",
+      "path": "README.md",
+      "source_sha256": "444b8a324b315ae2b4b4341b9fc6b8e03a86a8977ea76d9b846fffbe68a068f2",
+      "start": 62,
+      "status": "selected",
+      "value": "v0.1.17"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "no_match",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s05",
+      "path": "Cargo.toml",
+      "source_sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2",
+      "start": null,
+      "status": "no_match",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s06",
+      "path": "Cargo.toml",
+      "source_sha256": "758a75188f19a450388f4ac56404b51731c97f21332b82b618689a755b886487",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": 7,
+      "byte_start": 1,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 7,
+      "id": "s07",
+      "path": "README.md",
+      "source_sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+      "start": 1,
+      "status": "selected",
+      "value": "azdaja"
+    },
+    {
+      "byte_end": 31,
+      "byte_start": 26,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 31,
+      "id": "s08",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": 26,
+      "status": "selected",
+      "value": "jcode"
+    },
+    {
+      "byte_end": 115,
+      "byte_start": 109,
+      "choice": "c002",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 115,
+      "id": "s09",
+      "path": "README.md",
+      "source_sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7",
+      "start": 109,
+      "status": "selected",
+      "value": "azdaja"
+    },
+    {
+      "byte_end": 76,
+      "byte_start": 68,
+      "choice": "c004",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 76,
+      "id": "s10",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": 68,
+      "status": "selected",
+      "value": "opencode"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "no_match",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s11",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": null,
+      "status": "no_match",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "ambiguous",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s12",
+      "path": "docs/install.md",
+      "source_sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078",
+      "start": null,
+      "status": "ambiguous",
+      "value": null
+    },
+    {
+      "byte_end": 24,
+      "byte_start": 15,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 24,
+      "id": "s13",
+      "path": "assets/config.toml",
+      "source_sha256": "088a6586beab66eee8a15fef5da4883044aa916cf7c4bf511f0792c6d8231a56",
+      "start": 15,
+      "status": "selected",
+      "value": "jcode-api"
+    },
+    {
+      "byte_end": 28,
+      "byte_start": 17,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 28,
+      "id": "s14",
+      "path": "assets/config.toml",
+      "source_sha256": "12e1d317ea7e4108a9a0fd167db106c7c96f2a5caa5585dbdcbb2bdc4019a453",
+      "start": 17,
+      "status": "selected",
+      "value": "gpt-5.6-sol"
+    },
+    {
+      "byte_end": 168,
+      "byte_start": 144,
+      "choice": "c000",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 168,
+      "id": "s15",
+      "path": "docs/install.md",
+      "source_sha256": "ea1019e47a2acc0af7395616809331ef80ea549eaabc52fece0025ed9102bfea",
+      "start": 144,
+      "status": "selected",
+      "value": "getconf GNU_LIBC_VERSION"
+    },
+    {
+      "byte_end": 91,
+      "byte_start": 75,
+      "choice": "c001",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": 91,
+      "id": "s16",
+      "path": "README.md",
+      "source_sha256": "9e07dee661e6e82d8ce49503a87e1f49873bde4546f21f8774b0dd9e02a54508",
+      "start": 75,
+      "status": "selected",
+      "value": "az install jcode"
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "no_match",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s17",
+      "path": "docs/install.md",
+      "source_sha256": "00c3cc1ad4cbaf556dcdca0617d2c66b477a8855de62b26578202fcce371f166",
+      "start": null,
+      "status": "no_match",
+      "value": null
+    },
+    {
+      "byte_end": null,
+      "byte_start": null,
+      "choice": "no_match",
+      "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+      "end": null,
+      "id": "s18",
+      "path": "docs/install.md",
+      "source_sha256": "00c3cc1ad4cbaf556dcdca0617d2c66b477a8855de62b26578202fcce371f166",
+      "start": null,
+      "status": "no_match",
+      "value": null
+    }
+  ],
+  "typed_unjudged": 0
+}

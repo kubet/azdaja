@@ -1,0 +1,203 @@
+{
+  "cached": {
+    "_azdaja": {
+      "billing": "not_inferred",
+      "cache_hit": true,
+      "elapsed_ms": 1,
+      "model_semantics": "provider_reported_identifier_not_immutable_weights",
+      "new_request_usage": null,
+      "original_usage": {
+        "input_tokens": 3916,
+        "output_tokens": 366
+      },
+      "provider_requests_this_call": 0,
+      "request_sha256": "794f3c43878ee607d6668b2dddfbafad651d45eecf8853ce22772853d71374ce",
+      "usage_semantics": "original_observation_reused_no_new_request"
+    },
+    "answers": {
+      "s01": {
+        "choice": "c000",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 1.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s02": {
+        "choice": "c000",
+        "confidence": 0.98,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.99,
+          "no_match": 0.0,
+          "not_covered": 0.01
+        },
+        "type": "choice"
+      },
+      "s03": {
+        "choice": "c000",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 1.0,
+          "c001": 0.0,
+          "c002": 0.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s04": {
+        "choice": "c000",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 1.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s05": {
+        "choice": "no_match",
+        "confidence": 0.93,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.0,
+          "no_match": 0.95,
+          "not_covered": 0.05
+        },
+        "type": "choice"
+      },
+      "s06": {
+        "choice": "ambiguous",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 1.0,
+          "c000": 0.0,
+          "c001": 0.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      }
+    },
+    "model": "jev-1.13.0",
+    "usage": {
+      "input_tokens": 3916,
+      "output_tokens": 366
+    }
+  },
+  "observation": {
+    "_azdaja": {
+      "billing": "not_inferred",
+      "cache_hit": false,
+      "elapsed_ms": 770,
+      "model_semantics": "provider_reported_identifier_not_immutable_weights",
+      "new_request_usage": {
+        "input_tokens": 3916,
+        "output_tokens": 366
+      },
+      "original_usage": {
+        "input_tokens": 3916,
+        "output_tokens": 366
+      },
+      "provider_requests_this_call": 1,
+      "request_sha256": "794f3c43878ee607d6668b2dddfbafad651d45eecf8853ce22772853d71374ce",
+      "usage_semantics": "original_provider_request"
+    },
+    "answers": {
+      "s01": {
+        "choice": "c000",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 1.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s02": {
+        "choice": "c000",
+        "confidence": 0.98,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.99,
+          "no_match": 0.0,
+          "not_covered": 0.01
+        },
+        "type": "choice"
+      },
+      "s03": {
+        "choice": "c000",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 1.0,
+          "c001": 0.0,
+          "c002": 0.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s04": {
+        "choice": "c000",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 1.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      },
+      "s05": {
+        "choice": "no_match",
+        "confidence": 0.93,
+        "probabilities": {
+          "ambiguous": 0.0,
+          "c000": 0.0,
+          "no_match": 0.95,
+          "not_covered": 0.05
+        },
+        "type": "choice"
+      },
+      "s06": {
+        "choice": "ambiguous",
+        "confidence": 1.0,
+        "probabilities": {
+          "ambiguous": 1.0,
+          "c000": 0.0,
+          "c001": 0.0,
+          "no_match": 0.0,
+          "not_covered": 0.0
+        },
+        "type": "choice"
+      }
+    },
+    "model": "jev-1.13.0",
+    "usage": {
+      "input_tokens": 3916,
+      "output_tokens": 366
+    }
+  },
+  "stats": {
+    "attempts": 1,
+    "billing": "not_inferred",
+    "cache_hits": 1,
+    "cached_requests": 1,
+    "enabled": true,
+    "input_usage_complete": true,
+    "known_input_tokens": 3916,
+    "poisoned": false,
+    "provider_requests": 1,
+    "questions": 6,
+    "transport_available": true,
+    "unknown_input_usage_requests": 0
+  }
+}

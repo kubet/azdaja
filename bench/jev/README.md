@@ -4,6 +4,8 @@
 
 **Native follow-up now exists:** ordinary `exec` exposes optional `judge_many` beside `llm`, with full distributions and no semantic confidence cutoff. See the [interface](../../docs/typed-judgments.md) and [actual native workflow outcomes](usefulness/RESULTS.md). The new run found a narrow retrieval gain but no benefit from blanket answer review. Current provider-free native interface checks are `cargo test --locked --features typesafe --test judge_native` and `cargo test --locked --features typesafe --lib judge::tests`. They do not read a real key or call a provider.
 
+**Separate exact-source selection follow-up:** the [2026-09-17 actual native study](span_selection/RESULTS.md) produced 17/18 correct typed rows versus 18/18 for the matched generative selector. Its lower observed latency did not satisfy the no-quality-loss bar. Run `python3 -B -m bench.jev.span_selection.replay` for an offline result replay, not new inference. The [consolidated angle and control flow](../../docs/research/jev-angle-of-attack-20260917.md) distinguish measured outcomes from the remaining orchestration hypotheses.
+
 The TypeSafe skill is installed project-locally at `.agents/skills/typesafe-ai/`. Existing `llm`, `llm_batch`, hooks, and core Rust behavior were unchanged by this earlier prototype. The later native feature is separate and default-disabled.
 
 **Use-case scope:** this prototype judges supplied claim/evidence packs. It does not implement semantic memory retrieval, discover repository dependencies, or establish evidence-pack completeness. The [request-to-evidence map and concrete memory hypothesis](../../docs/research/jev-request-evidence-map-20260916.md) distinguish those future applications from tested behavior.
