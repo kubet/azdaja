@@ -34,6 +34,14 @@ span to lie entirely within the same window and no exact answer string in anothe
 This avoids silently grading several supported alternatives as one. It is a selected,
 short-paragraph development panel, not million-token search or an official SQuAD score.
 
+Pre-live clarification: the model reads all windows jointly as the complete paragraph
+and locates the answer-bearing window. The selected window is not claimed to entail
+the answer independently of the other windows. Source identity also rejects paragraphs
+equal after NFKC/case-fold/whitespace normalization. This does not detect every semantic
+near-duplicate. Verifier paragraphs need not satisfy the flat answer-window eligibility
+rule. All provider questions explicitly name their case path and contain the actual
+question meaning because TypeSafe question IDs alone are not model instructions.
+
 Model sees only raw windows and the question, never gold/answer offsets/impossible flag.
 Choice options are every window plus `no_match`. No summaries, heading-only representation,
 learned retrieval, discarded window or tree. Both models receive identical evidence/questions.
@@ -66,6 +74,10 @@ A small positive count is a measured failure of this declared strict bar, not ev
 all verification is useless. Retain Brier score and five fixed-bin reliability statistics,
 plus fixed confidence coverage/risk at .6/.7/.8/.9/.95, with no posthoc threshold selection.
 Article/paragraph dependence and possible training contamination remain explicit.
+Scores are against official annotations, not a newly adjudicated universal truth set.
+The independent preflight checked100 negative-case counts and plausible-answer presence,
+but did not supply a recorded semantic adjudication for every case. Lexical presence is
+expected in these planted adversarial claims and is neither support nor an exclusion rule.
 
 ## 4. Admission, cost and receipts
 
