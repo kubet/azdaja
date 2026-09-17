@@ -48,10 +48,24 @@ jobs:
         run: >-
           python3 -B -m bench.jev.audit_sampling.replay
           --output "$RUNNER_TEMP/jev-portable-replay.json"
+      - name: Check exact-response recovery boundaries without a provider
+        env:
+          JCODE_SCRATCH_DIR: ${{ runner.temp }}
+        run: >-
+          python3 -B -m unittest
+          bench.jev.long_task_salvage.test_extract
+          bench.jev.long_task_salvage.test_replay
+          bench.jev.long_task_salvage.test_verify -v
+      - name: Reproduce both complete recovered long-task scores
+        run: >-
+          python3 -B -m bench.jev.long_task_salvage.verify
+          > "$RUNNER_TEMP/jev-long-task-recovery.json"
       - name: Retain the explicitly scoped offline result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: jev-portable-evidence
-          path: ${{ runner.temp }}/jev-portable-replay.json
+          path: |
+            ${{ runner.temp }}/jev-portable-replay.json
+            ${{ runner.temp }}/jev-long-task-recovery.json
           if-no-files-found: error
           retention-days: 30
