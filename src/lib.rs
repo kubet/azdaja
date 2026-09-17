@@ -8767,7 +8767,13 @@ fn jcode_root_timeout(cfg: &Config) -> Duration {
 }
 #[cfg(unix)]
 fn jcode_root_idle_timeout(cfg: &Config) -> Duration {
-    Duration::from_secs(cfg.sub_timeout.min(60))
+    if cfg.judge.enabled && cfg!(feature = "typesafe") {
+        // Optional orchestration can spend the full configured root turn on its
+        // first program. This changes only silence allowance, never the hard cap.
+        jcode_root_timeout(cfg)
+    } else {
+        Duration::from_secs(cfg.sub_timeout.min(60))
+    }
 }
 #[cfg(unix)]
 fn jcode_batch_timeout(cfg: &Config, prompt_chars: usize) -> Duration {
@@ -12090,6 +12096,100 @@ JSONL
         assert_eq!(jcode_batch_timeout(&cfg, 2_000), Duration::from_secs(12));
         assert_eq!(jcode_root_timeout(&cfg), Duration::from_secs(12));
         assert_eq!(jcode_root_idle_timeout(&cfg), Duration::from_secs(12));
+    }
+
+    #[test]
+    fn optional_judge_root_idle_uses_configured_hard_ceiling() {
+        for configured in [12, 60, 90, 120, 300] {
+            let mut cfg = Config {
+                sub_timeout: configured,
+                ..Config::default()
+            };
+            let disabled = jcode_root_idle_timeout(&cfg);
+            let small_child = jcode_batch_timeout(&cfg, 2_000);
+            let large_child = jcode_batch_timeout(&cfg, 20_000);
+            assert_eq!(disabled, Duration::from_secs(configured.min(60)));
+            cfg.judge.enabled = true;
+            let cap = if cfg!(feature = "typesafe") { 120 } else { 60 };
+            assert_eq!(
+                jcode_root_idle_timeout(&cfg),
+                Duration::from_secs(configured.min(cap))
+            );
+            assert_eq!(
+                jcode_root_timeout(&cfg),
+                Duration::from_secs(configured.min(120))
+            );
+            assert_eq!(jcode_batch_timeout(&cfg, 2_000), small_child);
+            assert_eq!(jcode_batch_timeout(&cfg, 20_000), large_child);
+            assert_eq!(cfg.sub_timeout, configured);
+        }
+    }
+
+    #[test]
+    fn optional_judge_root_idle_deadline_allows_silence_only_within_hard_cap() {
+        let started = Instant::now();
+        let mut cfg = Config {
+            sub_timeout: 120,
+            ..Config::default()
+        };
+        let disabled = TurnDeadline::new(
+            started,
+            jcode_root_timeout(&cfg),
+            jcode_root_idle_timeout(&cfg),
+        )
+        .unwrap();
+        assert_eq!(
+            disabled
+                .remaining(started + Duration::from_secs(59))
+                .unwrap(),
+            Duration::from_secs(1)
+        );
+        assert!(
+            disabled
+                .remaining(started + Duration::from_secs(60))
+                .unwrap_err()
+                .to_string()
+                .contains("idle deadline timed out")
+        );
+        cfg.judge.enabled = true;
+        let mut enabled = TurnDeadline::new(
+            started,
+            jcode_root_timeout(&cfg),
+            jcode_root_idle_timeout(&cfg),
+        )
+        .unwrap();
+        if cfg!(feature = "typesafe") {
+            assert_eq!(
+                enabled
+                    .remaining(started + Duration::from_secs(61))
+                    .unwrap(),
+                Duration::from_secs(59)
+            );
+            assert_eq!(
+                enabled
+                    .remaining(started + Duration::from_secs(119))
+                    .unwrap(),
+                Duration::from_secs(1)
+            );
+            enabled
+                .progress(started + Duration::from_secs(119))
+                .unwrap();
+            assert!(
+                enabled
+                    .remaining(started + Duration::from_secs(120))
+                    .unwrap_err()
+                    .to_string()
+                    .contains("hard deadline timed out")
+            );
+        } else {
+            assert!(
+                enabled
+                    .remaining(started + Duration::from_secs(60))
+                    .unwrap_err()
+                    .to_string()
+                    .contains("idle deadline timed out")
+            );
+        }
     }
 
     #[test]
