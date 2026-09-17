@@ -1,0 +1,764 @@
+{
+  "actual_installed_binary_sha256": "13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32",
+  "checks": [
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "notice_distribution",
+        "cargo_package_list_matches_the_reviewed_file_allowlist"
+      ],
+      "exit": 0,
+      "log_bytes": 535,
+      "log_sha256": "bd76028285228a0b0fb092d5e1c51360353b9e0931f3eaabbd203bfe62a2000b",
+      "name": "exact-package-gate",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        }
+      ],
+      "seconds": 8.57001287501771,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "bench.jev.angle_analysis.report"
+      ],
+      "exit": 0,
+      "log_bytes": 425,
+      "log_sha256": "6926cdaf705ab0ea10f5f5ba6390415ba3e4bb07309ef87bfc0ef0e4eb4f4aaf",
+      "name": "public-angle-replay",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "seconds": 1.4387098750448786,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "bench.jev.angle_analysis.test_report",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 1192,
+      "log_sha256": "030806019972bed30784edfd384bed277652fc17f5c17730312a9309591b4fcb",
+      "name": "angle-replay-mutations",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "seconds": 5.921194041962735,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "log_bytes": 185,
+      "log_sha256": "8a928d10a171ecff2a77120602e0867df9b0a442844cb0c9bc8ad935aa02cab8",
+      "name": "strict-clippy",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "seconds": 4.9567636660067365,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "format",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "seconds": 0.44684241694631055,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "release/verify-third-party-notices.py"
+      ],
+      "exit": 0,
+      "log_bytes": 434,
+      "log_sha256": "c4e5031df0d74e410df04fb0337db0151d4fca9dbcc0694d68b6dc082c0a6e35",
+      "name": "public-notice",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "seconds": 1.4110482080141082,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "release",
+        "-p",
+        "test_*notice*.py",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 5722,
+      "log_sha256": "63f668738059bc81647b467e8e674edea06ceb4884b2cb30a02daa2e67e73d31",
+      "name": "notice-mutations",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "seconds": 34.16479720897041,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "sh",
+        "proof/reproduction/run.sh"
+      ],
+      "exit": 0,
+      "log_bytes": 365,
+      "log_sha256": "5779fc2460d155dd59a41518e20630c0d0b354fe50fdb3c01b177d7572c20d90",
+      "name": "proof-public",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "seconds": 0.2632462500478141,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "proof.reproduction.test_verify",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 2043,
+      "log_sha256": "674fd8d01b791654d2dc94493d9e9060c07483451a72d7468b033bc644f57995",
+      "name": "proof-tests",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "seconds": 0.6023150839610025,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--test",
+        "jev_credentials"
+      ],
+      "exit": 0,
+      "log_bytes": 1043,
+      "log_sha256": "d4f9e1a86f4e4e289d5a66018ecb95279e4a77b918467d252edbda5b7f87e2a6",
+      "name": "default-credential-cli",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 7
+        }
+      ],
+      "seconds": 5.486902000033297,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "jev_credentials"
+      ],
+      "exit": 0,
+      "log_bytes": 1043,
+      "log_sha256": "9a50cfb2d2493ce4edb761e9dd5fdc66bff61504b05ab3da4e816f51a6b6839e",
+      "name": "feature-credential-cli",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 7
+        }
+      ],
+      "seconds": 0.810456958017312,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--lib",
+        "judge::tests"
+      ],
+      "exit": 0,
+      "log_bytes": 1620,
+      "log_sha256": "4924d80ae9f594fe750a5eca8daeeeecda15953df0896f881558f8ea0e112d25",
+      "name": "default-judge-unit",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 15
+        }
+      ],
+      "seconds": 4.245117166952696,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--lib",
+        "judge::tests"
+      ],
+      "exit": 0,
+      "log_bytes": 1550,
+      "log_sha256": "91f249ab8f6e3209f53323b918452454e588c4e83edbab8c9eedd65b6fbe854f",
+      "name": "feature-judge-unit",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 14
+        }
+      ],
+      "seconds": 4.7231760830036364,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "judge_native"
+      ],
+      "exit": 0,
+      "log_bytes": 909,
+      "log_sha256": "8e93eb6b546caef34ab8e0d8cb9504b6c0897c23a5bc99854d5f8e8569cb0b63",
+      "name": "feature-native-boundary",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        }
+      ],
+      "seconds": 0.7630146250012331,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--test",
+        "judge_native"
+      ],
+      "exit": 0,
+      "log_bytes": 909,
+      "log_sha256": "168ebf0198261180fd981339929ae52ea228c2fea29189bfbacb8d4e48f6662f",
+      "name": "default-native-boundary",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        }
+      ],
+      "seconds": 0.7328739159856923,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/azdaja-notice-remediation-20260917/target/debug/azdaja",
+        "doctor",
+        "--caps"
+      ],
+      "exit": 0,
+      "log_bytes": 450,
+      "log_sha256": "20d6128415f244b245c6f5f2924cab83454190381933acb2dd5d9f826fb2b1f9",
+      "name": "default-capabilities",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "seconds": 0.00461558299139142,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "package",
+        "--locked",
+        "--offline",
+        "--all-features"
+      ],
+      "exit": 0,
+      "log_bytes": 3931,
+      "log_sha256": "a47c5be6ac6b2289eefcce726991dfdb1539296c0d5dd5c45a98ab055d7a57e6",
+      "name": "source-package-verify",
+      "observed_in_prior_run": "jev-angle-final-acceptance-20260917-1110",
+      "seconds": 5.680956750002224,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--no-fail-fast"
+      ],
+      "exit": 0,
+      "log_bytes": 65329,
+      "log_sha256": "c014018bfb65be79647a1e2157c25c67369acdd5d4d535e72437a864ef529ddf",
+      "name": "all-targets-all-features",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 207
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 77
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 137
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 2,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 7
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 34
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 18
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 4
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 17
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 16
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 0
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 15
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 53
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        }
+      ],
+      "seconds": 511.4118432920077,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "build",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "--bin",
+        "azdaja"
+      ],
+      "exit": 0,
+      "log_bytes": 72,
+      "log_sha256": "dd621e9ff7c9eac161c730aa8a79332dd68698435a7a84d044d9ad39dfa1f5d2",
+      "name": "final-feature-build",
+      "seconds": 0.47374116600258276,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/azdaja-notice-remediation-20260917/target/debug/azdaja",
+        "install",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 390,
+      "log_sha256": "54eb64c069956caf18ad4147cec34bdfde4cb952f8a6658242a990446329b722",
+      "name": "private-install",
+      "seconds": 0.7973572500050068,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/jev-angle-final-acceptance-20260917-1121/private home with spaces/.claude/skills/azdaja/azdaja",
+        "doctor",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 277,
+      "log_sha256": "f6da2889a749755734f2649f8ca97cab2e7a0271837b1c9ed9eb3ba3905ef646",
+      "name": "private-doctor",
+      "seconds": 0.20534112496534362,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/jev-angle-final-acceptance-20260917-1121/private home with spaces/.claude/skills/azdaja/azdaja",
+        "doctor",
+        "--caps"
+      ],
+      "exit": 0,
+      "log_bytes": 449,
+      "log_sha256": "8ca0c005723186290b2b2711f28b71b622a8647c80a4c5228d56f3d7b2e0b6e9",
+      "name": "installed-capabilities",
+      "seconds": 0.005711250007152557,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "bench.jev.span_selection.run",
+        "--offline",
+        "--azdaja",
+        "/Users/vukasinkubet/.jcode/scratch/jev-angle-final-acceptance-20260917-1121/private home with spaces/.claude/skills/azdaja/azdaja",
+        "--scratch",
+        "/Users/vukasinkubet/.jcode/scratch/jev-angle-final-acceptance-20260917-1121",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-angle-final-acceptance-20260917-1121/installed-span-offline"
+      ],
+      "exit": 0,
+      "log_bytes": 95,
+      "log_sha256": "0cdc07f800240b9a69f300129f4bf8fd3b2338dba70a9dccb3af557ac709d299",
+      "name": "installed-offline-span",
+      "seconds": 0.6324052920099348,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "bench.jev.angle_lab.test_native",
+        "bench.jev.angle_lab.test_lanes",
+        "bench.jev.angle_followthrough.test_run",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 4175,
+      "log_sha256": "cbd2157a98f6e848fbff9124cbc1864eba8b363e2210602c5f5f1ed8d5bd648d",
+      "name": "installed-angle-packs-and-continuation",
+      "seconds": 2.913749083993025,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "bench.jev.span_selection.test_kernel",
+        "bench.jev.span_selection.test_runner",
+        "bench.jev.span_selection.test_replay",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 4951,
+      "log_sha256": "79a36caf8ce29a849b22d1d701b03186316644ab3fb093f228e385acda2f486a",
+      "name": "installed-native-and-result-tests",
+      "seconds": 1.3476743329665624,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "installed_project_memory",
+        "--",
+        "--ignored",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "log_bytes": 530,
+      "log_sha256": "800648fb0a5faef842ea6876cff3b5a0cc234e1264c33ed503df5d865fcc9972",
+      "name": "installed-memory",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        }
+      ],
+      "seconds": 0.2907234589802101,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/jev-angle-final-acceptance-20260917-1121/private home with spaces/.claude/skills/azdaja/azdaja",
+        "uninstall",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 166,
+      "log_sha256": "d0d866ac185874fe07cbc407d4ab849d369b589a9fd137aa0b7af44f425274bb",
+      "name": "private-uninstall",
+      "seconds": 1.3189334169728681,
+      "status": "passed"
+    }
+  ],
+  "default_capabilities": {
+    "azdaja": "0.1.17",
+    "capabilities": [
+      "persistent-repl",
+      "snapshots",
+      "external-functions",
+      "native-sha256",
+      "native-typed-judgments",
+      "re",
+      "json",
+      "datetime",
+      "monty-os-calls-denied"
+    ],
+    "dump_version": 5,
+    "monty": "0.0.21",
+    "typed_judgments": {
+      "cache_and_budget_scope": "cell",
+      "credentials_checked": false,
+      "enabled_by_default": false,
+      "functions": [
+        "judge_many",
+        "judge_stats"
+      ],
+      "host_opt_in_required": true,
+      "runtime_configuration_checked": false,
+      "typesafe_compiled": false
+    }
+  },
+  "final_binary_sha256": "13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32",
+  "installed_capabilities": {
+    "azdaja": "0.1.17",
+    "capabilities": [
+      "persistent-repl",
+      "snapshots",
+      "external-functions",
+      "native-sha256",
+      "native-typed-judgments",
+      "re",
+      "json",
+      "datetime",
+      "monty-os-calls-denied"
+    ],
+    "dump_version": 5,
+    "monty": "0.0.21",
+    "typed_judgments": {
+      "cache_and_budget_scope": "cell",
+      "credentials_checked": false,
+      "enabled_by_default": false,
+      "functions": [
+        "judge_many",
+        "judge_stats"
+      ],
+      "host_opt_in_required": true,
+      "runtime_configuration_checked": false,
+      "typesafe_compiled": true
+    }
+  },
+  "interrupted_predecessor": {
+    "exit": 124,
+    "path": "jev-angle-final-acceptance-20260917-1110",
+    "reason": "outer command deadline at600seconds; full suite incomplete; completed checks validated before carry",
+    "receipt_sha256": "f95a9df1d78ebef27f34ee51863ce589befced1e8b246a955d7d5e3ccb95659a",
+    "tool_task": "4050589vvg"
+  },
+  "live_provider_calls": 0,
+  "private_install_removed": true,
+  "publication_authorized": false,
+  "published_assets_modified": false,
+  "schema": "azdaja.final_source_followthrough.v1",
+  "source_commit": "e75d83660660e5e9fb199a3c00a7c5905df42f5b",
+  "source_tree_clean": true,
+  "source_tree_clean_after": true,
+  "status": "passed"
+}

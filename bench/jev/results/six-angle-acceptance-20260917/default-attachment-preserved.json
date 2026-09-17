@@ -1,0 +1,10 @@
+{
+  "schema": "azdaja.persistent_attachment_recheck.v1",
+  "source": "attached_file",
+  "syntax_valid": true,
+  "provider_checked": false,
+  "fingerprint_unchanged": null,
+  "default_attachment_preserved_after_experiment_cleanup": true,
+  "new_provider_calls": 0,
+  "inspection_binary_sha256": "16b3d35002fcec31bb0243c0e33fbcf4b751eab78be77c04fd856b5607540bbb"
+}

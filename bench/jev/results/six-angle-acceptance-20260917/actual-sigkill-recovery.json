@@ -1,0 +1,21 @@
+{
+  "attempts": 1,
+  "orphan_observed": true,
+  "provider_calls": 0,
+  "recovery_passed": true,
+  "after": {
+    "fingerprint": null,
+    "fingerprint_algorithm": "sha256-prefix-12",
+    "incomplete_attachment": false,
+    "key_env": "TYPESAFE_API_KEY",
+    "provider_checked": false,
+    "provider_readiness_checked": false,
+    "runtime_configuration_checked": false,
+    "source": "absent",
+    "storage_backend": "owner_only_plaintext_file",
+    "storage_supported": true,
+    "syntax_valid": false,
+    "typesafe_compiled": true
+  },
+  "binary_sha256": "16b3d35002fcec31bb0243c0e33fbcf4b751eab78be77c04fd856b5607540bbb"
+}

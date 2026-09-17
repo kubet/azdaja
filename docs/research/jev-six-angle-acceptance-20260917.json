@@ -1,0 +1,137 @@
+{
+  "accepted_source": "e75d83660660e5e9fb199a3c00a7c5905df42f5b",
+  "all_user_outcomes_satisfied": false,
+  "engineering_acceptance_passed": true,
+  "general_quality_advantage_established": false,
+  "new_ingestion_study_covered": false,
+  "production_distributed_memory_implemented": false,
+  "requirements": [
+    {
+      "check": "Project-local `.agents/skills/typesafe-ai/SKILL.md`; targeted current API, confidence, models and hierarchical-classification primary docs; retained exact native requests",
+      "observed_result_and_limit": "Skill present and used. Noul routing probability is not separate confidence. Price is an estimate from the documented rate. Hierarchical Choice has prior art, not an established novel RLM primitive.",
+      "requirement": "Use TypeSafe with current provider semantics"
+    },
+    {
+      "check": "`angle_lab/PLAN.md`, frozen 41-file manifest, detached gold, original stopped receipt, explicit `angle_followthrough/AMENDMENT.md`, native replay",
+      "observed_result_and_limit": "Six separate lanes completed. No repeated completed request, post-hoc threshold change, tuned rerun or pooling of unrelated panels. Failed setup and its admission are retained.",
+      "requirement": "Executable, isolated hypotheses with stop bars"
+    },
+    {
+      "check": "Complete 227-May-occurrence Oolong row645 pack, matched question/state inputs, exact official-count grader",
+      "observed_result_and_limit": "Typed 139 and generative 139 versus official 132. Both fail. Typed labeling call time 5.324s versus 63.292s is a speed result, not quality success.",
+      "requirement": "Bulk semantic gate rather than generative labeling"
+    },
+    {
+      "check": "Separate 20-case non-May calibration, fixed threshold grid, 10 explicitly escalated residuals, full occurrence expansion",
+      "observed_result_and_limit": "Threshold 0.7 selected before evaluation. Final 138 still fails gold 132. Routing floats did not certify accepted labels.",
+      "requirement": "Calibrated routing rather than judgment about judgments"
+    },
+    {
+      "check": "Twelve source-bound claims, raw full distributions, no-review/abstain/direct controls, detached gold",
+      "observed_result_and_limit": "Typed 10/12 versus direct 12/12, including one false support. Screening was measured, not repaired prose or a mandatory gate.",
+      "requirement": "Pre-FINAL verifier"
+    },
+    {
+      "check": "Exact-source flat, root, greedy and beam outputs; preprocessing and state bytes counted",
+      "observed_result_and_limit": "Flat 4/4 versus tree 1/4. All root queries selected no-match and no child request was admitted. Lossy headings/path representation failed. No million-source or logarithmic-total-work result.",
+      "requirement": "Choice descent"
+    },
+    {
+      "check": "Same 12 authorized synthetic events, same 1800-byte ceiling, actual new generative task calls, detached four-decision grader",
+      "observed_result_and_limit": "Lexical 0/4, typed-ranked 3/4. Missing migration remains honestly unknown. Partial gain, not completed work. Strong BM25/MMR and full-evidence controls remain necessary.",
+      "requirement": "Shared wisdom improves subsequent agent work"
+    },
+    {
+      "check": "Independent injected responsive oracle, plain exact cache versus full recomputation, six scoped states, five mutations, 1k/10k occurrences",
+      "observed_result_and_limit": "Full arrays match. At 10k, 50k uncached evaluations versus 12 misses. Ordinary memoization only. No distinct incremental engine or provider speed claim.",
+      "requirement": "Incremental economics compared with a simple cache"
+    },
+    {
+      "check": "Public `bench.jev.angle_analysis.report` replays matched inputs, raw answers, trace ordinals, known usage and combined stopped/continued ledgers",
+      "observed_result_and_limit": "Ten typed HTTP requests, 279 questions,56094 input/6701 output. Ten logical generative admissions, nine entered turns, 44254 input/4199 output. Typed documented-rate estimate $0.002355948. Total billing and generative price unknown.",
+      "requirement": "Quality, speed, cost, tokens and attempted work"
+    },
+    {
+      "check": "All source/occurrence IDs, full typed distributions, `REPLAY.json` source/request/response binding, missing-evidence outputs",
+      "observed_result_and_limit": "No production confidence cutoff, automatic winner-as-truth conversion, semantic pruning policy or automatic memory ingestion added. A cache hit is not independent confirmation.",
+      "requirement": "Preserve raw evidence and uncertainty"
+    },
+    {
+      "check": "`MEMORY-SCALE.json`, unique event IDs, 31 partitions, visibility-before-ranking tests, shared/changed-email fixture",
+      "observed_result_and_limit": "Local 1k/10k index/query exercised. Git email is asserted attribution, not actor identity or authorization. Production concurrent writers, authenticated sharing, revocation and cross-machine replication are **not implemented**.",
+      "requirement": "Scale beyond one person or repository"
+    },
+    {
+      "check": "`tests/jev_credentials.rs::public_attachment_survives_restart_replacement_and_detach_without_config_or_network`; installed supplement `fresh-process-persistent-status`, `explicit-replacement`, `detach-persistent-file`",
+      "observed_result_and_limit": "Public process restarts preserve an owner-only attachment. Replacement requires explicit opt-in, detach is idempotent, attachment does not change host config. Default user attachment survives experiment cleanup.",
+      "requirement": "Persistent attach, replacement and detach"
+    },
+    {
+      "check": "`attachment_rejects_argv_secrets_and_bounded_stdin_without_disclosure`",
+      "observed_result_and_limit": "Argv secrets, unsafe names, duplicate flags, oversized/empty/multiline/non-UTF8 inputs refuse without disclosing the supplied value. Key is not placed in repository config, memory or prompts.",
+      "requirement": "Stdin-only secret admission and bounded input"
+    },
+    {
+      "check": "`public_attachment_refuses_unsafe_paths_without_changing_existing_bytes_or_modes`, `unsafe_staging_is_not_followed_or_deleted`, `interrupted_attachment_is_visible_and_detach_recovers_only_that_key`; actual SIGKILL receipt",
+      "observed_result_and_limit": "Unsafe modes/symlinks refuse without repair or deletion. Root observed a real orphan, then real status/detach recovered it. Status exposes incomplete attachment. Earlier auditor found the bug, but did not independently sign off the final fix. Storage is plaintext 0600, not a vault, secure erase or a same-UID sandbox.",
+      "requirement": "Storage custody and crash recovery"
+    },
+    {
+      "check": "`native_resolution_uses_attachment_but_disabled_and_invalid_overrides_never_enter_transport`; installed supplement four native cells",
+      "observed_result_and_limit": "Environment wins. Invalid override does not fall back to attached key. Valid synthetic credentials deliberately in state hit the leakage guard. Each preflight path records zero transport attempts.",
+      "requirement": "Environment override and fail-closed resolution"
+    },
+    {
+      "check": "`doctor_jev_is_explicit_local_status_and_caps_remains_non_probing`; actual installed `doctor-local-attachment`",
+      "observed_result_and_limit": "`jev status`/`doctor jev` expose source, syntax and SHA256-prefix fingerprint, never the key. No provider probe. Status does not initialize absent state.",
+      "requirement": "Explicit local credential status"
+    },
+    {
+      "check": "`native_judgment_capabilities_are_static_and_distinguish_transport_from_readiness`; default and installed `doctor --caps`",
+      "observed_result_and_limit": "Reports API names, compile-time transport, opt-in and per-cell scope. `runtime_configuration_checked=false`, `credentials_checked=false`. Bare doctor is a different command and may call a canary.",
+      "requirement": "Provider-free API discovery"
+    },
+    {
+      "check": "Six `judge_native` tests in both feature modes; installed native/pack/continuation tests; `native_judgments_default_disabled_and_regular_repl_recovers`",
+      "observed_result_and_limit": "API remains optional and default-disabled. Ordinary evaluator use works after refused typed calls. Observations persist as evaluator variables. Cache/budgets remain per-cell, not a persistent global engine.",
+      "requirement": "Optional engine and ordinary RLM recovery"
+    },
+    {
+      "check": "`judge::tests` in default and typesafe modes, actual native packs and prior public-interface map",
+      "observed_result_and_limit": "Exact IDs, types, finite probabilities, usage limits, cell deadlines and terminal failures checked. Full distributions are exposed without a semantic acceptance threshold. These contracts do not establish truth, domain calibration or immutable model weights.",
+      "requirement": "Typed response, budget and failure contracts"
+    },
+    {
+      "check": "`known_key_shape_redaction_does_not_access_credentials`, `command_transport_trace_keeps_requested_model_and_unknown_provider_usage`, `native_judgment_key_is_not_forwarded_to_custom_generative_provider`",
+      "observed_result_and_limit": "Known TypeSafe-shaped strings are scrubbed from observed trace outputs and keys are not forwarded to custom generative commands. Pattern redaction is defense in depth, not an arbitrary-secret detector or authorization to upload repository data.",
+      "requirement": "Traces and generative-provider secret boundaries"
+    },
+    {
+      "check": "`command_help_usage_and_bare_text_are_identical_through_both_names`, `non_tty_bare_command_is_exactly_five_line_help_without_sprite`",
+      "observed_result_and_limit": "`jev` and `doctor jev` appear in exact public help/usage under both names. The added command does not silently change installed skills.",
+      "requirement": "Discoverable CLI help and alias behavior"
+    },
+    {
+      "check": "Exact Cargo file allowlist, verified source package, public notices, public historical proof, strict Clippy/fmt and all-target/all-feature suite",
+      "observed_result_and_limit": "Current-source results are in the acceptance receipt. The package ordering defect was fixed rather than weakening membership assertions. Old proof and live-study identities remain explicit. Engineering acceptance is not publication authorization or legal sufficiency.",
+      "requirement": "Deliverable package and released-main integration"
+    },
+    {
+      "check": "Private installation into a path with spaces, installed doctor/caps, native persistent packs, offline span workflow, two ignored installed-memory tests, private uninstall",
+      "observed_result_and_limit": "Actual installed binary is hash-bound to the accepted build. Zero new provider calls. The default user installation and attachment are separate from these disposable tests.",
+      "requirement": "Actual installed workflows, not just mocks"
+    },
+    {
+      "check": "Public replay plus seven tests for actual negative outcome, rehashed false wins, mismatched baseline, malformed probabilities, erased usage, missing source and unsafe output reuse",
+      "observed_result_and_limit": "Retained raw evidence regenerates deterministic outputs. No provider authentication or live inference replay is claimed. Earlier negative seven-task and eighteen-case studies remain unchanged.",
+      "requirement": "False-success resistance and evidence custody"
+    },
+    {
+      "check": "`PRESERVATION.json`, actual attachment recheck, original 25-file hash/mode comparison, three historical study binary hashes, new study binary hash",
+      "observed_result_and_limit": "Original work and released assets preserved. Temporary experiment attachment/OAuth state/bridge cleaned up. Default durable attachment retained. No further inference is part of acceptance.",
+      "requirement": "Preserve unrelated work and stop bounded research"
+    }
+  ],
+  "retention": "../../bench/jev/results/six-angle-acceptance-20260917/RETENTION.json",
+  "schema": "azdaja.six_angle_requirements.v1"
+}

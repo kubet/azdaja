@@ -1,0 +1,388 @@
+{
+  "checks": [
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "notice_distribution",
+        "cargo_package_list_matches_the_reviewed_file_allowlist"
+      ],
+      "exit": 0,
+      "log_bytes": 535,
+      "log_sha256": "bd76028285228a0b0fb092d5e1c51360353b9e0931f3eaabbd203bfe62a2000b",
+      "name": "exact-package-gate",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        }
+      ],
+      "seconds": 8.57001287501771,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "bench.jev.angle_analysis.report"
+      ],
+      "exit": 0,
+      "log_bytes": 425,
+      "log_sha256": "6926cdaf705ab0ea10f5f5ba6390415ba3e4bb07309ef87bfc0ef0e4eb4f4aaf",
+      "name": "public-angle-replay",
+      "seconds": 1.4387098750448786,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "bench.jev.angle_analysis.test_report",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 1192,
+      "log_sha256": "030806019972bed30784edfd384bed277652fc17f5c17730312a9309591b4fcb",
+      "name": "angle-replay-mutations",
+      "seconds": 5.921194041962735,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "log_bytes": 185,
+      "log_sha256": "8a928d10a171ecff2a77120602e0867df9b0a442844cb0c9bc8ad935aa02cab8",
+      "name": "strict-clippy",
+      "seconds": 4.9567636660067365,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "format",
+      "seconds": 0.44684241694631055,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "release/verify-third-party-notices.py"
+      ],
+      "exit": 0,
+      "log_bytes": 434,
+      "log_sha256": "c4e5031df0d74e410df04fb0337db0151d4fca9dbcc0694d68b6dc082c0a6e35",
+      "name": "public-notice",
+      "seconds": 1.4110482080141082,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "release",
+        "-p",
+        "test_*notice*.py",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 5722,
+      "log_sha256": "63f668738059bc81647b467e8e674edea06ceb4884b2cb30a02daa2e67e73d31",
+      "name": "notice-mutations",
+      "seconds": 34.16479720897041,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "sh",
+        "proof/reproduction/run.sh"
+      ],
+      "exit": 0,
+      "log_bytes": 365,
+      "log_sha256": "5779fc2460d155dd59a41518e20630c0d0b354fe50fdb3c01b177d7572c20d90",
+      "name": "proof-public",
+      "seconds": 0.2632462500478141,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "proof.reproduction.test_verify",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 2043,
+      "log_sha256": "674fd8d01b791654d2dc94493d9e9060c07483451a72d7468b033bc644f57995",
+      "name": "proof-tests",
+      "seconds": 0.6023150839610025,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--test",
+        "jev_credentials"
+      ],
+      "exit": 0,
+      "log_bytes": 1043,
+      "log_sha256": "d4f9e1a86f4e4e289d5a66018ecb95279e4a77b918467d252edbda5b7f87e2a6",
+      "name": "default-credential-cli",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 7
+        }
+      ],
+      "seconds": 5.486902000033297,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "jev_credentials"
+      ],
+      "exit": 0,
+      "log_bytes": 1043,
+      "log_sha256": "9a50cfb2d2493ce4edb761e9dd5fdc66bff61504b05ab3da4e816f51a6b6839e",
+      "name": "feature-credential-cli",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 7
+        }
+      ],
+      "seconds": 0.810456958017312,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--lib",
+        "judge::tests"
+      ],
+      "exit": 0,
+      "log_bytes": 1620,
+      "log_sha256": "4924d80ae9f594fe750a5eca8daeeeecda15953df0896f881558f8ea0e112d25",
+      "name": "default-judge-unit",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 15
+        }
+      ],
+      "seconds": 4.245117166952696,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--lib",
+        "judge::tests"
+      ],
+      "exit": 0,
+      "log_bytes": 1550,
+      "log_sha256": "91f249ab8f6e3209f53323b918452454e588c4e83edbab8c9eedd65b6fbe854f",
+      "name": "feature-judge-unit",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 14
+        }
+      ],
+      "seconds": 4.7231760830036364,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "judge_native"
+      ],
+      "exit": 0,
+      "log_bytes": 909,
+      "log_sha256": "8e93eb6b546caef34ab8e0d8cb9504b6c0897c23a5bc99854d5f8e8569cb0b63",
+      "name": "feature-native-boundary",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        }
+      ],
+      "seconds": 0.7630146250012331,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--test",
+        "judge_native"
+      ],
+      "exit": 0,
+      "log_bytes": 909,
+      "log_sha256": "168ebf0198261180fd981339929ae52ea228c2fea29189bfbacb8d4e48f6662f",
+      "name": "default-native-boundary",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        }
+      ],
+      "seconds": 0.7328739159856923,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/azdaja-notice-remediation-20260917/target/debug/azdaja",
+        "doctor",
+        "--caps"
+      ],
+      "exit": 0,
+      "log_bytes": 450,
+      "log_sha256": "20d6128415f244b245c6f5f2924cab83454190381933acb2dd5d9f826fb2b1f9",
+      "name": "default-capabilities",
+      "seconds": 0.00461558299139142,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "package",
+        "--locked",
+        "--offline",
+        "--all-features"
+      ],
+      "exit": 0,
+      "log_bytes": 3931,
+      "log_sha256": "a47c5be6ac6b2289eefcce726991dfdb1539296c0d5dd5c45a98ab055d7a57e6",
+      "name": "source-package-verify",
+      "seconds": 5.680956750002224,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--no-fail-fast"
+      ],
+      "name": "all-targets-all-features",
+      "status": "running"
+    }
+  ],
+  "default_capabilities": {
+    "azdaja": "0.1.17",
+    "capabilities": [
+      "persistent-repl",
+      "snapshots",
+      "external-functions",
+      "native-sha256",
+      "native-typed-judgments",
+      "re",
+      "json",
+      "datetime",
+      "monty-os-calls-denied"
+    ],
+    "dump_version": 5,
+    "monty": "0.0.21",
+    "typed_judgments": {
+      "cache_and_budget_scope": "cell",
+      "credentials_checked": false,
+      "enabled_by_default": false,
+      "functions": [
+        "judge_many",
+        "judge_stats"
+      ],
+      "host_opt_in_required": true,
+      "runtime_configuration_checked": false,
+      "typesafe_compiled": false
+    }
+  },
+  "live_provider_calls": 0,
+  "predecessor_acceptance": "jev-current-whole-acceptance-20260917-0921",
+  "prior_binary_sha256": "5132067f43965059377b77df33db81dad4e4e72a868cd0e4076acda2c73e5adb",
+  "publication_authorized": false,
+  "published_assets_modified": false,
+  "schema": "azdaja.final_source_followthrough.v1",
+  "source_commit": "e75d83660660e5e9fb199a3c00a7c5905df42f5b",
+  "source_tree_clean": true,
+  "status": "running"
+}

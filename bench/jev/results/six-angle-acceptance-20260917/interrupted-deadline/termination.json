@@ -1,0 +1,9 @@
+{
+  "task": "4050589vvg",
+  "exit": 124,
+  "seconds": 600.03,
+  "reason": "outer command deadline",
+  "full_suite_completed": false,
+  "completed_check_count": 17,
+  "original_receipt_left_unchanged": true
+}

@@ -1,0 +1,24 @@
+{
+  "status": "passed",
+  "checks": [
+    {
+      "command": [
+        "jev",
+        "detach",
+        "--key-env",
+        "AZDAJA_INSTALLED_TEST_CREDENTIAL"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "uninstall",
+        "claude"
+      ],
+      "exit": 0
+    }
+  ],
+  "synthetic_attachment_removed": true,
+  "private_install_removed": true,
+  "provider_calls": 0
+}

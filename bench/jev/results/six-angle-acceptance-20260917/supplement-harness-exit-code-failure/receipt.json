@@ -1,0 +1,46 @@
+{
+  "binary_sha256": "13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32",
+  "checks": [
+    {
+      "exit": 0,
+      "log_sha256": "7ae84ed92b61c2f693e989dc42c2699c7b86235048743c360c40b667b26284c3",
+      "name": "private-install",
+      "seconds": 12.19799829099793
+    },
+    {
+      "exit": 0,
+      "log_sha256": "06084ead3ec453adaf27a905a0dc66adfd6a542e61b5cd84d280a57e6e8ed2c0",
+      "name": "caps-before-attachment",
+      "seconds": 0.009216165984980762
+    },
+    {
+      "exit": 0,
+      "log_sha256": "25013d7c02e45f200995f05ef554c715a6c145b655b88821a3e0c6685805d1e1",
+      "name": "status-before-attachment",
+      "seconds": 0.0063245409983210266
+    },
+    {
+      "exit": 0,
+      "log_sha256": "efa63a4907effd580b0f82ca36eca8dc95992e8f4ec9acf723295bf2c21d761a",
+      "name": "attach-from-stdin",
+      "seconds": 0.019334375043399632
+    },
+    {
+      "exit": 0,
+      "log_sha256": "10619ac30eb57739cafd341c7fe7bb36a49f1ae3ee6dbca6e403c70f789a64a5",
+      "name": "fresh-process-persistent-status",
+      "seconds": 0.005792542011477053
+    },
+    {
+      "exit": 0,
+      "log_sha256": "3de2d64816c3063d48988fa937881913a34cf011fc6aa65ec61f4bb19a2fb1ed",
+      "name": "environment-wins",
+      "seconds": 0.005921916977968067
+    }
+  ],
+  "failure": "AssertionError: ('replacement-needs-opt-in', 2, 'error: credentials: private storage unavailable, unsafe, busy, or already occupied\\n')",
+  "provider_calls": 0,
+  "schema": "azdaja.installed_credential_acceptance.v1",
+  "status": "failed",
+  "synthetic_credentials_only": true
+}

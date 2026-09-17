@@ -1,0 +1,498 @@
+{
+  "checks": [
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "log_bytes": 185,
+      "log_sha256": "be3263e00481fe98faef38c36ad179fb974f0dc3444a6eb5a488746d460828b5",
+      "name": "strict-clippy",
+      "seconds": 6.4091919580241665,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "format",
+      "seconds": 0.4480347500066273,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "release/verify-third-party-notices.py"
+      ],
+      "exit": 0,
+      "log_bytes": 434,
+      "log_sha256": "c4e5031df0d74e410df04fb0337db0151d4fca9dbcc0694d68b6dc082c0a6e35",
+      "name": "public-notice",
+      "seconds": 1.4914805829757825,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "release",
+        "-p",
+        "test_*notice*.py",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 5722,
+      "log_sha256": "44c0b04099a187a8e899fc860fccb1dbc43de867112c68e79d1ac41c8b9ad4b8",
+      "name": "notice-mutations",
+      "seconds": 33.076203332981095,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "sh",
+        "proof/reproduction/run.sh"
+      ],
+      "exit": 0,
+      "log_bytes": 365,
+      "log_sha256": "2048439e262eb58b5cd84f851e5f9349352aaf9a4e735fc9814872e1d3fbb6f2",
+      "name": "proof-public",
+      "seconds": 0.26480037497822195,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "proof.reproduction.test_verify",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 2043,
+      "log_sha256": "781c56d7663bfa90e75cf25afae04d14216ae96cd85dc4de5d70fe388f9025c5",
+      "name": "proof-tests",
+      "seconds": 0.5594227500259876,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--test",
+        "jev_credentials"
+      ],
+      "exit": 0,
+      "log_bytes": 1043,
+      "log_sha256": "697229302a5871bd4c8cacf3bd9c23ef6164029a183a7cfa3deb094c280923d8",
+      "name": "default-credential-cli",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 7
+        }
+      ],
+      "seconds": 6.309806167031638,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "jev_credentials"
+      ],
+      "exit": 0,
+      "log_bytes": 1043,
+      "log_sha256": "081e1f125959b5de008b8cb8128f53e8c102dcf91774136e94833bb0f99d6c1f",
+      "name": "feature-credential-cli",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 7
+        }
+      ],
+      "seconds": 6.047613917035051,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--lib",
+        "judge::tests"
+      ],
+      "exit": 0,
+      "log_bytes": 1620,
+      "log_sha256": "2a09e3c6487ef4b9d6f1a8ea2225473b8c8109d6f850b3067e5641a535d192db",
+      "name": "default-judge-unit",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 15
+        }
+      ],
+      "seconds": 4.2718579590437,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--lib",
+        "judge::tests"
+      ],
+      "exit": 0,
+      "log_bytes": 1550,
+      "log_sha256": "7bceb88c09a433d3621321d8c8c17fda0fa089026d793c1eff697110bbc2f5d5",
+      "name": "feature-judge-unit",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 14
+        }
+      ],
+      "seconds": 5.543267625034787,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "judge_native"
+      ],
+      "exit": 0,
+      "log_bytes": 909,
+      "log_sha256": "be28ef39aa02ed76dfe8b6b0e7be5bf250e76567bbc6436eb77a2efec0912c42",
+      "name": "feature-native-boundary",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        }
+      ],
+      "seconds": 0.9874915420077741,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--test",
+        "judge_native"
+      ],
+      "exit": 0,
+      "log_bytes": 909,
+      "log_sha256": "f7b8bedee5e6ecca3630400d538b42006b22a7f8c15d911c3f17f811086e9cbb",
+      "name": "default-native-boundary",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        }
+      ],
+      "seconds": 0.8704602499492466,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/azdaja-notice-remediation-20260917/target/debug/azdaja",
+        "doctor",
+        "--caps"
+      ],
+      "exit": 0,
+      "log_bytes": 450,
+      "log_sha256": "20d6128415f244b245c6f5f2924cab83454190381933acb2dd5d9f826fb2b1f9",
+      "name": "default-capabilities",
+      "seconds": 0.005292750021908432,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "package",
+        "--locked",
+        "--offline",
+        "--all-features"
+      ],
+      "exit": 0,
+      "log_bytes": 3931,
+      "log_sha256": "4f062a6e734737c7d444c6a78da8723fe74a0f7ae26fcfc59ff1ba256da8ebde",
+      "name": "source-package-verify",
+      "seconds": 6.23389945802046,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--no-fail-fast"
+      ],
+      "exit": 101,
+      "log_bytes": 67515,
+      "log_sha256": "b5b8004cd2fb4a867d22eb611e640332b51ba57f93fe8372a0d93d47090f2740",
+      "name": "all-targets-all-features",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 207
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 77
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 137
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 2,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 7
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 34
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 18
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 4
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 17
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 1,
+          "ignored": 0,
+          "passed": 15
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 0
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 15
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 53
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        }
+      ],
+      "seconds": 503.49327479099156,
+      "status": "failed"
+    }
+  ],
+  "default_capabilities": {
+    "azdaja": "0.1.17",
+    "capabilities": [
+      "persistent-repl",
+      "snapshots",
+      "external-functions",
+      "native-sha256",
+      "native-typed-judgments",
+      "re",
+      "json",
+      "datetime",
+      "monty-os-calls-denied"
+    ],
+    "dump_version": 5,
+    "monty": "0.0.21",
+    "typed_judgments": {
+      "cache_and_budget_scope": "cell",
+      "credentials_checked": false,
+      "enabled_by_default": false,
+      "functions": [
+        "judge_many",
+        "judge_stats"
+      ],
+      "host_opt_in_required": true,
+      "runtime_configuration_checked": false,
+      "typesafe_compiled": false
+    }
+  },
+  "failure": "all-targets-all-features failed with 101",
+  "live_provider_calls": 0,
+  "predecessor_acceptance": "jev-current-whole-acceptance-20260917-0921",
+  "prior_binary_sha256": "16b3d35002fcec31bb0243c0e33fbcf4b751eab78be77c04fd856b5607540bbb",
+  "publication_authorized": false,
+  "published_assets_modified": false,
+  "schema": "azdaja.final_source_followthrough.v1",
+  "source_commit": "6ace26151a84b9dae209c3ba1c1588b6b81ec6b5",
+  "source_tree_clean": true,
+  "status": "failed"
+}
