@@ -8,9 +8,19 @@
     "metrics.json": "91678a55f9bada01d0797557de90b44398f7b5d5468f25b12d4672ee729e704e",
     "reliability.csv": "8a7ad8b8319b402bf6b5aca08c4f35420058d967a88f436a7bcbba185fed91ea"
   },
+  "blocking_requirement": "Select the intended sender account for external delivery.",
   "email_sha256": "3b3206efac216f3c72a22a6123ef9531061d7241eded1ec7f9833076c5ae3499",
   "line_endings": "LF for exact Git byte preservation",
-  "reason": "Gmail integration is unconfigured; no existing browser session was available through the browser bridge. No login or OAuth flow initiated.",
+  "native_mail_check": {
+    "accounts_modified": 0,
+    "already_running": true,
+    "credentials_read": 0,
+    "enabled_accounts": 2,
+    "messages_read": 0,
+    "messages_sent": 0,
+    "recorded_at": "2026-09-17T18:50:55.322345+00:00"
+  },
+  "reason": "Gmail integration is unconfigured and the browser bridge had no authorized sender. A final read-only native Mail check found two enabled accounts. No sending identity was specified or selected; the report remains unsent rather than choosing an account arbitrarily.",
   "recipient": "hello@typesafe.ai",
   "sender_selected": false,
   "status": "prepared_not_sent"
