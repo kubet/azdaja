@@ -1,0 +1,31 @@
+   Compiling azdaja v0.1.17 (/Users/vukasinkubet/dev/azdaja)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 23.92s
+     Running unittests src/lib.rs (/Users/vukasinkubet/.jcode/scratch/jev-solo-repair-target/debug/deps/azdaja-adb89ad9dd63a4c0)
+
+running 2 tests
+test unit_tests::optional_judge_root_idle_deadline_allows_silence_only_within_hard_cap ... FAILED
+test unit_tests::optional_judge_root_idle_uses_configured_hard_ceiling ... FAILED
+
+failures:
+
+---- unit_tests::optional_judge_root_idle_deadline_allows_silence_only_within_hard_cap stdout ----
+
+thread 'unit_tests::optional_judge_root_idle_deadline_allows_silence_only_within_hard_cap' (12147509) panicked at src/lib.rs:12159:22:
+called `Result::unwrap()` on an `Err` value: jcode subscription turn idle deadline timed out
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- unit_tests::optional_judge_root_idle_uses_configured_hard_ceiling stdout ----
+
+thread 'unit_tests::optional_judge_root_idle_uses_configured_hard_ceiling' (12147510) panicked at src/lib.rs:12108:13:
+assertion `left == right` failed
+  left: 60s
+ right: 90s
+
+
+failures:
+    unit_tests::optional_judge_root_idle_deadline_allows_silence_only_within_hard_cap
+    unit_tests::optional_judge_root_idle_uses_configured_hard_ceiling
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 211 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

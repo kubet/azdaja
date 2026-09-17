@@ -1,0 +1,37 @@
+   Compiling azdaja v0.1.17 (/Users/vukasinkubet/dev/azdaja)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.13s
+     Running unittests src/lib.rs (/Users/vukasinkubet/.jcode/scratch/jev-solo-repair-target/debug/deps/azdaja-adb89ad9dd63a4c0)
+
+running 2 tests
+test unit_tests::optional_judge_root_idle_deadline_allows_silence_only_within_hard_cap ... ok
+test unit_tests::optional_judge_root_idle_uses_configured_hard_ceiling ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 211 filtered out; finished in 0.00s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.73s
+     Running unittests src/lib.rs (/Users/vukasinkubet/.jcode/scratch/jev-solo-repair-target/debug/deps/azdaja-adb89ad9dd63a4c0)
+
+running 1 test
+test unit_tests::root_and_batch_timeouts_are_capped_without_changing_config ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 212 filtered out; finished in 0.00s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (/Users/vukasinkubet/.jcode/scratch/jev-solo-repair-target/debug/deps/azdaja-adb89ad9dd63a4c0)
+
+running 2 tests
+test unit_tests::turn_deadline_progress_extends_idle_but_not_hard_cap ... ok
+test unit_tests::turn_deadline_times_out_when_idle_without_reaching_hard_cap ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 211 filtered out; finished in 0.00s
+
+   Compiling azdaja v0.1.17 (/Users/vukasinkubet/dev/azdaja)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.21s
+     Running unittests src/lib.rs (/Users/vukasinkubet/.jcode/scratch/jev-solo-repair-target/debug/deps/azdaja-5a730779e5203f0c)
+
+running 2 tests
+test unit_tests::optional_judge_root_idle_deadline_allows_silence_only_within_hard_cap ... ok
+test unit_tests::optional_judge_root_idle_uses_configured_hard_ceiling ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 212 filtered out; finished in 0.00s
+
