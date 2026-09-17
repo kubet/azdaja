@@ -1,0 +1,12 @@
+{
+  "files": {
+    "predictions.json": "75db8e20e4e3ed881bd1c152fea73f4b45e65ff6bb748151675dde3d5f96ccd3",
+    "public-commands.json": "fb01ea2899d16e13df0a05cb6734df09696fe486a9483ce0447c5021d6167386",
+    "public-workflow.json": "846e6a69864b3366fbbdc6f06805c28a0c31c2d7a1443cd4318a50420a9ff6c3",
+    "replicates.json": "8b4d39d4749aec3584a1d9481ec3f0d9589ff525aed25ef40339c1577b69211b",
+    "result.json": "45f2c5faada3d386bdd685476b2f9ef5a1ebd265b7c6a16827642726cca3ca8d",
+    "sample500.json": "d98d47acfbfe1741d25dc3b34e1f255c1c98452a50779b22a7a0a03ef69fc188"
+  },
+  "implementation_commit": "5819ecb7cbf5c1f02c35bc45caecc960909065a6",
+  "schema": "azdaja.audit_sampling.retention.v1"
+}
