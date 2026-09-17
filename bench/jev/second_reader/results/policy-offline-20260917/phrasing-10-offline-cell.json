@@ -1,0 +1,1 @@
+{"code":"p=json.loads(policy_payload)\nFINAL({\"hash\":sha256(policy_payload),\"ids\":list(p[\"questions\"].keys()),\"attempts\":judge_stats()[\"attempts\"]})\n"}

@@ -1,0 +1,1 @@
+{"code":"\np = json.loads(request_payload)\nfailure = None\ntry:\n    observation = judge_many(p[\"state\"], p[\"questions\"])\nexcept Exception as error:\n    failure = str(error)\nif failure is None:\n    observations[p[\"name\"]] = observation\n    FINAL({\"observation\":observation,\"stats\":judge_stats()})\nelse:\n    FINAL({\"failure\":failure,\"stats\":judge_stats()})\n"}

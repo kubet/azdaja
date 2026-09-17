@@ -1,0 +1,258 @@
+{
+  "agreement": {
+    "actual_error_floor_on_agreement": {
+      "count": 5,
+      "meaning": "errors remaining when only model disagreements are escalated",
+      "rate_among_agreements": 0.02242152466367713,
+      "rate_of_panel": 0.022026431718061675
+    },
+    "agreement_count": 223,
+    "agreement_error_ids": [
+      "r0044",
+      "r0503",
+      "r1383",
+      "r1394",
+      "r1747"
+    ],
+    "disagreement_count": 4,
+    "disagreement_ids": [
+      "r0514",
+      "r0576",
+      "r1581",
+      "r1856"
+    ],
+    "hypothetical_oracle_ceiling_if_all_disagreements_resolved": {
+      "accuracy_ceiling": 0.9779735682819384,
+      "correct_count_ceiling": 222,
+      "hypothetical": true,
+      "meaning": "If a perfect oracle resolved every disagreement, agreement errors would remain",
+      "remaining_errors": 5,
+      "resolved_disagreements": 4
+    }
+  },
+  "agreement_table_nonzero": [
+    {
+      "count": 86,
+      "direct_ham": false,
+      "gold_ham": false,
+      "typed_ham": false
+    },
+    {
+      "count": 2,
+      "direct_ham": true,
+      "gold_ham": false,
+      "typed_ham": false
+    },
+    {
+      "count": 2,
+      "direct_ham": false,
+      "gold_ham": false,
+      "typed_ham": true
+    },
+    {
+      "count": 5,
+      "direct_ham": true,
+      "gold_ham": false,
+      "typed_ham": true
+    },
+    {
+      "count": 132,
+      "direct_ham": true,
+      "gold_ham": true,
+      "typed_ham": true
+    }
+  ],
+  "brier_score": 0.025986784140969162,
+  "ece_definitions": {
+    "bins": "equal width; [lower, upper) except final [lower, 1.0]",
+    "positive_probability": "binary positive-probability ECE; p_ham versus official gold_ham",
+    "top_label": "top-label ECE; max(p_ham, 1-p_ham) versus prediction correctness"
+  },
+  "panel_n": 227,
+  "positive_probability_ece": {
+    "10": {
+      "bins": [
+        {
+          "abs_gap": 0.0323943661971831,
+          "interval": "[0.0, 0.1)",
+          "mean_p_ham": 0.0323943661971831,
+          "n": 71,
+          "observed_ham_rate": 0.0
+        },
+        {
+          "abs_gap": 0.13,
+          "interval": "[0.1, 0.2)",
+          "mean_p_ham": 0.13,
+          "n": 5,
+          "observed_ham_rate": 0.0
+        },
+        {
+          "abs_gap": 0.24500000000000002,
+          "interval": "[0.2, 0.3)",
+          "mean_p_ham": 0.24500000000000002,
+          "n": 4,
+          "observed_ham_rate": 0.0
+        },
+        {
+          "abs_gap": 0.355,
+          "interval": "[0.3, 0.4)",
+          "mean_p_ham": 0.355,
+          "n": 4,
+          "observed_ham_rate": 0.0
+        },
+        {
+          "abs_gap": 0.4125,
+          "interval": "[0.4, 0.5)",
+          "mean_p_ham": 0.4125,
+          "n": 4,
+          "observed_ham_rate": 0.0
+        },
+        {
+          "abs_gap": 0.52,
+          "interval": "[0.5, 0.6)",
+          "mean_p_ham": 0.52,
+          "n": 1,
+          "observed_ham_rate": 0.0
+        },
+        {
+          "abs_gap": 0.68,
+          "interval": "[0.6, 0.7)",
+          "mean_p_ham": 0.68,
+          "n": 1,
+          "observed_ham_rate": 0.0
+        },
+        {
+          "abs_gap": 0.4150000000000001,
+          "interval": "[0.7, 0.8)",
+          "mean_p_ham": 0.7483333333333334,
+          "n": 6,
+          "observed_ham_rate": 0.3333333333333333
+        },
+        {
+          "abs_gap": 0.13888888888888884,
+          "interval": "[0.8, 0.9)",
+          "mean_p_ham": 0.8611111111111112,
+          "n": 9,
+          "observed_ham_rate": 1.0
+        },
+        {
+          "abs_gap": 0.02803278688524591,
+          "interval": "[0.9, 1.0]",
+          "mean_p_ham": 0.9637704918032787,
+          "n": 122,
+          "observed_ham_rate": 0.9918032786885246
+        }
+      ],
+      "ece": 0.06766519823788547
+    },
+    "5": {
+      "bins": [
+        {
+          "abs_gap": 0.03881578947368421,
+          "interval": "[0.0, 0.2)",
+          "mean_p_ham": 0.03881578947368421,
+          "n": 76,
+          "observed_ham_rate": 0.0
+        },
+        {
+          "abs_gap": 0.3,
+          "interval": "[0.2, 0.4)",
+          "mean_p_ham": 0.3,
+          "n": 8,
+          "observed_ham_rate": 0.0
+        },
+        {
+          "abs_gap": 0.434,
+          "interval": "[0.4, 0.6)",
+          "mean_p_ham": 0.434,
+          "n": 5,
+          "observed_ham_rate": 0.0
+        },
+        {
+          "abs_gap": 0.45285714285714285,
+          "interval": "[0.6, 0.8)",
+          "mean_p_ham": 0.7385714285714285,
+          "n": 7,
+          "observed_ham_rate": 0.2857142857142857
+        },
+        {
+          "abs_gap": 0.03564885496183201,
+          "interval": "[0.8, 1.0]",
+          "mean_p_ham": 0.9567175572519084,
+          "n": 131,
+          "observed_ham_rate": 0.9923664122137404
+        }
+      ],
+      "ece": 0.06766519823788544
+    }
+  },
+  "provider_calls": 0,
+  "top_label_ece": {
+    "10": {
+      "bins": [
+        {
+          "abs_gap": 0.10999999999999988,
+          "accuracy": 0.6666666666666666,
+          "interval": "[0.5, 0.6)",
+          "mean_confidence": 0.5566666666666668,
+          "n": 3
+        },
+        {
+          "abs_gap": 0.21999999999999997,
+          "accuracy": 0.8571428571428571,
+          "interval": "[0.6, 0.7)",
+          "mean_confidence": 0.6371428571428571,
+          "n": 7
+        },
+        {
+          "abs_gap": 0.18999999999999995,
+          "accuracy": 0.5555555555555556,
+          "interval": "[0.7, 0.8)",
+          "mean_confidence": 0.7455555555555555,
+          "n": 9
+        },
+        {
+          "abs_gap": 0.14,
+          "accuracy": 1.0,
+          "interval": "[0.8, 0.9)",
+          "mean_confidence": 0.86,
+          "n": 15
+        },
+        {
+          "abs_gap": 0.029637305699481864,
+          "accuracy": 0.9948186528497409,
+          "interval": "[0.9, 1.0]",
+          "mean_confidence": 0.965181347150259,
+          "n": 193
+        }
+      ],
+      "ece": 0.05022026431718061
+    },
+    "5": {
+      "bins": [
+        {
+          "abs_gap": 0.10999999999999988,
+          "accuracy": 0.6666666666666666,
+          "interval": "[0.4, 0.6)",
+          "mean_confidence": 0.5566666666666668,
+          "n": 3
+        },
+        {
+          "abs_gap": 0.010624999999999996,
+          "accuracy": 0.6875,
+          "interval": "[0.6, 0.8)",
+          "mean_confidence": 0.698125,
+          "n": 16
+        },
+        {
+          "abs_gap": 0.03759615384615378,
+          "accuracy": 0.9951923076923077,
+          "interval": "[0.8, 1.0]",
+          "mean_confidence": 0.9575961538461539,
+          "n": 208
+        }
+      ],
+      "ece": 0.03665198237885456
+    }
+  }
+}
