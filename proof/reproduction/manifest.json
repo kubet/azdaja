@@ -1,14 +1,14 @@
 {
   "schema": "azdaja.first_party_proof_bundle.v1",
   "bundle": "azdaja-first-party-proof",
-  "source_commit": "16e56fb854d049825d329255ba6368e377fa2263",
+  "source_commit": "200d70628010647b216042a99d3875d4331e3538",
   "hash_algorithm": "sha256",
   "artifacts": [
     {
       "path": ".github/workflows/ci.yml",
       "role": "ci_verifier",
-      "bytes": 22514,
-      "sha256": "ed70fe750dbc6b7575df6f5ddc78856b40a772b375c2e840f9ea339f6ac68e68"
+      "bytes": 22518,
+      "sha256": "1d42200cccf211e92b240155a0c1a612432b76a6662f86a2b8be0c03e9dd5365"
     },
     {
       "path": ".github/workflows/release.yml",
@@ -19,8 +19,8 @@
     {
       "path": ".github/workflows/source-install-integrity.yml",
       "role": "source_install_ci_verifier",
-      "bytes": 16052,
-      "sha256": "e3801fb1eb789285cbdb40609c6fdf82af1ec7e422bed6aff957929163e1eb7a"
+      "bytes": 16056,
+      "sha256": "e767f7255e1b208e759b9fb187984e02cbba196f3c68d84f48d0f6f00e709891"
     },
     {
       "path": ".github/workflows/verify-proof.yml",
