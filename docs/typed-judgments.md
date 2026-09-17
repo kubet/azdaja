@@ -35,10 +35,14 @@ First use `azdaja doctor --caps` for provider-free discovery. Its
 the `typesafe` transport was compiled, and identifies the per-cell cache/budget
 scope. This is **build capability, not runtime readiness**: the command does
 not read configuration or credentials, create state, or call a provider.
+Use the exact `doctor --caps` form: bare `doctor` is a different diagnostic
+that can make a model canary call.
 `typesafe_compiled: true` does not mean that the host enabled inference or
 supplied a valid key. A default-feature build still exposes the API names but
 reports `typesafe_compiled: false`. The existing opt-in and ordinary-execution
 recovery behavior below is unchanged.
+The [discovery acceptance report](research/jev-native-discovery-20260917.md)
+records the before-fix failure, both build modes and the actual installed output.
 
 Build this source tree with Rust 1.95:
 

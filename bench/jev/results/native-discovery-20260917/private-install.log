@@ -1,0 +1,3 @@
+Detected: claude (selected explicitly)
+Written: claude -> $JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/private home with spaces/.claude/skills/azdaja
+Next: run '$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/private home with spaces/.claude/skills/azdaja/azdaja' doctor; then restart Claude to load its skill, user rule, and hook

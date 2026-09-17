@@ -1,0 +1,35 @@
+test_copying_wrong_valid_id_is_not_correctness (bench.jev.span_selection.test_kernel.KernelTests.test_copying_wrong_valid_id_is_not_correctness) ... ok
+test_duplicate_occurrences_and_unicode_offsets (bench.jev.span_selection.test_kernel.KernelTests.test_duplicate_occurrences_and_unicode_offsets) ... ok
+test_family_and_gold_never_enter_model_pack (bench.jev.span_selection.test_kernel.KernelTests.test_family_and_gold_never_enter_model_pack) ... ok
+test_gold_must_have_representable_provenance (bench.jev.span_selection.test_kernel.KernelTests.test_gold_must_have_representable_provenance) ... ok
+test_literal_baseline_zero_overlap_ties_and_role_distance (bench.jev.span_selection.test_kernel.KernelTests.test_literal_baseline_zero_overlap_ties_and_role_distance) ... ok
+test_materializer_rejects_bad_offsets_and_changed_sources (bench.jev.span_selection.test_kernel.KernelTests.test_materializer_rejects_bad_offsets_and_changed_sources) ... ok
+test_no_candidate_truncation (bench.jev.span_selection.test_kernel.KernelTests.test_no_candidate_truncation) ... ok
+test_nonpublic_revision_is_rejected_before_git (bench.jev.span_selection.test_kernel.KernelTests.test_nonpublic_revision_is_rejected_before_git) ... ok
+test_omitted_candidate_is_not_a_claim_of_absent_source_value (bench.jev.span_selection.test_kernel.KernelTests.test_omitted_candidate_is_not_a_claim_of_absent_source_value) ... ok
+test_rejects_mutated_source_and_duplicate_task_ids (bench.jev.span_selection.test_kernel.KernelTests.test_rejects_mutated_source_and_duplicate_task_ids) ... ok
+test_sentinels_are_not_unjudged_and_preserve_source_pool (bench.jev.span_selection.test_kernel.KernelTests.test_sentinels_are_not_unjudged_and_preserve_source_pool) ... ok
+test_source_guard_rejects_reconstruction_even_with_matching_local_hash (bench.jev.span_selection.test_kernel.KernelTests.test_source_guard_rejects_reconstruction_even_with_matching_local_hash) ... ok
+test_strict_response_json_and_id_coverage (bench.jev.span_selection.test_kernel.KernelTests.test_strict_response_json_and_id_coverage) ... ok
+test_versions_and_quote_escape_are_verbatim (bench.jev.span_selection.test_kernel.KernelTests.test_versions_and_quote_escape_are_verbatim) ... ok
+test_unicode_duplicate_occurrences_wrong_choice_and_invalid_id (bench.jev.span_selection.test_runner.ActualNativeTests.test_unicode_duplicate_occurrences_wrong_choice_and_invalid_id) ... ok
+test_changed_method_stops_before_transport (bench.jev.span_selection.test_runner.RunnerTests.test_changed_method_stops_before_transport) ... ok
+test_complete_bar_rejects_losses_and_slow_ties (bench.jev.span_selection.test_runner.RunnerTests.test_complete_bar_rejects_losses_and_slow_ties) ... ok
+test_credential_source_is_not_deleted_and_symlinks_are_refused (bench.jev.span_selection.test_runner.RunnerTests.test_credential_source_is_not_deleted_and_symlinks_are_refused) ... ok
+test_crossing_usage_survives_but_never_becomes_eligible_rows (bench.jev.span_selection.test_runner.RunnerTests.test_crossing_usage_survives_but_never_becomes_eligible_rows) ... ok
+test_deadline_and_call_caps_reject_before_process (bench.jev.span_selection.test_runner.RunnerTests.test_deadline_and_call_caps_reject_before_process) ... ok
+test_occupied_and_dangling_output_are_rejected_before_key_or_child (bench.jev.span_selection.test_runner.RunnerTests.test_occupied_and_dangling_output_are_rejected_before_key_or_child) ... ok
+test_progressive_stop_is_cumulative_and_keeps_partial_unknown (bench.jev.span_selection.test_runner.RunnerTests.test_progressive_stop_is_cumulative_and_keeps_partial_unknown) ... ok
+test_public_fixture_source_and_gold_before_inference (bench.jev.span_selection.test_runner.RunnerTests.test_public_fixture_source_and_gold_before_inference) ... ok
+test_timeout_poisoning_does_not_adopt_old_state (bench.jev.span_selection.test_runner.RunnerTests.test_timeout_poisoning_does_not_adopt_old_state) ... ok
+test_trace_distinguishes_logical_requests_and_physical_attempts (bench.jev.span_selection.test_runner.RunnerTests.test_trace_distinguishes_logical_requests_and_physical_attempts) ... ok
+test_actual_retained_panel_keeps_negative_quality_result (bench.jev.span_selection.test_replay.ReplayTests.test_actual_retained_panel_keeps_negative_quality_result) ... ok
+test_digest_detects_changed_response (bench.jev.span_selection.test_replay.ReplayTests.test_digest_detects_changed_response) ... ok
+test_rehashed_false_win_is_rejected (bench.jev.span_selection.test_replay.ReplayTests.test_rehashed_false_win_is_rejected) ... ok
+test_rehashed_native_table_is_not_authoritative (bench.jev.span_selection.test_replay.ReplayTests.test_rehashed_native_table_is_not_authoritative) ... ok
+test_rehashed_unmatched_baseline_inputs_are_rejected (bench.jev.span_selection.test_replay.ReplayTests.test_rehashed_unmatched_baseline_inputs_are_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 30 tests in 1.254s
+
+OK

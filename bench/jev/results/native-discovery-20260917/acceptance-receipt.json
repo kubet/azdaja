@@ -1,0 +1,559 @@
+{
+  "actual_installed_binary_sha256": "455846f6e613463e96a7e37e4b5ed0541a9cfc90502f60b20c98c13d367d9546",
+  "checks": [
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "log_bytes": 185,
+      "log_sha256": "36a4800364e8b170cb805b1aa1e0c095fdf8c2bc0b727b7c943e442e92ba8b55",
+      "name": "strict-clippy",
+      "seconds": 5.441587749985047,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "format",
+      "seconds": 0.4364318340085447,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "release/verify-third-party-notices.py"
+      ],
+      "exit": 0,
+      "log_bytes": 434,
+      "log_sha256": "c4e5031df0d74e410df04fb0337db0151d4fca9dbcc0694d68b6dc082c0a6e35",
+      "name": "public-notice",
+      "seconds": 1.3439040000084788,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "release",
+        "-p",
+        "test_*notice*.py",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 5722,
+      "log_sha256": "624154b494a135b639ee38feae4a7951a003a289fb2ed951bc6949599f4c5e1b",
+      "name": "notice-mutations",
+      "seconds": 32.489666416018736,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "sh",
+        "proof/reproduction/run.sh"
+      ],
+      "exit": 0,
+      "log_bytes": 365,
+      "log_sha256": "c4c4cc56351dcb658336db0b7762ec53ef0ccddc6f0209780107b611186e6e2f",
+      "name": "proof-public",
+      "seconds": 0.24534495803527534,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "proof.reproduction.test_verify",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 2043,
+      "log_sha256": "e8934046696a9d9729807a542af385137e8fa1d73fc63d4a5e0ff8b7bf526f98",
+      "name": "proof-tests",
+      "seconds": 0.5536464580218308,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--lib",
+        "judge::tests"
+      ],
+      "exit": 0,
+      "log_bytes": 1620,
+      "log_sha256": "a480616ee522e08a481952744e6510b79e62f2f36032e62866adc8958c5248ec",
+      "name": "default-judge-unit",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 15
+        }
+      ],
+      "seconds": 4.433050208957866,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--test",
+        "judge_native"
+      ],
+      "exit": 0,
+      "log_bytes": 909,
+      "log_sha256": "3a4c3dd6f7ab3c6d1cb50d08037156a07cbcfbcc2ec73bc629477b0fb9989521",
+      "name": "default-native-boundary",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        }
+      ],
+      "seconds": 5.260811833024491,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/azdaja",
+        "doctor",
+        "--caps"
+      ],
+      "exit": 0,
+      "log_bytes": 450,
+      "log_sha256": "20d6128415f244b245c6f5f2924cab83454190381933acb2dd5d9f826fb2b1f9",
+      "name": "default-capabilities",
+      "seconds": 0.004620291001629084,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "package",
+        "--locked",
+        "--offline",
+        "--all-features"
+      ],
+      "exit": 0,
+      "log_bytes": 3819,
+      "log_sha256": "2548750e98a74875b2ad7bf60d4be415e289e595621edafd8087963d7891c1b4",
+      "name": "source-package-verify",
+      "seconds": 5.648107875022106,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--no-fail-fast"
+      ],
+      "exit": 0,
+      "log_bytes": 64321,
+      "log_sha256": "dd0776d714a31cc72ebf9b23192949a8048fb13d1266a12c6cffd99786ef92f3",
+      "name": "all-targets-all-features",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 205
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 76
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 137
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 2,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 34
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 18
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 4
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 17
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 16
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 0
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 15
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 53
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        }
+      ],
+      "seconds": 488.6348898750148,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "build",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "--bin",
+        "azdaja"
+      ],
+      "exit": 0,
+      "log_bytes": 72,
+      "log_sha256": "a178c7902ac24dda0e2c0cd4cf0e47a2a6976ef30481cb4015f2f71620380d8b",
+      "name": "final-feature-build",
+      "seconds": 0.40952883299905807,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/azdaja",
+        "install",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 390,
+      "log_sha256": "d3c5f030beaac07415c75013cdb036a2b1302a843f170efb73af61a90e868e5d",
+      "name": "private-install",
+      "seconds": 0.8039839169941843,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/private home with spaces/.claude/skills/azdaja/azdaja",
+        "doctor",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 277,
+      "log_sha256": "47d60031e227a169d16e54a420683e90a5d3c9f33af95d5fd55470ddc5b401b2",
+      "name": "private-doctor",
+      "seconds": 0.21303387498483062,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/private home with spaces/.claude/skills/azdaja/azdaja",
+        "doctor",
+        "--caps"
+      ],
+      "exit": 0,
+      "log_bytes": 449,
+      "log_sha256": "8ca0c005723186290b2b2711f28b71b622a8647c80a4c5228d56f3d7b2e0b6e9",
+      "name": "installed-capabilities",
+      "seconds": 0.005777458020020276,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "bench.jev.span_selection.run",
+        "--offline",
+        "--azdaja",
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/private home with spaces/.claude/skills/azdaja/azdaja",
+        "--scratch",
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917",
+        "--output",
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/installed-span-offline"
+      ],
+      "exit": 0,
+      "log_bytes": 95,
+      "log_sha256": "0cdc07f800240b9a69f300129f4bf8fd3b2338dba70a9dccb3af557ac709d299",
+      "name": "installed-offline-span",
+      "seconds": 0.6232471669791266,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "bench.jev.span_selection.test_kernel",
+        "bench.jev.span_selection.test_runner",
+        "bench.jev.span_selection.test_replay",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 4951,
+      "log_sha256": "f764ab275bc78c2d3240161f9221979c926cb0f8ecee950dfb243feae943ec92",
+      "name": "installed-native-and-result-tests",
+      "seconds": 1.3545370000065304,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "installed_project_memory",
+        "--",
+        "--ignored",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "log_bytes": 530,
+      "log_sha256": "f3ce830e528ffa7fba8ec3a6fa31cb89702a98ad09232e8acfc37c88e5e8102c",
+      "name": "installed-memory",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        }
+      ],
+      "seconds": 0.316042665974237,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/private home with spaces/.claude/skills/azdaja/azdaja",
+        "uninstall",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 166,
+      "log_sha256": "d0d866ac185874fe07cbc407d4ab849d369b589a9fd137aa0b7af44f425274bb",
+      "name": "private-uninstall",
+      "seconds": 1.3388022090075538,
+      "status": "passed"
+    }
+  ],
+  "default_capabilities": {
+    "azdaja": "0.1.17",
+    "capabilities": [
+      "persistent-repl",
+      "snapshots",
+      "external-functions",
+      "native-sha256",
+      "native-typed-judgments",
+      "re",
+      "json",
+      "datetime",
+      "monty-os-calls-denied"
+    ],
+    "dump_version": 5,
+    "monty": "0.0.21",
+    "typed_judgments": {
+      "cache_and_budget_scope": "cell",
+      "credentials_checked": false,
+      "enabled_by_default": false,
+      "functions": [
+        "judge_many",
+        "judge_stats"
+      ],
+      "host_opt_in_required": true,
+      "runtime_configuration_checked": false,
+      "typesafe_compiled": false
+    }
+  },
+  "final_binary_sha256": "455846f6e613463e96a7e37e4b5ed0541a9cfc90502f60b20c98c13d367d9546",
+  "installed_capabilities": {
+    "azdaja": "0.1.17",
+    "capabilities": [
+      "persistent-repl",
+      "snapshots",
+      "external-functions",
+      "native-sha256",
+      "native-typed-judgments",
+      "re",
+      "json",
+      "datetime",
+      "monty-os-calls-denied"
+    ],
+    "dump_version": 5,
+    "monty": "0.0.21",
+    "typed_judgments": {
+      "cache_and_budget_scope": "cell",
+      "credentials_checked": false,
+      "enabled_by_default": false,
+      "functions": [
+        "judge_many",
+        "judge_stats"
+      ],
+      "host_opt_in_required": true,
+      "runtime_configuration_checked": false,
+      "typesafe_compiled": true
+    }
+  },
+  "live_provider_calls": 0,
+  "predecessor_acceptance": "jev-clean-final-acceptance-20260917-0216",
+  "private_install_removed": true,
+  "publication_authorized": false,
+  "published_assets_modified": false,
+  "schema": "azdaja.final_source_followthrough.v1",
+  "source_commit": "6b1139e86af8d18365232b7f57f9b9aa1352f6cb",
+  "source_tree_clean": true,
+  "source_tree_clean_after": true,
+  "status": "passed"
+}

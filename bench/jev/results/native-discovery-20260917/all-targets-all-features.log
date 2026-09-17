@@ -1,0 +1,862 @@
+   Compiling azdaja v0.1.17 ($JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/source)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.75s
+     Running unittests src/lib.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/azdaja-adb89ad9dd63a4c0)
+
+running 206 tests
+test claude_hook_tests::recent_scope_label_basename_is_bounded_and_safe ... ok
+test claude_hook_tests::claude_hook_managed_transaction_rejects_shell_envelope_smuggling ... ok
+test claude_hook_tests::claude_hook_internal_errors_fail_open_without_ignoring_real_decisions ... ok
+test claude_hook_tests::claude_hook_nontriggers_never_create_large_file_coverage ... ok
+test exact_line_ledger_projection_tests::filters_by_canonical_ids_without_losing_source_order ... ok
+test exact_line_ledger_projection_tests::marker_byte_boundaries_and_suffix_bytes_are_exact ... ok
+test exact_line_ledger_projection_tests::projects_original_occurrences_and_completes_full_expansion ... ok
+test exact_line_ledger_projection_tests::rejects_forged_ledgers_bad_selectors_and_ambiguous_markers ... ok
+test exact_line_ledger_projection_tests::validates_expansion_coverage_independent_of_dictionary_order ... ok
+test exact_line_ledger_projection_tests::exact_line_ledger_is_absent_from_ordinary_exec_cells ... ok
+test exact_line_record_tests::authoritative_csv_records_bound_repeated_header_expansion ... ok
+test exact_line_record_tests::authoritative_csv_records_fail_closed_on_ambiguous_or_malformed_shapes ... ok
+test exact_line_record_tests::authoritative_csv_records_preserve_multiline_rows_duplicates_and_raw_hashes ... ok
+test claude_hook_tests::claude_hook_litmus_routes_only_large_semantic_file_access ... ok
+test exact_line_ledger_projection_tests::authenticates_full_loaded_context_and_hides_private_callbacks ... ok
+test exact_line_record_tests::authoritative_jsonl_records_fail_closed_on_invalid_boundaries_and_shapes ... ok
+test exact_line_record_tests::authoritative_jsonl_records_preserve_order_occurrences_and_bytes ... ok
+test exact_line_record_tests::authoritative_record_coverage_rejects_omission_reorder_tampering_and_unknown_output ... ok
+test exact_line_record_tests::exact_line_records_defines_lf_crlf_mixed_and_terminal_behavior ... ok
+test exact_line_record_tests::authoritative_record_coverage_binds_every_occurrence_and_label_in_source_order ... ok
+test exact_line_record_tests::exact_line_records_dispatch_rejects_arity_kwargs_and_types ... ok
+test exact_line_record_tests::exact_line_records_enforces_prefix_utf8_byte_contract ... ok
+test exact_line_record_tests::exact_line_records_fails_closed_on_missing_record ... ok
+test exact_line_record_tests::exact_line_records_is_absent_from_ordinary_cells ... ok
+test exact_line_record_tests::exact_line_records_preserves_order_duplicates_and_all_nonseparator_bytes ... ok
+test exact_line_record_tests::exact_line_records_rejects_every_bare_cr_shape ... ok
+test claude_hook_tests::claude_hook_prompt_trigger_is_exhaustive_semantic_and_one_input_only ... ok
+test jcode_gate::activation_contract_tests::activation_is_explicit_bounded_and_restored_between_cases ... ok
+test jcode_gate::activation_contract_tests::activation_scopes_require_their_current_context ... ok
+test jcode_gate::build_command_classification_tests::allows_locked_package_and_explicit_local_install ... ok
+test exact_line_record_tests::exact_line_records_supports_metadata_selection_after_full_ledger ... ok
+test jcode_gate::build_command_classification_tests::allows_toolchain_qualified_cargo_build_and_build_rustup_setup ... ok
+test jcode_gate::build_command_classification_tests::rejects_nearby_read_capable_and_compound_commands ... ok
+test jcode_gate::build_command_classification_tests::release_build_exceptions_reject_implicit_remote_and_compound_operations ... ok
+test claude_hook_tests::claude_hook_allows_one_bounded_large_sample_before_activation ... ok
+test exact_line_record_tests::exact_line_records_enforces_occurrence_limit_boundaries ... ok
+test exact_line_ledger_projection_tests::ledger_supports_exactly_one_hundred_five_thousand_records ... ok
+test claude_hook_tests::claude_hook_activation_is_request_scoped_and_completion_releases_prompt ... ok
+test jcode_gate::tests::blocked_before_completion_uses_exact_managed_command_pattern ... ok
+test jcode_gate::tests::bounded_bash_scans_reject_symlink_operands ... ok
+test jcode_gate::tests::challenge_command_uses_the_running_executable ... ok
+test jcode_gate::tests::bounded_bash_scans_reject_oversized_external_and_shell_controlled_inputs ... ok
+test jcode_gate::tests::broad_content_reading_and_git_source_extraction_are_blocked ... ok
+test jcode_gate::tests::bounded_read_only_bash_scans_are_allowed_and_charged ... ok
+test jcode_gate::tests::empty_repository_evidence_cannot_unlock_broad_work ... ok
+test jcode_gate::tests::completion_shuts_down_the_heartbeat_thread_promptly ... ok
+test jcode_gate::tests::challenge_claim_is_exclusive_and_drop_releases_it_for_retry ... ok
+test jcode_gate::tests::detached_observer_events_never_mutate_challenge_state ... ok
+test jcode_gate::tests::challenge_claimed_before_expiry_can_finish_after_a_long_provider_run ... ok
+test jcode_gate::tests::empty_work_is_not_completion_and_state_names_do_not_leak_bindings ... ok
+test jcode_gate::tests::file_scoped_work_is_rejected_when_claiming_before_provider_entry ... ok
+test jcode_gate::tests::github_failed_log_read_is_exact_and_fail_closed ... ok
+test jcode_gate::tests::narrow_explicit_read_is_allowed_and_charged ... ok
+test jcode_gate::tests::only_the_exact_challenged_azdaja_command_bypasses_shell_memory_gating ... ok
+test jcode_gate::tests::expired_challenge_cannot_complete ... ok
+test jcode_gate::tests::live_claim_remains_exclusive_after_the_issuance_window_expires ... ok
+test jcode_gate::tests::ordinary_git_build_test_lint_and_format_commands_are_allowed ... ok
+test jcode_gate::tests::overlong_managed_binary_cannot_overflow_jcode_hook_stderr ... ok
+test jcode_gate::tests::one_requested_minified_line_cannot_bypass_the_byte_bound ... ok
+test jcode_gate::tests::safe_command_extraction_preserves_only_recognized_wrappers ... ok
+test jcode_gate::tests::sha256_binding_matches_standard_vector ... ok
+test jcode_gate::tests::recursive_batch_blocks_when_any_nested_call_is_broad ... ok
+test jcode_gate::tests::failed_handoff_preserves_bounded_shell_reads_and_shared_budget ... ok
+test jcode_gate::tests::narrow_read_fails_closed_when_reaching_the_range_requires_a_large_scan ... ok
+test jcode_gate::tests::unrecognized_bash_commands_fail_closed ... ok
+test jcode_gate::tests::repository_challenge_rejects_a_different_canonical_workspace ... ok
+test judge::tests::all_primitives_cache_and_question_mutation ... ok
+test judge::tests::budgets_are_debited_and_crossing_retains_usage_without_answers ... ok
+test judge::tests::deadline_preflight_and_transport_timeout ... ok
+test jcode_gate::tests::repeated_narrow_reads_exhaust_the_per_session_budget ... ok
+test judge::tests::integer_token_budget_crossing_and_overflow_stay_terminal ... ok
+test judge::tests::invalid_probabilities_argmax_score_and_legend ... ok
+test judge::tests::malformed_duplicate_extra_missing_ids_and_types ... ok
+test judge::tests::model_alias_concrete_and_explicit_expectation ... ok
+test judge::tests::preflight_limits_and_invalid_arguments_do_not_read_credentials ... ok
+test judge::tests::request_cap_allows_cache_without_new_credential_or_observation ... ok
+test judge::tests::response_size_http_status_and_config_validation ... ok
+test judge::tests::secret_safe_errors_and_poisoned_transport_failure ... ok
+test judge::tests::token_counts_are_integers_and_null_is_unknown_not_zero ... ok
+test judge::tests::unknown_usage_is_not_zero_billing_and_bad_usage_poisoned ... ok
+test jcode_gate::tests::tiny_file_scoped_work_cannot_unlock_repository_inspection ... ok
+test lexical_relevance_tests::lexical_relevance_cached_frequencies_match_frozen_baseline ... ok
+test jcode_gate::tests::wrong_challenge_is_rejected_without_activation ... ok
+test lexical_relevance_tests::lexical_relevance_accepts_measured_holistic_query_but_keeps_a_hard_term_cap ... ok
+test lexical_relevance_tests::lexical_relevance_is_absent_from_ordinary_cells ... ok
+test lexical_relevance_tests::lexical_relevance_is_available_to_solo_without_provider_calls ... ok
+test lexical_relevance_tests::lexical_relevance_handles_non_ascii_runs_without_normalizing_evidence ... ok
+test lexical_relevance_tests::lexical_relevance_release_stress_16m ... ignored, release-only 16M-character stress
+test lexical_relevance_tests::lexical_relevance_returns_complete_small_source ... ok
+test managed_skill_tests::frontmatter_and_rendering_preserve_explicit_opt_in_contract ... ok
+test memory::recall::tests::query_bounds_reject_empty_punctuation_control_and_oversized_input ... ok
+test memory::recall::tests::query_is_unicode_case_insensitive_and_repetition_does_not_add_weight ... ok
+test memory::recall::tests::readonly_state_resolution_preserves_override_and_xdg_precedence ... ok
+test memory::recall::tests::unsafe_scope_is_rejected_before_ledger_lookup ... ok
+test lexical_relevance_tests::lexical_relevance_fails_closed_without_discriminating_matches ... ok
+test memory::tests::corrupt_and_unsafe_ledgers_fail_closed ... ok
+test judge::tests::elapsed_transport_deadline_poisoned_but_usage_retained ... ok
+test memory::tests::global_and_scoped_kind_filters_stay_isolated ... ok
+test memory::tests::kind_filters_are_stable_and_read_only ... ok
+test memory::tests::scope_ledgers_are_isolated_and_show_backlinks ... ok
+test lexical_relevance_tests::lexical_relevance_is_deterministic_and_byte_faithful ... ok
+test native_hash_tests::sha256_matches_standard_vectors ... ok
+test memory::transfer::opened_entry_tests::changed_bundle_entry_is_refused_after_a_successful_regular_file_precheck ... ok
+test jcode_gate::tests::successful_repository_pass_preserves_the_exhausted_read_budget ... ok
+test observability::tests::obsolete_derived_observation_fields_are_ignored_on_load ... ok
+test observability::tests::aggregate_persistence_keeps_only_counts_and_privacy_flags ... ok
+test observability::tests::recent_aggregates_render_a_truthful_memory_constellation ... ok
+test observability::tests::scope_keys_distinguish_non_utf8_directory_names ... ok
+test observability::tests::source_aggregate_counts_utf8_lines_and_byte_entropy_without_text ... ok
+test observability::tests::scoped_histories_are_isolated_deterministic_and_path_free ... ok
+test observability::tests::successful_session_completion_is_persisted_once_per_loaded_source ... ok
+test observability::tests::summary_loaders_reject_non_regular_summary_paths ... ok
+test observability::tests::summary_loaders_reject_symlink_summary_paths ... ok
+test receipt_writer_tests::concurrent_receipt_publication_has_one_complete_nonoverwriting_winner ... ok
+test recent_scope_status_tests::missing_scope_directories_are_empty_without_degradation ... ok
+test recent_scope_status_tests::legacy_and_corrupt_scope_label_metadata_fall_back_to_token_only ... ok
+test recent_scope_status_tests::nonprivate_scope_directory_degrades_atomically ... ok
+test recent_scope_status_tests::persisted_scope_label_is_basename_only_and_keeps_scope_identity ... ok
+test recent_scope_status_tests::recent_scopes_merge_exclude_current_order_ties_and_cap_three ... ok
+test recent_scope_status_tests::scope_basename_labels_are_sanitized_and_bounded ... ok
+test recent_scope_status_tests::selected_corruption_degrades_atomically ... ok
+test memory::tests::concurrent_appends_are_bounded_and_unique ... ok
+test observability::tests::recent_runs_are_bounded_without_identifiers ... ok
+test recent_scope_status_tests::symlink_scope_directory_degrades_atomically ... ok
+test recent_scope_status_tests::symlink_scope_record_degrades_atomically ... ok
+test recent_scope_status_tests::selected_oversized_record_degrades_atomically ... ok
+test recent_scope_status_tests::unique_key_cap_is_enforced_before_inserting_another_candidate ... ok
+test repo_source::tests::excludes_build_cache_venv_and_credential_shapes ... ok
+test repo_source::tests::enforces_file_count_per_file_and_total_limits_without_truncation ... ok
+test repo_source::tests::git_worktree_enumeration_failure_is_fail_closed ... ok
+test repo_source::tests::output_is_deterministic_and_sorted_by_normalized_relative_path ... ok
+test repo_source::tests::preserves_unicode_paths_uses_forward_slashes_and_leaks_no_root_path ... ok
+test repo_source::tests::rejects_non_directory_roots_and_schema_is_compact_and_versioned ... ok
+test repo_source::tests::skips_non_regular_entries ... ok
+test repo_source::tests::git_worktree_excludes_ignored_secrets_and_includes_tracked_and_nonignored_files ... ok
+test typed_final_schema_tests::typed_final_integer_accepts_integral_json_numbers_only ... ok
+test typed_final_schema_tests::typed_final_schema_file_load_enforces_the_byte_cap ... ok
+test typed_final_schema_tests::typed_final_schema_rejects_ambiguous_or_unsupported_documents ... ok
+test typed_final_schema_tests::typed_final_schema_validates_nested_required_enum_and_array_shapes ... ok
+test unit_tests::codex_command_detection_is_exact_and_json_only ... ok
+test repo_source::tests::skips_non_utf8_contents_and_counts_only_raw_included_utf8_bytes ... ok
+test unit_tests::codex_jsonl_parser_rejects_bad_json_missing_text_and_negative_usage ... ok
+test unit_tests::codex_jsonl_parser_rejects_duplicate_terminal_events_and_text ... ok
+test unit_tests::codex_jsonl_parser_rejects_failures_errors_and_model_reroute_evidence ... ok
+test unit_tests::codex_jsonl_parser_returns_final_text_and_authoritative_usage ... ok
+test unit_tests::configured_default_command_provenance_covers_managed_and_custom_commands ... ok
+test unit_tests::configured_default_command_provenance_parses_equivalent_explicit_reasoning_values ... ok
+test unit_tests::create_session_cwd_is_bound_private_empty_and_not_task_cwd ... ok
+test unit_tests::dashboard_sessions_skip_vanished_entries_but_reject_present_corruption ... ok
+test repo_source::tests::rejects_symlink_root_and_skips_nested_symlinks_without_target_leakage ... ok
+test unit_tests::entered_turn_budget_is_atomic_and_transport_retry_classes_are_explicit ... ok
+test unit_tests::explicit_absolute_jcode_home_is_authoritative_and_relative_values_fail_closed ... ok
+test unit_tests::failed_local_allocation_cleanup_never_removes_nonempty_data ... ok
+test unit_tests::failed_reload_invalidates_prior_structural_sample ... ok
+test unit_tests::failed_solo_cell_cannot_publish_final ... ok
+test unit_tests::codex_command_transport_parses_raw_jsonl_and_traces_usage ... ok
+test unit_tests::generic_command_transport_traces_unknown_usage ... ok
+test unit_tests::isolated_environment_marker_is_standalone_and_codex_only ... ok
+test recent_scope_status_tests::more_than_1024_entries_degrades_to_an_empty_enrichment ... ok
+test unit_tests::jcode_bridge_health_requires_both_public_and_daemon_sockets ... ok
+test unit_tests::isolated_codex_provider_environment_scrubs_inherited_credentials ... ok
+test unit_tests::jcode_workspace_cap_is_atomic_and_empty_cleanup_frees_slots ... ok
+test unit_tests::jcode_workspace_retains_nonempty_and_archive_uncertain_evidence ... ok
+test unit_tests::jcode_workspace_root_rejects_nonprivate_mode ... ok
+test unit_tests::jcode_workspace_same_owner_substitution_never_deletes_or_renames ... ok
+test unit_tests::legacy_none_model_is_displayed_as_none_without_rewriting_metadata ... ok
+test unit_tests::local_cwd_containment_rejection_removes_unexposed_workspace ... ok
+test unit_tests::monty_failure_kinds_separate_program_bugs_from_resource_and_host_classes ... ok
+test unit_tests::new_session_metadata_persists_default_model_and_explicit_override ... ok
+test unit_tests::opencode_command_detection_is_exact_and_json_only ... ok
+test unit_tests::isolated_provider_environment_is_allowlisted ... ok
+test unit_tests::opencode_jsonl_parser_rejects_bad_usage_failures_and_terminal_drift ... ok
+test unit_tests::opencode_jsonl_parser_returns_final_text_and_complete_usage ... ok
+test unit_tests::permission_ack_wait_dispatches_interleaved_turn_frames ... ok
+test unit_tests::permission_request_flood_is_bounded_and_every_response_is_deny ... ok
+test unit_tests::planner_probe_policy_is_three_bounded_independent_calls ... ok
+test unit_tests::private_bridge_socket_is_short_and_state_specific ... ok
+test unit_tests::provider_sandbox_parent_must_be_outside_project_roots ... ok
+test unit_tests::provider_sandbox_placeholder_fails_closed_without_a_bound_directory ... ok
+test unit_tests::opencode_command_transport_parses_jsonl_and_traces_complete_usage ... ok
+test unit_tests::provider_sandbox_placeholder_sets_an_empty_private_working_directory ... ok
+test unit_tests::reliability_two_default_call_cap_is_measured_headroom ... ok
+test unit_tests::root_and_batch_timeouts_are_capped_without_changing_config ... ok
+test unit_tests::semantic_batch_policy_allows_exactly_one_physical_provider_turn ... ok
+test unit_tests::semantic_wall_budget_scales_with_phase_waves_at_eight_workers ... ok
+test unit_tests::shipped_default_config_matches_sixty_second_evaluator_cap ... ok
+test unit_tests::socket_timeout_rounding_ceilings_fractional_milliseconds ... ok
+test unit_tests::socketless_stale_numeric_bridge_pidfile_never_signals_a_live_process_group ... ok
+test unit_tests::solo_jcode_lease_guard_drains_unconsumed_shared_session ... ok
+test jcode_gate::tests::stale_claim_is_recovered_after_the_claimant_disappears ... ok
+test unit_tests::solo_structural_sample_is_bounded_escaped_and_offset_labelled ... ok
+test exact_line_record_tests::authoritative_jsonl_records_enforce_the_semantic_occurrence_limit ... ok
+test memory::tests::large_concurrent_append_stress_stops_at_the_256_record_bound ... ok
+test unit_tests::structural_sample_continues_a_long_rare_line_beyond_the_head_region ... ok
+test unit_tests::structural_overlap_guard_streams_large_source_against_bounded_sample_hashes ... ok
+test unit_tests::structural_sample_includes_bounded_low_frequency_line_exemplars ... ok
+test exact_line_record_tests::authoritative_csv_records_enforce_the_semantic_occurrence_limit ... ok
+test unit_tests::turn_deadline_progress_extends_idle_but_not_hard_cap ... ok
+test unit_tests::turn_deadline_times_out_when_idle_without_reaching_hard_cap ... ok
+test unit_tests::structural_sample_drops_self_embedded_distinct_metadata ... ok
+test unit_tests::structural_sample_breaks_exact_dynamic_label_self_embedding ... ok
+test unit_tests::jcode_drop_uses_cleanup_deadline_not_turn_deadline ... ok
+test unit_tests::provider_sandboxes_clean_up_across_execution_outcomes_and_concurrency ... ok
+test unit_tests::structural_sample_never_copies_a_hundred_character_source_span ... ok
+test unit_tests::dead_public_socket_stale_private_jcode_bridge_group_is_retired ... ok
+test unit_tests::stale_private_jcode_bridge_process_group_and_descendants_are_retired ... ok
+
+test result: ok. 205 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.17s
+
+     Running unittests src/main.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/azdaja-0220b787ddd2c4a3)
+
+running 76 tests
+test banner::tests::color_gate_requires_a_capable_terminal ... ok
+test banner::tests::art_and_depth_masks_stay_aligned ... ok
+test dashboard::recent_scope_tests::recent_scope_line_uses_singular_words_and_hides_path_like_tokens ... ok
+test dashboard::tests::dashboard_error_is_terminal_safe ... ok
+test banner::tests::plain_renderer_is_the_exact_art_and_current_version ... ok
+test dashboard::tests::list_view_names_live_sessions_and_local_number_summaries ... ok
+test banner::tests::colored_renderer_preserves_the_plain_glyphs_and_depth_palette ... ok
+test dashboard::tests::list_view_has_useful_empty_and_narrow_states ... ok
+test dashboard::tests::truly_empty_dashboard_explains_what_appears_next ... ok
+test dashboard::tests::history_only_dashboard_keeps_summary_privacy_scoped ... ok
+test dashboard::tests::narrow_dashboard_is_sanitized_and_keeps_the_same_meaning ... ok
+test dashboard::tests::dashboard_discloses_degraded_optional_metrics ... ok
+test dashboard::tests::wide_dashboard_shows_active_mixed_model_work_plainly ... ok
+test jcode_config::tests::enable_refuses_foreign_pre_tool_and_disable_preserves_it ... ok
+test jcode_config::tests::absent_config_creates_pre_tool_only_block_and_can_remove_it ... ok
+test jcode_config::tests::exact_matching_values_without_delimiters_are_not_claimed ... ok
+test jcode_config::tests::ambiguous_hooks_headers_are_rejected ... ok
+test jcode_config::tests::exact_block_text_inside_multiline_string_is_never_claimed ... ok
+test jcode_config::tests::crlf_round_trip_preserves_every_original_byte ... ok
+test jcode_config::tests::malformed_toml_is_rejected_without_a_plan ... ok
+test jcode_config::tests::comments_order_and_unrelated_tables_are_preserved_byte_for_byte ... ok
+test jcode_config::tests::exact_existing_managed_block_is_idempotent ... ok
+test jcode_config::tests::marker_text_inside_multiline_string_is_not_a_hooks_header ... ok
+test jcode_config::tests::one_byte_customization_refuses_enable_and_disable ... ok
+test jcode_config::tests::foreign_observer_hooks_are_preserved_byte_for_byte ... ok
+test jcode_config::tests::refuses_command_over_1024_bytes_after_shell_quoting ... ok
+test jcode_config::tests::rejects_low_zero_and_non_integer_pre_tool_timeouts ... ok
+test jcode_config::tests::non_table_hooks_value_is_refused_before_appending ... ok
+test jcode_config::tests::preserves_valid_pre_tool_timeout_byte_for_byte ... ok
+test jcode_config::tests::windows_like_and_unicode_paths_are_toml_and_shell_safe ... ok
+test projected_root_validation_tests::rejects_private_callbacks_and_projected_wrapper_shadowing ... ok
+test tests::claude_activation_rule_is_narrow_semantic_and_names_nontriggers ... ok
+test tests::claude_standard_lane_is_conversational_and_strict_lane_remains_exact ... ok
+test tests::codex_nested_adapter_disables_skill_instructions_and_stays_ephemeral ... ok
+test tests::codex_openai_metadata_declares_implicit_azdaja_interface ... ok
+test tests::codex_and_opencode_efficiency_contract_is_bounded_and_fail_fast ... ok
+test tests::managed_coworker_adapters_are_sol_only_and_call_bounded ... ok
+test tests::managed_skill_repair_claim_matches_turn_cap_and_eligibility ... ok
+test tests::missing_final_repair_repeats_the_solo_final_contract ... ok
+test tests::codex_compatibility_profile_is_safe_when_opencode_gives_it_precedence ... ok
+test tests::opencode_activation_description_is_narrow_and_names_nontriggers ... ok
+test tests::classification_final_gate_is_typed_axiomatic_and_fail_closed ... ok
+test tests::only_byte_exact_legacy_opencode_configs_are_auto_migrated ... ok
+test tests::only_byte_exact_legacy_codex_configs_are_auto_migrated ... ok
+test tests::requested_answer_prefix_is_normalized_without_repeating_semantic_work ... ok
+test tests::only_byte_exact_legacy_jcode_configs_are_auto_migrated ... ok
+test tests::root_repair_categories_are_typed_and_prompt_is_fixed_and_bounded ... ok
+test tests::codex_system_root_scan_does_not_follow_directory_symlinks ... ok
+test tests::opencode_rendered_output_is_version_neutral_byte_golden ... ok
+test tests::solo_argument_parser_validates_record_input_contract ... ok
+test tests::opencode_standard_lane_is_low_ceremony_and_strict_lane_remains_exact ... ok
+test tests::solo_trace_preflight_failure_prevents_provider_entry ... ok
+test tests::solo_python_extraction_rejects_ambiguous_or_malformed_output ... ok
+test tests::managed_skill_profiles_are_harness_specific_and_default_is_reset_source ... ok
+test tests::solo_python_extraction_accepts_exactly_one_python_fence ... ok
+test projected_root_validation_tests::projected_cells_cannot_mix_or_rebind_the_ordinary_manifest ... ok
+test tui::tests::active_mixed_model_sessions_show_persisted_defaults_without_fallback ... ok
+test tui::tests::centered_card_preserves_wide_and_narrow_width_behavior ... ok
+test tests::typed_final_schema_repair_is_bounded_and_stops_after_semantic_spend ... ok
+test tui::tests::control_sequences_are_removed_from_snapshot_strings ... ok
+test tui::tests::constellation_is_a_minimal_labeled_source_summary_graph ... ok
+test tui::tests::degraded_telemetry_is_visible_without_claiming_live_work_failed ... ok
+test tui::tests::history_only_overview_reports_finished_and_loaded_summaries_plainly ... ok
+test tui::tests::details_translate_entropy_and_scope_privacy_to_summaries ... ok
+test tui::tests::integration_view_distinguishes_host_and_managed_state ... ok
+test tui::tests::new_work_uses_the_authoritative_runner_label_and_known_thinking_only ... ok
+test tui::tests::overview_has_no_forbidden_jargon_or_metric_headlines ... ok
+test tui::tests::selection_moves_across_history_and_live_work ... ok
+test tui::tests::truly_empty_overview_has_plain_rows_without_fake_measurements ... ok
+test tui::tests::narrow_runtime_keeps_the_title_and_plain_summary_rows ... ok
+test tests::stable_harness_profiles_are_byte_golden ... ok
+test tests::solo_trace_preflight_records_exact_counted_private_root_request ... ok
+test tests::solo_trace_rejects_insecure_existing_mode_without_repair_or_write ... ok
+test tests::typed_final_schema_never_truncates_json_stdout ... ok
+test tests::solo_trace_rejects_hardlink_without_mutating_alias ... ok
+test tests::solo_runtime_recorder_writes_failed_footer_at_absolute_eof ... ok
+
+test result: ok. 76 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/claude_nonblocking.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/claude_nonblocking-5b584fd89bde00ee)
+
+running 3 tests
+test claude_hook_default_and_invalid_activation_are_fail_open_and_side_effect_free ... ok
+test claude_hook_opt_in_handles_stale_markers_and_releases_failed_transactions ... ok
+test claude_hook_active_allows_ordinary_cp_read_grep_and_screenshot_workflow ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/claude_profile_hooks.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/claude_profile_hooks-92bdd3a07e889dc2)
+
+running 5 tests
+test profiles_created_in_the_same_clock_tick_have_distinct_roots ... ok
+test installed_claude_hooks_execute_actual_commands_and_recover_without_tool_monopoly ... ok
+test installed_claude_skill_wrapper_is_recognized_by_installed_hook ... ok
+test installed_hook_releases_the_prompt_after_a_captured_failed_lifecycle ... ok
+test installed_hook_routes_the_captured_claude_code_sequence_without_post_tool_use_skill ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.68s
+
+     Running tests/cli_ux.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/cli_ux-13b0eaba965e75aa)
+
+running 9 tests
+test no_supported_tool_refuses_cleanly_before_writing_anything ... ok
+test non_tty_bare_command_is_exactly_five_line_help_without_sprite ... ok
+test help_alias_is_concise_and_command_help_uses_plain_targets ... ok
+test memory_cli_is_scope_first_linked_and_global_only_when_explicit ... ok
+test map_keeps_a_private_numeric_source_summary_after_the_session_is_killed ... ok
+test doctor_prints_one_pass_or_fail_per_check_and_every_fail_has_a_fix ... ok
+test doctor_config_failures_name_adjacent_and_xdg_paths_before_provider_work ... ok
+test memory_list_kind_filters_cover_all_kinds_and_fail_cleanly ... ok
+test install_is_three_human_lines_and_detects_only_tool_executables ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+
+     Running tests/config_repair_model.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/config_repair_model-b3a741acd60e4320)
+
+running 2 tests
+test blank_jcode_repair_model_is_rejected_when_present ... ok
+test explicit_jcode_repair_model_deserializes_and_validates ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/e2e.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/e2e-923b06adf48f2736)
+
+running 137 tests
+test claude_hook_worker_errors_fail_open_for_interactive_events ... ok
+test authoritative_config_failures_never_enter_fallback_provider ... ok
+test adjacent_config_requires_standalone_name_or_managed_marker ... ok
+test codex_doctor_accepts_valid_bundled_skills_config ... ok
+test batch_preserves_ordered_successes_across_timeout_but_single_call_fails_closed ... ok
+test codex_doctor_duplicate_exception_uses_final_path_or_name_selector_state ... ok
+test cell_timeout_excludes_suspended_host_call_wall ... ok
+test codex_doctor_honors_custom_project_root_markers ... ok
+test callbacks_batch_depth_and_timeout ... ok
+test codex_doctor_honors_empty_project_root_markers_as_cwd_only ... ok
+test codex_doctor_honors_name_disable_and_later_path_reenable_for_managed_skill ... ok
+test codex_doctor_rejects_relative_codex_home_without_provider_calls ... ok
+test codex_doctor_matches_codex_scalar_repair_for_unrelated_frontmatter_keys ... ok
+test codex_doctor_matches_codex_validation_for_missing_description_and_repairable_yaml ... ok
+test codex_doctor_refuses_symlinked_user_config ... ok
+test codex_doctor_rejects_disabled_managed_skill ... ok
+test codex_doctor_rejects_include_instructions_false ... ok
+test command_help_usage_and_bare_text_are_identical_through_both_names ... ok
+test command_transport_trace_keeps_requested_model_and_unknown_provider_usage ... ok
+test concurrent_starts_respect_limit ... ok
+test corrupt_foreign_metadata_degrades_scoped_dashboard_without_blocking_it ... ok
+test corrupt_observability_sidecars_do_not_block_authoritative_loads ... ok
+test codex_doctor_rejects_invalid_project_root_markers ... ok
+test doctor_reports_sanitized_config_path_and_terminal_cause ... ok
+test cumulative_llm_budget_stops_repeated_calls_in_one_cell ... ok
+test global_lock_path_replacement_is_detected_after_waiting ... ok
+test global_lock_symlink_and_hardlink_victims_are_unchanged ... ok
+test exact_line_records_external_boundary_accepts_105000_and_rejects_105001 ... ok
+test jcode_api_fresh_batch_uses_one_session_per_item_and_streams_usage ... ok
+test codex_doctor_rejects_visible_codex_home_duplicate_unless_exact_skill_disabled ... ok
+test jcode_fresh_batch_retries_setup_without_repeating_model_turn ... ok
+test codex_doctor_rejects_zero_max_context_tokens ... ok
+test jcode_fresh_batch_stops_after_four_failed_setups ... ok
+test jcode_install_refuses_linked_hook_configs_without_mutating_victims ... ok
+test jcode_install_refuses_unsafe_pre_tool_timeout_without_mutation ... ok
+test jcode_memory_handoff_contract_errors_fail_open ... ok
+test jcode_memory_handoff_returns_answer_without_unlocking_broad_reads ... ok
+test legacy_sessions_complete_into_global_history_without_folder_contamination ... ok
+test lifecycle_is_persistent_and_load_is_metadata_only ... ok
+test codex_doctor_scans_project_codex_and_agents_duplicates_even_when_untrusted ... ok
+test jcode_batch_retries_provider_once_then_preserves_failure ... ok
+test memory_list_kind_filters_are_scope_correct_and_do_not_mutate_state ... ok
+test output_cap_is_unicode_exact_and_errors_preserve_state ... ok
+test prompt_file_beats_arg_max_and_model_is_one_argument ... ok
+test sandbox_and_path_validation_fail_closed ... ok
+test codex_metadata_is_manifested_and_removed_by_uninstall ... ok
+test managed_skill_is_rendered_consistently_for_every_harness ... ok
+test semantic_manifest_105001_occurrences_reject_before_child_calls ... ok
+test managed_install_never_removes_stopped_pid_or_symlink_collisions ... ok
+test semantic_manifest_adjudication_reuses_adaptive_capacity_in_source_order ... ok
+test semantic_manifest_long_records_split_below_legacy_item_target ... ok
+test install_is_provider_free_idempotent_and_owned ... ok
+test semantic_manifest_oversized_singleton_fails_before_provider_calls ... ok
+test jcode_install_manages_memory_handoff_and_preserves_foreign_hooks ... ok
+test semantic_manifest_utf8_bytes_drive_replanning ... ok
+test semantic_phase_reserves_are_host_enforced_before_provider_entry ... ok
+test semantic_manifest_exact_target_projection_preserves_102158_occurrences ... ok
+test semantic_private_budget_is_isolated_from_ordinary_call_cap ... ok
+test sessions_and_observability_are_working_directory_scoped_with_explicit_global_escape_hatch ... ok
+test shipped_cleaners_strip_jcode_banners_and_ansi ... ok
+test sigint_stops_solo_provider_without_retry_and_cleans_prompt ... ok
+test sigint_stops_provider_group_cleans_prompt_and_preserves_exec_snapshot ... ok
+test solo_csv_preflight_is_provider_free_and_fail_closed ... ok
+test codex_reinstall_migrates_byte_exact_legacy_adapter_to_isolated_workers ... ok
+test solo_cross_field_labels_keep_complete_records_and_emit_no_projection_provenance ... ok
+test solo_csv_receipt_rejects_semantic_evidence_tampering_without_artifact ... ok
+test solo_csv_receipt_binds_multiline_records_for_file_and_stdin ... ok
+test solo_does_not_repair_after_a_child_call_consumes_evidence ... ok
+test solo_does_not_repair_unknown_runtime_failures ... ok
+test solo_dual_manifest_blindly_adjudicates_every_disagreement ... ok
+test solo_dual_manifest_provider_errors_never_exceed_fragmented_retry_reserve ... ok
+test solo_dual_manifest_retries_only_malformed_primary_shard ... ok
+test solo_dual_manifest_retries_malformed_adjudication_once_within_envelope ... ok
+test solo_empty_values_fail_before_config_or_input_loading ... ok
+test solo_exact_line_ledger_filters_noncontiguous_ids_before_fused_projection ... ok
+test solo_exact_line_ledger_projects_and_expands_duplicate_probe_occurrences ... ok
+test solo_does_not_repair_monty_timeouts ... ok
+test solo_exact_line_records_preserves_complete_record_occurrences ... ok
+test semantic_manifest_oversized_evidence_rejects_before_child_calls ... ok
+test solo_exact_line_records_invalid_prefix_fails_before_final_or_children ... ok
+test solo_fixed_manifest_prelude_owns_dual_provider_plumbing ... ok
+test solo_fails_closed_after_three_repair_turns ... ok
+test solo_jsonl_file_and_stdin_expose_authoritative_records ... ok
+test solo_jsonl_receipt_destination_preflight_is_provider_free_and_nonoverwriting ... ok
+test solo_jcode_runtime_repair_reuses_one_session_and_archives_once ... ok
+test solo_jsonl_rejects_invalid_records_before_provider_calls ... ok
+test solo_handles_synthetic_final_section_and_prefix_formats_without_gold ... ok
+test solo_jsonl_receipt_binds_complete_semantic_coverage_before_stdout ... ok
+test solo_jsonl_receipt_rejects_missing_coverage_and_tampering_without_artifacts ... ok
+test solo_manifest_adjudicates_malformed_primary_after_bounded_retry ... ok
+test solo_manifest_continues_a_valid_short_positional_prefix ... ok
+test solo_manifest_normalizes_only_unambiguous_positional_frames ... ok
+test solo_manifest_is_invariant_to_caller_allowed_label_order ... ok
+test solo_manifest_is_invariant_to_caller_item_id_renaming ... ok
+test solo_manifest_rejects_ambiguous_short_frame_before_retry ... ok
+test solo_manifest_rejects_duplicate_singleton_labels_before_child_call ... ok
+test solo_manifest_rejects_one_unique_label_before_child_call ... ok
+test solo_manifest_rejects_ham_harm_ontology_typo_before_children ... ok
+test solo_manifest_reversal_preserves_order_invariant_reduction ... ok
+test solo_manifest_scales_duplicate_multiplicity_and_expands_every_occurrence ... ok
+test codex_doctor_rejects_malformed_skills_config_shapes ... ok
+test solo_manifest_scripted_oracle_ignores_harmless_metadata_and_whitespace ... ok
+test solo_manifest_blocks_fragmented_second_judge_retry_before_provider_entry ... ok
+test solo_never_accepts_a_zero_call_classification_final_across_all_repairs ... ok
+test semantic_manifest_response_envelope_accepts_8192_and_replans_8193 ... ok
+test solo_projected_manifest_rejects_invalid_capability_paths_before_children ... ok
+test solo_positional_manifest_rejects_wrong_tag_order_length_and_code ... ok
+test solo_prompt_guides_exact_aggregation_in_one_root_turn ... ok
+test solo_projection_provenance_rejects_gameable_three_caller_path ... ok
+test solo_rejects_long_whitespace_final_before_output_capping ... ok
+test solo_repair_fails_closed_after_exactly_four_root_turns ... ok
+test solo_rejects_zero_call_classification_final_and_repairs_with_the_axiom ... ok
+test solo_repair_model_trace_preflight_failure_prevents_second_turn ... ok
+test solo_repair_trace_preflight_failure_prevents_second_turn ... ok
+test solo_repair_trace_rename_replacement_prevents_second_turn ... ok
+test solo_repairs_deferred_final_var_lookup_failure ... ok
+test solo_manifest_reserves_all_six_primary_and_adjudication_phases ... ok
+test solo_repairs_label_literal_grep_after_one_incidental_call ... ok
+test solo_reports_typed_compile_and_regex_diagnostics_after_one_repair ... ok
+test solo_repairs_each_observed_root_failure_class_once_and_uses_fresh_monty ... ok
+test solo_manifest_uses_adjudication_instead_of_a_third_primary_retry_round ... ok
+test solo_root_stops_after_four_setup_attempts_without_entering_turn ... ok
+test solo_manifest_uses_leftover_adjudication_reserve_for_one_second_suffix_retry ... ok
+test solo_second_repair_recovers_a_failed_first_repair_once ... ok
+test solo_second_repair_rejects_empty_final_and_recovers ... ok
+test solo_typed_final_schema_preflight_is_provider_free_and_fail_closed ... ok
+test solo_third_repair_recovers_after_two_failed_repairs ... ok
+test solo_root_does_not_retry_typed_permanent_invalid_request ... ok
+test source_ontology_extracts_unquoted_coarse_label_list ... ok
+test symlinked_state_locks_and_prompts_directories_fail_closed ... ok
+test solo_typed_final_schema_does_not_repair_after_semantic_evidence_spend ... ok
+test solo_typed_final_schema_repairs_invalid_shape_and_emits_compact_json_only ... ok
+test solo_manifest_uses_leftover_primary_reserve_for_one_second_suffix_retry ... ok
+test valid_root_response_is_not_retried_when_trace_append_fails ... ok
+test solo_root_retries_explicit_typed_transient_errors_with_separate_budgets ... ok
+test semantic_manifest_100000_rows_uses_adaptive_byte_shards has been running for over 60 seconds
+test semantic_manifest_102158_rows_uses_adaptive_byte_shards has been running for over 60 seconds
+test semantic_manifest_100000_rows_uses_adaptive_byte_shards ... ok
+test semantic_manifest_102158_rows_uses_adaptive_byte_shards ... ok
+
+test result: ok. 137 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 153.12s
+
+     Running tests/feedback_channel.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/feedback_channel-327231daee6e6f3c)
+
+running 1 test
+test public_feedback_paths_enforce_the_privacy_boundary ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/installed_project_memory.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/installed_project_memory-40d42bf3dee6a442)
+
+running 3 tests
+test installed_artifact_preserves_cross_home_handoff_and_relocation ... ignored, requires a separately installed candidate via AZDAJA_INSTALLED_TEST_BINARY
+test installed_artifact_refuses_disabled_writes_and_corrupt_reads_without_fallback ... ignored, requires a separately installed candidate via AZDAJA_INSTALLED_TEST_BINARY
+test capture_deadline_covers_inherited_pipes ... ok
+
+test result: ok. 1 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 2.01s
+
+     Running tests/jcode_release_commands.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/jcode_release_commands-e72089da608844a0)
+
+running 2 tests
+test source_install_hook_blocking_requires_explicit_session_activation ... ok
+test active_hook_allows_release_build_events_without_unlocking_broad_reads ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/judge_native.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/judge_native-b5cd7f1c8b8755d5)
+
+running 6 tests
+test native_judgment_config_roundtrips_without_a_secret ... ok
+test native_judgment_capabilities_are_static_and_distinguish_transport_from_readiness ... ok
+test native_judgment_valid_named_arguments_fail_before_network_without_key ... ok
+test native_judgment_key_is_not_forwarded_to_custom_generative_provider ... ok
+test native_judgments_default_disabled_and_regular_repl_recovers ... ok
+test native_judgment_argument_errors_do_not_enter_provider ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/lifecycle_ux.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/lifecycle_ux-b2e0ac997a5a9bb6)
+
+running 34 tests
+test all_harness_uninstall_preflights_unknown_changed_and_symlink_targets ... ok
+test all_harness_staging_permission_failure_occurs_before_any_commit ... ok
+test all_harness_install_and_custody_doctor_are_provider_free_and_session_honest ... ok
+test current_and_historical_notice_markers_cannot_be_cross_paired_or_self_authorized ... ok
+test committed_install_cleanup_failure_keeps_the_successful_replacement_active ... ok
+test committed_uninstall_cleanup_failures_keep_every_removal_active_and_quarantined ... ok
+test concurrent_standalone_document_lifecycle_has_one_owner_and_no_quarantine_leak ... ok
+test fake_v2_and_mutated_owned_standalone_documents_refuse_before_mutation ... ok
+test exact_legacy_v1_standalone_documents_are_safely_removable ... ok
+test all_harness_install_and_uninstall_roll_back_every_injected_target_failure has been running for over 60 seconds
+test changed_foreign_symlink_and_hardlinked_documents_refuse_all_before_mutation has been running for over 60 seconds
+test claude_activation_rule_is_owned_checked_removed_and_never_clobbers_foreign_content has been running for over 60 seconds
+test exact_published_previous_v2_standalone_documents_are_safely_removable ... ok
+test custom_jcode_home_is_authoritative_and_next_command_is_shell_quoted ... ok
+test foreign_standalone_config_refuses_full_all_before_harness_mutation ... ok
+test concurrent_reinstall_barrier_two_workers_twenty_reinstalls_never_loses_target_or_leaks has been running for over 60 seconds
+test jcode_config_permission_change_at_final_barrier_is_preserved_and_aborts_commit ... ok
+test changed_foreign_symlink_and_hardlinked_documents_refuse_all_before_mutation ... ok
+test jcode_config_replacement_after_final_validation_is_preserved_and_aborts_commit ... ok
+test claude_activation_rule_is_owned_checked_removed_and_never_clobbers_foreign_content ... ok
+test jcode_parent_replacement_at_final_barrier_never_reports_success_or_touches_foreign_tree ... ok
+test late_foreign_claude_rule_aborts_before_managed_target_commit ... ok
+test install_and_uninstall_are_exactly_three_lines_with_tool_reload_guidance has been running for over 60 seconds
+test opencode_doctor_rejects_project_visible_same_name_skills ... ok
+test replacing_existing_jcode_config_preserves_unix_uid_gid_and_mode ... ok
+test legacy_target_flag_remains_compatible_but_hidden_from_help ... ok
+test late_unknown_and_changed_targets_abort_without_touching_other_selected_surfaces ... ok
+test opencode_doctor_rejects_an_incompatible_agent_skills_shadow ... ok
+test install_and_uninstall_are_exactly_three_lines_with_tool_reload_guidance ... ok
+test unmanaged_standalone_uninstall_points_to_original_installer_or_cargo ... ok
+test unchanged_absent_jcode_config_is_revalidated_before_uninstall_commit ... ok
+test unchanged_absent_jcode_parent_replacement_aborts_without_touching_foreign_tree ... ok
+test unchanged_enabled_jcode_config_is_revalidated_before_reinstall_commit ... ok
+test standalone_and_full_all_self_uninstall_preserve_foreign_neighbors ... ok
+test unqualified_uninstall_removes_detected_integrations_and_keeps_standalone_documents ... ok
+test upgraded_binary_removes_exact_historical_v2_documents_without_losing_current_custody ... ok
+test concurrent_reinstall_barrier_two_workers_twenty_reinstalls_never_loses_target_or_leaks ... ok
+test standalone_document_quarantine_rolls_back_every_owned_generation_at_every_step has been running for over 60 seconds
+test all_harness_install_and_uninstall_roll_back_every_injected_target_failure ... ok
+test standalone_document_quarantine_rolls_back_every_owned_generation_at_every_step ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 201.65s
+
+     Running tests/memory_export.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/memory_export-69cb9c9a26c118f8)
+
+running 18 tests
+test corrupt_ledger_is_refused_without_repair_and_recovers_exact_export ... ok
+test dangling_relationship_is_refused_before_any_incomplete_bundle_is_emitted ... ok
+test explicit_export_is_deterministic_exact_and_nonmutating_without_writer_lock ... ok
+test conflicting_import_preserves_existing_records_and_does_not_recreate_missing_custody ... ok
+test explicit_global_and_disabled_project_routing_do_not_mix_stores ... ok
+test connected_context_requires_consent_and_preserves_all_directions_beyond_recall_cap ... ok
+test actual_clone_import_previews_without_writes_then_preserves_exact_handoff_idempotently ... ok
+test import_invalid_flags_and_nonregular_sources_refuse_without_initialization ... ok
+test invalid_selection_flags_and_cold_missing_ids_never_initialize_state ... ok
+test overlapping_imports_and_normal_writers_preserve_every_acknowledged_record ... ok
+test public_help_explains_context_consent_and_no_write_import_default ... ok
+test import_write_failure_preserves_history_and_releases_custody_for_recovery ... ok
+test valid_import_refuses_corrupt_destination_without_repair_then_recovers ... ok
+test malformed_tampered_duplicate_and_unknown_import_data_never_initializes_destination ... ok
+test import_routing_matrix_keeps_project_global_and_legacy_stores_separate ... ok
+test import_byte_capacity_accounts_for_utf8_metadata_and_newlines_then_recovers ... ok
+test import_at_record_capacity_refuses_without_losing_existing_history ... ok
+test full_connected_ledger_exports_without_truncation_and_enforces_selection_boundary ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.43s
+
+     Running tests/memory_recall.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/memory_recall-203526e3538b36cb)
+
+running 8 tests
+test recall_rejects_empty_and_oversized_queries_without_mutation ... ok
+test recall_refuses_corrupt_ledger ... ok
+test recall_reports_no_match_and_global_isolation ... ok
+test invalid_recall_is_read_only_for_complete_isolated_state ... ok
+test recall_includes_supersedes_context_for_selected_primary ... ok
+test recall_is_fresh_process_bounded_and_read_only ... ok
+test recall_preserves_nonmatching_incoming_context ... ok
+test recall_reports_primary_and_context_omissions_and_relationship_context ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/memory_recall_contract.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/memory_recall_contract-1585941d02e16f32)
+
+running 4 tests
+test stored_instruction_text_remains_exact_untrusted_json_data ... ok
+test lexical_recall_uses_whole_words_and_distinct_query_terms ... ok
+test unchanged_store_produces_byte_identical_recall_across_fresh_processes ... ok
+test successful_concurrent_writers_preserve_every_note_for_fresh_recall ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/memory_recall_paths.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/memory_recall_paths-9520bd9ff8d40067)
+
+running 6 tests
+test invalid_authoritative_state_paths_fail_without_creating_fallback_state ... ok
+test empty_private_state_root_is_not_initialized_by_recall ... ok
+test unsafe_state_roots_are_refused_without_chmod_or_link_mutation ... ok
+test global_only_store_and_foreign_folder_recall_do_not_initialize_scope_state ... ok
+test outgoing_evidence_is_returned_even_without_query_words ... ok
+test recall_matches_writer_path_policy_without_initializing_empty_roots ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/memory_recall_reliability.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/memory_recall_reliability-8b56463548ecdd13)
+
+running 17 tests
+test documented_handoff_preserves_nonmatching_disagreement_in_a_fresh_process ... ok
+test global_recall_refuses_a_ledger_above_the_byte_limit_without_repairing_it ... ok
+test hardlinked_ledger_is_refused_without_mutating_either_name ... ok
+test concurrent_first_use_initializes_one_store_without_losing_successful_notes ... ok
+test killed_writer_while_store_lock_is_held_preserves_history_and_recovery ... ok
+test recall_recovers_after_writer_custody_release ... ok
+test symlinked_ledger_is_refused_without_exposing_or_modifying_victim ... ok
+test file_size_limit_failure_keeps_the_old_ledger_and_releases_writer_custody ... ok
+test live_readers_observe_coherent_snapshots_during_concurrent_writes ... ok
+test world_readable_ledger_is_refused_without_permission_repair ... ok
+test global_parseable_invalid_record_shapes_are_refused_without_rewriting_history ... ok
+test concurrent_utf8_writers_at_byte_capacity_preserve_history_and_smaller_write_recovery ... ok
+test timed_writer_termination_attempts_preserve_acknowledged_records_and_allow_recovery ... ok
+test utf8_byte_capacity_refusal_preserves_history_and_allows_a_smaller_write ... ok
+test full_record_capacity_refuses_new_notes_without_evicting_acknowledged_history ... ok
+test global_recall_refuses_a_ledger_above_the_record_limit_without_dropping_history ... ok
+test concurrent_writers_at_record_capacity_preserve_exactly_the_acknowledged_notes ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.04s
+
+     Running tests/memory_recall_review.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/memory_recall_review-dc53dfc94abd41fc)
+
+running 3 tests
+test recall_missing_state_is_read_only_and_returns_empty_matches ... ok
+test recall_existing_store_without_lock_or_observability_is_read_only ... ok
+test recall_bounds_long_unicode_records_and_reports_omissions ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/monty_compat.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/monty_compat-201d1324c8862cb8)
+
+running 1 test
+test rlm_idioms_and_regex_flavor_execute_unmodified ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/notice_distribution.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/notice_distribution-3004885ec413bbbf)
+
+running 16 tests
+test ci_builds_every_documented_standalone_target_explicitly ... ok
+test ci_windows_safety_is_strict_and_retains_exact_commit_candidates ... ok
+test candidate_fixture_server_avoids_reverse_dns_on_hosted_macos ... ok
+test readme_has_exactly_three_install_blocks_and_readme_site_link_notices ... ok
+test public_platform_claims_include_every_installer_target ... ok
+test release_publication_is_manual_exact_tag_nonoverwriting_and_attested ... ok
+test source_backed_notice_workflows_prepare_all_targets_without_adding_cargo_to_proof ... ok
+test workflow_installer_fixtures_remain_historical_and_distinct_from_current_notice_gate ... ok
+test workflow_release_identity_matches_current_package_version ... ok
+test reviewed_notice_license_and_font_ofl_bytes_are_preserved ... ok
+test promoted_v0114_assets_are_bound_to_exact_workflow_receipt ... ok
+test cargo_package_list_matches_the_reviewed_file_allowlist ... ok
+test current_notice_front_matter_tracks_canonical_version_targets_and_table_membership ... ok
+test standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads ... ok
+test current_notice_matches_every_feature_qualified_cargo_closure ... ok
+test published_notice_license_and_font_artifacts_remain_frozen ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.12s
+
+     Running tests/process_xdg.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/process_xdg-dbea68fd98d7e677)
+
+running 8 tests
+test invalid_authoritative_overrides_fail_before_provider_entry ... ok
+test shell_ignores_empty_and_relative_xdg_config_during_detection ... ok
+test unicode_absolute_config_and_state_overrides_remain_supported ... ok
+test empty_and_relative_xdg_roots_fall_back_to_home_not_cwd ... ok
+test term_and_hup_clean_prompt_and_descendants_with_conventional_status ... ok
+test timeout_is_an_overall_pipe_deadline_and_removes_the_process_group ... ok
+test direct_success_and_error_cannot_leave_background_descendants_or_orphan_writes ... ok
+test rust_targets_use_absolute_xdg_fallback_and_unicode_paths_and_reject_bad_jcode_home ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.74s
+
+     Running tests/product_50mb.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/product_50mb-67450556e94e3903)
+
+running 1 test
+test offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death ... ignored, release-only acceptance: run with AZDAJA_PRODUCT_BINARY=target/release/azdaja
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/project_memory.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/project_memory-cf368ef445e770ce)
+
+running 16 tests
+test emit_luna_handoff_pilot_receipts ... ignored, explicit preparation of frozen Luna pilot inputs, not an inference-quality test
+test explicit_project_memory_off_does_not_create_a_project_store ... ok
+test empty_project_recall_is_read_only_and_reports_project_scope ... ok
+test invalid_authoritative_home_and_forced_project_outside_git_fail_without_fallback ... ok
+test corrupt_project_ledger_is_refused_without_rewriting_or_personal_fallback ... ok
+test explicit_global_memory_remains_separate_when_project_memory_is_off ... ok
+test kind_filtered_list_and_show_use_the_project_store_across_homes ... ok
+test symlinked_project_store_is_refused_without_touching_the_target ... ok
+test legacy_memory_is_explicitly_accessible_not_silently_merged_or_migrated ... ok
+test authoritative_home_and_explicit_modes_have_consistent_precedence ... ok
+test concurrent_first_use_keeps_every_acknowledged_project_note ... ok
+test project_notes_keep_file_tags_after_repository_relocation_and_stay_git_ignored ... ok
+test preexisting_empty_project_directories_are_not_initialized_by_read_commands ... ok
+test unsafe_project_directory_is_refused_without_permission_repair ... ok
+test repo_local_handoff_crosses_homes_and_subdirectories_without_global_leakage ... ok
+test existing_invalid_project_ledger_entries_are_refused_without_exposure_or_repair ... ok
+
+test result: ok. 15 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests/project_memory_worktrees.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/project_memory_worktrees-60e77069b935f230)
+
+running 5 tests
+test populated_project_reads_do_not_recreate_the_actual_writer_lock ... ok
+test cold_global_and_legacy_read_commands_do_not_initialize_personal_state ... ok
+test ordinary_clone_excludes_private_notes_and_requires_an_explicit_new_handoff ... ok
+test linked_worktrees_isolate_notes_but_share_handoffs_between_fresh_agents ... ok
+test unsafe_existing_reader_custody_is_refused_without_repair_or_exposure ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests/public_surface.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/public_surface-df1ce2475f1a9eb3)
+
+running 2 tests
+test public_site_exposes_machine_readable_search_metadata ... ok
+test public_surface_leads_with_the_product_contract_not_capacity_marketing ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/publication_verifier.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/publication_verifier-8f88ee639f410574)
+
+running 9 tests
+test release_note_requires_the_post_publication_verifier ... ok
+test workflow_dispatch_runs_the_read_only_publication_verifier ... ok
+test publication_verifier_requires_an_explicit_version ... ok
+test publication_verifier_rejects_a_non_semver_release_selector ... ok
+test publication_verifier_rejects_an_installer_without_the_intel_route ... ok
+test publication_verifier_rejects_a_two_binary_github_manifest ... ok
+test publication_verifier_rejects_a_tag_without_the_intel_payload ... ok
+test publication_verifier_rejects_mismatched_provenance ... ok
+test publication_verifier_accepts_complete_matching_boundaries ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.26s
+
+     Running tests/recent_overview.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/recent_overview-51d30ff8ad868eed)
+
+running 2 tests
+test non_tty_and_explicit_commands_remain_help_or_command_output_without_state ... ok
+test bare_tty_shows_private_bounded_recent_projects_in_recency_order ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.36s
+
+     Running tests/release_promotion.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/release_promotion-87c8ec09157ad0f4)
+
+running 5 tests
+test promotion_rejects_dirty_or_mismatched_source_commit ... ok
+test promotion_accepts_a_logical_symlink_alias_of_the_source_repository ... ok
+test promotion_succeeds_with_exact_payloads_and_is_deterministic ... ok
+test promotion_rejects_omission_extra_symlink_and_tamper_atomically ... ok
+test promotion_rejects_receipt_identity_and_wrong_magic_atomically ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+
+     Running tests/site_installer.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/site_installer-122bbcfb8f8c7972)
+
+running 53 tests
+test bare_installer_without_a_terminal_requires_an_explicit_selection ... ok
+test all_harness_preflight_refuses_unknown_late_target_before_valid_first_target_changes ... ok
+test ambiguous_adjacent_config_states_refuse_before_install_mutation ... ok
+test custom_xdg_unicode_space_apostrophe_reinstall_is_exact_and_idempotent ... ok
+test adjacent_config_ownership_preserves_custom_state_and_generic_config ... ok
+test frozen_installer_rejects_current_unpublished_notice_even_with_matching_download_checksum ... ok
+test foreign_document_directory_file_symlink_and_hardlink_refuse_without_mutation ... ok
+test installed_memory_transfer::duplicate_context_cannot_be_hidden_by_record_map_collection - should panic ... ok
+test installers_are_identical_and_bind_current_assets_and_sums ... ok
+test exact_published_previous_v2_documents_migrate_to_current_and_reinstall ... ok
+test alias_safety_failures_leave_home_and_foreign_paths_unchanged ... ok
+test license_and_notice_checksum_missing_or_mismatch_is_zero_home_mutation ... ok
+test exact_legacy_v1_documents_migrate_to_fixed_v2_and_reinstall_exactly ... ok
+test linux_local_selector_requires_fake_glibc_instead_of_reading_the_host ... ok
+test foreign_az_anywhere_on_path_skips_alias_without_changing_resolution ... ok
+test installed_alias_matches_solo_through_a_provider_free_fixture ... ok
+test late_harness_failure_rolls_back_fresh_documents_and_standalone_surfaces ... ok
+test native_linux_musl_and_missing_getconf_refuse_without_curl_or_home_mutation ... ok
+test ordinary_installs_reject_validation_overrides_before_mutation ... ok
+test mutated_owned_documents_and_marker_declared_fake_v2_refuse_before_home_mutation ... ok
+test public_v014_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v015_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v015_binary_headers_match_the_advertised_platforms ... ok
+test public_v015_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v016_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v016_binary_headers_match_the_advertised_platforms ... ok
+test public_v016_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v017_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v017_binary_headers_match_the_advertised_platforms ... ok
+test public_v017_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v018_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v018_binary_headers_match_the_advertised_platforms ... ok
+test public_v018_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v019_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v019_binary_headers_match_the_advertised_platforms ... ok
+test public_v019_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v020_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v020_binary_headers_match_the_advertised_platforms ... ok
+test public_v020_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v021_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v021_binary_headers_match_the_advertised_platforms ... ok
+test public_v021_site_assets_match_the_bound_checksum_manifest ... ok
+test stale_integration_directories_do_not_count_as_found_tools ... ok
+test interactive_selection_installs_only_the_chosen_detected_subset ... ok
+test symlinked_harness_target_refuses_without_touching_link_or_target ... ok
+test unowned_hardlinked_harness_refuses_without_inode_link_or_mode_mutation ... ok
+test linux_glibc_floor_refuses_below_and_accepts_exact_boundary_and_above ... ok
+test standalone_installer_honors_authoritative_custom_jcode_home ... ok
+test previous_document_migrations_roll_back_exactly_after_injected_harness_failure ... ok
+test exact_legacy_jcode_configs_migrate_but_customized_bytes_are_preserved ... ok
+test local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route ... ok
+test exact_v015_luna_configs_migrate_to_sol_but_customized_bytes_are_preserved has been running for over 60 seconds
+test exact_v015_luna_configs_migrate_to_sol_but_customized_bytes_are_preserved ... ok
+test local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states has been running for over 60 seconds
+test local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states ... ok
+
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 95.15s
+
+     Running tests/source_install_artifact_gate.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/source_install_artifact_gate-8f32f981b2dfdb79)
+
+running 3 tests
+test source_install_handoff_explicitly_activates_its_shared_session ... ok
+test source_install_ci_separates_current_notice_audit_from_frozen_installer_compatibility ... ok
+test source_install_ci_runs_registered_artifact_tests_against_verified_installed_bytes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/windows_installer.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/windows_installer-21ba2be467edfdf7)
+
+running 3 tests
+test windows_installer_is_served_uncached_as_plain_text ... ok
+test windows_ci_runs_the_real_installer_and_rejects_tampering ... ok
+test windows_installer_is_versioned_hashed_atomic_and_fail_closed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

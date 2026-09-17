@@ -1,0 +1,2 @@
+PASS claude: managed Azdaja skill is installed on disk at $JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/private home with spaces/.claude/skills/azdaja
+INFO claude: restart Claude after install to load the managed skill, user rule, and hook plugin

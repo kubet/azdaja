@@ -1,0 +1,14 @@
+   Compiling azdaja v0.1.17 ($JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/source)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.02s
+     Running tests/judge_native.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/judge_native-936755107abc7ce0)
+
+running 6 tests
+test native_judgment_config_roundtrips_without_a_secret ... ok
+test native_judgment_capabilities_are_static_and_distinguish_transport_from_readiness ... ok
+test native_judgment_valid_named_arguments_fail_before_network_without_key ... ok
+test native_judgment_key_is_not_forwarded_to_custom_generative_provider ... ok
+test native_judgments_default_disabled_and_regular_repl_recovers ... ok
+test native_judgment_argument_errors_do_not_enter_provider ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+

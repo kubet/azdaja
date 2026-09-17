@@ -1,5 +1,10 @@
 # Jev final follow-through, 2026-09-17
 
+> This records source `4582663`. The later, narrowly scoped
+> [capability-discovery follow-through](jev-native-discovery-20260917.md)
+> records source `6b1139e` and its own installed acceptance. The measurements,
+> failed study decisions and build identities below are not relabeled.
+
 ## Decision and actual usefulness
 
 **The optional native interface works end to end. A quality-preserving Jev advantage has not been demonstrated.** The product angle is an optional typed semantic worker beside `llm` inside Azdaja's persistent context. Keep exact work in code, retain sources and distributions, and let the caller choose further reasoning. Do not turn a model's confidence into a compulsory gate or discard competing evidence.

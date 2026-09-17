@@ -1,0 +1,22 @@
+   Compiling azdaja v0.1.17 ($REPO)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.30s
+     Running tests/judge_native.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/judge_native-b5cd7f1c8b8755d5)
+
+running 1 test
+test native_judgment_capabilities_are_static_and_distinguish_transport_from_readiness ... FAILED
+
+failures:
+
+---- native_judgment_capabilities_are_static_and_distinguish_transport_from_readiness stdout ----
+
+thread 'native_judgment_capabilities_are_static_and_distinguish_transport_from_readiness' (10600652) panicked at tests/judge_native.rs:186:9:
+assertion failed: caps["capabilities"].as_array().unwrap().contains(&serde_json::json!("native-typed-judgments"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    native_judgment_capabilities_are_static_and_distinguish_transport_from_readiness
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.09s
+
+error: test failed, to rerun pass `--test judge_native`

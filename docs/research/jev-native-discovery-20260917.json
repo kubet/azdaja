@@ -1,0 +1,769 @@
+{
+  "checks": [
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "log_bytes": 185,
+      "log_sha256": "36a4800364e8b170cb805b1aa1e0c095fdf8c2bc0b727b7c943e442e92ba8b55",
+      "name": "strict-clippy",
+      "seconds": 5.441587749985047,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "format",
+      "seconds": 0.4364318340085447,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "release/verify-third-party-notices.py"
+      ],
+      "exit": 0,
+      "log_bytes": 434,
+      "log_sha256": "c4e5031df0d74e410df04fb0337db0151d4fca9dbcc0694d68b6dc082c0a6e35",
+      "name": "public-notice",
+      "seconds": 1.3439040000084788,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "release",
+        "-p",
+        "test_*notice*.py",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 5722,
+      "log_sha256": "624154b494a135b639ee38feae4a7951a003a289fb2ed951bc6949599f4c5e1b",
+      "name": "notice-mutations",
+      "seconds": 32.489666416018736,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "sh",
+        "proof/reproduction/run.sh"
+      ],
+      "exit": 0,
+      "log_bytes": 365,
+      "log_sha256": "c4c4cc56351dcb658336db0b7762ec53ef0ccddc6f0209780107b611186e6e2f",
+      "name": "proof-public",
+      "seconds": 0.24534495803527534,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "proof.reproduction.test_verify",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 2043,
+      "log_sha256": "e8934046696a9d9729807a542af385137e8fa1d73fc63d4a5e0ff8b7bf526f98",
+      "name": "proof-tests",
+      "seconds": 0.5536464580218308,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--lib",
+        "judge::tests"
+      ],
+      "exit": 0,
+      "log_bytes": 1620,
+      "log_sha256": "a480616ee522e08a481952744e6510b79e62f2f36032e62866adc8958c5248ec",
+      "name": "default-judge-unit",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 15
+        }
+      ],
+      "seconds": 4.433050208957866,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--test",
+        "judge_native"
+      ],
+      "exit": 0,
+      "log_bytes": 909,
+      "log_sha256": "3a4c3dd6f7ab3c6d1cb50d08037156a07cbcfbcc2ec73bc629477b0fb9989521",
+      "name": "default-native-boundary",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        }
+      ],
+      "seconds": 5.260811833024491,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/azdaja",
+        "doctor",
+        "--caps"
+      ],
+      "exit": 0,
+      "log_bytes": 450,
+      "log_sha256": "20d6128415f244b245c6f5f2924cab83454190381933acb2dd5d9f826fb2b1f9",
+      "name": "default-capabilities",
+      "seconds": 0.004620291001629084,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "package",
+        "--locked",
+        "--offline",
+        "--all-features"
+      ],
+      "exit": 0,
+      "log_bytes": 3819,
+      "log_sha256": "2548750e98a74875b2ad7bf60d4be415e289e595621edafd8087963d7891c1b4",
+      "name": "source-package-verify",
+      "seconds": 5.648107875022106,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--no-fail-fast"
+      ],
+      "exit": 0,
+      "log_bytes": 64321,
+      "log_sha256": "dd0776d714a31cc72ebf9b23192949a8048fb13d1266a12c6cffd99786ef92f3",
+      "name": "all-targets-all-features",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 205
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 76
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 137
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 2,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 34
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 18
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 4
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 17
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 16
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 0
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 15
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 53
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        }
+      ],
+      "seconds": 488.6348898750148,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "build",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "--bin",
+        "azdaja"
+      ],
+      "exit": 0,
+      "log_bytes": 72,
+      "log_sha256": "a178c7902ac24dda0e2c0cd4cf0e47a2a6976ef30481cb4015f2f71620380d8b",
+      "name": "final-feature-build",
+      "seconds": 0.40952883299905807,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/azdaja",
+        "install",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 390,
+      "log_sha256": "d3c5f030beaac07415c75013cdb036a2b1302a843f170efb73af61a90e868e5d",
+      "name": "private-install",
+      "seconds": 0.8039839169941843,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/private home with spaces/.claude/skills/azdaja/azdaja",
+        "doctor",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 277,
+      "log_sha256": "47d60031e227a169d16e54a420683e90a5d3c9f33af95d5fd55470ddc5b401b2",
+      "name": "private-doctor",
+      "seconds": 0.21303387498483062,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/private home with spaces/.claude/skills/azdaja/azdaja",
+        "doctor",
+        "--caps"
+      ],
+      "exit": 0,
+      "log_bytes": 449,
+      "log_sha256": "8ca0c005723186290b2b2711f28b71b622a8647c80a4c5228d56f3d7b2e0b6e9",
+      "name": "installed-capabilities",
+      "seconds": 0.005777458020020276,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "bench.jev.span_selection.run",
+        "--offline",
+        "--azdaja",
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/private home with spaces/.claude/skills/azdaja/azdaja",
+        "--scratch",
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917",
+        "--output",
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/installed-span-offline"
+      ],
+      "exit": 0,
+      "log_bytes": 95,
+      "log_sha256": "0cdc07f800240b9a69f300129f4bf8fd3b2338dba70a9dccb3af557ac709d299",
+      "name": "installed-offline-span",
+      "seconds": 0.6232471669791266,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "bench.jev.span_selection.test_kernel",
+        "bench.jev.span_selection.test_runner",
+        "bench.jev.span_selection.test_replay",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 4951,
+      "log_sha256": "f764ab275bc78c2d3240161f9221979c926cb0f8ecee950dfb243feae943ec92",
+      "name": "installed-native-and-result-tests",
+      "seconds": 1.3545370000065304,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "installed_project_memory",
+        "--",
+        "--ignored",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "log_bytes": 530,
+      "log_sha256": "f3ce830e528ffa7fba8ec3a6fa31cb89702a98ad09232e8acfc37c88e5e8102c",
+      "name": "installed-memory",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        }
+      ],
+      "seconds": 0.316042665974237,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/jev-native-discovery-acceptance-20260917/private home with spaces/.claude/skills/azdaja/azdaja",
+        "uninstall",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 166,
+      "log_sha256": "d0d866ac185874fe07cbc407d4ab849d369b589a9fd137aa0b7af44f425274bb",
+      "name": "private-uninstall",
+      "seconds": 1.3388022090075538,
+      "status": "passed"
+    }
+  ],
+  "closed_live_result_unchanged": {
+    "baseline_correct": 18,
+    "panel_size": 18,
+    "quality_bar_passed": false,
+    "typed_correct": 17
+  },
+  "default_capabilities": {
+    "azdaja": "0.1.17",
+    "capabilities": [
+      "persistent-repl",
+      "snapshots",
+      "external-functions",
+      "native-sha256",
+      "native-typed-judgments",
+      "re",
+      "json",
+      "datetime",
+      "monty-os-calls-denied"
+    ],
+    "dump_version": 5,
+    "monty": "0.0.21",
+    "typed_judgments": {
+      "cache_and_budget_scope": "cell",
+      "credentials_checked": false,
+      "enabled_by_default": false,
+      "functions": [
+        "judge_many",
+        "judge_stats"
+      ],
+      "host_opt_in_required": true,
+      "runtime_configuration_checked": false,
+      "typesafe_compiled": false
+    }
+  },
+  "files": [
+    {
+      "original_bytes": 185,
+      "original_sha256": "36a4800364e8b170cb805b1aa1e0c095fdf8c2bc0b727b7c943e442e92ba8b55",
+      "path": "bench/jev/results/native-discovery-20260917/strict-clippy.log",
+      "retained_bytes": 169,
+      "retained_sha256": "8058e55d3fd7358ec372ecbc027af2547332d774c620e9db2152122289a58362",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "path": "bench/jev/results/native-discovery-20260917/format.log",
+      "retained_bytes": 0,
+      "retained_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 434,
+      "original_sha256": "c4e5031df0d74e410df04fb0337db0151d4fca9dbcc0694d68b6dc082c0a6e35",
+      "path": "bench/jev/results/native-discovery-20260917/public-notice.log",
+      "retained_bytes": 434,
+      "retained_sha256": "c4e5031df0d74e410df04fb0337db0151d4fca9dbcc0694d68b6dc082c0a6e35",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 5722,
+      "original_sha256": "624154b494a135b639ee38feae4a7951a003a289fb2ed951bc6949599f4c5e1b",
+      "path": "bench/jev/results/native-discovery-20260917/notice-mutations.log",
+      "retained_bytes": 5722,
+      "retained_sha256": "624154b494a135b639ee38feae4a7951a003a289fb2ed951bc6949599f4c5e1b",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 365,
+      "original_sha256": "c4c4cc56351dcb658336db0b7762ec53ef0ccddc6f0209780107b611186e6e2f",
+      "path": "bench/jev/results/native-discovery-20260917/proof-public.log",
+      "retained_bytes": 365,
+      "retained_sha256": "c4c4cc56351dcb658336db0b7762ec53ef0ccddc6f0209780107b611186e6e2f",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 2043,
+      "original_sha256": "e8934046696a9d9729807a542af385137e8fa1d73fc63d4a5e0ff8b7bf526f98",
+      "path": "bench/jev/results/native-discovery-20260917/proof-tests.log",
+      "retained_bytes": 2043,
+      "retained_sha256": "e8934046696a9d9729807a542af385137e8fa1d73fc63d4a5e0ff8b7bf526f98",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 1620,
+      "original_sha256": "a480616ee522e08a481952744e6510b79e62f2f36032e62866adc8958c5248ec",
+      "path": "bench/jev/results/native-discovery-20260917/default-judge-unit.log",
+      "retained_bytes": 1588,
+      "retained_sha256": "b192589bf6390f2fe35b701e9cec5dfb80dd8586d86b23d95900eb3fbed667db",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 909,
+      "original_sha256": "3a4c3dd6f7ab3c6d1cb50d08037156a07cbcfbcc2ec73bc629477b0fb9989521",
+      "path": "bench/jev/results/native-discovery-20260917/default-native-boundary.log",
+      "retained_bytes": 877,
+      "retained_sha256": "9c51bc093af30600855ab2cd57a8acc3611138e6a9731b247bdb27e9d4089e00",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 450,
+      "original_sha256": "20d6128415f244b245c6f5f2924cab83454190381933acb2dd5d9f826fb2b1f9",
+      "path": "bench/jev/results/native-discovery-20260917/default-capabilities.log",
+      "retained_bytes": 450,
+      "retained_sha256": "20d6128415f244b245c6f5f2924cab83454190381933acb2dd5d9f826fb2b1f9",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 3819,
+      "original_sha256": "2548750e98a74875b2ad7bf60d4be415e289e595621edafd8087963d7891c1b4",
+      "path": "bench/jev/results/native-discovery-20260917/source-package-verify.log",
+      "retained_bytes": 3771,
+      "retained_sha256": "ef5c07c370d1a811080e303e37572bcde2adfc096e724c874ac326eac364b465",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 64321,
+      "original_sha256": "dd0776d714a31cc72ebf9b23192949a8048fb13d1266a12c6cffd99786ef92f3",
+      "path": "bench/jev/results/native-discovery-20260917/all-targets-all-features.log",
+      "retained_bytes": 63809,
+      "retained_sha256": "4045249d68e4e4fe512108b1a633e9e61a801b551d84a8a2e8cda2130e2c82e1",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 72,
+      "original_sha256": "a178c7902ac24dda0e2c0cd4cf0e47a2a6976ef30481cb4015f2f71620380d8b",
+      "path": "bench/jev/results/native-discovery-20260917/final-feature-build.log",
+      "retained_bytes": 72,
+      "retained_sha256": "a178c7902ac24dda0e2c0cd4cf0e47a2a6976ef30481cb4015f2f71620380d8b",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 390,
+      "original_sha256": "d3c5f030beaac07415c75013cdb036a2b1302a843f170efb73af61a90e868e5d",
+      "path": "bench/jev/results/native-discovery-20260917/private-install.log",
+      "retained_bytes": 358,
+      "retained_sha256": "9530941b9fe74d21875e6cdc1e61995b59dad15ead10e897665cdfc4fb8cbd3d",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 277,
+      "original_sha256": "47d60031e227a169d16e54a420683e90a5d3c9f33af95d5fd55470ddc5b401b2",
+      "path": "bench/jev/results/native-discovery-20260917/private-doctor.log",
+      "retained_bytes": 261,
+      "retained_sha256": "dc152776bfa3f09767ffc1d122a89d86b354709d027d4584481351c65883f76e",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 449,
+      "original_sha256": "8ca0c005723186290b2b2711f28b71b622a8647c80a4c5228d56f3d7b2e0b6e9",
+      "path": "bench/jev/results/native-discovery-20260917/installed-capabilities.log",
+      "retained_bytes": 449,
+      "retained_sha256": "8ca0c005723186290b2b2711f28b71b622a8647c80a4c5228d56f3d7b2e0b6e9",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 95,
+      "original_sha256": "0cdc07f800240b9a69f300129f4bf8fd3b2338dba70a9dccb3af557ac709d299",
+      "path": "bench/jev/results/native-discovery-20260917/installed-offline-span.log",
+      "retained_bytes": 95,
+      "retained_sha256": "0cdc07f800240b9a69f300129f4bf8fd3b2338dba70a9dccb3af557ac709d299",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 4951,
+      "original_sha256": "f764ab275bc78c2d3240161f9221979c926cb0f8ecee950dfb243feae943ec92",
+      "path": "bench/jev/results/native-discovery-20260917/installed-native-and-result-tests.log",
+      "retained_bytes": 4951,
+      "retained_sha256": "f764ab275bc78c2d3240161f9221979c926cb0f8ecee950dfb243feae943ec92",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 530,
+      "original_sha256": "f3ce830e528ffa7fba8ec3a6fa31cb89702a98ad09232e8acfc37c88e5e8102c",
+      "path": "bench/jev/results/native-discovery-20260917/installed-memory.log",
+      "retained_bytes": 514,
+      "retained_sha256": "2687ff7e2b4f0e4df62780416bfeba093e000e642a8c21c814cd76612b5c5131",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 166,
+      "original_sha256": "d0d866ac185874fe07cbc407d4ab849d369b589a9fd137aa0b7af44f425274bb",
+      "path": "bench/jev/results/native-discovery-20260917/private-uninstall.log",
+      "retained_bytes": 166,
+      "retained_sha256": "d0d866ac185874fe07cbc407d4ab849d369b589a9fd137aa0b7af44f425274bb",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 13401,
+      "original_sha256": "a35e3d2e4d2c194c6cec17e2a6caec09c1e7608a72280ce5e1949e3cbdbf7699",
+      "path": "bench/jev/results/native-discovery-20260917/acceptance-receipt.json",
+      "retained_bytes": 13273,
+      "retained_sha256": "eb80ac41df01275fcb5ebe899c327dc7e8d1904293367ebf4ef735ae0e98a92e",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 1100,
+      "original_sha256": "51d710e0862ff6954d18418c900553862eb105ab203648a6581ed050eb0a976a",
+      "path": "bench/jev/results/native-discovery-20260917/before-fix.log",
+      "retained_bytes": 1059,
+      "retained_sha256": "6ea4e26002c9c52be31d82c4a88d9cf7a52b716509f5bf114fd2e8754f5fff2e",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 857,
+      "original_sha256": "536db15fb899efd82f5a57670cb8a2b6438dbac171f2f0d9fd19e667720a96cc",
+      "path": "bench/jev/results/native-discovery-20260917/focused-default-native-tests.log",
+      "retained_bytes": 816,
+      "retained_sha256": "6ad235054dd42385f10a985fc830f08f2f6d292e0b50818e4ce44f45c9594e44",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 857,
+      "original_sha256": "42fe0015b0c851f90b93da6b03445b40d4543ffdd67ba4a0873d08afa89abceb",
+      "path": "bench/jev/results/native-discovery-20260917/focused-typesafe-native-tests.log",
+      "retained_bytes": 816,
+      "retained_sha256": "64750e5ae76fd513e02f580e8885fd11b0a39485af4835139b09ac059981da50",
+      "transformation": "local absolute path prefixes only"
+    }
+  ],
+  "final_binary_sha256": "455846f6e613463e96a7e37e4b5ed0541a9cfc90502f60b20c98c13d367d9546",
+  "frozen_study_binaries_unchanged": 3,
+  "full_suite": {
+    "failed": 0,
+    "ignored": 5,
+    "passed": 659
+  },
+  "hosted_ci_executed": false,
+  "ignored_tests_subsequently_passed_on_installed_binary": 2,
+  "installed_capabilities": {
+    "azdaja": "0.1.17",
+    "capabilities": [
+      "persistent-repl",
+      "snapshots",
+      "external-functions",
+      "native-sha256",
+      "native-typed-judgments",
+      "re",
+      "json",
+      "datetime",
+      "monty-os-calls-denied"
+    ],
+    "dump_version": 5,
+    "monty": "0.0.21",
+    "typed_judgments": {
+      "cache_and_budget_scope": "cell",
+      "credentials_checked": false,
+      "enabled_by_default": false,
+      "functions": [
+        "judge_many",
+        "judge_stats"
+      ],
+      "host_opt_in_required": true,
+      "runtime_configuration_checked": false,
+      "typesafe_compiled": true
+    }
+  },
+  "live_provider_calls": 0,
+  "original_files_unchanged": 25,
+  "predecessor_acceptance": "docs/research/jev-final-followthrough-20260917.json",
+  "prior_accepted_binary_preserved_sha256": "7fbbc3bc543e2a433ca1a5d44942fad48c5a2bc10e6a1383dbbfcea9c7e1c0dd",
+  "private_install_removed": true,
+  "publication_authorized": false,
+  "published_asset_license_files_unchanged": 123,
+  "published_or_user_install_changed": false,
+  "quality_advantage_established": false,
+  "readiness": "not_checked",
+  "recorded_at": "2026-09-17T02:48:12.071999+00:00",
+  "remaining_exclusions": [
+    "release-only 16M-character stress",
+    "release-only 50 MiB acceptance",
+    "frozen Luna pilot input preparation"
+  ],
+  "requirements_map": "docs/research/jev-native-discovery-20260917.md",
+  "schema": "azdaja.native_discovery_acceptance.v1",
+  "source_commit": "6b1139e86af8d18365232b7f57f9b9aa1352f6cb",
+  "source_tree_clean_after": true,
+  "status": "passed"
+}
