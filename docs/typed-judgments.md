@@ -30,6 +30,16 @@ This is an optional execution leaf beside `llm`, not a mandatory workflow or a r
 
 ## Enable explicitly
 
+First use `azdaja doctor --caps` for provider-free discovery. Its
+`typed_judgments` object names `judge_many` and `judge_stats`, reports whether
+the `typesafe` transport was compiled, and identifies the per-cell cache/budget
+scope. This is **build capability, not runtime readiness**: the command does
+not read configuration or credentials, create state, or call a provider.
+`typesafe_compiled: true` does not mean that the host enabled inference or
+supplied a valid key. A default-feature build still exposes the API names but
+reports `typesafe_compiled: false`. The existing opt-in and ordinary-execution
+recovery behavior below is unchanged.
+
 Build this source tree with Rust 1.95:
 
 ```sh

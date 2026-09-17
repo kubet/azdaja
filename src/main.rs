@@ -791,7 +791,26 @@ fn doctor(args: &[String]) -> Result<bool> {
         exact(args, 2, "doctor")?;
         println!(
             "{}",
-            serde_json::json!({"azdaja":VERSION,"monty":MONTY_VERSION,"dump_version":monty::DUMP_VERSION,"capabilities":["persistent-repl","snapshots","external-functions","native-sha256","re","json","datetime","monty-os-calls-denied"]})
+            serde_json::json!({
+                "azdaja": VERSION,
+                "monty": MONTY_VERSION,
+                "dump_version": monty::DUMP_VERSION,
+                "capabilities": [
+                    "persistent-repl", "snapshots", "external-functions", "native-sha256",
+                    "native-typed-judgments", "re", "json", "datetime", "monty-os-calls-denied"
+                ],
+                // Build-time facts only. This branch must not load user config,
+                // inspect credentials, start a session, or probe any provider.
+                "typed_judgments": {
+                    "functions": ["judge_many", "judge_stats"],
+                    "typesafe_compiled": cfg!(feature = "typesafe"),
+                    "enabled_by_default": false,
+                    "host_opt_in_required": true,
+                    "runtime_configuration_checked": false,
+                    "credentials_checked": false,
+                    "cache_and_budget_scope": "cell"
+                }
+            })
         );
         return Ok(true);
     }

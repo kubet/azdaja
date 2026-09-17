@@ -159,6 +159,58 @@ fn native_judgment_config_roundtrips_without_a_secret() {
     assert!(cfg.validate().is_err());
 }
 
+#[test]
+fn native_judgment_capabilities_are_static_and_distinguish_transport_from_readiness() {
+    let s = Session::new("");
+    let home = s.dir.join("caps home must remain absent");
+    let state = s.dir.join("caps state must remain absent");
+    let bad_config = s.dir.join("unreadable-as-toml");
+    fs::write(&bad_config, "this is intentionally invalid TOML [[").unwrap();
+    let missing_config = s.dir.join("missing config");
+    let synthetic = "capability-probe-synthetic-not-a-credential";
+    let mut previous = None;
+    for config in [&bad_config, &missing_config] {
+        let out = Command::new(env!("CARGO_BIN_EXE_azdaja"))
+            .args(["doctor", "--caps"])
+            .env_clear()
+            .env("HOME", &home)
+            .env("AZDAJA_HOME", &state)
+            .env("AZDAJA_CONFIG", config)
+            .env("TYPESAFE_API_KEY", synthetic)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{:?}", out.stderr);
+        assert!(out.stderr.is_empty());
+        assert!(!String::from_utf8_lossy(&out.stdout).contains(synthetic));
+        let caps: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert!(
+            caps["capabilities"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("native-typed-judgments"))
+        );
+        assert_eq!(
+            caps["typed_judgments"],
+            serde_json::json!({
+                "functions": ["judge_many", "judge_stats"],
+                "typesafe_compiled": cfg!(feature = "typesafe"),
+                "enabled_by_default": false,
+                "host_opt_in_required": true,
+                "runtime_configuration_checked": false,
+                "credentials_checked": false,
+                "cache_and_budget_scope": "cell"
+            })
+        );
+        if let Some(previous) = &previous {
+            assert_eq!(&out.stdout, previous);
+        }
+        previous = Some(out.stdout);
+        assert!(!home.exists());
+        assert!(!state.exists());
+        assert!(!missing_config.exists());
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn native_judgment_key_is_not_forwarded_to_custom_generative_provider() {
