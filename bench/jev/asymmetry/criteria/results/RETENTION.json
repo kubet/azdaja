@@ -1,0 +1,440 @@
+{
+  "claims": {
+    "automatic_approval_authorized": false,
+    "billing_known": false,
+    "development_panel_only": true,
+    "independent_generalization_established": false
+  },
+  "files": {
+    "bench/jev/asymmetry/criteria/FROZEN.started": {
+      "bytes": 107,
+      "sha256": "a016439a05ac1643eb37a9c3aa648fd2ffd83372e8d33a9f2c8d5a39e0ac42d3"
+    },
+    "bench/jev/asymmetry/criteria/RESULTS.md": {
+      "bytes": 5778,
+      "sha256": "aeb664daace1131cac61694775bda3e4f2e78161c30306e659d3adb2a672d081"
+    },
+    "bench/jev/asymmetry/criteria/results/grade-20260917.json": {
+      "bytes": 14879,
+      "sha256": "65765977c90ffa37d8d53834768bc657a00e6bd950b9640d68b8f3010cfb3ea8"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-01-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-01-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-01-custody-result.json": {
+      "bytes": 926,
+      "sha256": "d477dddf2b27267355fcb0b2979939012bceb19b0890c3ca0d4353a1ee9c6f47"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-01-observation.json": {
+      "bytes": 3380,
+      "sha256": "a0e91055c6a0d0c92c42da29d6735eabf42561f642e97cc667905d2e89cade5e"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-01-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "65e56308cef260b7714e20dfd2f580ed433c20fd20ac178c03451affb0479641"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-01-reentry-result.json": {
+      "bytes": 3098,
+      "sha256": "0cf5b535231ec1c0d720c286d9c461cc75e4733b25efff38f85a6749fbe5d41d"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-01-request.json": {
+      "bytes": 35451,
+      "sha256": "7cc211178d2302d9a531bc8af6c72b45739d12ae313478eec47a457f9e6b6152"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-01-result.json": {
+      "bytes": 3380,
+      "sha256": "a0e91055c6a0d0c92c42da29d6735eabf42561f642e97cc667905d2e89cade5e"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-02-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-02-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-02-custody-result.json": {
+      "bytes": 926,
+      "sha256": "9c070e9181187cc90b9c4d3d74fe6e981749611c31f6f10c1b3c82e9acb9934a"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-02-observation.json": {
+      "bytes": 3382,
+      "sha256": "2470e6bd35e82e8720bfbdc29d98403b879a520a62c1e2b5925bb67d6ae68789"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-02-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "8e0e3024dc7fd5b83c067cf0db9746bd2b076947ed04dd7b044f2acb5e8155a1"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-02-reentry-result.json": {
+      "bytes": 3099,
+      "sha256": "eeba3ff5ca51a6bbe70935fcf77197264b3bc7808ae27ed5c724671895dc3e34"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-02-request.json": {
+      "bytes": 60714,
+      "sha256": "57312aba15089c9e9233d03d93ee592ae811dded571f49b1f0b1988e1ba3c502"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-02-result.json": {
+      "bytes": 3382,
+      "sha256": "2470e6bd35e82e8720bfbdc29d98403b879a520a62c1e2b5925bb67d6ae68789"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-03-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-03-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-03-custody-result.json": {
+      "bytes": 989,
+      "sha256": "78516814124d17adbb8abe7301fed2dabacc6d09b7ebbdb2ed5c5a70879ea0e2"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-03-observation.json": {
+      "bytes": 3444,
+      "sha256": "bc9f7f5ce8be508480825913270627748823bb6177a1313be9d863b95e7a9abd"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-03-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "3588ef092e98c4d04d48aeab45dcc43f183bbc1107771e27f3ccf75824614efe"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-03-reentry-result.json": {
+      "bytes": 3161,
+      "sha256": "0f417dbc4511ff3d47e0c3b688b8187c35897d13e0012047ef1b86b070bb230e"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-03-request.json": {
+      "bytes": 49185,
+      "sha256": "59edd409f2e5024c601d0cad3df78e263793128beb260d065e8b720d80636672"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-03-result.json": {
+      "bytes": 3444,
+      "sha256": "bc9f7f5ce8be508480825913270627748823bb6177a1313be9d863b95e7a9abd"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-04-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-04-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-04-custody-result.json": {
+      "bytes": 926,
+      "sha256": "12c42f5d0af43a567f8bd0aa8a2881c554ee74f4c708cc276110f6caae07c902"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-04-observation.json": {
+      "bytes": 3384,
+      "sha256": "7172536d09190845d18015ca85182643edc2f7682baadc3bde5254ef15094262"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-04-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "22f8252733a4a1659e560ff204d635344945c0642bb2263d314265c87880e693"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-04-reentry-result.json": {
+      "bytes": 3101,
+      "sha256": "29eea92167d308d05d435707c91c975d43ee89c1521cec9de471ed97c629c2ef"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-04-request.json": {
+      "bytes": 61450,
+      "sha256": "cc8a75f7f923a5617cf190889a60055fd26a746f693c985623ed59ca4473ae34"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-04-result.json": {
+      "bytes": 3384,
+      "sha256": "7172536d09190845d18015ca85182643edc2f7682baadc3bde5254ef15094262"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-05-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-05-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-05-custody-result.json": {
+      "bytes": 989,
+      "sha256": "72c189bfedc74bedd31d0c49ca2ea1ee7f4240f7459619a4fe99ae99ebfa826b"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-05-observation.json": {
+      "bytes": 3445,
+      "sha256": "a6fe22ba504a068f2572d388edf2c5b81704185da3a6c5cef3f349c299b58d18"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-05-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "89a88628817b59a7f60f7674cea8915531d55c6e382e0316a408efbc0db89a46"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-05-reentry-result.json": {
+      "bytes": 3162,
+      "sha256": "dd8790916c17b0a91795acbc1411ea115826fab6c2370c1e5c3629fd39bee0f7"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-05-request.json": {
+      "bytes": 49921,
+      "sha256": "24a811f3901ce28b29174a11e5f45829b0207ddd688051fad4c09e81d1bd2fd9"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-05-result.json": {
+      "bytes": 3445,
+      "sha256": "a6fe22ba504a068f2572d388edf2c5b81704185da3a6c5cef3f349c299b58d18"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-06-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-06-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-06-custody-result.json": {
+      "bytes": 926,
+      "sha256": "b40680c22c0d6898b40436e7a8459440a36cdbd4a02f0eddfd991c0ebe1ea7d8"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-06-observation.json": {
+      "bytes": 3378,
+      "sha256": "2a727c3046e76d15baecc540346f10e0885347bce8eb4a8d7746c579a91d4959"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-06-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "68b8a34cd0adbafcf58062075ca80b837f091125dac09ab546cfb7e661cdf809"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-06-reentry-result.json": {
+      "bytes": 3096,
+      "sha256": "28d8f70bc08f2c2cfb976ca5021105848c122c26afea98214fa3b2840a6a5931"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-06-request.json": {
+      "bytes": 36187,
+      "sha256": "5aec642cdea9a43343326d12184ebc47943be6add912100af78c048d650e8319"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-06-result.json": {
+      "bytes": 3378,
+      "sha256": "2a727c3046e76d15baecc540346f10e0885347bce8eb4a8d7746c579a91d4959"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-07-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-07-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-07-custody-result.json": {
+      "bytes": 989,
+      "sha256": "13984fccb8e0d160c11401c5f8b17aedf0739fe0f3163bb552276a977affa6c2"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-07-observation.json": {
+      "bytes": 3444,
+      "sha256": "20c9fdc2e06c84e5e09b8f88a49ba00cb8ddbaf6e97b2c5beee9ec355075404b"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-07-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "8f5797ee748c58c1e165181013ea90ab93c6b74164f182e8532a2e90732d1a91"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-07-reentry-result.json": {
+      "bytes": 3161,
+      "sha256": "0f744bcf22fb4b8e2c3808197c3068ed5466e7b4be376e749ee2bb56bc41738d"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-07-request.json": {
+      "bytes": 49777,
+      "sha256": "2be163891cfcd031b34308ef4c9ac84bdf862cd5363fc04175d6a80bf45f1a82"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-07-result.json": {
+      "bytes": 3444,
+      "sha256": "20c9fdc2e06c84e5e09b8f88a49ba00cb8ddbaf6e97b2c5beee9ec355075404b"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-08-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-08-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-08-custody-result.json": {
+      "bytes": 926,
+      "sha256": "6980866545ab7002e221ad45c076055d1970956a792064209b38025743258187"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-08-observation.json": {
+      "bytes": 3378,
+      "sha256": "2a19fe0e6ffb9eeea5e1b11f1565f5c327acb9a66b7c0d1f91d312ec723f50c8"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-08-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "5875bb2e116ad383ba9608e2a9080f6248d643f3d547e699958636763b6eaaae"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-08-reentry-result.json": {
+      "bytes": 3096,
+      "sha256": "e8c37b27defd90d0b6dfc3b69866a8a646ac8e4b0e0769624b71ea31eca8a01c"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-08-request.json": {
+      "bytes": 36043,
+      "sha256": "77368c739404760ff4c914e3d9363caed4f173d7b0e3827c7419dca1e071ae47"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-08-result.json": {
+      "bytes": 3378,
+      "sha256": "2a19fe0e6ffb9eeea5e1b11f1565f5c327acb9a66b7c0d1f91d312ec723f50c8"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-09-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-09-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-09-custody-result.json": {
+      "bytes": 926,
+      "sha256": "fae57340408e84952211caed4b522fe4e0a69a359c4a13666224a566201d2056"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-09-observation.json": {
+      "bytes": 3380,
+      "sha256": "2ecc4eb2e17092ddb515c68a309b0039602a9d7b50583d311b2e3ed609088084"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-09-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "de70603b61e2b45871b8e509afea5057c1b8a6f51de73ee24fbcf5d058a606a3"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-09-reentry-result.json": {
+      "bytes": 3097,
+      "sha256": "ef81571f5474a6d69defc415d6028e1284c967b5f571e0cbdee0b597217303a7"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-09-request.json": {
+      "bytes": 61306,
+      "sha256": "16b18f73f3b4c74ea4dbd05eb500bb62997792948c65ebe201eea1e842716d92"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-09-result.json": {
+      "bytes": 3380,
+      "sha256": "2ecc4eb2e17092ddb515c68a309b0039602a9d7b50583d311b2e3ed609088084"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-10-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-10-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-10-custody-result.json": {
+      "bytes": 601,
+      "sha256": "926708c46f0e9d79665128e7e87dd6de00cda7b2d4e25032c2c3031b25196171"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-10-observation.json": {
+      "bytes": 2350,
+      "sha256": "fce7af3bbf36eeb7eda03e13658ff22adf8a89e0131bc08ebba5856f663e18fb"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-10-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "e3a404948953f2b74627b5fb1ed8d2d14653ef0f20996866530291c45d43607f"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-10-reentry-result.json": {
+      "bytes": 2068,
+      "sha256": "6367e73cc6a41a20e3ae9e9d66b22efd0d5ad2f31a38dacfed5afa91b317b6cc"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-10-request.json": {
+      "bytes": 22117,
+      "sha256": "ab668ea1363f5f182bfd87ccf9f7d92b65d1ecdf1bfa2275e639a0dd9d9169a3"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-10-result.json": {
+      "bytes": 2350,
+      "sha256": "fce7af3bbf36eeb7eda03e13658ff22adf8a89e0131bc08ebba5856f663e18fb"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-11-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-11-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-11-custody-result.json": {
+      "bytes": 601,
+      "sha256": "c8b243174b1bef01364a9a8a2b34966c87e623043b771c8b1e824a5854573d0d"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-11-observation.json": {
+      "bytes": 2350,
+      "sha256": "a03d930f47fa4e4ea6ccf84999c1a4424da6206102e8b0122434d7601c7dd13d"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-11-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "00e583c59bcc62036488a3844b30d95daea5672232c99fd4c6cadc3eff1c7b8c"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-11-reentry-result.json": {
+      "bytes": 2068,
+      "sha256": "8bfa82cefd1472a93baa49d736c3006eb7b026c5c27c330f5d6f4be6aa4ecc97"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-11-request.json": {
+      "bytes": 37355,
+      "sha256": "8fd3a147ef70ed158293577dad954df49fa89bc4e08dd67c25d21cbed788266f"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-11-result.json": {
+      "bytes": 2350,
+      "sha256": "a03d930f47fa4e4ea6ccf84999c1a4424da6206102e8b0122434d7601c7dd13d"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-12-cell.json": {
+      "bytes": 382,
+      "sha256": "93bcf1e8eb7ec29c96d468655bb454841e8b3f735ea27c343d86e8d4f67bee06"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-12-custody-cell.json": {
+      "bytes": 232,
+      "sha256": "094945ff4e3e9ac0f3b5824ed363f3eb71681360af7d0c4ac9d802d0476c1a27"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-12-custody-result.json": {
+      "bytes": 639,
+      "sha256": "8c530f5b33e2f075c36b5e2e65cba9cd6270ef0ffe0793b7db0a09d52878594b"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-12-observation.json": {
+      "bytes": 2390,
+      "sha256": "60c4df986fb6fb5eee66382c918024abe043dbe1541156654512bc557cf29648"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-12-reentry-cell.json": {
+      "bytes": 48,
+      "sha256": "6375b28b3f443a257c598567df4e8303704b651bbdd7aef37a1b5fc2c0d0dec3"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-12-reentry-result.json": {
+      "bytes": 2108,
+      "sha256": "4a62aac71bdb9636d9fd79f28f2904f6233c985c50effe57c40b6e8b8b339a02"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-12-request.json": {
+      "bytes": 30401,
+      "sha256": "d2a83ed183b20d6bb0c707fa57b2a66ad4f1ec604254bf9f5565f292be3fd1dd"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/criteria-12-result.json": {
+      "bytes": 2390,
+      "sha256": "60c4df986fb6fb5eee66382c918024abe043dbe1541156654512bc557cf29648"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/initialize-cell.json": {
+      "bytes": 62,
+      "sha256": "20990af07f05fd8fb176f94b638232079c9c01cc408a7228e7819445c429184d"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/initialize-result.json": {
+      "bytes": 21,
+      "sha256": "96bc5a97b369b9499bac54e9856eba39025aadf08890e07ad62bd8e4e08235b1"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/privacy-cleanup.json": {
+      "bytes": 294,
+      "sha256": "5f09f9e31cb8093407e698708354f34bb962c30fb1c28eb93a35f1f83b5b0621"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/receipt.json": {
+      "bytes": 22113,
+      "sha256": "b65fedaa70e3e94dbf647138793b228dea3e5a7045b21236c03827bfed656903"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/reduce-cell.json": {
+      "bytes": 306,
+      "sha256": "da1863fbf6b6d3705e1439740dfe727c3795d54c74d93999ba1dfc64aa07038c"
+    },
+    "bench/jev/asymmetry/criteria/results/native-20260917/reduce-result.json": {
+      "bytes": 61,
+      "sha256": "d92f4eb562175eba1bfdacc180d2ab3da0f77ab01474963e57bc47513f9b4354"
+    },
+    "bench/jev/asymmetry/criteria/results/timing-cost-20260917.json": {
+      "bytes": 880,
+      "sha256": "a5e759863a19b873baeaa71c66e3d88f87bc5a6df2572bb9726a9b828514211d"
+    }
+  },
+  "native_receipt_sha256": "b65fedaa70e3e94dbf647138793b228dea3e5a7045b21236c03827bfed656903",
+  "new_provider_calls": 0,
+  "public_replay_matches_retained_grade": true,
+  "scan_scope": "known credential shapes and no retained private-work, not proof against arbitrary unknown secrets",
+  "schema": "azdaja.asymmetry.criteria_retention.v1",
+  "seal_sha256": "b66e9bf06c28ff848ab1be1b8abf59584af9282f922681139e80b6e16113c34d"
+}

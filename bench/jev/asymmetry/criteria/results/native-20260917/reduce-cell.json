@@ -1,0 +1,1 @@
+{"code":"expected = json.loads(expected_payload)\nseen = []\nfor body in observations.values():\n    for qid in body[\"answers\"]:\n        seen.append(qid)\nFINAL({\"observed\":len(seen),\"expected\":len(expected),\"complete\":sorted(seen)==sorted(expected),\"attempts\":judge_stats()[\"attempts\"]})\n"}

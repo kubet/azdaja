@@ -1,0 +1,32 @@
+{
+  "arms": {
+    "control": {
+      "input_price_estimate_usd": "0.001498266",
+      "input_tokens": 35673,
+      "median_call_seconds": 1.0739735414972529,
+      "output_tokens": 5010,
+      "requests": 4
+    },
+    "criteria_ham": {
+      "input_price_estimate_usd": "0.00227052",
+      "input_tokens": 54060,
+      "median_call_seconds": 1.366162375517888,
+      "output_tokens": 5010,
+      "requests": 4
+    },
+    "inverse_spam": {
+      "input_price_estimate_usd": "0.00193683",
+      "input_tokens": 46115,
+      "median_call_seconds": 1.3255661249859259,
+      "output_tokens": 5010,
+      "requests": 4
+    }
+  },
+  "billing_known": false,
+  "elapsed_seconds": 18.23404179199133,
+  "input_price_estimate_usd": "0.005705616",
+  "new_provider_calls": 0,
+  "schema": "azdaja.asymmetry.criteria_summary.v1",
+  "total_input_tokens": 135848,
+  "total_output_tokens": 15030
+}
