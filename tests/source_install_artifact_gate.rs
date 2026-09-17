@@ -1,8 +1,37 @@
-//! Structural CI wiring checks. These do not execute the installer or claim artifact acceptance.
+//! CI wiring checks plus an actual public-help/embedded-fixture equality check.
+//! These do not execute the installer or claim installed artifact acceptance.
 const WORKFLOW: &str = include_str!("../.github/workflows/source-install-integrity.yml");
 const LIST_COMMAND: &str = "          cargo +1.95.0 test --release --locked --test installed_project_memory \\\n            -- --ignored --list > \"$scratch/installed-artifact-tests\"";
 const RUN_COMMAND: &str = "          AZDAJA_INSTALLED_TEST_BINARY=\"$installed\" PATH=\"$guard:$PATH\" \\\n            cargo +1.95.0 test --release --locked --test installed_project_memory \\\n            -- --ignored --test-threads=1\n          test ! -e \"$marker\"";
 const HISTORICAL_NOTICE_CHECK: &str = "          cmp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md \"$install_home/.local/share/azdaja/THIRD-PARTY-NOTICES.md\"";
+
+#[test]
+fn hosted_help_fixtures_match_the_actual_current_public_command() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_azdaja"))
+        .env_clear()
+        .env("NO_COLOR", "1")
+        .output()
+        .expect("execute the current binary's provider-free bare help");
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let actual = String::from_utf8(output.stdout).unwrap();
+    for (name, workflow) in [
+        ("source-install-integrity", WORKFLOW),
+        ("ci", include_str!("../.github/workflows/ci.yml")),
+    ] {
+        let marker = "          cat > \"$scratch/expected-help\" <<'EOF'\n";
+        assert_eq!(workflow.matches(marker).count(), 1, "{name}");
+        let block = workflow.split_once(marker).unwrap().1;
+        let block = block.split_once("          EOF\n").unwrap().0;
+        let expected = block
+            .lines()
+            .map(|line| line.strip_prefix("          ").unwrap())
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        assert_eq!(expected, actual, "stale hosted help fixture: {name}");
+    }
+}
 
 #[test]
 fn source_install_ci_runs_registered_artifact_tests_against_verified_installed_bytes() {

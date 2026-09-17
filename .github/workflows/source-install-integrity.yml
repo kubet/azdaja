@@ -317,7 +317,7 @@ jobs:
           cat > "$scratch/expected-help" <<'EOF'
           AZDAJA v0.1.17 — virtual memory for language models
           Usage: az <command>
-          Commands: help solo map install doctor start load exec final list kill uninstall memory
+          Commands: help solo map install doctor start load exec final list kill uninstall memory jev
           Install: az install  (auto-detects supported tools)
           Example: az solo "summarize this file" -f ./document.txt
           EOF
