@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "id": "s01",
+      "expected": "0.1.17",
+      "rationale": "The bounded Git excerpt establishes the requested role or sentinel.",
+      "acceptable_spans": [
+        {
+          "start": 11,
+          "end": 17
+        }
+      ]
+    },
+    {
+      "id": "s02",
+      "expected": "1.95",
+      "rationale": "The bounded Git excerpt establishes the requested role or sentinel.",
+      "acceptable_spans": [
+        {
+          "start": 16,
+          "end": 20
+        }
+      ]
+    },
+    {
+      "id": "s03",
+      "expected": "azdaja.dev/install",
+      "rationale": "The bounded Git excerpt establishes the requested role or sentinel.",
+      "acceptable_spans": [
+        {
+          "start": 12,
+          "end": 30
+        }
+      ]
+    },
+    {
+      "id": "s04",
+      "expected": "v0.1.17",
+      "rationale": "The bounded Git excerpt establishes the requested role or sentinel.",
+      "acceptable_spans": [
+        {
+          "start": 62,
+          "end": 69
+        }
+      ]
+    },
+    {
+      "id": "s05",
+      "expected": "no_match",
+      "rationale": "This excerpt states only the package version. It contains no license identifier. Do not infer one from other tasks or external package knowledge.",
+      "acceptable_spans": []
+    },
+    {
+      "id": "s06",
+      "expected": "ambiguous",
+      "rationale": "The source gives package version 0.1.17 and rust-version 1.95. The caller explicitly leaves the role unspecified, so neither value alone is determined.",
+      "acceptable_spans": []
+    },
+    {
+      "id": "s07",
+      "expected": "azdaja",
+      "rationale": "The first azdaja occurrence is the subject of the canonical-command sentence; the later occurrence belongs to the Cargo clause.",
+      "acceptable_spans": [
+        {
+          "start": 1,
+          "end": 7
+        }
+      ]
+    },
+    {
+      "id": "s08",
+      "expected": "jcode",
+      "rationale": "The bounded Git excerpt establishes the requested role or sentinel.",
+      "acceptable_spans": [
+        {
+          "start": 26,
+          "end": 31
+        }
+      ]
+    },
+    {
+      "id": "s09",
+      "expected": "azdaja",
+      "rationale": "The final azdaja occurrence is the object of Cargo installs. The question explicitly requests this occurrence, not only an equal string.",
+      "acceptable_spans": [
+        {
+          "start": 109,
+          "end": 115
+        }
+      ]
+    },
+    {
+      "id": "s10",
+      "expected": "opencode",
+      "rationale": "The bounded Git excerpt establishes the requested role or sentinel.",
+      "acceptable_spans": [
+        {
+          "start": 68,
+          "end": 76
+        }
+      ]
+    },
+    {
+      "id": "s11",
+      "expected": "no_match",
+      "rationale": "The excerpt lists supported tool names but does not name docker or a docker integration.",
+      "acceptable_spans": []
+    },
+    {
+      "id": "s12",
+      "expected": "ambiguous",
+      "rationale": "The source permits multiple host integrations and describes detection or explicit selection, but the task supplies neither a host preference nor detection results.",
+      "acceptable_spans": []
+    },
+    {
+      "id": "s13",
+      "expected": "jcode-api",
+      "rationale": "The bounded Git excerpt establishes the requested role or sentinel.",
+      "acceptable_spans": [
+        {
+          "start": 15,
+          "end": 24
+        }
+      ]
+    },
+    {
+      "id": "s14",
+      "expected": "gpt-5.6-sol",
+      "rationale": "The bounded Git excerpt establishes the requested role or sentinel.",
+      "acceptable_spans": [
+        {
+          "start": 17,
+          "end": 28
+        }
+      ]
+    },
+    {
+      "id": "s15",
+      "expected": "getconf GNU_LIBC_VERSION",
+      "rationale": "The bounded Git excerpt establishes the requested role or sentinel.",
+      "acceptable_spans": [
+        {
+          "start": 144,
+          "end": 168
+        }
+      ]
+    },
+    {
+      "id": "s16",
+      "expected": "az install jcode",
+      "rationale": "The bounded Git excerpt establishes the requested role or sentinel.",
+      "acceptable_spans": [
+        {
+          "start": 75,
+          "end": 91
+        }
+      ]
+    },
+    {
+      "id": "s17",
+      "expected": "no_match",
+      "rationale": "The bounded Git excerpt establishes the requested role or sentinel.",
+      "acceptable_spans": []
+    },
+    {
+      "id": "s18",
+      "expected": "ambiguous",
+      "rationale": "The source distinguishes XDG_CONFIG_HOME, XDG_STATE_HOME and XDG_DATA_HOME. Without the requested file category no single variable is determined; the rules for invalid paths do not specify that category.",
+      "acceptable_spans": []
+    }
+  ]
+}

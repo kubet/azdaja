@@ -1,0 +1,276 @@
+{
+  "schema_version": 1,
+  "source_commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+  "tasks": [
+    {
+      "id": "s01",
+      "block": 1,
+      "family": "direct",
+      "question": "Package version?",
+      "source": {
+        "path": "Cargo.toml",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 3,
+        "end_line": 3,
+        "text": "version = \"0.1.17\"\n",
+        "sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2"
+      },
+      "candidate_kind": "version"
+    },
+    {
+      "id": "s02",
+      "block": 1,
+      "family": "direct",
+      "question": "Required Rust version?",
+      "source": {
+        "path": "Cargo.toml",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 8,
+        "end_line": 8,
+        "text": "rust-version = \"1.95\"\n",
+        "sha256": "b0c3e7bfae90e88a3c7420b0f38e679cbef04c19e30046e15d9711089f694a73"
+      },
+      "candidate_kind": "version"
+    },
+    {
+      "id": "s03",
+      "block": 1,
+      "family": "context",
+      "question": "Which URL is the stable current installer?",
+      "source": {
+        "path": "README.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 33,
+        "end_line": 33,
+        "text": "The stable `azdaja.dev/install` URL serves the current published installer. Its versioned release payloads are fetched from `azdaja.dev` and verified against `SHA256SUMS` before installation.\n",
+        "sha256": "d16a52791f8e67e904989360e0edb590235e951f033c10ebbee02b9f3ab317b8"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s04",
+      "block": 1,
+      "family": "context",
+      "question": "Which exact release-tag token follows --tag?",
+      "source": {
+        "path": "README.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 38,
+        "end_line": 38,
+        "text": "cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.17 --locked\n",
+        "sha256": "444b8a324b315ae2b4b4341b9fc6b8e03a86a8977ea76d9b846fffbe68a068f2"
+      },
+      "candidate_kind": "version"
+    },
+    {
+      "id": "s05",
+      "block": 1,
+      "family": "absent",
+      "question": "Which license identifier is explicitly stated in this excerpt?",
+      "source": {
+        "path": "Cargo.toml",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 3,
+        "end_line": 3,
+        "text": "version = \"0.1.17\"\n",
+        "sha256": "2bc2bdec09cf12dd73b66fb556677c9f578170731fe8511875592a1f18c3e6a2"
+      },
+      "candidate_kind": "version"
+    },
+    {
+      "id": "s06",
+      "block": 1,
+      "family": "ambiguous",
+      "question": "The caller asks for one version value but has not specified whether it wants the package version or the minimum Rust version. Which single value does that underspecified request determine?",
+      "source": {
+        "path": "Cargo.toml",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 3,
+        "end_line": 8,
+        "text": "version = \"0.1.17\"\nedition = \"2024\"\nlicense = \"MIT\"\ndescription = \"Virtual memory for language models with a bounded model-facing surface\"\nrepository = \"https://github.com/kubet/azdaja\"\nrust-version = \"1.95\"\n",
+        "sha256": "758a75188f19a450388f4ac56404b51731c97f21332b82b618689a755b886487"
+      },
+      "candidate_kind": "version"
+    },
+    {
+      "id": "s07",
+      "block": 2,
+      "family": "direct",
+      "question": "Copy the command-name occurrence in the sentence that explicitly calls it the canonical command.",
+      "source": {
+        "path": "README.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 41,
+        "end_line": 41,
+        "text": "`azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.\n",
+        "sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s08",
+      "block": 2,
+      "family": "direct",
+      "question": "Which first supported tool name is listed?",
+      "source": {
+        "path": "docs/install.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 11,
+        "end_line": 11,
+        "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n",
+        "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s09",
+      "block": 2,
+      "family": "context",
+      "question": "Copy the command-name occurrence in the clause Cargo installs ... only, not an earlier mention of the same name.",
+      "source": {
+        "path": "README.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 41,
+        "end_line": 41,
+        "text": "`azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.\n",
+        "sha256": "4bd94238b464d71fbb0f6e029d80286963c61a452f316e3123f513c6538750d7"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s10",
+      "block": 2,
+      "family": "context",
+      "question": "Which tool name is last in the supported list?",
+      "source": {
+        "path": "docs/install.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 11,
+        "end_line": 11,
+        "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n",
+        "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s11",
+      "block": 2,
+      "family": "absent",
+      "question": "Which supported container-engine integration is explicitly named docker in this excerpt?",
+      "source": {
+        "path": "docs/install.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 11,
+        "end_line": 11,
+        "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n",
+        "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s12",
+      "block": 2,
+      "family": "ambiguous",
+      "question": "Which ONE supported host integration should the caller explicitly request? The caller has not specified a host tool, and no PATH or executable-detection result is supplied.",
+      "source": {
+        "path": "docs/install.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 11,
+        "end_line": 11,
+        "text": "Supported tool names are `jcode`, `claude`, `codex`, `gemini`, and `opencode`. Curl-bootstrap detection examines executable names on `PATH` only. A stale tool directory or an old managed skill does not mean the host tool is installed. With no target and a usable terminal, the installer shows all five tools, preselects only detected executables, and still permits explicitly selecting a not-found tool. It distinguishes `found`, `not found`, `integration present`, and `needs repair`; `present` is intentionally not called `active` until the downloaded binary performs authoritative preflight. If raw-key controls are unavailable, the same choices use a numbered line prompt. With no terminal and no explicit target, installation fails before download or mutation and prints exact rerun forms. Pass `--all` for unattended installation of every integration, or name a comma-separated subset such as `jcode,codex`.\n",
+        "sha256": "f5b8f9e5918fdb3ad7657646ff464ab661eee4822ae22762ed2ec60e07ca5078"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s13",
+      "block": 3,
+      "family": "direct",
+      "question": "Which provider boundary command is configured?",
+      "source": {
+        "path": "assets/config.toml",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 3,
+        "end_line": 3,
+        "text": "sub_llm_cmd = \"jcode-api\"\n",
+        "sha256": "088a6586beab66eee8a15fef5da4883044aa916cf7c4bf511f0792c6d8231a56"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s14",
+      "block": 3,
+      "family": "direct",
+      "question": "Which default model literal is configured?",
+      "source": {
+        "path": "assets/config.toml",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 4,
+        "end_line": 4,
+        "text": "default_model = \"gpt-5.6-sol\"\n",
+        "sha256": "12e1d317ea7e4108a9a0fd167db106c7c96f2a5caa5585dbdcbb2bdc4019a453"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s15",
+      "block": 3,
+      "family": "context",
+      "question": "Which quoted probe command is named for Linux preflight?",
+      "source": {
+        "path": "docs/install.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 5,
+        "end_line": 5,
+        "text": "The standalone installer accepts macOS 11 or newer on Apple Silicon and Intel, plus x86-64 Linux with glibc 2.35 or newer. On Linux, it parses `getconf GNU_LIBC_VERSION` and refuses musl, an older glibc, a missing `getconf`, or an invalid result before download or mutation under `HOME`. Use a newer glibc host or build with Rust 1.95 when that preflight fails.\n",
+        "sha256": "ea1019e47a2acc0af7395616809331ef80ea549eaabc52fece0025ed9102bfea"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s16",
+      "block": 3,
+      "family": "context",
+      "question": "Which command is the explicit Jcode install target?",
+      "source": {
+        "path": "README.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 43,
+        "end_line": 43,
+        "text": "`az install` finds supported tools automatically. To target one tool, run `az install jcode`; to install every integration, run `az install all`. Then run the exact `az doctor` command printed by install before reloading the tool. See [edge cases and lifecycle details](docs/install.md) for platform checks, registry reloads, configuration paths, Cargo setup, and safe removal.\n",
+        "sha256": "9e07dee661e6e82d8ce49503a87e1f49873bde4546f21f8774b0dd9e02a54508"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s17",
+      "block": 3,
+      "family": "absent",
+      "question": "What absolute XDG cache path is supplied?",
+      "source": {
+        "path": "docs/install.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 7,
+        "end_line": 7,
+        "text": "A set `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, or `XDG_DATA_HOME` must be absolute. Empty or relative XDG config and state values fall back to the corresponding absolute `HOME` paths; an invalid data root fails closed.\n",
+        "sha256": "00c3cc1ad4cbaf556dcdca0617d2c66b477a8855de62b26578202fcce371f166"
+      },
+      "candidate_kind": "quoted_literal"
+    },
+    {
+      "id": "s18",
+      "block": 3,
+      "family": "ambiguous",
+      "question": "Which ONE XDG home variable should be used for a file when its category, configuration versus state versus data, has not been specified?",
+      "source": {
+        "path": "docs/install.md",
+        "commit": "ca320c3607116447a506d6c8429489f1b30157a9",
+        "start_line": 7,
+        "end_line": 7,
+        "text": "A set `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, or `XDG_DATA_HOME` must be absolute. Empty or relative XDG config and state values fall back to the corresponding absolute `HOME` paths; an invalid data root fails closed.\n",
+        "sha256": "00c3cc1ad4cbaf556dcdca0617d2c66b477a8855de62b26578202fcce371f166"
+      },
+      "candidate_kind": "quoted_literal"
+    }
+  ]
+}
