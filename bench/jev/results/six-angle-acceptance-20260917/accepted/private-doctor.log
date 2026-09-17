@@ -1,0 +1,2 @@
+PASS claude: managed Azdaja skill is installed on disk at /Users/vukasinkubet/.jcode/scratch/jev-angle-final-acceptance-20260917-1121/private home with spaces/.claude/skills/azdaja
+INFO claude: restart Claude after install to load the managed skill, user rule, and hook plugin

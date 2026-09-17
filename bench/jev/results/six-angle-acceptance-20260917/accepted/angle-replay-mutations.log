@@ -1,0 +1,12 @@
+test_actual_retained_result_is_negative_and_usage_is_complete (bench.jev.angle_analysis.test_report.ReportTests.test_actual_retained_result_is_negative_and_usage_is_complete) ... ok
+test_missing_source_artifact_is_rejected (bench.jev.angle_analysis.test_report.ReportTests.test_missing_source_artifact_is_rejected) ... ok
+test_public_cli_refuses_existing_or_dangling_output (bench.jev.angle_analysis.test_report.ReportTests.test_public_cli_refuses_existing_or_dangling_output) ... ok
+test_rehashed_false_win_is_rejected (bench.jev.angle_analysis.test_report.ReportTests.test_rehashed_false_win_is_rejected) ... ok
+test_rehashed_invalid_probability_is_not_a_judgment (bench.jev.angle_analysis.test_report.ReportTests.test_rehashed_invalid_probability_is_not_a_judgment) ... ok
+test_rehashed_receipt_cannot_erase_reported_usage (bench.jev.angle_analysis.test_report.ReportTests.test_rehashed_receipt_cannot_erase_reported_usage) ... ok
+test_rehashed_unmatched_baseline_state_is_rejected (bench.jev.angle_analysis.test_report.ReportTests.test_rehashed_unmatched_baseline_state_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 5.838s
+
+OK

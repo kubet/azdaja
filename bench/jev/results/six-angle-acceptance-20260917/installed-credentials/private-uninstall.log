@@ -1,0 +1,5 @@
+Selected: claude integration only (standalone and documents kept)
+Removed: claude; claude activation rule
+Next: restart Claude to load its skill, user rule, and hook
+
+[stderr]

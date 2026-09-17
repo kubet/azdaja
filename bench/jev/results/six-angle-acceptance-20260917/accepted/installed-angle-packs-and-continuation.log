@@ -1,0 +1,32 @@
+test_authorization_before_output_or_process (bench.jev.angle_lab.test_native.NativeTests.test_authorization_before_output_or_process) ... ok
+test_bounded_process_returns_actual_output (bench.jev.angle_lab.test_native.NativeTests.test_bounded_process_returns_actual_output) ... ok
+test_dangling_output_symlink_refused (bench.jev.angle_lab.test_native.NativeTests.test_dangling_output_symlink_refused) ... ok
+test_every_pack_reaches_native_credential_guard_without_transport (bench.jev.angle_lab.test_native.NativeTests.test_every_pack_reaches_native_credential_guard_without_transport) ... ok
+test_frozen_manifest_checked_before_output (bench.jev.angle_lab.test_native.NativeTests.test_frozen_manifest_checked_before_output) ... ok
+test_keyboard_interrupt_does_not_leave_usable_campaign (bench.jev.angle_lab.test_native.NativeTests.test_keyboard_interrupt_does_not_leave_usable_campaign) ... ok
+test_output_limit_and_timeout_reap_local_children (bench.jev.angle_lab.test_native.NativeTests.test_output_limit_and_timeout_reap_local_children) ... ok
+test_pack_limits_and_credential_pattern (bench.jev.angle_lab.test_native.NativeTests.test_pack_limits_and_credential_pattern) ... ok
+test_public_persistent_cli_without_any_model_turn (bench.jev.angle_lab.test_native.NativeTests.test_public_persistent_cli_without_any_model_turn) ... ok
+test_runtime_source_change_poisoned (bench.jev.angle_lab.test_native.NativeTests.test_runtime_source_change_poisoned) ... ok
+test_semantic_validation_error_is_terminal (bench.jev.angle_lab.test_native.NativeTests.test_semantic_validation_error_is_terminal) ... ok
+test_unknown_trace_usage_not_zero_and_retry_ordinals (bench.jev.angle_lab.test_native.NativeTests.test_unknown_trace_usage_not_zero_and_retry_ordinals) ... ok
+test_aggregate_coincidence_not_per_record_accuracy (bench.jev.angle_lab.test_lanes.LaneTests.test_aggregate_coincidence_not_per_record_accuracy) ... ok
+test_all_may_occurrences_exact_and_calibration_disjoint (bench.jev.angle_lab.test_lanes.LaneTests.test_all_may_occurrences_exact_and_calibration_disjoint) ... ok
+test_all_packs_use_the_actual_native_contract (bench.jev.angle_lab.test_lanes.LaneTests.test_all_packs_use_the_actual_native_contract) ... ok
+test_cache_full_arrays_and_wrong_cache_witness (bench.jev.angle_lab.test_lanes.LaneTests.test_cache_full_arrays_and_wrong_cache_witness) ... ok
+test_canonical_raw_log_is_in_the_frozen_source_set (bench.jev.angle_lab.test_lanes.LaneTests.test_canonical_raw_log_is_in_the_frozen_source_set) ... ok
+test_memory_scope_before_prompt_and_same_budget (bench.jev.angle_lab.test_lanes.LaneTests.test_memory_scope_before_prompt_and_same_budget) ... ok
+test_threshold_comes_from_calibration_only (bench.jev.angle_lab.test_lanes.LaneTests.test_threshold_comes_from_calibration_only) ... ok
+test_tree_reentry_driven_by_response_not_gold (bench.jev.angle_lab.test_lanes.LaneTests.test_tree_reentry_driven_by_response_not_gold) ... ok
+test_verifier_requires_exact_ids_and_flags_corruption (bench.jev.angle_lab.test_lanes.LaneTests.test_verifier_requires_exact_ids_and_flags_corruption) ... ok
+test_actual_reentry_carries_usage_without_new_call (bench.jev.angle_followthrough.test_run.ContinuationTests.test_actual_reentry_carries_usage_without_new_call) ... ok
+test_cumulative_caps_refuse_before_transport (bench.jev.angle_followthrough.test_run.ContinuationTests.test_cumulative_caps_refuse_before_transport) ... ok
+test_mutated_question_cannot_reuse_calibration (bench.jev.angle_followthrough.test_run.ContinuationTests.test_mutated_question_cannot_reuse_calibration) ... ok
+test_original_elapsed_time_is_not_reset (bench.jev.angle_followthrough.test_run.ContinuationTests.test_original_elapsed_time_is_not_reset) ... ok
+test_predecessor_is_exact_stopped_setup_not_quality_rerun (bench.jev.angle_followthrough.test_run.ContinuationTests.test_predecessor_is_exact_stopped_setup_not_quality_rerun) ... ok
+test_unknown_usage_or_entered_turn_prevents_admission (bench.jev.angle_followthrough.test_run.ContinuationTests.test_unknown_usage_or_entered_turn_prevents_admission) ... ok
+
+----------------------------------------------------------------------
+Ran 27 tests in 2.768s
+
+OK

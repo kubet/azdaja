@@ -1,0 +1,1 @@
+{"artifacts_verified": 49, "bundle_source_commit": "16e56fb854d049825d329255ba6368e377fa2263", "classification": "narrow first-party reproducible evidence", "git_binding": true, "live_fable": {"exact_results": 3, "provider_calls": 3, "scenarios": 3}, "provider_free": {"scenarios": 3, "surviving_sessions": 0}, "schema": "azdaja.first_party_proof_verification.v1"}

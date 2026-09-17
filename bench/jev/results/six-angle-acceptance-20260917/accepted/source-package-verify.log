@@ -1,0 +1,35 @@
+   Packaging azdaja v0.1.17 (/Users/vukasinkubet/.jcode/scratch/jev-angle-final-acceptance-20260917-1110/source)
+warning: ignoring test `claude_nonblocking` as `tests/claude_nonblocking.rs` is not included in the published package
+warning: ignoring test `claude_profile_hooks` as `tests/claude_profile_hooks.rs` is not included in the published package
+warning: ignoring test `cli_ux` as `tests/cli_ux.rs` is not included in the published package
+warning: ignoring test `config_repair_model` as `tests/config_repair_model.rs` is not included in the published package
+warning: ignoring test `e2e` as `tests/e2e.rs` is not included in the published package
+warning: ignoring test `feedback_channel` as `tests/feedback_channel.rs` is not included in the published package
+warning: ignoring test `installed_project_memory` as `tests/installed_project_memory.rs` is not included in the published package
+warning: ignoring test `jcode_release_commands` as `tests/jcode_release_commands.rs` is not included in the published package
+warning: ignoring test `jev_credentials` as `tests/jev_credentials.rs` is not included in the published package
+warning: ignoring test `judge_native` as `tests/judge_native.rs` is not included in the published package
+warning: ignoring test `lifecycle_ux` as `tests/lifecycle_ux.rs` is not included in the published package
+warning: ignoring test `memory_export` as `tests/memory_export.rs` is not included in the published package
+warning: ignoring test `memory_recall` as `tests/memory_recall.rs` is not included in the published package
+warning: ignoring test `memory_recall_contract` as `tests/memory_recall_contract.rs` is not included in the published package
+warning: ignoring test `memory_recall_paths` as `tests/memory_recall_paths.rs` is not included in the published package
+warning: ignoring test `memory_recall_reliability` as `tests/memory_recall_reliability.rs` is not included in the published package
+warning: ignoring test `memory_recall_review` as `tests/memory_recall_review.rs` is not included in the published package
+warning: ignoring test `monty_compat` as `tests/monty_compat.rs` is not included in the published package
+warning: ignoring test `notice_distribution` as `tests/notice_distribution.rs` is not included in the published package
+warning: ignoring test `process_xdg` as `tests/process_xdg.rs` is not included in the published package
+warning: ignoring test `product_50mb` as `tests/product_50mb.rs` is not included in the published package
+warning: ignoring test `project_memory` as `tests/project_memory.rs` is not included in the published package
+warning: ignoring test `project_memory_worktrees` as `tests/project_memory_worktrees.rs` is not included in the published package
+warning: ignoring test `public_surface` as `tests/public_surface.rs` is not included in the published package
+warning: ignoring test `publication_verifier` as `tests/publication_verifier.rs` is not included in the published package
+warning: ignoring test `recent_overview` as `tests/recent_overview.rs` is not included in the published package
+warning: ignoring test `release_promotion` as `tests/release_promotion.rs` is not included in the published package
+warning: ignoring test `site_installer` as `tests/site_installer.rs` is not included in the published package
+warning: ignoring test `source_install_artifact_gate` as `tests/source_install_artifact_gate.rs` is not included in the published package
+warning: ignoring test `windows_installer` as `tests/windows_installer.rs` is not included in the published package
+    Packaged 31 files, 2.3MiB (406.8KiB compressed)
+   Verifying azdaja v0.1.17 (/Users/vukasinkubet/.jcode/scratch/jev-angle-final-acceptance-20260917-1110/source)
+   Compiling azdaja v0.1.17 (/Users/vukasinkubet/.jcode/scratch/azdaja-notice-remediation-20260917/target/package/azdaja-0.1.17)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.65s

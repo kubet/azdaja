@@ -1,0 +1,3 @@
+{"fingerprint":null,"fingerprint_algorithm":"sha256-prefix-12","incomplete_attachment":null,"key_env":"AZDAJA_INSTALLED_TEST_CREDENTIAL","provider_checked":false,"provider_readiness_checked":false,"runtime_configuration_checked":false,"source":"absent","storage_backend":"owner_only_plaintext_file","storage_supported":true,"syntax_valid":false,"typesafe_compiled":true}
+
+[stderr]
