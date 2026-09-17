@@ -19,7 +19,6 @@ ARTIFACT_ROLES = {
     "Cargo.lock": "current_notice_lock_input",
     "Cargo.toml": "current_notice_manifest_input",
     "THIRD-PARTY-NOTICES.md": "current_notice_rendering",
-    "rust-toolchain.toml": "notice_cargo_toolchain",
     "README.md": "public_claim_surface",
     "bench/live_fable_suite/run.py": "live_fixture_generator",
     "bench/live_fable_suite/verify.py": "live_receipt_verifier",

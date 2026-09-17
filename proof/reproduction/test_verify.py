@@ -15,6 +15,12 @@ SPEC.loader.exec_module(verify)
 
 
 class ProofBundleVerifierTests(unittest.TestCase):
+    def test_declared_bundle_artifacts_exist_before_generation(self):
+        builder = verify.import_module("proof_manifest_builder", HERE / "build_manifest.py")
+        for relative in builder.ARTIFACT_ROLES:
+            path = ROOT / relative
+            self.assertTrue(path.is_file() and not path.is_symlink(), relative)
+
     def test_original_manifest_and_experiment_inputs_remain_byte_exact(self):
         original = HERE / "historical/manifest-cc442345.json"
         self.assertEqual(verify.sha256(original),
