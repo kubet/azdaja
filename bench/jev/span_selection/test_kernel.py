@@ -97,6 +97,17 @@ class KernelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'changed source'):
             k.materialize(pack, {'s01': 'c000'})
 
+    def test_omitted_candidate_is_not_a_claim_of_absent_source_value(self):
+        pack = k.prepare(fixture())
+        pack['tasks'][0]['candidates'] = [pack['tasks'][0]['candidates'][1]]
+        criteria = k.questions(pack)['s01']['criteria']
+        self.assertIn('absent from the supplied source', criteria['no_match'])
+        self.assertIn('missing from the supplied candidates', criteria['not_covered'])
+        rows = k.materialize(pack, {'s01': 'not_covered'})
+        self.assertEqual(rows[0]['status'], 'not_covered')
+        self.assertIsNone(rows[0]['value'])
+        self.assertIn('alpha', pack['tasks'][0]['source']['text'])
+
     def test_literal_baseline_zero_overlap_ties_and_role_distance(self):
         pack = k.prepare(fixture('`alpha` then `beta`'))
         pack['tasks'][0]['question'] = 'Who signed?'  # no overlap
