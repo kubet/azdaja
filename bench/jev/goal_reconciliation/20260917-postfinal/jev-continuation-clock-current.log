@@ -1,0 +1,16 @@
+test_actual_prefix_has25_known_turns_and_exact_answer_coverage (bench.jev.goal_reconciliation.test_continuation_clock.RecoveryTests.test_actual_prefix_has25_known_turns_and_exact_answer_coverage) ... ok
+test_changed_recovered_answer_and_prompt_rejected (bench.jev.goal_reconciliation.test_continuation_clock.RecoveryTests.test_changed_recovered_answer_and_prompt_rejected) ... ok
+test_default_and_unacknowledged_never_create_campaign (bench.jev.goal_reconciliation.test_continuation_clock.RecoveryTests.test_default_and_unacknowledged_never_create_campaign) ... ok
+test_exclusive_admission_blocks_repeat_output_before_any_campaign (bench.jev.goal_reconciliation.test_continuation_clock.RecoveryTests.test_exclusive_admission_blocks_repeat_output_before_any_campaign) ... ok
+test_expired_admission_stops_before_inventory_or_campaign (bench.jev.goal_reconciliation.test_continuation_clock.RecoveryTests.test_expired_admission_stops_before_inventory_or_campaign) ... ok
+test_original_source_and_deadline_still_match_the_study_seal (bench.jev.goal_reconciliation.test_continuation_clock.RecoveryTests.test_original_source_and_deadline_still_match_the_study_seal) ... ok
+test_prefix_cannot_be_regenerated_or_call112_budget_reset (bench.jev.goal_reconciliation.test_continuation_clock.RecoveryTests.test_prefix_cannot_be_regenerated_or_call112_budget_reset) ... ok
+test_rehashed_final_envelope_is_not_proof_of_a_successful_read (bench.jev.goal_reconciliation.test_continuation_clock.RecoveryTests.test_rehashed_final_envelope_is_not_proof_of_a_successful_read) ... ok
+test_supervisor_deadline_reaps_real_local_child (bench.jev.goal_reconciliation.test_continuation_clock.RecoveryTests.test_supervisor_deadline_reaps_real_local_child) ... ok
+test_supervisor_reaps_after_bridge_error_and_child_exit_race (bench.jev.goal_reconciliation.test_continuation_clock.RecoveryTests.test_supervisor_reaps_after_bridge_error_and_child_exit_race) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 1.778s
+
+OK
+{"status": "offline_plan", "new_provider_calls": 0, "allowed_suffix": [26, 112]}

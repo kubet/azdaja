@@ -1,0 +1,198 @@
+{
+  "schema": "azdaja.second_reader.policy_replay.v1",
+  "consistent": true,
+  "complete_panel": true,
+  "adjudication": {
+    "fullpanel_accuracy": 0.9779735682819384,
+    "correct": 222,
+    "observed": 227,
+    "retained_agreement_errors": 5,
+    "adjudicated_errors": 0,
+    "errors": [
+      "r0044",
+      "r0503",
+      "r1383",
+      "r1394",
+      "r1747"
+    ],
+    "approval": false,
+    "disagreement_ids": [
+      "r0514",
+      "r0576",
+      "r1581",
+      "r1856"
+    ],
+    "new_labels": {
+      "r0514": false,
+      "r0576": false,
+      "r1581": false,
+      "r1856": false
+    },
+    "baseline_correct": 220,
+    "original_typed_correct": 220
+  },
+  "phrasing": {
+    "variants": {
+      "v0": {
+        "errors": [
+          "r0044",
+          "r0282",
+          "r0503",
+          "r0576",
+          "r1383",
+          "r1394",
+          "r1747",
+          "r1856"
+        ],
+        "fp": 8,
+        "fn": 0,
+        "count": 140,
+        "sum": 137.19,
+        "brier": 0.026872687224669605
+      },
+      "v1": {
+        "errors": [
+          "r0282",
+          "r0503",
+          "r0576",
+          "r1383",
+          "r1394",
+          "r1747",
+          "r1856"
+        ],
+        "fp": 7,
+        "fn": 0,
+        "count": 139,
+        "sum": 136.85999999999999,
+        "brier": 0.02546872246696035
+      },
+      "v2": {
+        "errors": [
+          "r0044",
+          "r0503",
+          "r0576",
+          "r1383",
+          "r1394",
+          "r1747",
+          "r1856"
+        ],
+        "fp": 7,
+        "fn": 0,
+        "count": 139,
+        "sum": 134.32,
+        "brier": 0.01932775330396476
+      }
+    },
+    "majority_vote": {
+      "errors": [
+        "r0044",
+        "r0282",
+        "r0503",
+        "r0576",
+        "r1383",
+        "r1394",
+        "r1747",
+        "r1856"
+      ],
+      "countsum": 140,
+      "accuracy": 0.9647577092511013
+    },
+    "unanimity": {
+      "coverage": 0.9911894273127754,
+      "errors": [
+        "r0503",
+        "r0576",
+        "r1383",
+        "r1394",
+        "r1747",
+        "r1856"
+      ]
+    },
+    "exact_vote_disagreement_ids": [
+      "r0044",
+      "r0282"
+    ],
+    "original_vs_fresh_v0": {
+      "changed_labels": [
+        "r0282"
+      ],
+      "mean_absolute_probability_change": 0.02004405286343612,
+      "interpretation": "new call and changed batch composition; not isolated wording effect"
+    },
+    "error_set_shifts_vs_original": {
+      "v0": {
+        "new_errors": [
+          "r0282"
+        ],
+        "resolved_errors": []
+      },
+      "v1": {
+        "new_errors": [
+          "r0282"
+        ],
+        "resolved_errors": [
+          "r0044"
+        ]
+      },
+      "v2": {
+        "new_errors": [],
+        "resolved_errors": []
+      }
+    }
+  },
+  "quality_scope": "known development panel; no generalization or safe-approval claim",
+  "typed_requests": 11,
+  "typed_questions": 681,
+  "known_input_tokens": 73841,
+  "known_output_tokens": 15026,
+  "typed_seconds": 12.913163455959875,
+  "adjudication_seconds": 2.9895076249958947,
+  "generative_trace": {
+    "physical_attempt_events": 1,
+    "entered_turns": 1,
+    "setup_attempts": 0,
+    "failed_identity_unknown_events": 0,
+    "logical_request_ids": 1,
+    "observed_models": [
+      "gpt-5.6-sol"
+    ],
+    "observed_providers": [
+      "OpenAI"
+    ],
+    "outcomes": [
+      "succeeded"
+    ],
+    "usage": {
+      "input_tokens": {
+        "known_total": 1418,
+        "observed_events": 1,
+        "unknown_entered_events": 0
+      },
+      "output_tokens": {
+        "known_total": 33,
+        "observed_events": 1,
+        "unknown_entered_events": 0
+      },
+      "cache_read_tokens": {
+        "known_total": 0,
+        "observed_events": 1,
+        "unknown_entered_events": 0
+      },
+      "cache_write_tokens": {
+        "known_total": 0,
+        "observed_events": 1,
+        "unknown_entered_events": 0
+      },
+      "reasoning_tokens": {
+        "known_total": 0,
+        "observed_events": 1,
+        "unknown_entered_events": 0
+      }
+    },
+    "succeeded_events": 1,
+    "billing_known": false
+  },
+  "elapsed_seconds": 20.26088437496219,
+  "input_estimate_usd": 0.003101322,
+  "billing_known": false
+}

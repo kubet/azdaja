@@ -1,0 +1,1 @@
+{"status": "passed", "new_inference_requests": 0, "observed": 17469, "correct": 16794, "accuracy": 0.9613601236476044, "false_positives": 641, "false_negatives": 34, "predicted_ham": 9245, "gold_ham": 8638, "sum_noul": 9287.38, "brier_score": 0.028811792317820138, "ece_5": 0.0624408953002462, "ece_10": 0.06781498654759861}
