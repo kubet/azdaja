@@ -1,1 +1,17 @@
-{"attachments": {"MANIFEST.json": "d22a12f20143f839ba5f1927078620441bc110e4602b3ec347e00528991a1c44", "REPORT.md": "6b241dc19fc984bf5ec060534b2c7825889527fc416ad8f49dbbaed56a3df1ef", "failed-choice-request.json": "d2e67d0385c8f49524b1bc55d3bc80bebb8838a5f6b78cdbd204dd6eaa7decf0", "metrics.json": "91678a55f9bada01d0797557de90b44398f7b5d5468f25b12d4672ee729e704e", "reliability.csv": "8a7ad8b8319b402bf6b5aca08c4f35420058d967a88f436a7bcbba185fed91ea"}, "email_sha256": "9d060acbc4b807635579a8b90647ee11a4f3e652e90020a672003b937167183b", "reason": "Gmail integration is unconfigured; no existing browser session was available through the browser bridge. No login or OAuth flow initiated.", "recipient": "hello@typesafe.ai", "sender_selected": false, "status": "prepared_not_sent"}
+{
+  "attachment_count": 5,
+  "attachment_payloads_verified": true,
+  "attachments": {
+    "MANIFEST.json": "d22a12f20143f839ba5f1927078620441bc110e4602b3ec347e00528991a1c44",
+    "REPORT.md": "6b241dc19fc984bf5ec060534b2c7825889527fc416ad8f49dbbaed56a3df1ef",
+    "failed-choice-request.json": "d2e67d0385c8f49524b1bc55d3bc80bebb8838a5f6b78cdbd204dd6eaa7decf0",
+    "metrics.json": "91678a55f9bada01d0797557de90b44398f7b5d5468f25b12d4672ee729e704e",
+    "reliability.csv": "8a7ad8b8319b402bf6b5aca08c4f35420058d967a88f436a7bcbba185fed91ea"
+  },
+  "email_sha256": "3b3206efac216f3c72a22a6123ef9531061d7241eded1ec7f9833076c5ae3499",
+  "line_endings": "LF for exact Git byte preservation",
+  "reason": "Gmail integration is unconfigured; no existing browser session was available through the browser bridge. No login or OAuth flow initiated.",
+  "recipient": "hello@typesafe.ai",
+  "sender_selected": false,
+  "status": "prepared_not_sent"
+}
