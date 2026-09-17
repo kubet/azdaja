@@ -113,7 +113,9 @@ def inventory(binary):
                 'fixtures/corpus.json', 'fixtures/questions.json', 'fixtures/gold.json',
                 'fixtures/source-manifest.json']
     paths = [HERE / name for name in required]
-    paths += [ROOT / name for name in ['Cargo.lock', 'Cargo.toml', 'build.rs']]
+    paths += [ROOT / name for name in ['Cargo.lock', 'Cargo.toml']]
+    if os.path.lexists(ROOT / 'build.rs'):
+        paths.append(ROOT / 'build.rs')
     paths += sorted((ROOT / 'src').rglob('*.rs'))
     check(all(p.is_file() and not p.is_symlink() for p in paths), 'source_inventory_missing')
     return {'files': {str(p.relative_to(ROOT)): sha(p.read_bytes()) for p in paths},

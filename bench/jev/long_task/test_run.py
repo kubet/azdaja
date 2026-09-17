@@ -10,6 +10,13 @@ from bench.jev.long_task import run as r
 
 
 class RunnerTests(unittest.TestCase):
+    def test_actual_inventory_matches_project_build_inputs(self):
+        inventory = r.inventory(Path(sys.executable))
+        self.assertIn('Cargo.toml', inventory['files'])
+        self.assertIn('Cargo.lock', inventory['files'])
+        self.assertIn('src/judge.rs', inventory['files'])
+        self.assertEqual('build.rs' in inventory['files'], (r.ROOT / 'build.rs').exists())
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=os.environ['JCODE_SCRATCH_DIR'], prefix='long-run-test-')
         self.root = Path(self.temp.name)
