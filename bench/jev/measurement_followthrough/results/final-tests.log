@@ -1,0 +1,39 @@
+test_all_annotations_must_share_one_window (bench.jev.measurement_v2.test_prepare.PreparationTests.test_all_annotations_must_share_one_window) ... ok
+test_cross_boundary_answer_is_not_arbitrarily_assigned (bench.jev.measurement_v2.test_prepare.PreparationTests.test_cross_boundary_answer_is_not_arbitrarily_assigned) ... ok
+test_exact_source_regeneration_and_unique_panels (bench.jev.measurement_v2.test_prepare.PreparationTests.test_exact_source_regeneration_and_unique_panels) ... ok
+test_existing_output_not_overwritten (bench.jev.measurement_v2.test_prepare.PreparationTests.test_existing_output_not_overwritten) ... ok
+test_forged_fixture_and_default_live_admission (bench.jev.measurement_v2.test_prepare.PreparationTests.test_forged_fixture_and_default_live_admission) ... ok
+test_raw_coverage_exact_spans_and_semantic_case_binding (bench.jev.measurement_v2.test_prepare.PreparationTests.test_raw_coverage_exact_spans_and_semantic_case_binding) ... ok
+test_unicode_offsets_are_not_character_offsets (bench.jev.measurement_v2.test_prepare.PreparationTests.test_unicode_offsets_are_not_character_offsets) ... ok
+test_always_flag_is_not_a_usefulness_win (bench.jev.measurement_v2.test_report.ReportTests.test_always_flag_is_not_a_usefulness_win) ... ok
+test_boolean_nan_and_out_of_range_rejected (bench.jev.measurement_v2.test_report.ReportTests.test_boolean_nan_and_out_of_range_rejected) ... ok
+test_choice_winner_must_match_complete_distribution (bench.jev.measurement_v2.test_report.ReportTests.test_choice_winner_must_match_complete_distribution) ... ok
+test_incomplete_never_passes_and_probabilities_cannot_be_omitted (bench.jev.measurement_v2.test_report.ReportTests.test_incomplete_never_passes_and_probabilities_cannot_be_omitted) ... ok
+test_perfect_and_asymmetric_falsifiers (bench.jev.measurement_v2.test_report.ReportTests.test_perfect_and_asymmetric_falsifiers) ... ok
+test_valid_body_swap_fails_request_binding (bench.jev.measurement_v2.test_report.ReportTests.test_valid_body_swap_fails_request_binding) ... ok
+test_actual_rejection_keeps_known_input_and_unknown_output (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_actual_rejection_keeps_known_input_and_unknown_output) ... ok
+test_caps_include_predecessor_before_any_native_call (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_caps_include_predecessor_before_any_native_call) ... ok
+test_continuation_keeps_original_arm_order_and_has_no_repeat (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_continuation_keeps_original_arm_order_and_has_no_repeat) ... ok
+test_default_cli_and_existing_output_are_provider_free (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_default_cli_and_existing_output_are_provider_free) ... ok
+test_failed_observation_cannot_appear_completed (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_failed_observation_cannot_appear_completed) ... ok
+test_forged_completion_and_failed_promotion_reject (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_forged_completion_and_failed_promotion_reject) ... ok
+test_instruction_mutation_is_not_matched_evidence (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_instruction_mutation_is_not_matched_evidence) ... ok
+test_missing_body_and_trace_swap_reject (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_missing_body_and_trace_swap_reject) ... ok
+test_partial_panel_never_passes_even_perfect_observed_answers (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_partial_panel_never_passes_even_perfect_observed_answers) ... ok
+test_rehashed_typed_state_swap_rejects (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_rehashed_typed_state_swap_rejects) ... ok
+test_removing_failed_usage_cannot_shrink_cost (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_removing_failed_usage_cannot_shrink_cost) ... ok
+test_repeated_or_missing_attempt_rejects (bench.jev.measurement_followthrough.test_followthrough.FollowthroughTests.test_repeated_or_missing_attempt_rejects) ... ok
+test_equal_counts_are_not_equal_errors (bench.jev.row645_labels.test_audit.OfficialGoldTests.test_equal_counts_are_not_equal_errors) ... ok
+test_exact_2177_alignment_and_actual_false_positives (bench.jev.row645_labels.test_audit.OfficialGoldTests.test_exact_2177_alignment_and_actual_false_positives) ... ok
+test_message_edit_cannot_keep_label_alignment (bench.jev.row645_labels.test_audit.OfficialGoldTests.test_message_edit_cannot_keep_label_alignment) ... ok
+test_reordered_labeled_occurrences_refused (bench.jev.row645_labels.test_audit.OfficialGoldTests.test_reordered_labeled_occurrences_refused) ... ok
+test_truncation_and_wrong_row_refused (bench.jev.row645_labels.test_audit.OfficialGoldTests.test_truncation_and_wrong_row_refused) ... ok
+test_actual_full_replay_is_negative_but_consistent (bench.jev.test_measurement_audit.FinalMeasurementTests.test_actual_full_replay_is_negative_but_consistent) ... ok
+test_changed_bar_cannot_become_a_rehashed_win (bench.jev.test_measurement_audit.FinalMeasurementTests.test_changed_bar_cannot_become_a_rehashed_win) ... ok
+test_missing_completed_call_is_rejected (bench.jev.test_measurement_audit.FinalMeasurementTests.test_missing_completed_call_is_rejected) ... ok
+test_public_audit_fresh_output_and_refusal_paths (bench.jev.test_measurement_audit.FinalMeasurementTests.test_public_audit_fresh_output_and_refusal_paths) ... ok
+
+----------------------------------------------------------------------
+Ran 34 tests in 1.925s
+
+OK
