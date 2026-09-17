@@ -13,7 +13,7 @@ cd azdaja
 The verifier itself uses only Python 3.9+, Git, and files in this checkout. It performs no provider call, downloads nothing, and does not rewrite a receipt. A successful run prints one JSON object with this stable shape:
 
 ```json
-{"artifacts_verified": 48, "bundle_source_commit": "<40-hex-source-commit>", "classification": "narrow first-party reproducible evidence", "git_binding": true, "live_fable": {"exact_results": 3, "provider_calls": 3, "scenarios": 3}, "provider_free": {"scenarios": 3, "surviving_sessions": 0}, "schema": "azdaja.first_party_proof_verification.v1"}
+{"artifacts_verified": 49, "bundle_source_commit": "<40-hex-source-commit>", "classification": "narrow first-party reproducible evidence", "git_binding": true, "live_fable": {"exact_results": 3, "provider_calls": 3, "scenarios": 3}, "provider_free": {"scenarios": 3, "surviving_sessions": 0}, "schema": "azdaja.first_party_proof_verification.v1"}
 ```
 
 Shallow clones and source archives can lack the historical commits named by the receipts. If Git reports a shallow checkout, run `git fetch --unshallow` before verification. A nonzero exit means the evidence was not verified. Read the `proof verification failed:` diagnostic rather than treating a partial check as a pass.
@@ -57,6 +57,10 @@ The original manifest remains byte-for-byte in `historical/manifest-cc442345.jso
 `manifest.json.source_commit` identifies the **offline bundle assembly**, not the executable measured by either experiment. Neither retained receipt, experiment source commit, binary identity, fixture specification, expected invariant nor result was changed or rerun by this refresh. Those identities remain in the provenance table below. Current notice sources and workflows are additional reproducibility inputs, not evidence of new provider performance or legal approval. Historical notice-audit and reconciliation files retain historical limitations rather than asserting that the current source gate is still stale.
 
 The one-command proof verifier hashes these files and validates the retained receipts using Python and Git only. It does not execute the Cargo-dependent notice audit. CI runs the notice audit separately after explicitly preparing its pinned Cargo and archive prerequisites. Passing this bundle still does not establish completeness of legal metadata or authorize publication.
+
+The original wrapper compared historical receipt source manifests to the latest checkout. Adding a new Rust module therefore made a valid old measurement fail with `source manifest length mismatch`. The wrapper now supplies each **unchanged receipt verifier** an isolated local Git snapshot of that receipt's recorded source commit. Complete `src/` and optional build configuration are selected independently of the receipt's list, so omitting a source entry still fails. Hash, size, path-universe and Git-diff checks remain intact. The original wrapper is preserved in `historical/verify-cc442345.py.txt`, SHA-256 `187b8e6b97ee144d6ced3256bfdb4b63fe789ee2b7a4b2add66efe9005c716b7`.
+
+These temporary, selected-source checkouts are removed on exit. They do not download, build, run provider inference or change the user's checkout. Historical source validation is not a claim that the current executable produced the old results. Current bundle-artifact drift still fails before receipt validation.
 
 ## Provenance map
 

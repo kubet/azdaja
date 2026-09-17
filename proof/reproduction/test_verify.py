@@ -29,13 +29,35 @@ class ProofBundleVerifierTests(unittest.TestCase):
         self.assertEqual(manifest["source_commit"], "cc442345ef47cc62eb5d22b07a918eab9111766d")
         immutable_roles = {"live_receipt", "provider_free_receipt", "live_receipt_index",
                            "provider_free_receipt_index", "fixture_specification", "expected_invariants",
-                           "bundle_verifier"}
+                           "live_receipt_verifier", "provider_free_receipt_verifier"}
         matched = set()
         for record in manifest["artifacts"]:
             if record["role"] in immutable_roles:
                 self.assertEqual(verify.sha256(ROOT / record["path"]), record["sha256"], record["path"])
                 matched.add(record["role"])
         self.assertEqual(matched, immutable_roles)
+        self.assertEqual(verify.sha256(HERE / "historical/verify-cc442345.py.txt"),
+                         "187b8e6b97ee144d6ced3256bfdb4b63fe789ee2b7a4b2add66efe9005c716b7")
+
+    def test_historical_source_is_complete_and_missing_receipt_entries_still_fail(self):
+        receipt = json.loads((ROOT / "bench/results/live-fable-suite.json").read_text())
+        checker = verify.import_module("historical_live_check", ROOT / "bench/live_fable_suite/verify.py")
+        with verify.historical_source(receipt["source"]["commit"], ROOT) as snapshot:
+            self.assertFalse((snapshot / "src/judge.rs").exists())
+            self.assertEqual(checker.validate_receipt(receipt, root=snapshot), {"source": True, "binary": False})
+            bad = copy.deepcopy(receipt)
+            bad["source"]["files"].pop()
+            with self.assertRaisesRegex(ValueError, "source manifest length mismatch"):
+                checker.validate_receipt(bad, root=snapshot)
+            bad = copy.deepcopy(receipt)
+            bad["source"]["files"][0]["sha256"] = "0" * 64
+            with self.assertRaisesRegex(ValueError, "source hash mismatch"):
+                checker.validate_receipt(bad, root=snapshot)
+
+    def test_unknown_historical_commit_fails_before_snapshot(self):
+        with self.assertRaisesRegex(ValueError, "historical source commit unavailable"):
+            with verify.historical_source("0" * 40, ROOT):
+                self.fail("unknown commit yielded a snapshot")
 
     def test_current_bundle_verifies_when_manifest_exists(self):
         manifest = HERE / "manifest.json"

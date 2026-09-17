@@ -4,14 +4,11 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
 import hashlib
 import importlib.util
 import json
-import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -81,42 +78,6 @@ def import_module(name: str, path: Path):
         if sys.path[0] == sibling_path:
             sys.path.pop(0)
     return module
-
-
-@contextmanager
-def historical_source(commit: object, root: Path = ROOT):
-    """Provide real Git source, not a receipt-selected subset or current build.
-
-    All src/ files and optional build configuration are selected independently of
-    the receipt's file list, so omission from that list still fails the original
-    verifier. The original receipt verifiers and their strict Git diff remain in
-    force. This does not compile or execute a historical program.
-    """
-    if not isinstance(commit, str) or len(commit) != 40 or not set(commit) <= HEX:
-        raise ValueError("invalid historical source commit")
-    command = ["git", "-c", "core.hooksPath=/dev/null"]
-    try:
-        subprocess.run(command + ["cat-file", "-e", f"{commit}^{{commit}}"], cwd=root,
-                       check=True, capture_output=True, timeout=30)
-    except (OSError, subprocess.SubprocessError) as error:
-        raise ValueError("historical source commit unavailable") from error
-    with tempfile.TemporaryDirectory(prefix="azdaja-proof-source-",
-                                     dir=os.environ.get("JCODE_SCRATCH_DIR")) as directory:
-        snapshot = Path(directory) / "source"
-        try:
-            subprocess.run(command + ["clone", "--quiet", "--shared", "--no-checkout",
-                           str(root.resolve()), str(snapshot)], check=True,
-                           capture_output=True, timeout=30)
-            patterns = ["/src/", "/Cargo.toml", "/Cargo.lock", "/build.rs", "/.cargo/",
-                        "/bench/live_fable_repo/", "/bench/live_fable_suite/",
-                        "/bench/product_50mb/", "/tests/product_50mb.rs"]
-            subprocess.run(command + ["-C", str(snapshot), "sparse-checkout", "set",
-                           "--no-cone", *patterns], check=True, capture_output=True, timeout=30)
-            subprocess.run(command + ["-C", str(snapshot), "checkout", "--quiet", "--detach", commit],
-                           check=True, capture_output=True, timeout=30)
-        except (OSError, subprocess.SubprocessError) as error:
-            raise ValueError("historical source checkout failed") from error
-        yield snapshot
 
 
 def validate_artifacts(
@@ -221,8 +182,7 @@ def validate_live(
     receipt_path = root / safe_relative_path(expected["receipt"], "live receipt")
     receipt = load_json(receipt_path)
     verifier = import_module("bundle_live_verifier", root / "bench/live_fable_suite/verify.py")
-    with historical_source(receipt["source"]["commit"], root) as snapshot:
-        checks = verifier.validate_receipt(receipt, root=snapshot)
+    checks = verifier.validate_receipt(receipt, root=root)
     if checks != {"source": True, "binary": False}:
         raise ValueError("live verifier returned unexpected checks")
     if receipt["schema"] != expected["receipt_schema"]:
@@ -283,10 +243,9 @@ def validate_provider_free(
     log_path = root / safe_relative_path(expected["log"], "provider-free log")
     receipt = load_json(receipt_path)
     verifier = import_module("bundle_product_verifier", root / "bench/product_50mb/verify.py")
-    with historical_source(receipt["source"]["commit"], root) as snapshot:
-        checks = verifier.validate_receipt(
-            receipt, root=snapshot, log_path=log_path, require_log=True
-        )
+    checks = verifier.validate_receipt(
+        receipt, root=root, log_path=log_path, require_log=True
+    )
     if checks != {"source": True, "binary": False, "log": True}:
         raise ValueError("provider-free verifier returned unexpected checks")
     if receipt["schema"] != expected["receipt_schema"]:

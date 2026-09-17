@@ -35,6 +35,7 @@ ARTIFACT_ROLES = {
     "proof/reproduction/expected/invariants.json": "expected_invariants",
     "proof/reproduction/fixtures/spec.json": "fixture_specification",
     "proof/reproduction/historical/manifest-cc442345.json": "original_bundle_inventory",
+    "proof/reproduction/historical/verify-cc442345.py.txt": "original_bundle_verifier",
     "proof/reproduction/receipts/fable/index.json": "live_receipt_index",
     "proof/reproduction/receipts/provider-free/index.json": "provider_free_receipt_index",
     "proof/reproduction/run.sh": "one_command_verifier",
