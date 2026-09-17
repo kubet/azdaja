@@ -24,7 +24,12 @@ def check_prefix(folder=PREVIOUS):
     for field,name in [('original_receipt_sha256','receipt.json'),('model_trace_sha256','model-trace.jsonl'),('external_final_read_sha256','external-final-read.json')]:
         b.check(side[field]==n.sha((folder/name).read_bytes()),'interruption_binding')
     b.check(side['status']=='externally_stopped' and side['cleanup_exit']==0 and side['new_provider_calls']==0
-            and side['recovered_pack']=='pack-025' and side['original_started_unix']==STARTED,'interruption_contract')
+            and side['recovered_pack']=='pack-025' and side['original_started_unix']==STARTED
+            and side['recovered_final_validated'] is True and side['original_receipt_unchanged'] is True,'interruption_contract')
+    final=load(folder/'external-final-read.json')
+    b.check(final.get('command')=='final' and type(final.get('exit')) is int and final['exit']==0
+            and type(final.get('new_model_requests')) is int and final['new_model_requests']==0
+            and final.get('stderr')=='','recovered_final_envelope')
     for path,digest in receipt['frozen_files'].items():
         b.check(n.sha(Path(path).read_bytes())==digest,'prefix_source_changed')
     prepared=b.rows(); answers=[]

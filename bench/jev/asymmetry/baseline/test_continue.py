@@ -45,6 +45,17 @@ class RecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(c.n.Stop,'acknowledgement_required'):
                 c.main(['--live','--azdaja','not-used'])
             campaign.assert_not_called()
+    def test_rehashed_final_envelope_is_not_proof_of_a_successful_read(self):
+        with tempfile.TemporaryDirectory(dir=os.environ.get('JCODE_SCRATCH_DIR')) as tmp:
+            d=Path(tmp)
+            for p in c.PREVIOUS.iterdir():
+                if p.is_file():shutil.copyfile(p,d/p.name)
+            original=c.load(d/'external-final-read.json')
+            for key,value in [('command','exec'),('exit',1),('exit',False),('new_model_requests',1),('stderr','failure')]:
+                final={**original,key:value};fp=d/'external-final-read.json';fp.write_bytes(c.n.canonical(final))
+                side=c.load(c.PREVIOUS/'external-interruption.json');side['external_final_read_sha256']=c.n.sha(fp.read_bytes())
+                (d/'external-interruption.json').write_bytes(c.n.canonical(side))
+                with self.assertRaisesRegex(c.n.Stop,'recovered_final_envelope'):c.check_prefix(d)
     def test_exclusive_admission_blocks_repeat_output_before_any_campaign(self):
         with tempfile.TemporaryDirectory(dir=os.environ.get('JCODE_SCRATCH_DIR')) as tmp:
             d=Path(tmp);seal=d/'seal.json';seal.write_bytes(c.n.canonical({'files':{},'suffix':[],'deadline_unix':c.DEADLINE}))
@@ -68,4 +79,16 @@ class RecoveryTests(unittest.TestCase):
         with patch.object(s.subprocess,'Popen') as child:
             with self.assertRaisesRegex(c.n.Stop,'original_campaign_deadline'):s.supervise([],time.time()-1,Path('absent'))
             child.assert_not_called()
+    def test_supervisor_reaps_after_bridge_error_and_child_exit_race(self):
+        from bench.jev.asymmetry.baseline import continuation_supervisor as s
+        import time,subprocess
+        from unittest.mock import Mock
+        child=Mock(pid=99999999);child.poll.return_value=None
+        child.wait.side_effect=[subprocess.TimeoutExpired('local',1),-15]
+        with patch.object(s.subprocess,'Popen',return_value=child),patch.object(s,'stop_owned_bridge',side_effect=c.n.Stop('owned_bridge_identity')),patch.object(s.os,'killpg',side_effect=ProcessLookupError):
+            result=s.supervise(['no-process-created'],time.time()+1,Path('absent'))
+        self.assertEqual(child.wait.call_count,2)
+        self.assertEqual(result['stop_reason'],'absolute_campaign_deadline')
+        self.assertEqual(result['child_exit'],-15)
+        self.assertFalse(result['campaign_completed'])
 if __name__=='__main__':unittest.main()

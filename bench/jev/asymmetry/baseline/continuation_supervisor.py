@@ -21,8 +21,24 @@ def stop_owned_bridge(output):
     args=shlex.split(probe.stdout.strip())
     c.b.check(args[:2]==['jcode','api-bridge'] and '--api-socket' in args and
               args[args.index('--api-socket')+1]==socket,'owned_bridge_identity')
-    os.kill(pid,signal.SIGTERM)
+    try:os.kill(pid,signal.SIGTERM)
+    except ProcessLookupError:return False
     return True
+
+
+def signal_group(pid, sig):
+    try:os.killpg(pid,sig)
+    except ProcessLookupError:pass
+
+
+def reap(child,output):
+    try:stopped_bridge=stop_owned_bridge(output)
+    except (OSError,ValueError,subprocess.SubprocessError,c.n.Stop):stopped_bridge=False
+    if child.poll() is None:signal_group(child.pid,signal.SIGTERM)
+    try:code=child.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        signal_group(child.pid,signal.SIGKILL);code=child.wait()
+    return code,stopped_bridge
 
 
 def supervise(command,deadline,output,*,env=None):
@@ -33,19 +49,9 @@ def supervise(command,deadline,output,*,env=None):
     try:
         code=child.wait(timeout=remaining)
     except subprocess.TimeoutExpired:
-        reason='absolute_campaign_deadline'
-        stopped_bridge=stop_owned_bridge(output)
-        os.killpg(child.pid,signal.SIGTERM)
-        try:code=child.wait(timeout=5)
-        except subprocess.TimeoutExpired:os.killpg(child.pid,signal.SIGKILL);code=child.wait()
+        reason='absolute_campaign_deadline';code,stopped_bridge=reap(child,output)
     except BaseException as exc:
-        reason='supervisor_'+type(exc).__name__
-        try:stopped_bridge=stop_owned_bridge(output)
-        except (OSError,ValueError,subprocess.SubprocessError,c.n.Stop):stopped_bridge=False
-        finally:
-            if child.poll() is None:os.killpg(child.pid,signal.SIGTERM)
-            try:code=child.wait(timeout=5)
-            except subprocess.TimeoutExpired:os.killpg(child.pid,signal.SIGKILL);code=child.wait()
+        reason='supervisor_'+type(exc).__name__;code,stopped_bridge=reap(child,output)
     return {'schema':'azdaja.asymmetry.continuation_supervisor.v1','child_exit':code,
             'stop_reason':reason,'absolute_deadline_unix':deadline,'finished_unix':time.time(),
             'owned_bridge_stop_requested':stopped_bridge,'campaign_completed':code==0 and reason is None}
@@ -60,9 +66,10 @@ def main(argv=None):
         print(json.dumps({'status':'offline_plan','new_provider_calls':0}));return 0
     c.b.check(args.acknowledge_provider_calls and args.azdaja and args.output and args.private_jcode_home,'explicit_live_arguments')
     c.b.check(not os.path.lexists(args.output),'new_output_required')
-    # The child owns the exclusive continuation marker before any model admission.
     command=[sys.executable,'-B','-m','bench.jev.asymmetry.baseline.continue_run','--live','--acknowledge-provider-calls',
              '--azdaja',str(args.azdaja),'--output',str(args.output),'--private-jcode-home',str(args.private_jcode_home)]
+    def interrupt(signum,frame):raise KeyboardInterrupt('supervisor interrupted')
+    signal.signal(signal.SIGTERM,interrupt)
     result=supervise(command,c.DEADLINE,args.output)
     destination=args.output/'supervisor-result.json' if args.output.is_dir() else args.output.with_suffix('.supervisor.json')
     with destination.open('xb') as f:f.write(c.n.canonical(result)+b'\n')
