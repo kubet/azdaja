@@ -1,0 +1,16 @@
+{
+  "required_sets": {
+    "d01": [
+      "b0_l3"
+    ],
+    "d02": [
+      "b1_l1"
+    ],
+    "d03": [
+      "b0_l3",
+      "b3_l0"
+    ],
+    "d04": []
+  },
+  "scope": "exact allowed catalog only, agent-reviewed before inference"
+}

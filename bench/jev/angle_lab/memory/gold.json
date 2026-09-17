@@ -1,0 +1,14 @@
+{
+  "origin": "controlled synthetic source contract, not real incident outcomes",
+  "required_evidence": [
+    "e01",
+    "e02",
+    "e03"
+  ],
+  "handoff_answers": {
+    "key": "organization",
+    "migration": "v2_no_fallback",
+    "race": "open",
+    "credit": "actor-b"
+  }
+}
