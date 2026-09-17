@@ -60,6 +60,7 @@ def main():
     if not args.acknowledge_provider_calls or not args.credential_state_root or not args.output:
         ap.error('live requires acknowledgement, credential root and new output')
     if os.path.lexists(args.output): ap.error('output exists')
+    if not args.output.parent.is_dir(): ap.error('output parent must already exist')
     manifest = n.strict_loads(args.manifest.read_bytes())
     if manifest['files'] != files: raise n.Stop('diagnostic_manifest_changed')
     with args.manifest.with_suffix('.started').open('xb') as stream:

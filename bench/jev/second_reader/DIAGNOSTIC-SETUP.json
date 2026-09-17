@@ -1,0 +1,1 @@
+{"prior_admission": "DIAGNOSTIC-FROZEN.started", "prior_outcome": "output parent absent before test process spawn", "prior_provider_calls": 0, "recovery": "new setup-only seal, original claim retained", "requests_max_across_both": 3, "validator_and_probe_unchanged": true, "missing_parent_regression_exit": 2}
