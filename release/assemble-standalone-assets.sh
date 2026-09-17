@@ -34,8 +34,8 @@ sha256_file() {
   printf '%s\n' 'assemble-standalone-assets: root LICENSE identity mismatch' >&2
   exit 2
 }
-[ "$(sha256_file "$ROOT/THIRD-PARTY-NOTICES.md")" = 393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2 ] || {
-  printf '%s\n' 'assemble-standalone-assets: reviewed notice identity mismatch' >&2
+python3 "$ROOT/release/verify-third-party-notices.py" --notice "$ROOT/THIRD-PARTY-NOTICES.md" --lockfile "$ROOT/Cargo.lock" >/dev/null || {
+  printf '%s\n' 'assemble-standalone-assets: current source-backed notice verification failed' >&2
   exit 2
 }
 cp "$ROOT/LICENSE" "$OUT/LICENSE.tmp.$$"

@@ -26,11 +26,14 @@ const V0114_NOTICES: &[u8] = include_bytes!("../site/releases/v0.1.14/THIRD-PART
 const V0114_NOTICES_SHA256: &str =
     "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3";
 
-fn cargo_tree_packages(root: &Path, target: &str) -> BTreeSet<String> {
+fn cargo_tree_packages(root: &Path, target: &str, feature: &str) -> BTreeSet<String> {
     let output = Command::new(env!("CARGO"))
         .args([
             "tree",
             "--locked",
+            "--offline",
+            "--features",
+            feature,
             "--target",
             target,
             "--no-dedupe",
@@ -60,7 +63,7 @@ fn cargo_tree_packages(root: &Path, target: &str) -> BTreeSet<String> {
 fn reviewed_notice_license_and_font_ofl_bytes_are_preserved() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     assert_eq!(
-        sha256(&root.join("THIRD-PARTY-NOTICES.md")),
+        sha256(&root.join("release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md")),
         "393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2"
     );
     assert_eq!(
@@ -104,18 +107,18 @@ fn current_notice_front_matter_tracks_canonical_version_targets_and_table_member
         .collect();
     assert_eq!(actual_targets, targets);
 
-    let table = notice
-        .split_once("## Exact supported-target third-party union (root excluded)\n\n")
-        .unwrap()
-        .1
-        .split_once("\n## Lock records outside both supported closures")
-        .unwrap()
-        .0;
-    let linux_target = targets
-        .iter()
-        .find(|target| target.ends_with("unknown-linux-gnu"))
+    assert!(notice.contains("## Current feature-qualified package union"));
+    assert!(notice.contains("**Feature scope:** `default` and default + `typesafe`"));
+    let output = Command::new("python3")
+        .arg(root.join("release/verify-third-party-notices.py"))
+        .current_dir(root)
+        .output()
         .unwrap();
-    assert!(table.contains(&format!("| `spin` | `0.9.9` | `MIT` | `{linux_target}` |")));
+    assert!(
+        output.status.success(),
+        "public notice verifier failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[test]
@@ -418,7 +421,7 @@ fn candidate_fixture_server_avoids_reverse_dns_on_hosted_macos() {
     let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap();
     let step = ci
         .split_once(
-            "      - name: Validate release candidate install, plain help, and 50 MiB path\n",
+            "      - name: Validate current binary with frozen installer, plain help, and 50 MiB path\n",
         )
         .expect("candidate validation step must exist")
         .1
@@ -505,39 +508,134 @@ fn release_publication_is_manual_exact_tag_nonoverwriting_and_attested() {
 }
 
 #[test]
-fn intel_darwin_dependency_delta_is_already_in_the_reviewed_notice_corpus() {
-    if !cfg!(target_os = "macos") {
-        return;
-    }
+fn current_notice_matches_every_feature_qualified_cargo_closure() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let arm = cargo_tree_packages(root, "aarch64-apple-darwin");
-    let intel = cargo_tree_packages(root, "x86_64-apple-darwin");
-    let linux = cargo_tree_packages(root, "x86_64-unknown-linux-gnu");
-
-    assert_eq!(arm.len(), 189);
-    assert_eq!(intel.len(), 190);
-    assert_eq!(linux.len(), 190);
+    let index: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/current-third-party-notice.json")).unwrap(),
+    )
+    .unwrap();
+    let packages = index["packages"].as_array().unwrap();
+    let targets = index["targets"].as_array().unwrap();
+    let notice = fs::read_to_string(root.join("THIRD-PARTY-NOTICES.md")).unwrap();
+    let mut combined = BTreeSet::new();
+    for feature in ["default", "typesafe"] {
+        let mut union = BTreeSet::new();
+        for target in targets {
+            let target = target.as_str().unwrap();
+            let actual = cargo_tree_packages(root, target, feature);
+            let indexed: BTreeSet<_> = packages
+                .iter()
+                .filter(|p| {
+                    p["membership"][feature]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|t| t == target)
+                })
+                .map(|p| {
+                    format!(
+                        "{} v{}",
+                        p["name"].as_str().unwrap(),
+                        p["version"].as_str().unwrap()
+                    )
+                })
+                .collect();
+            assert_eq!(indexed, actual, "{feature}/{target}");
+            assert_eq!(
+                index["target_counts"][feature][target].as_u64().unwrap() as usize,
+                actual.len()
+            );
+            union.extend(actual);
+        }
+        assert_eq!(
+            index["feature_union_records"][feature].as_u64().unwrap() as usize,
+            union.len()
+        );
+        combined.extend(union);
+    }
+    assert_eq!(combined.len(), packages.len());
     assert_eq!(
-        intel.difference(&arm).cloned().collect::<Vec<_>>(),
-        ["spin v0.9.9"]
+        index["supported_union_records"].as_u64().unwrap() as usize,
+        combined.len()
     );
-    assert!(arm.difference(&intel).next().is_none());
-    assert!(linux.contains("spin v0.9.9"));
+    let mut occurrences = 0;
+    for package in packages {
+        let membership = |feature: &str| {
+            let targets = package["membership"][feature].as_array().unwrap();
+            if targets.is_empty() {
+                "(absent)".to_owned()
+            } else {
+                targets
+                    .iter()
+                    .map(|t| format!("`{}`", t.as_str().unwrap()))
+                    .collect::<Vec<_>>()
+                    .join("<br>")
+            }
+        };
+        let name = package["name"].as_str().unwrap();
+        let version = package["version"].as_str().unwrap();
+        let license = package["license"]
+            .as_str()
+            .unwrap_or("(no license expression)");
+        let row = format!(
+            "| `{name}` | `{version}` | `{license}` | {} | {} | `{}` |",
+            membership("default"),
+            membership("typesafe"),
+            package["archive_sha256"].as_str().unwrap()
+        );
+        assert_eq!(
+            notice.lines().filter(|line| *line == row).count(),
+            1,
+            "{name}@{version}"
+        );
+        for file in package["license_files"].as_array().unwrap() {
+            occurrences += 1;
+            let digest = file["sha256"].as_str().unwrap();
+            let body = &index["bodies"][digest];
+            assert_eq!(file["bytes"], body["bytes"]);
+            assert!(body["text"].is_string());
+            let line = format!(
+                "- `{name} {version}` / `{}` -> body `{digest}` ({} source bytes)",
+                file["path"].as_str().unwrap(),
+                file["bytes"]
+            );
+            assert_eq!(
+                notice
+                    .lines()
+                    .filter(|candidate| *candidate == line)
+                    .count(),
+                1
+            );
+        }
+    }
     assert_eq!(
-        arm.union(&intel)
-            .cloned()
-            .collect::<BTreeSet<_>>()
-            .union(&linux)
-            .count(),
-        191
+        index["named_legal_files"].as_u64().unwrap() as usize,
+        occurrences
     );
-
-    let notices = fs::read_to_string(root.join("THIRD-PARTY-NOTICES.md")).unwrap();
-    assert!(notices.contains("| `spin` | `0.9.9` | `MIT` | `x86_64-unknown-linux-gnu` |"));
-    assert!(notices.contains("pkg:cargo/spin@0.9.9 — `LICENSE` (archive_named_legal_file)"));
+    let historical = notice
+        .split_once("## Historical supplemental attributions (not current-scope evidence)")
+        .unwrap()
+        .1;
+    assert!(historical.contains("NOT been re-audited as current or complete"));
     assert!(
-        notices.contains("pkg:cargo/spin@0.9.9 — `src/barrier.rs` (archive_legal_header_block)")
+        historical.contains("pkg:cargo/spin@0.9.9 — `src/barrier.rs` (archive_legal_header_block)")
     );
+}
+
+#[test]
+fn published_notice_license_and_font_artifacts_remain_frozen() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let frozen: std::collections::BTreeMap<String, String> = serde_json::from_str(include_str!(
+        "../release/historical/published-notice-hashes.json"
+    ))
+    .unwrap();
+    for (path, digest) in frozen {
+        assert_eq!(
+            sha256(&root.join(&path)),
+            digest,
+            "published artifact changed: {path}"
+        );
+    }
 }
 
 #[test]
@@ -559,5 +657,142 @@ fn workflow_release_identity_matches_current_package_version() {
         for identity in identities {
             assert_eq!(&identity[1], version, "stale release identity in {name}");
         }
+    }
+}
+
+#[test]
+fn source_backed_notice_workflows_prepare_all_targets_without_adding_cargo_to_proof() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let toolchain = "dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c";
+    for (file, job, consumer) in [
+        (
+            "ci.yml",
+            "test",
+            "release/test_verify_third_party_notices.py",
+        ),
+        (
+            "release.yml",
+            "publish",
+            "python3 release/verify-third-party-notices.py",
+        ),
+        (
+            "source-install-integrity.yml",
+            "source-install",
+            "python3 release/verify-third-party-notices.py",
+        ),
+        (
+            "verify-proof.yml",
+            "notices",
+            "python3 release/verify-third-party-notices.py",
+        ),
+    ] {
+        let workflow: serde_yaml::Value = serde_yaml::from_str(
+            &fs::read_to_string(root.join(".github/workflows").join(file)).unwrap(),
+        )
+        .unwrap();
+        let steps = workflow["jobs"][job]["steps"].as_sequence().unwrap();
+        let rust = steps
+            .iter()
+            .position(|step| step["uses"].as_str() == Some(toolchain))
+            .unwrap();
+        assert_eq!(steps[rust]["with"]["toolchain"].as_str(), Some("1.95.0"));
+        let fetch = steps
+            .iter()
+            .position(|step| {
+                step["run"]
+                    .as_str()
+                    .is_some_and(|run| run.contains("cargo fetch --locked --target"))
+            })
+            .unwrap();
+        let verify = steps
+            .iter()
+            .position(|step| {
+                step["run"]
+                    .as_str()
+                    .is_some_and(|run| run.contains(consumer))
+            })
+            .unwrap();
+        assert!(rust < fetch && fetch < verify, "{file}/{job}");
+        let command = steps[fetch]["run"].as_str().unwrap();
+        for target in [
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+            "x86_64-unknown-linux-gnu",
+        ] {
+            assert!(command.contains(target), "{file} missing {target}");
+        }
+        assert!(
+            !command.contains("--offline"),
+            "fresh CI cache must be populated before offline verification"
+        );
+    }
+    let proof: serde_yaml::Value = serde_yaml::from_str(
+        &fs::read_to_string(root.join(".github/workflows/verify-proof.yml")).unwrap(),
+    )
+    .unwrap();
+    let proof_steps = proof["jobs"]["verify"]["steps"].as_sequence().unwrap();
+    for step in proof_steps {
+        let run = step["run"].as_str().unwrap_or("");
+        assert!(!run.contains("cargo") && !run.contains("release/test_"));
+        assert!(
+            !step["uses"]
+                .as_str()
+                .unwrap_or("")
+                .contains("rust-toolchain")
+        );
+    }
+    for event in ["push", "pull_request"] {
+        let paths = proof["on"][event]["paths"].as_sequence().unwrap();
+        for path in [
+            "Cargo.toml",
+            "Cargo.lock",
+            "THIRD-PARTY-NOTICES.md",
+            "release/build-current-third-party-notice.py",
+            "release/current-third-party-notice.json",
+            "release/historical/**",
+        ] {
+            assert!(
+                paths.iter().any(|value| value.as_str() == Some(path)),
+                "{event} missing {path}"
+            );
+        }
+    }
+}
+
+#[test]
+fn workflow_installer_fixtures_remain_historical_and_distinct_from_current_notice_gate() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for file in ["ci.yml", "source-install-integrity.yml"] {
+        let workflow = fs::read_to_string(root.join(".github/workflows").join(file)).unwrap();
+        assert!(!workflow.contains("cp LICENSE THIRD-PARTY-NOTICES.md"));
+        assert!(workflow.contains("cp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md \"$fixture/THIRD-PARTY-NOTICES.md\""));
+        assert!(workflow.contains("cmp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md"));
+        assert!(
+            workflow.contains("393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2")
+        );
+        assert!(
+            workflow.contains("frozen")
+                && workflow.contains("Current notice verification is separate")
+        );
+    }
+    let source =
+        fs::read_to_string(root.join(".github/workflows/source-install-integrity.yml")).unwrap();
+    assert!(source.contains("python3 release/verify-third-party-notices.py"));
+    assert!(source.contains(
+        "frozen_installer_rejects_current_unpublished_notice_even_with_matching_download_checksum"
+    ));
+    let ci: serde_yaml::Value =
+        serde_yaml::from_str(&fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap())
+            .unwrap();
+    let steps = ci["jobs"]["test"]["steps"].as_sequence().unwrap();
+    for command in [
+        "cargo test --locked --features typesafe --lib judge::tests",
+        "cargo test --locked --features typesafe --test judge_native",
+    ] {
+        let step = steps
+            .iter()
+            .find(|step| step["run"].as_str() == Some(command))
+            .unwrap();
+        assert_eq!(step["env"]["TYPESAFE_API_KEY"].as_str(), Some(""));
     }
 }

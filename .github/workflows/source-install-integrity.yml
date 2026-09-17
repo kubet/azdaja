@@ -27,7 +27,22 @@ jobs:
         with:
           toolchain: 1.95.0
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - name: Install checked-out source and exercise the local HTTP installer
+      - name: Cache all supported-target notice inputs (including optional features)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # cargo fetch covers the locked optional dependencies, not just host defaults.
+          for target in aarch64-apple-darwin x86_64-apple-darwin x86_64-unknown-linux-gnu; do
+            cargo fetch --locked --target "$target"
+          done
+      - name: Verify current source-backed notice independently of the frozen installer
+        run: python3 release/verify-third-party-notices.py
+      - name: Frozen installer refuses current unpublished notice
+        run: >-
+          cargo test --locked --offline --test site_installer
+          frozen_installer_rejects_current_unpublished_notice_even_with_matching_download_checksum
+          -- --exact --test-threads=1
+      - name: Install current source and check frozen-installer compatibility
         shell: bash
         run: |
           set -euo pipefail
@@ -95,7 +110,10 @@ jobs:
           cp "$source_binary" "$fixture/azdaja-v0.1.17-darwin-arm64"
           cp "$source_binary" "$fixture/azdaja-v0.1.17-darwin-x86_64"
           cp "$source_binary" "$fixture/azdaja-v0.1.17-linux-x86_64"
-          cp LICENSE THIRD-PARTY-NOTICES.md "$fixture/"
+          # This immutable installer accepts the frozen historical notice only.
+          # Current notice verification is separate; this is not publication approval.
+          cp LICENSE "$fixture/"
+          cp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md "$fixture/THIRD-PARTY-NOTICES.md"
           digest="$(python3 - "$source_binary" <<'PY'
           import hashlib
           import pathlib
@@ -108,6 +126,7 @@ jobs:
           import pathlib
           import sys
           fixture, binary_digest = pathlib.Path(sys.argv[1]), sys.argv[2]
+          assert hashlib.sha256((fixture / "THIRD-PARTY-NOTICES.md").read_bytes()).hexdigest() == "393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2"
           payloads = [
               ("azdaja-v0.1.17-darwin-arm64", binary_digest),
               ("azdaja-v0.1.17-darwin-x86_64", binary_digest),
@@ -161,7 +180,7 @@ jobs:
             PATH="$guard:/usr/bin:/bin:/usr/sbin:/sbin" command -v az >/dev/null
           fi
           cmp LICENSE "$install_home/.local/share/azdaja/LICENSE"
-          cmp THIRD-PARTY-NOTICES.md "$install_home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
+          cmp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md "$install_home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
 
           # Refuse a green run that registered zero or unexpected ignored tests.
           cargo +1.95.0 test --release --locked --test installed_project_memory \

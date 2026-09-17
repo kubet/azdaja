@@ -15,6 +15,22 @@ SPEC.loader.exec_module(verify)
 
 
 class ProofBundleVerifierTests(unittest.TestCase):
+    def test_original_manifest_and_experiment_inputs_remain_byte_exact(self):
+        original = HERE / "historical/manifest-cc442345.json"
+        self.assertEqual(verify.sha256(original),
+                         "8d75cd97eb868b4721017327b950b5516e4155a1ed6ece64d647be6ca5c6ee99")
+        manifest = json.loads(original.read_text())
+        self.assertEqual(manifest["source_commit"], "cc442345ef47cc62eb5d22b07a918eab9111766d")
+        immutable_roles = {"live_receipt", "provider_free_receipt", "live_receipt_index",
+                           "provider_free_receipt_index", "fixture_specification", "expected_invariants",
+                           "bundle_verifier"}
+        matched = set()
+        for record in manifest["artifacts"]:
+            if record["role"] in immutable_roles:
+                self.assertEqual(verify.sha256(ROOT / record["path"]), record["sha256"], record["path"])
+                matched.add(record["role"])
+        self.assertEqual(matched, immutable_roles)
+
     def test_current_bundle_verifies_when_manifest_exists(self):
         manifest = HERE / "manifest.json"
         if not manifest.exists():

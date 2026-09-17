@@ -4944,7 +4944,7 @@ fn preflight_harness_removals(
 
 const STANDALONE_OWNER_MAGIC: &[u8] = b"azdaja-installer-owned-config-v1\n";
 const DOCUMENT_OWNER_V1_MAGIC: &[u8] = b"azdaja-installer-owned-docs-v1\n";
-const DOCUMENT_OWNER_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
+const DOCUMENT_OWNER_HISTORICAL_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
 THIRD-PARTY-NOTICES.md.sha256=393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2\n";
@@ -4954,6 +4954,23 @@ LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\
 THIRD-PARTY-NOTICES.md.sha256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6\n";
 const DISTRIBUTED_LICENSE: &[u8] = include_bytes!("../LICENSE");
 const DISTRIBUTED_NOTICES: &[u8] = include_bytes!("../THIRD-PARTY-NOTICES.md");
+
+// Bind current custody to the exact embedded build inputs, not an obsolete notice hash.
+fn current_document_owner_v2() -> &'static [u8] {
+    static MARKER: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    MARKER.get_or_init(|| {
+        let hex = |bytes: &[u8]| {
+            sha256_digest(bytes)
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        };
+        format!(
+            "azdaja-installer-owned-docs-v2\nschema=azdaja-managed-documents-v2\nLICENSE.sha256={}\nTHIRD-PARTY-NOTICES.md.sha256={}\n",
+            hex(DISTRIBUTED_LICENSE), hex(DISTRIBUTED_NOTICES)
+        ).into_bytes()
+    })
+}
 
 fn sha256_digest(bytes: &[u8]) -> [u8; 32] {
     const K: [u32; 64] = [
@@ -5044,6 +5061,16 @@ fn legacy_notices_are_exact(bytes: &[u8]) -> bool {
         ]
 }
 
+// Frozen pre-remediation root bytes, retained separately from the current build.
+fn historical_v2_notices_are_exact(bytes: &[u8]) -> bool {
+    sha256_digest(bytes)
+        == [
+            0x39, 0x3c, 0xfd, 0x09, 0x2b, 0x54, 0x30, 0x59, 0xd3, 0x76, 0xb9, 0x61, 0x34, 0xe7,
+            0xda, 0xdf, 0x2d, 0xa5, 0xe2, 0xf5, 0xe7, 0x6d, 0xf8, 0x4d, 0x9e, 0xdb, 0xca, 0x42,
+            0xd2, 0x2f, 0x62, 0xd2,
+        ]
+}
+
 fn previous_v2_notices_are_exact(bytes: &[u8]) -> bool {
     sha256_digest(bytes)
         == [
@@ -5056,6 +5083,7 @@ fn previous_v2_notices_are_exact(bytes: &[u8]) -> bool {
 #[derive(Clone, Copy)]
 enum DocumentVersion {
     CurrentV2,
+    HistoricalV2,
     PreviousV2,
     LegacyV1,
 }
@@ -5069,7 +5097,10 @@ fn document_bytes_match(
     license == DISTRIBUTED_LICENSE
         && match version {
             DocumentVersion::CurrentV2 => {
-                marker == DOCUMENT_OWNER_V2 && notices == DISTRIBUTED_NOTICES
+                marker == current_document_owner_v2() && notices == DISTRIBUTED_NOTICES
+            }
+            DocumentVersion::HistoricalV2 => {
+                marker == DOCUMENT_OWNER_HISTORICAL_V2 && historical_v2_notices_are_exact(notices)
             }
             DocumentVersion::PreviousV2 => {
                 marker == DOCUMENT_OWNER_PREVIOUS_V2 && previous_v2_notices_are_exact(notices)
@@ -5239,8 +5270,10 @@ fn preflight_document_removal(home: &Path) -> Result<DocumentRemoval> {
     let marker_bytes = read_install_regular(&marker)?;
     let license_bytes = read_install_regular(&license)?;
     let notices_bytes = read_install_regular(&notices)?;
-    let version = if marker_bytes == DOCUMENT_OWNER_V2 {
+    let version = if marker_bytes == current_document_owner_v2() {
         DocumentVersion::CurrentV2
+    } else if marker_bytes == DOCUMENT_OWNER_HISTORICAL_V2 {
+        DocumentVersion::HistoricalV2
     } else if marker_bytes == DOCUMENT_OWNER_PREVIOUS_V2 {
         DocumentVersion::PreviousV2
     } else if marker_bytes == DOCUMENT_OWNER_V1_MAGIC {

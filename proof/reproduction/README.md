@@ -13,7 +13,7 @@ cd azdaja
 The verifier itself uses only Python 3.9+, Git, and files in this checkout. It performs no provider call, downloads nothing, and does not rewrite a receipt. A successful run prints one JSON object with this stable shape:
 
 ```json
-{"artifacts_verified": 36, "bundle_source_commit": "<40-hex-source-commit>", "classification": "narrow first-party reproducible evidence", "git_binding": true, "live_fable": {"exact_results": 3, "provider_calls": 3, "scenarios": 3}, "provider_free": {"scenarios": 3, "surviving_sessions": 0}, "schema": "azdaja.first_party_proof_verification.v1"}
+{"artifacts_verified": 49, "bundle_source_commit": "<40-hex-source-commit>", "classification": "narrow first-party reproducible evidence", "git_binding": true, "live_fable": {"exact_results": 3, "provider_calls": 3, "scenarios": 3}, "provider_free": {"scenarios": 3, "surviving_sessions": 0}, "schema": "azdaja.first_party_proof_verification.v1"}
 ```
 
 Shallow clones and source archives can lack the historical commits named by the receipts. If Git reports a shallow checkout, run `git fetch --unshallow` before verification. A nonzero exit means the evidence was not verified. Read the `proof verification failed:` diagnostic rather than treating a partial check as a pass.
@@ -40,13 +40,23 @@ The verifier requires a Git checkout that contains the commits named by the two 
 - `verify.py`: stdlib-only fail-closed verifier
 - `test_verify.py`: artifact tamper, path escape, schema, and current-bundle tests
 - `../../docs/release/notice-audit-2026-09-04.md`: exact third-party notice metadata limitation that prevents calling this a complete verification capsule
-- `../../release/third-party-notice-inputs.json`: current-lock, three-target source-input inventory with archive, manifest, and legal-file hashes
+- `../../release/third-party-notice-inputs.json`: historical three-target source-input inventory with archive, manifest, and legal-file hashes, not the current optional-feature scope
 - `../../release/audit-third-party-notice-inputs.py`: fail-closed input inventory reproducer
 - `../../release/test_audit_third_party_notice_inputs.py`: cache-independent parser, archive, path, identity, and checksum tests
 - `../../release/third-party-notice-reconciliation.json`: machine-checked comparison of 191 package inventory rows and 314 legal-file input records, with 126 exact digest headings found and the stale binding kept explicit
 - `../../release/reconcile-third-party-notice.py`: fail-closed comparison checker that never authorizes publication
 - `../../release/test_reconcile_third_party_notice.py`: inventory, legal hash, target, checksum, claim-boundary, path, and symlink tamper tests
-- `../../release/verify-third-party-notices.py`: fail-closed publication gate for the notice's current `Cargo.lock` binding
+- `../../release/verify-third-party-notices.py`: separate fail-closed source-backed current notice gate, requiring the pinned Cargo toolchain and cached archives when executed
+- `../../release/current-third-party-notice.json`: current default/typesafe target memberships and exact legal-text occurrence index
+- `../../release/THIRD-PARTY-NOTICE-GENERATION.md`: current notice generation, independent historical attribution limits and offline prerequisites
+
+### Artifact inventory refresh, not a new measurement
+
+The original manifest remains byte-for-byte in `historical/manifest-cc442345.json`, SHA-256 `8d75cd97eb868b4721017327b950b5516e4155a1ed6ece64d647be6ca5c6ee99`. Its source commit was `cc442345ef47cc62eb5d22b07a918eab9111766d`. The current inventory is regenerated from committed artifact bytes after notice/CI changes. The fail-closed verifier and Git comparison have not been weakened to ignore drift.
+
+`manifest.json.source_commit` identifies the **offline bundle assembly**, not the executable measured by either experiment. Neither retained receipt, experiment source commit, binary identity, fixture specification, expected invariant nor result was changed or rerun by this refresh. Those identities remain in the provenance table below. Current notice sources and workflows are additional reproducibility inputs, not evidence of new provider performance or legal approval. Historical notice-audit and reconciliation files retain historical limitations rather than asserting that the current source gate is still stale.
+
+The one-command proof verifier hashes these files and validates the retained receipts using Python and Git only. It does not execute the Cargo-dependent notice audit. CI runs the notice audit separately after explicitly preparing its pinned Cargo and archive prerequisites. Passing this bundle still does not establish completeness of legal metadata or authorize publication.
 
 ## Provenance map
 

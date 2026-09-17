@@ -577,7 +577,7 @@ fn all_harness_uninstall_preflights_unknown_changed_and_symlink_targets() {
 }
 
 const DOCUMENT_OWNER_V1: &[u8] = b"azdaja-installer-owned-docs-v1\n";
-const DOCUMENT_OWNER_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
+const DOCUMENT_OWNER_HISTORICAL_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
 THIRD-PARTY-NOTICES.md.sha256=393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2\n";
@@ -586,6 +586,17 @@ schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
 THIRD-PARTY-NOTICES.md.sha256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6\n";
 const PREVIOUS_V2_NOTICES: &[u8] = include_bytes!("../site/releases/v0.1.4/THIRD-PARTY-NOTICES.md");
+
+const HISTORICAL_V2_NOTICES: &[u8] =
+    include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md");
+
+fn current_document_owner_v2() -> Vec<u8> {
+    format!(
+        "azdaja-installer-owned-docs-v2\nschema=azdaja-managed-documents-v2\nLICENSE.sha256={}\nTHIRD-PARTY-NOTICES.md.sha256={}\n",
+        sha256_bytes(include_bytes!("../LICENSE")),
+        sha256_bytes(include_bytes!("../THIRD-PARTY-NOTICES.md"))
+    ).into_bytes()
+}
 
 fn sha256_bytes(bytes: &[u8]) -> String {
     for (tool, args) in [("shasum", vec!["-a", "256"]), ("sha256sum", vec![])] {
@@ -670,7 +681,27 @@ fn standalone(home: &Path, name: &str) -> PathBuf {
         include_bytes!("../THIRD-PARTY-NOTICES.md"),
     )
     .unwrap();
-    fs::write(documents.join(".azdaja-managed"), DOCUMENT_OWNER_V2).unwrap();
+    fs::write(
+        documents.join(".azdaja-managed"),
+        current_document_owner_v2(),
+    )
+    .unwrap();
+    binary
+}
+
+fn historical_v2_standalone(home: &Path, name: &str) -> PathBuf {
+    let binary = standalone(home, name);
+    let documents = home.join(".local/share/azdaja");
+    fs::write(
+        documents.join("THIRD-PARTY-NOTICES.md"),
+        HISTORICAL_V2_NOTICES,
+    )
+    .unwrap();
+    fs::write(
+        documents.join(".azdaja-managed"),
+        DOCUMENT_OWNER_HISTORICAL_V2,
+    )
+    .unwrap();
     binary
 }
 
@@ -795,6 +826,85 @@ fn exact_published_previous_v2_standalone_documents_are_safely_removable() {
 }
 
 #[test]
+fn upgraded_binary_removes_exact_historical_v2_documents_without_losing_current_custody() {
+    assert_eq!(
+        sha256_bytes(HISTORICAL_V2_NOTICES),
+        "393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2"
+    );
+    assert_ne!(current_document_owner_v2(), DOCUMENT_OWNER_HISTORICAL_V2);
+    for generation in ["current", "historical"] {
+        let scratch = Scratch::new(generation);
+        // Both helpers use the freshly built binary, simulating executable upgrade.
+        let binary = if generation == "current" {
+            standalone(&scratch.0, "bin")
+        } else {
+            historical_v2_standalone(&scratch.0, "bin")
+        };
+        let output = run(&binary, &scratch.0, &["uninstall", "--standalone"]);
+        assert_success(&output);
+        assert!(!binary.exists());
+        assert!(!scratch.0.join(".local/share/azdaja").exists());
+    }
+}
+
+#[test]
+fn current_and_historical_notice_markers_cannot_be_cross_paired_or_self_authorized() {
+    for state in [
+        "historical-mutated",
+        "historical-marker-current-body",
+        "current-marker-historical-body",
+        "self-consistent-forgery",
+    ] {
+        let scratch = Scratch::new(state);
+        let binary = historical_v2_standalone(&scratch.0, "bin");
+        let documents = scratch.0.join(".local/share/azdaja");
+        match state {
+            "historical-marker-current-body" => fs::write(
+                documents.join("THIRD-PARTY-NOTICES.md"),
+                include_bytes!("../THIRD-PARTY-NOTICES.md"),
+            )
+            .unwrap(),
+            "current-marker-historical-body" => fs::write(
+                documents.join(".azdaja-managed"),
+                current_document_owner_v2(),
+            )
+            .unwrap(),
+            _ => {
+                let mut changed = HISTORICAL_V2_NOTICES.to_vec();
+                changed.extend_from_slice(b"changed legal terms");
+                fs::write(documents.join("THIRD-PARTY-NOTICES.md"), &changed).unwrap();
+                if state == "self-consistent-forgery" {
+                    let marker = format!(
+                        "azdaja-installer-owned-docs-v2\nschema=azdaja-managed-documents-v2\nLICENSE.sha256={}\nTHIRD-PARTY-NOTICES.md.sha256={}\n",
+                        sha256_bytes(include_bytes!("../LICENSE")),
+                        sha256_bytes(&changed)
+                    );
+                    fs::write(documents.join(".azdaja-managed"), marker).unwrap();
+                }
+            }
+        }
+        let binary_before = surface_snapshot(binary.parent().unwrap());
+        let documents_before = surface_snapshot(&documents);
+        let output = run(&binary, &scratch.0, &["uninstall", "--standalone"]);
+        assert!(!output.status.success(), "state={state}");
+        let error = text(&output).1;
+        if state == "self-consistent-forgery" {
+            assert!(
+                error.contains("document owner marker is not exact"),
+                "{error}"
+            );
+        } else {
+            assert!(
+                error.contains("exact supported document version"),
+                "{error}"
+            );
+        }
+        assert_eq!(surface_snapshot(binary.parent().unwrap()), binary_before);
+        assert_eq!(surface_snapshot(&documents), documents_before);
+    }
+}
+
+#[test]
 fn fake_v2_and_mutated_owned_standalone_documents_refuse_before_mutation() {
     for state in ["fake-v2", "mutated-legacy", "mutated-previous-v2"] {
         if state == "mutated-legacy" && legacy_notices().is_none() {
@@ -834,13 +944,14 @@ fn fake_v2_and_mutated_owned_standalone_documents_refuse_before_mutation() {
 #[cfg(debug_assertions)]
 #[test]
 fn standalone_document_quarantine_rolls_back_every_owned_generation_at_every_step() {
-    for state in ["current-v2", "previous-v2", "legacy-v1"] {
+    for state in ["current-v2", "historical-v2", "previous-v2", "legacy-v1"] {
         if state == "legacy-v1" && legacy_notices().is_none() {
             continue;
         }
         let scratch = Scratch::new(&format!("rollback-{state}"));
         let binary = match state {
             "current-v2" => standalone(&scratch.0, "bin"),
+            "historical-v2" => historical_v2_standalone(&scratch.0, "bin"),
             "previous-v2" => previous_v2_standalone(&scratch.0, "bin"),
             _ => legacy_standalone(&scratch.0, "bin").unwrap(),
         };

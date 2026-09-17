@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare current notice inputs with the retained reviewed notice corpus.
+"""Reproduce the historical notice-input reconciliation, not the public release gate.
 
 This checker proves a narrow mechanical comparison only. It intentionally does
 not update or authorize the notice's Cargo.lock binding, recompute retained
@@ -359,13 +359,13 @@ def write_atomic(path: Path, content: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--notice", type=Path, default=ROOT / "THIRD-PARTY-NOTICES.md")
+    parser.add_argument("--notice", type=Path, default=ROOT / "release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md")
     parser.add_argument(
         "--manifest",
         type=Path,
         default=ROOT / "release/third-party-notice-inputs.json",
     )
-    parser.add_argument("--lockfile", type=Path, default=ROOT / "Cargo.lock")
+    parser.add_argument("--lockfile", type=Path, default=ROOT / "release/historical/Cargo.lock.notice-inputs")
     parser.add_argument(
         "--output",
         type=Path,

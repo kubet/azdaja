@@ -16,9 +16,9 @@ SPEC.loader.exec_module(RECONCILE)
 
 class NoticeReconciliationTests(unittest.TestCase):
     def setUp(self):
-        self.notice = ROOT / "THIRD-PARTY-NOTICES.md"
+        self.notice = ROOT / "release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md"
         self.manifest = HERE / "third-party-notice-inputs.json"
-        self.lockfile = ROOT / "Cargo.lock"
+        self.lockfile = ROOT / "release/historical/Cargo.lock.notice-inputs"
 
     def test_current_inputs_reconcile_but_binding_remains_blocked(self):
         result = RECONCILE.reconcile(self.notice, self.manifest, self.lockfile)

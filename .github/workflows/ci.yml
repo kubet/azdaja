@@ -32,6 +32,14 @@ jobs:
           toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache all supported-target notice inputs (including optional features)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # cargo fetch covers the locked optional dependencies, not just host defaults.
+          for target in aarch64-apple-darwin x86_64-apple-darwin x86_64-unknown-linux-gnu; do
+            cargo fetch --locked --target "$target"
+          done
       - name: Verify exact Cargo package allowlist
         shell: bash
         run: |
@@ -65,8 +73,12 @@ jobs:
               "src/dashboard.rs",
               "src/jcode_config.rs",
               "src/jcode_gate.rs",
+              "src/judge.rs",
               "src/lib.rs",
               "src/main.rs",
+              "src/memory/project.rs",
+              "src/memory/recall.rs",
+              "src/memory/transfer.rs",
               "src/memory.rs",
               "src/observability.rs",
               "src/repo_source.rs",
@@ -87,6 +99,14 @@ jobs:
           release/test_audit_third_party_notice_inputs.py
           release/test_reconcile_third_party_notice.py
       - run: cargo test --all --locked -- --test-threads=1
+      - name: Provider-free optional judge unit tests
+        env:
+          TYPESAFE_API_KEY: ""
+        run: cargo test --locked --features typesafe --lib judge::tests
+      - name: Provider-free optional judge native boundary tests
+        env:
+          TYPESAFE_API_KEY: ""
+        run: cargo test --locked --features typesafe --test judge_native
       - run: cargo build --release --locked
       - name: Verify advertised Linux glibc floor
         if: runner.os == 'Linux'
@@ -109,7 +129,7 @@ jobs:
       # Manual runs validate and retain exact candidate bytes for reviewed promotion.
       # These artifacts are not releases and must never be bound directly into site/install.
       # They may only be promoted by release/promote-standalone-assets.sh after review.
-      - name: Validate release candidate install, plain help, and 50 MiB path
+      - name: Validate current binary with frozen installer, plain help, and 50 MiB path
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
@@ -146,12 +166,16 @@ jobs:
           cp "$candidate" "$fixture/azdaja-v0.1.17-darwin-arm64"
           cp "$candidate" "$fixture/azdaja-v0.1.17-darwin-x86_64"
           cp "$candidate" "$fixture/azdaja-v0.1.17-linux-x86_64"
-          cp LICENSE THIRD-PARTY-NOTICES.md "$fixture/"
+          # This immutable installer accepts the frozen historical notice only.
+          # Current notice verification is separate; this is not publication approval.
+          cp LICENSE "$fixture/"
+          cp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md "$fixture/THIRD-PARTY-NOTICES.md"
           python3 - "$fixture" "$digest" <<'PY'
           import hashlib
           import pathlib
           import sys
           fixture, binary_digest = pathlib.Path(sys.argv[1]), sys.argv[2]
+          assert hashlib.sha256((fixture / "THIRD-PARTY-NOTICES.md").read_bytes()).hexdigest() == "393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2"
           payloads = [
               ("azdaja-v0.1.17-darwin-arm64", binary_digest),
               ("azdaja-v0.1.17-darwin-x86_64", binary_digest),
@@ -222,7 +246,7 @@ jobs:
             PATH="$guard:/usr/bin:/bin:/usr/sbin:/sbin" command -v az >/dev/null
           fi
           cmp LICENSE "$home/.local/share/azdaja/LICENSE"
-          cmp THIRD-PARTY-NOTICES.md "$home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
+          cmp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md "$home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
 
           cat > "$scratch/expected-help" <<'EOF'
           AZDAJA v0.1.17 — virtual memory for language models

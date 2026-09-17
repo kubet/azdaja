@@ -150,7 +150,8 @@ fn sha256(path: &Path) -> String {
 }
 
 const DOCUMENT_OWNER_V1: &[u8] = b"azdaja-installer-owned-docs-v1\n";
-const DOCUMENT_OWNER_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
+// The immutable site installer still accepts this exact historical generation.
+const DOCUMENT_OWNER_FROZEN_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
 THIRD-PARTY-NOTICES.md.sha256=393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2\n";
@@ -341,7 +342,7 @@ fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     let source = Path::new(env!("CARGO_MANIFEST_DIR"));
     fs::copy(source.join("LICENSE"), release.join("LICENSE")).unwrap();
     fs::copy(
-        source.join("THIRD-PARTY-NOTICES.md"),
+        source.join("release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md"),
         release.join("THIRD-PARTY-NOTICES.md"),
     )
     .unwrap();
@@ -3270,6 +3271,60 @@ fn license_and_notice_checksum_missing_or_mismatch_is_zero_home_mutation() {
 }
 
 #[test]
+fn frozen_installer_rejects_current_unpublished_notice_even_with_matching_download_checksum() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(
+        &fixture_root,
+        "current-notice",
+        &candidate,
+        &sha256(&candidate),
+    );
+    let release = fixture_root.join("current-notice");
+    let old_digest = sha256(&release.join("THIRD-PARTY-NOTICES.md"));
+    assert_eq!(
+        old_digest,
+        "393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2"
+    );
+    fs::write(
+        release.join("THIRD-PARTY-NOTICES.md"),
+        include_bytes!("../THIRD-PARTY-NOTICES.md"),
+    )
+    .unwrap();
+    let current_digest = sha256(&release.join("THIRD-PARTY-NOTICES.md"));
+    assert_ne!(current_digest, old_digest);
+    let sums = fs::read_to_string(release.join("SHA256SUMS")).unwrap();
+    fs::write(
+        release.join("SHA256SUMS"),
+        sums.replace(&old_digest, &current_digest),
+    )
+    .unwrap();
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let home = scratch.0.join("home");
+    fs::create_dir(&home).unwrap();
+    mark_detected(&home, "claude");
+    let before = tree_identity(&home);
+    let output = run_installer(InstallRun {
+        home: &home,
+        base: &format!("{}/current-notice", server.base),
+        os: "Darwin",
+        arch: "arm64",
+        glibc_version: None,
+        harness: Some("claude"),
+        bin_dir: Some(&home.join("bin")),
+        path: "/usr/bin:/bin",
+    });
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("does not bind the exact reviewed THIRD-PARTY-NOTICES.md")
+    );
+    assert_eq!(tree_identity(&home), before);
+}
+
+#[test]
 fn foreign_document_directory_file_symlink_and_hardlink_refuse_without_mutation() {
     let scratch = Scratch::new();
     let fixture_root = scratch.0.join("releases");
@@ -3310,7 +3365,7 @@ fn foreign_document_directory_file_symlink_and_hardlink_refuse_without_mutation(
                 fs::hard_link(&source, docs.join("LICENSE")).unwrap();
                 fs::write(
                     docs.join("THIRD-PARTY-NOTICES.md"),
-                    include_bytes!("../THIRD-PARTY-NOTICES.md"),
+                    include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md"),
                 )
                 .unwrap();
                 fs::write(
@@ -3373,11 +3428,11 @@ fn exact_legacy_v1_documents_migrate_to_fixed_v2_and_reinstall_exactly() {
     assert_success(&run_once());
     assert_eq!(
         fs::read(docs.join(".azdaja-managed")).unwrap(),
-        DOCUMENT_OWNER_V2
+        DOCUMENT_OWNER_FROZEN_V2
     );
     assert_eq!(
         fs::read(docs.join("THIRD-PARTY-NOTICES.md")).unwrap(),
-        include_bytes!("../THIRD-PARTY-NOTICES.md")
+        include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md")
     );
     let migrated = tree_identity(&docs);
     assert_success(&run_once());
@@ -3424,11 +3479,11 @@ fn exact_published_previous_v2_documents_migrate_to_current_and_reinstall() {
     assert_success(&run_once());
     assert_eq!(
         fs::read(docs.join(".azdaja-managed")).unwrap(),
-        DOCUMENT_OWNER_V2
+        DOCUMENT_OWNER_FROZEN_V2
     );
     assert_eq!(
         fs::read(docs.join("THIRD-PARTY-NOTICES.md")).unwrap(),
-        include_bytes!("../THIRD-PARTY-NOTICES.md")
+        include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md")
     );
     let migrated = tree_identity(&docs);
     assert_success(&run_once());
@@ -3591,11 +3646,11 @@ fn custom_xdg_unicode_space_apostrophe_reinstall_is_exact_and_idempotent() {
     );
     assert_eq!(
         fs::read(docs.join("THIRD-PARTY-NOTICES.md")).unwrap(),
-        include_bytes!("../THIRD-PARTY-NOTICES.md")
+        include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md")
     );
     assert_eq!(
         fs::read(docs.join(".azdaja-managed")).unwrap(),
-        DOCUMENT_OWNER_V2
+        DOCUMENT_OWNER_FROZEN_V2
     );
     let before = tree_identity(&docs);
     let second = assert_success(&run_once());

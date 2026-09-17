@@ -20,7 +20,7 @@ The public `start → load → exec → final → re-entry → kill` workflow ra
 
 Typed/baseline median ratio was **0.459**, approximately 54% lower in these three observations. This is not a population latency guarantee. The predeclared bar also required no loss against the baseline. **Quality bar: failed. Benefit bar: failed.** The process status `completed` means the protocol completed, not that quality passed.
 
-There were three typed HTTP requests covering 18 questions, three same-cell cache hits without new requests, and three logical generative calls with three entered turns and no setup/failure events in the retained trace. Returned typed model string was `jev-1.13.0`; native generative trace reported `OpenAI` / `gpt-5.6-sol`. These strings do not authenticate immutable model weights. Known typed usage was 18,128 input tokens, with zero requests missing input usage. Billing was not inferred.
+There were three typed HTTP requests covering 18 questions, three same-cell cache hits without new requests, and three logical generative calls with three entered turns and no setup/failure events in the retained trace. Returned typed model string was `jev-1.13.0`; native generative trace reported `OpenAI` / `gpt-5.6-sol`. These strings do not authenticate immutable model weights. Known typed usage was 18,128 input and 1,707 output tokens, with zero requests missing input usage. The generative trace reported 14,316 input and 123 output tokens, with zero reported cache-read/write tokens. Provider token accounting and prices are not interchangeable. Billing and dollar savings were not inferred.
 
 ## The actual failure, not an aggregate excuse
 

@@ -29,6 +29,18 @@ jobs:
           ref: v${{ inputs.version }}
           fetch-depth: 0
 
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.95.0
+      - name: Cache all supported-target notice inputs (including optional features)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # cargo fetch covers the locked optional dependencies, not just host defaults.
+          for target in aarch64-apple-darwin x86_64-apple-darwin x86_64-unknown-linux-gnu; do
+            cargo fetch --locked --target "$target"
+          done
+
       - name: Validate immutable tag, exact-head CI, promotion receipt, and payloads
         shell: bash
         env:
