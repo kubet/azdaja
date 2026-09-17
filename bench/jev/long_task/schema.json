@@ -1,0 +1,276 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "contracts": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "additionalProperties": false,
+            "properties": {
+              "assignment": {
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label",
+                  "quote"
+                ],
+                "type": "object"
+              },
+              "change_control": {
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label",
+                  "quote"
+                ],
+                "type": "object"
+              },
+              "liability_cap": {
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label",
+                  "quote"
+                ],
+                "type": "object"
+              },
+              "liability_uncapped": {
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label",
+                  "quote"
+                ],
+                "type": "object"
+              },
+              "termination": {
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label",
+                  "quote"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "assignment",
+              "change_control",
+              "termination",
+              "liability_cap",
+              "liability_uncapped"
+            ],
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fields"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "queries": {
+      "additionalProperties": false,
+      "properties": {
+        "exit_with_uncapped": {
+          "additionalProperties": false,
+          "properties": {
+            "no": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "unknown": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "yes": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "yes",
+            "no",
+            "unknown"
+          ],
+          "type": "object"
+        },
+        "mixed_liability": {
+          "additionalProperties": false,
+          "properties": {
+            "no": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "unknown": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "yes": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "yes",
+            "no",
+            "unknown"
+          ],
+          "type": "object"
+        },
+        "transfer_exposure": {
+          "additionalProperties": false,
+          "properties": {
+            "no": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "unknown": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "yes": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "yes",
+            "no",
+            "unknown"
+          ],
+          "type": "object"
+        },
+        "transfer_without_convenience": {
+          "additionalProperties": false,
+          "properties": {
+            "no": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "unknown": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "yes": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "yes",
+            "no",
+            "unknown"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "transfer_exposure",
+        "exit_with_uncapped",
+        "mixed_liability",
+        "transfer_without_convenience"
+      ],
+      "type": "object"
+    },
+    "source_sha256": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_sha256",
+    "contracts",
+    "queries"
+  ],
+  "type": "object"
+}

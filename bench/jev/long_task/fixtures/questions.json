@@ -1,0 +1,30 @@
+{
+  "questions": [
+    {
+      "category": "Anti-Assignment",
+      "key": "assignment",
+      "question": "Highlight the parts (if any) of this contract related to \"Anti-Assignment\" that should be reviewed by a lawyer. Details: Is consent or notice required of a party if the contract is assigned to a third party?"
+    },
+    {
+      "category": "Change Of Control",
+      "key": "change_control",
+      "question": "Highlight the parts (if any) of this contract related to \"Change Of Control\" that should be reviewed by a lawyer. Details: Does one party have the right to terminate or is consent or notice required of the counterparty if such party undergoes a change of control, such as a merger, stock sale, transfer of all or substantially all of its assets or business, or assignment by operation of law?"
+    },
+    {
+      "category": "Termination For Convenience",
+      "key": "termination",
+      "question": "Highlight the parts (if any) of this contract related to \"Termination For Convenience\" that should be reviewed by a lawyer. Details: Can a party terminate this  contract without cause (solely by giving a notice and allowing a waiting  period to expire)?"
+    },
+    {
+      "category": "Cap On Liability",
+      "key": "liability_cap",
+      "question": "Highlight the parts (if any) of this contract related to \"Cap On Liability\" that should be reviewed by a lawyer. Details: Does the contract include a cap on liability upon the breach of a party’s obligation? This includes time limitation for the counterparty to bring claims or maximum amount for recovery."
+    },
+    {
+      "category": "Uncapped Liability",
+      "key": "liability_uncapped",
+      "question": "Highlight the parts (if any) of this contract related to \"Uncapped Liability\" that should be reviewed by a lawyer. Details: Is a party’s liability uncapped upon the breach of its obligation in the contract? This also includes uncap liability for a particular type of breach such as IP infringement or breach of confidentiality obligation."
+    }
+  ],
+  "schema_version": 1
+}
