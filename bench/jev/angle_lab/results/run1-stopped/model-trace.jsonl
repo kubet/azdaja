@@ -1,0 +1,1 @@
+{"schema_version":2,"event":"model_attempt","timestamp_ms":1789642161400,"depth":1,"request_id":"32283-1789642161396035000-1","attempt":1,"session_id":null,"category":"session_setup","outcome":"failed","error":"provider_call_failed","error_category":"unknown","stage":"session_setup","setup_substage":"connect","latency_ms":4}
