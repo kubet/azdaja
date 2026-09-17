@@ -2,6 +2,7 @@
 const WORKFLOW: &str = include_str!("../.github/workflows/source-install-integrity.yml");
 const LIST_COMMAND: &str = "          cargo +1.95.0 test --release --locked --test installed_project_memory \\\n            -- --ignored --list > \"$scratch/installed-artifact-tests\"";
 const RUN_COMMAND: &str = "          AZDAJA_INSTALLED_TEST_BINARY=\"$installed\" PATH=\"$guard:$PATH\" \\\n            cargo +1.95.0 test --release --locked --test installed_project_memory \\\n            -- --ignored --test-threads=1\n          test ! -e \"$marker\"";
+const HISTORICAL_NOTICE_CHECK: &str = "          cmp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md \"$install_home/.local/share/azdaja/THIRD-PARTY-NOTICES.md\"";
 
 #[test]
 fn source_install_ci_runs_registered_artifact_tests_against_verified_installed_bytes() {
@@ -18,7 +19,9 @@ fn source_install_ci_runs_registered_artifact_tests_against_verified_installed_b
     let byte_check = WORKFLOW
         .find("          cmp \"$source_binary\" \"$installed\"")
         .unwrap();
-    let legal_check = WORKFLOW.find("          cmp THIRD-PARTY-NOTICES.md \"$install_home/.local/share/azdaja/THIRD-PARTY-NOTICES.md\"").unwrap();
+    let legal_check = WORKFLOW
+        .find(HISTORICAL_NOTICE_CHECK)
+        .expect("the frozen installer must preserve the exact historical notice");
     let list = WORKFLOW.find(LIST_COMMAND).unwrap();
     let run = WORKFLOW.find(RUN_COMMAND).unwrap();
     assert!(byte_check < legal_check && legal_check < list && list < run);
@@ -40,6 +43,37 @@ fn source_install_ci_runs_registered_artifact_tests_against_verified_installed_b
     assert!(list < position && position < run);
     assert!(WORKFLOW.contains("          set -euo pipefail"));
     assert!(!WORKFLOW.contains("continue-on-error:"));
+}
+
+#[test]
+fn source_install_ci_separates_current_notice_audit_from_frozen_installer_compatibility() {
+    let stages = [
+        "        run: python3 release/verify-third-party-notices.py",
+        "          frozen_installer_rejects_current_unpublished_notice_even_with_matching_download_checksum",
+        "          cp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md \"$fixture/THIRD-PARTY-NOTICES.md\"",
+        "          assert hashlib.sha256((fixture / \"THIRD-PARTY-NOTICES.md\").read_bytes()).hexdigest() == \"393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2\"",
+        "            sh site/install jcode,claude --bin-dir \"$install_bin\"",
+        HISTORICAL_NOTICE_CHECK,
+    ];
+    let mut previous = None;
+    for stage in stages {
+        assert_eq!(
+            WORKFLOW.matches(stage).count(),
+            1,
+            "missing unique stage: {stage}"
+        );
+        let position = WORKFLOW.find(stage).unwrap();
+        if let Some(previous) = previous {
+            assert!(
+                previous < position,
+                "notice boundary stage out of order: {stage}"
+            );
+        }
+        previous = Some(position);
+    }
+    assert!(WORKFLOW.contains("          -- --exact --test-threads=1"));
+    assert!(!WORKFLOW.contains("cp LICENSE THIRD-PARTY-NOTICES.md"));
+    assert!(!WORKFLOW.contains("cmp THIRD-PARTY-NOTICES.md \"$install_home/"));
 }
 
 #[test]
