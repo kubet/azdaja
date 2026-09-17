@@ -2,22 +2,75 @@
 import argparse
 import json
 import math
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import statistics
 from bench.jev.angle_lab import native as n
 from bench.jev.second_reader import large_run as run
+
+_SEAL_RELATIVE = 'bench/jev/second_reader/ROW651-FROZEN.json'
+_SEAL_SHA = 'c6c4d7f840718466a2f12fb4c288b6fac104e21357717119090fd9ba3bc3cbb1'
 
 
 def check(condition, why):
     if not condition: raise ValueError(why)
 
 
-def replay(folder):
+def portable_sources(receipt, root):
+    """Check relocated source bytes, not the unavailable historical executable.
+
+    Recorded absolute paths are data, never lookup locations in this mode.
+    The separate scope record must accompany the legacy numerical summary.
+    """
+    root = Path(root).resolve(strict=True)
+    files = receipt['frozen_files']
+    check(type(files) is dict and files, 'frozen source inventory')
+    seal_path = root/_SEAL_RELATIVE
+    check(seal_path.is_file() and not seal_path.is_symlink()
+          and root in seal_path.resolve(strict=True).parents, 'missing or escaped seal')
+    seal_raw = seal_path.read_bytes()
+    check(n.sha(seal_raw) == _SEAL_SHA, 'original pre-run seal changed')
+    sealed = n.strict_loads(seal_raw)['files']
+    anchors = [p for p in sealed if type(p) is str
+               and p.endswith('/bench/jev/angle_lab/native.py')]
+    check(len(anchors) == 1, 'source root anchor')
+    origin = PurePosixPath(anchors[0]).parents[3]
+    check(origin.is_absolute() and '..' not in origin.parts, 'source origin')
+    expected = dict(sealed)
+    expected[str(origin/_SEAL_RELATIVE)] = _SEAL_SHA
+    check(files == expected, 'frozen source coverage')
+    sources, external = 0, []
+    for path, digest in files.items():
+        check(type(path) is str and type(digest) is str and len(digest) == 64
+              and all(c in '0123456789abcdef' for c in digest), 'frozen identity')
+        old = PurePosixPath(path)
+        check(old.is_absolute() and '..' not in old.parts and str(old) == path, 'frozen path')
+        try:
+            relative = old.relative_to(origin)
+        except ValueError:
+            external.append((path, digest))
+            continue
+        local = root.joinpath(*relative.parts)
+        check(local.is_file() and not local.is_symlink(), 'missing relocated source')
+        check(root in local.resolve(strict=True).parents, 'relocated source escape')
+        check(n.sha(local.read_bytes()) == digest, 'relocated source changed')
+        sources += 1
+    check(len(external) == 1 and external[0][1] == receipt['binary_sha256'] == run.BINARY_SHA,
+          'unexpected external frozen artifact')
+    return {'mode':'portable_retained_evidence', 'source_files_verified':sources,
+            'sealed_inventory_sha256':_SEAL_SHA,
+            'runtime_binary_identity_recorded':receipt['binary_sha256'],
+            'runtime_binary_bytes_verified':False, 'recorded_absolute_paths_used_for_lookup':False,
+            'provider_authenticity_proven':False}
+
+
+def replay(folder, *, portable=False):
     folder=Path(folder); receipt=n.strict_loads((folder/'receipt.json').read_bytes())
     check(receipt['status'] in ('completed','stopped'),'terminal status required')
     check(receipt['binary_sha256']==run.BINARY_SHA,'binary identity')
-    for path,digest in receipt['frozen_files'].items():
-        check(n.sha(Path(path).read_bytes())==digest,'frozen source changed')
+    scope = portable_sources(receipt, run.ROOT) if portable else None
+    if not portable:
+        for path,digest in receipt['frozen_files'].items():
+            check(n.sha(Path(path).read_bytes())==digest,'frozen source changed')
     check(receipt['logical_llm_calls']==0 and receipt['generative_trace']['entered_turns']==0,'unexpected generation')
     prepared=dict(run.packs()); rows=receipt.get('panel_rows',[])
     check([r['name'] for r in rows]==list(prepared)[:len(rows)],'attempt order/coverage')
@@ -88,7 +141,7 @@ def replay(folder):
     check(isinstance(answer,list) and len(answer)==1 and type(answer[0]) is int,'official answer contract')
     gold=answer[0]
     retained={str(p.relative_to(folder)):n.sha(p.read_bytes()) for p in sorted(folder.rglob('*')) if p.is_file() and 'private-work' not in p.parts}
-    return {'schema':'azdaja.second_reader.row651_replay.v1','consistent':True,'status':receipt['status'],
+    result = {'schema':'azdaja.second_reader.row651_replay.v1','consistent':True,'status':receipt['status'],
         'complete_panel':full,'observed_occurrences':len(seen),'expected_occurrences':17469,
         'eligible_packs':eligible_packs,'attempted_packs':len(rows),'confirmed_typed_requests':confirmed,
         'threshold':.5,'ham_count':ham,'sum_noul':sum_p,'official_count':gold,
@@ -102,11 +155,15 @@ def replay(folder):
         'known_input_estimate_usd':input_tokens*.042/1e6,'billing_known':False,
         'matched_generative_baseline':False,'provider_authenticity_proven':False,
         'agreement_authorizes_approval':False,'retained_hashes':retained}
+    if scope is not None:
+        result['validation_scope'] = scope
+    return result
 
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__); ap.add_argument('receipt_dir',type=Path); ap.add_argument('--output',type=Path)
-    args=ap.parse_args(); result=replay(args.receipt_dir)
+    ap.add_argument('--portable',action='store_true',help='Check relocated source and retained data, not historical executable bytes')
+    args=ap.parse_args(); result=replay(args.receipt_dir,portable=args.portable)
     if args.output:
         with args.output.open('xb') as f: f.write(n.canonical(result)+b'\n')
     print(json.dumps({k:v for k,v in result.items() if k!='retained_hashes'},indent=2)); return 0

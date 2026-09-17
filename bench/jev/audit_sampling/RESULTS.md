@@ -96,14 +96,19 @@ python3 -B -m bench.jev.audit_sampling.replay --output /a/new/path/replay.json
 
 This checks the official source and original native receipt, recomputes all
 6,000 fixed replications, verifies the claims, and checks the retained public
-command/results. It does **not** make new model calls or rerun the native binary.
+command/results. It resolves 124 frozen source files inside this checkout and
+checks their exact recorded hashes. It does **not** make new model calls, rerun
+the native binary, or verify that unavailable historical executable's bytes.
+The output explicitly reports `runtime_binary_bytes_verified=false`, the
+recorded binary identity, and `validation_scope.mode=portable_retained_evidence`.
 A new public execution additionally requires the exact retained binary
 SHA256 `13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32`:
 
 ```sh
 JCODE_SCRATCH_DIR=/a/private/scratch AZDAJA_BINARY=/path/to/exact/binary \
   python3 -B -m unittest bench.jev.audit_sampling.test_estimator \
-  bench.jev.audit_sampling.test_run bench.jev.audit_sampling.test_replay -v
+  bench.jev.audit_sampling.test_run bench.jev.audit_sampling.test_replay \
+  bench.jev.audit_sampling.test_portable -v
 ```
 
 | Requirement | Concrete check and observed behavior |
@@ -121,10 +126,43 @@ JCODE_SCRATCH_DIR=/a/private/scratch AZDAJA_BINARY=/path/to/exact/binary \
 
 Root ran all 14 scoped tests with the exact retained binary: all passed, zero
 skips. The full public replay passed under Python 3.14.5 and 3.9.6, recomputing
-all 6,000 outcomes. Independent read-only review found no code blocker and
+all 6,000 outcomes on the author's machine. Independent read-only review found no code blocker and
 confirmed the stated narrow result. That reviewer ran nine tests successfully
 but its native-binary test lacked AZDAJA_BINARY and did not execute. Do not
 confuse that partial independent run with root's complete native test result.
+
+### Portability correction after the initial push
+
+The initial same-machine fresh-clone check was insufficient: a nested historical
+replay still read the original checkout and executable via absolute paths.
+With those paths forbidden, the actual public command failed. The repair adds
+an explicit portable mode that checks relocated source bytes and retained
+responses, but **does not pretend to validate missing executable bytes**.
+The original default strict replay still checks them when available.
+
+The guarded fresh-checkout command then passed with the original checkout,
+historical binary, subprocesses and network forbidden. The initial 14 tests plus
+six path/scope tests and the 11 existing label-audit tests passed as a 31-test
+compatibility run. Independent review exposed an omitted-source acceptance gap;
+the repaired verifier now requires the complete inventory from the exact
+historical seal. The reviewer reran all six portable tests and independently
+confirmed that removing a source entry is rejected.
+
+A dedicated clean Ubuntu/Python3.9 workflow exercises the portable public command
+without any private paths, executable or credentials. Its hosted verdict must be
+checked separately, not inferred from local tests. Before publication of this
+repair, all three hosted workflows on `c94966e` completed successfully, including
+the full seven-job Rust/platform matrix. That result does not certify later
+commits. New verifier hashes and guarded evidence are retained separately under
+`portability/`; the original measurement retention manifest is unchanged.
+
+No inference artifact, gold, frozen measured source or numerical result was
+rewritten. The pre-fix **post-measurement verifier** versions remain retrievable
+at Git revision `c94966e`; old `EVIDENCE.json` and `RETENTION.json` source hashes
+remain historical rather than being relabeled. The portable report retains the
+unchanged legacy numerical-summary hash **and separately reports its narrower
+validation scope**. Matching a summary hash is not executable or provider
+authentication.
 
 ## Remaining angles, ranked by the next falsifiable question
 

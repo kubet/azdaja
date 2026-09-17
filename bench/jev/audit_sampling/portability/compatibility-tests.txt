@@ -1,0 +1,40 @@
+[stderr] test_all_subsets_unbiased_and_variance (bench.jev.audit_sampling.test_estimator.EstimatorTests.test_all_subsets_unbiased_and_variance) ... ok
+[stderr] test_duplicate_content_ids_are_multiplicities_and_permutations_harmless (bench.jev.audit_sampling.test_estimator.EstimatorTests.test_duplicate_content_ids_are_multiplicities_and_permutations_harmless) ... ok
+[stderr] test_malformed_inputs_rejected (bench.jev.audit_sampling.test_estimator.EstimatorTests.test_malformed_inputs_rejected) ... ok
+[stderr] test_special_cases_and_comparisons (bench.jev.audit_sampling.test_estimator.EstimatorTests.test_special_cases_and_comparisons) ... ok
+[stderr] test_actual_retained_binary_public_lifecycle_and_invalid_reentry (bench.jev.audit_sampling.test_run.SamplingRunTests.test_actual_retained_binary_public_lifecycle_and_invalid_reentry) ... ok
+[stderr] test_deadline_does_not_return_partial_win (bench.jev.audit_sampling.test_run.SamplingRunTests.test_deadline_does_not_return_partial_win) ... ok
+[stderr] test_fast_simulation_agrees_with_independent_public_estimator (bench.jev.audit_sampling.test_run.SamplingRunTests.test_fast_simulation_agrees_with_independent_public_estimator) ... ok
+[stderr] test_fixed_sampler_is_uniform_without_replacement_not_gold_ranked (bench.jev.audit_sampling.test_run.SamplingRunTests.test_fixed_sampler_is_uniform_without_replacement_not_gold_ranked) ... ok
+[stderr] test_oracle_size_satisfies_variance_and_is_minimal (bench.jev.audit_sampling.test_run.SamplingRunTests.test_oracle_size_satisfies_variance_and_is_minimal) ... ok
+[stderr] test_public_cli_refuses_existing_and_dangling_outputs (bench.jev.audit_sampling.test_run.SamplingRunTests.test_public_cli_refuses_existing_and_dangling_outputs) ... ok
+[stderr] test_missing_or_altered_artifact_refuses_before_recomputation (bench.jev.audit_sampling.test_replay.ReplayTests.test_missing_or_altered_artifact_refuses_before_recomputation) ... ok
+[stderr] test_public_replay_refuses_existing_and_dangling_output_before_work (bench.jev.audit_sampling.test_replay.ReplayTests.test_public_replay_refuses_existing_and_dangling_output_before_work) ... ok
+[stderr] test_retained_public_commands_are_bound_to_exact_inputs_and_reference (bench.jev.audit_sampling.test_replay.ReplayTests.test_retained_public_commands_are_bound_to_exact_inputs_and_reference) ... ok
+[stderr] test_strict_structural_comparison (bench.jev.audit_sampling.test_replay.ReplayTests.test_strict_structural_comparison) ... ok
+[stderr] test_missing_or_changed_local_source_has_no_original_fallback (bench.jev.audit_sampling.test_portable.PortableSourceTests.test_missing_or_changed_local_source_has_no_original_fallback) ... ok
+[stderr] test_receipt_cannot_omit_sources_or_rewrite_the_original_seal (bench.jev.audit_sampling.test_portable.PortableSourceTests.test_receipt_cannot_omit_sources_or_rewrite_the_original_seal) ... ok
+[stderr] test_relocated_bytes_pass_without_any_original_file_or_binary_reads (bench.jev.audit_sampling.test_portable.PortableSourceTests.test_relocated_bytes_pass_without_any_original_file_or_binary_reads) ... ok
+[stderr] test_runtime_identity_mismatch_and_nonhex_digests_reject (bench.jev.audit_sampling.test_portable.PortableSourceTests.test_runtime_identity_mismatch_and_nonhex_digests_reject) ... ok
+[stderr] test_symlink_source_cannot_escape_the_current_checkout (bench.jev.audit_sampling.test_portable.PortableSourceTests.test_symlink_source_cannot_escape_the_current_checkout) ... ok
+[stderr] test_traversal_duplicate_anchors_and_external_omissions_reject (bench.jev.audit_sampling.test_portable.PortableSourceTests.test_traversal_duplicate_anchors_and_external_omissions_reject) ... ok
+[stderr] test_actual_public_audit_and_safe_output_refusals (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_actual_public_audit_and_safe_output_refusals) ... ok
+[stderr] test_changed_snapshot_refuses_before_any_score (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_changed_snapshot_refuses_before_any_score) ... ok
+[stderr] test_changed_source_record_or_nonrecord_refuses (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_changed_source_record_or_nonrecord_refuses) ... ok
+[stderr] test_every_source_occurrence_aligns_with_exact_bytes (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_every_source_occurrence_aligns_with_exact_bytes) ... ok
+[stderr] test_frozen_report_recomputes_exactly_and_remains_a_count_failure (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_frozen_report_recomputes_exactly_and_remains_a_count_failure) ... ok
+[stderr] test_join_is_by_id_preserves_multiplicity_and_rejects_missing_extra_duplicate (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_join_is_by_id_preserves_multiplicity_and_rejects_missing_extra_duplicate) ... ok
+[stderr] test_malformed_probability_gold_duplicate_or_empty_never_scores (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_malformed_probability_gold_duplicate_or_empty_never_scores) ... ok
+[stderr] test_metrics_match_hand_computed_endpoint_and_threshold_example (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_metrics_match_hand_computed_endpoint_and_threshold_example) ... ok
+[stderr] test_reordered_labeled_lines_refuse (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_reordered_labeled_lines_refuse) ... ok
+[stderr] test_truncation_wrong_row_or_metadata_refuses (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_truncation_wrong_row_or_metadata_refuses) ... ok
+[stderr] test_unlabeled_source_and_label_sum_must_match (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_unlabeled_source_and_label_sum_must_match) ... ok
+[stderr] 
+[stderr] ----------------------------------------------------------------------
+[stderr] Ran 31 tests in 2.260s
+[stderr] 
+[stderr] OK
+{"schema": "azdaja.audit_sampling.replay.v1", "replay_consistent": true, "all_replicates_checked": 6000, "new_inference_requests": 0, "feasibility_bar_passed": true, "generalization_established": false, "retained_native_commands_checked": 10, "new_native_commands": 0, "raw_p_variance_ratio": 0.10973315295743129, "validation_scope": {"mode": "portable_retained_evidence", "source_files_verified": 124, "sealed_inventory_sha256": "c6c4d7f840718466a2f12fb4c288b6fac104e21357717119090fd9ba3bc3cbb1", "runtime_binary_identity_recorded": "13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32", "runtime_binary_bytes_verified": false, "recorded_absolute_paths_used_for_lookup": false, "provider_authenticity_proven": false}, "legacy_numerical_summary_matches": true}
+ 
+
+--- Command finished with exit code: 0 ---

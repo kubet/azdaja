@@ -90,7 +90,11 @@ def verify(folder):
             {'PLAN.md','estimator.py','run.py','test_estimator.py','test_run.py'}, 'implementation inventory')
     for name, digest in result['implementation_sha256'].items():
         equal(n.sha((HERE/name).read_bytes()), digest, 'implementation.' + name)
-    inputs = audit.audit()
+    inputs = audit.audit(portable=True)
+    scope = inputs.pop('validation_scope')
+    equal(scope['runtime_binary_bytes_verified'], False, 'portable runtime scope')
+    equal(scope['recorded_absolute_paths_used_for_lookup'], False, 'portable source lookup')
+    equal(scope['source_files_verified'], 124, 'portable source coverage')
     equal(result['input_audit_sha256'], n.sha(n.canonical(inputs)), 'source replay')
     equal(result['source_hashes'], {k:inputs[k] for k in
         ('official_snapshot_sha256','unlabeled_context_sha256','receipt_sha256',
@@ -118,7 +122,9 @@ def verify(folder):
             'all_replicates_checked':len(replicates), 'new_inference_requests':0,
             'feasibility_bar_passed':passed, 'generalization_established':False,
             'retained_native_commands_checked':10, 'new_native_commands':0,
-            'raw_p_variance_ratio':population['raw_p_variance_ratio']}
+            'raw_p_variance_ratio':population['raw_p_variance_ratio'],
+            'validation_scope':scope,
+            'legacy_numerical_summary_matches':True}
 
 
 def main():

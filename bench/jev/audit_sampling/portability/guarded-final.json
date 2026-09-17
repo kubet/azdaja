@@ -1,0 +1,7 @@
+{
+  "exit": 0,
+  "stdout": "{\"schema\": \"azdaja.audit_sampling.replay.v1\", \"replay_consistent\": true, \"all_replicates_checked\": 6000, \"new_inference_requests\": 0, \"feasibility_bar_passed\": true, \"generalization_established\": false, \"retained_native_commands_checked\": 10, \"new_native_commands\": 0, \"raw_p_variance_ratio\": 0.10973315295743129, \"validation_scope\": {\"mode\": \"portable_retained_evidence\", \"source_files_verified\": 124, \"sealed_inventory_sha256\": \"c6c4d7f840718466a2f12fb4c288b6fac104e21357717119090fd9ba3bc3cbb1\", \"runtime_binary_identity_recorded\": \"13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32\", \"runtime_binary_bytes_verified\": false, \"recorded_absolute_paths_used_for_lookup\": false, \"provider_authenticity_proven\": false}, \"legacy_numerical_summary_matches\": true}\n",
+  "stderr": "",
+  "original_paths_processes_network_forbidden": true,
+  "new_provider_calls": 0
+}

@@ -1,0 +1,94 @@
+{
+  "current_source_sha256": {
+    ".github/workflows/jev-retained-evidence.yml": "b35c8435d2fdd4b28d274424995ae3dc8dce2c0c499b5fbb4c2412164dfd53d1",
+    "bench/jev/audit_sampling/RESULTS.md": "08d6d71eeacc4b18174f05832d7b2f75e31e68b895cabe59bc6310cba0225dc1",
+    "bench/jev/audit_sampling/replay.py": "e842dcd0f14fdd286ef7ef8418a6d23fc75327eb34366d99d810d15d08e08f37",
+    "bench/jev/audit_sampling/test_portable.py": "e78127e7bb9948e3bee6b81a7d5a00d2b455bbbc5f39621d9d45bf2cd83c7cf8",
+    "bench/jev/row651_labels/audit.py": "db942efef046f213b7be036cfe927412aee671e96997ee693407516a2e876a7c",
+    "bench/jev/second_reader/replay_large.py": "5b218d4bd71c6ed24d6b47eb3ac1ee090f9aa7c672822661c596d78b2187013f"
+  },
+  "evidence_sha256": {
+    "compatibility-tests.txt": "074ddbb3b85c2e5bc67a78368f2285e62f79d81b64918fd07c6a287160ca976a",
+    "guarded-final.json": "da5bd9e4354fb5a46eae768e7c7dd2706b02ede9d014e7cae93304d274db0fad",
+    "public-replay.json": "4c281ba9290bccdb9af42628d81879066c84740dca58cba712038812c5737ae9"
+  },
+  "limits": [
+    "No historical executable bytes verified by portable mode.",
+    "No provider authenticity, fresh model replay or generalization proof.",
+    "Prior-revision hosted success does not certify a later revision."
+  ],
+  "new_revision_hosted_verdict": "not_yet_pushed_or_observed",
+  "prior_revision": "c94966e3f04b886ff147ff3634cd7de40c45fa7d",
+  "prior_revision_hosted_results": [
+    {
+      "conclusion": "success",
+      "databaseId": 35264965651,
+      "headSha": "c94966e3f04b886ff147ff3634cd7de40c45fa7d",
+      "name": "ci",
+      "status": "completed",
+      "url": "https://github.com/kubet/azdaja/actions/runs/35264965651"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 35264965533,
+      "headSha": "c94966e3f04b886ff147ff3634cd7de40c45fa7d",
+      "name": "Verify first-party proof bundle",
+      "status": "completed",
+      "url": "https://github.com/kubet/azdaja/actions/runs/35264965533"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 35264965625,
+      "headSha": "c94966e3f04b886ff147ff3634cd7de40c45fa7d",
+      "name": "Current source and install integrity",
+      "status": "completed",
+      "url": "https://github.com/kubet/azdaja/actions/runs/35264965625"
+    }
+  ],
+  "recorded_at": "2026-09-17T20:12:57.292976+00:00",
+  "requirement_checks": {
+    "complete_frozen_source_coverage": {
+      "omitted_source_and_rewritten_seal_rejected": true,
+      "original_seal_sha256": "c6c4d7f840718466a2f12fb4c288b6fac104e21357717119090fd9ba3bc3cbb1",
+      "sources_verified": 124
+    },
+    "honest_validation_scope": {
+      "mode": "portable_retained_evidence",
+      "provider_authenticity_proven": false,
+      "recorded_absolute_paths_used_for_lookup": false,
+      "runtime_binary_bytes_verified": false,
+      "runtime_binary_identity_recorded": "13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32",
+      "sealed_inventory_sha256": "c6c4d7f840718466a2f12fb4c288b6fac104e21357717119090fd9ba3bc3cbb1",
+      "source_files_verified": 124
+    },
+    "independent_review": {
+      "passed": 6,
+      "previous_omission_blocker_rejected": true,
+      "scope": "six portable tests and independent omitted-source witness only"
+    },
+    "portable_public_entry": {
+      "after_exit": 0,
+      "all_replicates_checked": 6000,
+      "before_exit": 1,
+      "before_reason": "original-machine path forbidden",
+      "original_paths_processes_network_forbidden": true,
+      "python": "3.9.6"
+    },
+    "preserve_measurements": {
+      "new_inference_requests": 0,
+      "retention_sha256": "9d85a27e287b56ad6fd9d33e042dbea758817f677adc2585ec645d968c68b7ac",
+      "six_result_files_and_five_measured_sources_unchanged": true
+    },
+    "strict_original_compatibility": {
+      "includes_actual_native_lifecycle": true,
+      "includes_original_strict_audit": true,
+      "skipped": 0,
+      "tests_passed": 31
+    },
+    "unrelated_file_preservation": {
+      "bytes_and_modes_unchanged": true,
+      "files": 40
+    }
+  },
+  "schema": "azdaja.audit_sampling.portability_acceptance.v1"
+}

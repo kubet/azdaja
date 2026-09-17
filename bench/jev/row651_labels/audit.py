@@ -112,7 +112,7 @@ def join(ledger, predictions):
     return [dict(row, p_ham=predictions[row['id']]) for row in ledger]
 
 
-def audit(upstream=HERE / 'official-row651.json', folder=RECEIPT):
+def audit(upstream=HERE / 'official-row651.json', folder=RECEIPT, *, portable=False):
     upstream, folder = Path(upstream), Path(folder)
     raw = upstream.read_bytes()
     require(n.sha(raw) == UPSTREAM_SHA, 'official snapshot changed')
@@ -120,7 +120,10 @@ def audit(upstream=HERE / 'official-row651.json', folder=RECEIPT):
     require(n.sha(source) == prepare.SOURCE_SHA256, 'unlabeled source hash changed')
     envelope = n.strict_loads(raw)
     ledger = align(envelope, source, n.strict_loads(prepare.ROW.read_bytes()))
-    replay = replay_large.replay(folder)
+    replay = replay_large.replay(folder, portable=True) if portable else replay_large.replay(folder)
+    # The old hash identifies the unchanged numerical/artifact summary. The
+    # separate validation scope is never represented by that historical hash.
+    scope = replay.pop('validation_scope', None)
     require(replay['status'] == 'completed' and replay['complete_panel'], 'incomplete native run')
     receipt = n.strict_loads((folder / 'receipt.json').read_bytes())
     predictions = {}
@@ -134,7 +137,7 @@ def audit(upstream=HERE / 'official-row651.json', folder=RECEIPT):
     require(result['predicted_ham'] == replay['ham_count']
             and result['gold_ham'] == replay['official_count']
             and result['sum_noul'] == replay['sum_noul'], 'native replay disagrees with label audit')
-    return {'schema': 'azdaja.row651_official_item_gold.v1', 'status': 'passed',
+    result = {'schema': 'azdaja.row651_official_item_gold.v1', 'status': 'passed',
             'new_inference_requests': 0, 'model_inputs_changed': False,
             'source_url': URL, 'official_snapshot_sha256': UPSTREAM_SHA,
             'labeled_context_sha256': n.sha(envelope['rows'][0]['row']['context_window_text_with_labels'].encode()),
@@ -151,6 +154,9 @@ def audit(upstream=HERE / 'official-row651.json', folder=RECEIPT):
                        'Metrics are occurrence-weighted on a public, potentially dependent/contaminated panel.',
                        'No inferential confidence interval or general calibration guarantee is claimed.',
                        'No model rerun, threshold change, production routing change or gold relabeling.']}
+    if scope is not None:
+        result['validation_scope'] = scope
+    return result
 
 
 def main():
@@ -158,9 +164,10 @@ def main():
     parser.add_argument('--upstream', type=Path, default=HERE / 'official-row651.json')
     parser.add_argument('--receipt', type=Path, default=RECEIPT)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--portable', action='store_true', help='Check retained evidence without the historical executable')
     args = parser.parse_args()
     require(not args.output.exists() and not args.output.is_symlink(), 'output exists')
-    result = audit(args.upstream, args.receipt)
+    result = audit(args.upstream, args.receipt, portable=args.portable)
     with args.output.open('xb') as stream:
         stream.write(n.canonical(result) + b'\n')
     m = result['metrics']
