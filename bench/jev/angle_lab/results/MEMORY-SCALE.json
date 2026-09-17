@@ -1,0 +1,26 @@
+{
+  "provider_calls": 0,
+  "cases": [
+    {
+      "events": 1000,
+      "distinct_event_ids": 1000,
+      "repos": 31,
+      "scoped_candidates": 31,
+      "ranked": 31,
+      "index_and_scoped_query_seconds": 0.0003266669809818268,
+      "provider_calls": 0,
+      "semantic_scale_or_distributed_claim": false
+    },
+    {
+      "events": 10000,
+      "distinct_event_ids": 10000,
+      "repos": 31,
+      "scoped_candidates": 300,
+      "ranked": 300,
+      "index_and_scoped_query_seconds": 0.0028941669734194875,
+      "provider_calls": 0,
+      "semantic_scale_or_distributed_claim": false
+    }
+  ],
+  "not_multiuser_auth_or_distributed_validation": true
+}

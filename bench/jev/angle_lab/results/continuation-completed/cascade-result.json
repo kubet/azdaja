@@ -1,0 +1,1 @@
+{"quality":{"absolute_count_error":6,"complete":true,"exact_task_answer":false,"occurrences":227,"official_ham":132,"per_record_accuracy":null,"per_record_accuracy_note":"Official aggregate only. Opposite label errors can cancel.","predicted_ham":138},"residuals":10,"semantic_calibration_guarantee":false,"status":"completed","threshold":0.7,"typed_autoaccepted":217}
