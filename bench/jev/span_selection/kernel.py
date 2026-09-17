@@ -6,6 +6,7 @@ import re
 import subprocess
 
 SENTINELS = ('no_match', 'ambiguous', 'not_covered')
+PUBLIC_SOURCE = 'ca320c3607116447a506d6c8429489f1b30157a9'
 VERSION = re.compile(r'(?<![A-Za-z0-9_])v?\d+\.\d+(?:\.\d+)?(?:[-+][A-Za-z0-9][A-Za-z0-9.-]*)?(?![A-Za-z0-9_])')
 QUOTED = (
     re.compile(r'(?<!`)`([^`\r\n]+)`(?!`)'),
@@ -93,11 +94,15 @@ def prepare(document):
 
 def verify_git_sources(document, root):
     prepare(document)
+    if document['source_commit'] != PUBLIC_SOURCE:
+        raise ValueError('experiment source is not the frozen public revision')
     for task in document['tasks']:
         s = task['source']
-        result = subprocess.run(['git', 'show', s['commit'] + ':' + s['path']], cwd=root,
+        result = subprocess.run(['git', 'cat-file', 'blob', s['commit'] + ':' + s['path']], cwd=root,
                                 capture_output=True, check=True, timeout=10)
         lines = result.stdout.decode().splitlines(keepends=True)
+        if s['end_line'] > len(lines):
+            raise ValueError('source line range exceeds Git blob')
         if ''.join(lines[s['start_line'] - 1:s['end_line']]) != s['text']:
             raise ValueError('source excerpt differs from pinned Git object')
 

@@ -1,5 +1,7 @@
 import copy
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from bench.jev.span_selection import kernel as k
 
@@ -123,6 +125,26 @@ class KernelTests(unittest.TestCase):
                      {'tasks': [{'id': 's01', 'expected': 'no_match', 'acceptable_spans': [{'start': 9, 'end': 14}]}]}):
             with self.assertRaises(ValueError):
                 k.validate_gold(pack, gold)
+
+    def test_source_guard_rejects_reconstruction_even_with_matching_local_hash(self):
+        doc = fixture('line one\nline three\n')
+        doc['source_commit'] = k.PUBLIC_SOURCE
+        source = doc['tasks'][0]['source']
+        source.update(commit=k.PUBLIC_SOURCE, start_line=1, end_line=2)
+        with patch.object(k.subprocess, 'run', return_value=SimpleNamespace(stdout=b'line one\nline two\nline three\n')) as run:
+            with self.assertRaisesRegex(ValueError, 'differs from pinned Git'):
+                k.verify_git_sources(doc, '.')
+            self.assertEqual(run.call_args.args[0][:3], ['git', 'cat-file', 'blob'])
+        source['end_line'] = 100
+        with patch.object(k.subprocess, 'run', return_value=SimpleNamespace(stdout=b'line one\n')):
+            with self.assertRaisesRegex(ValueError, 'line range exceeds'):
+                k.verify_git_sources(doc, '.')
+
+    def test_nonpublic_revision_is_rejected_before_git(self):
+        with patch.object(k.subprocess, 'run') as run:
+            with self.assertRaisesRegex(ValueError, 'frozen public revision'):
+                k.verify_git_sources(fixture(), '.')
+            run.assert_not_called()
 
 
 if __name__ == '__main__':
