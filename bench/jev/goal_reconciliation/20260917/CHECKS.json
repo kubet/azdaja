@@ -1,0 +1,27 @@
+{
+  "all_scientific_bars_passed": false,
+  "cancelled_scope_reopened": false,
+  "closed_study_manifests_unchanged": true,
+  "document_sha256": "e6d5e767e8ea0e0d67a2e5ed53558afbc000d17dade3a4e1999d6ac32e0c4f7b",
+  "installed_commands": 23,
+  "local_links_verified": 8,
+  "named_goals_mapped": [
+    "Usable optional Jev engine",
+    "Whole-result acceptance reconciliation",
+    "Shared agent wisdom and Jev strategy",
+    "Persistent TypeSafe attachment",
+    "Isolated Jev angles",
+    "Persistent optional credentials",
+    "Shared agent wisdom",
+    "Source ingestion and RAG context",
+    "Arbitrage and row651 calibration",
+    "Requested measurement rerun",
+    "Jev second-reader follow-through"
+  ],
+  "new_evidence_files_verified": 28,
+  "new_provider_calls": 0,
+  "retention_sha256": "a165f811116fcbed8c2691813a19717dd781f19732bf2635173941ab5ff43508",
+  "runtime_changed": false,
+  "schema": "azdaja.goal_reconciliation_checks.v1",
+  "status": "passed"
+}

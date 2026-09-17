@@ -1,0 +1,160 @@
+{
+  "accepted_runtime_source": "e75d83660660e5e9fb199a3c00a7c5905df42f5b",
+  "binary_sha256": "13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32",
+  "files": [
+    {
+      "bytes": 34954,
+      "path": "angle-replay.json",
+      "sha256": "a27fb2dcf1a421bca098e107ed3ec1c8e999f2915d1ee5773218f51b626fb8c5"
+    },
+    {
+      "bytes": 2001,
+      "path": "measurement-audit.json",
+      "sha256": "8e09a314254c5583493d29904684656bc9cc713346ce3bd604f7b13fa5ee270b"
+    },
+    {
+      "bytes": 1319,
+      "path": "source-and-custody.json",
+      "sha256": "36df43ac240660a7fba437a6439df5512144a193a96d5811a207ebeb4c2378aa"
+    },
+    {
+      "bytes": 689,
+      "path": "current-package-list.txt",
+      "sha256": "a04823db794eb4ad0a63feba875f4e57b83c4830585147a924bc68d8438470f9"
+    },
+    {
+      "bytes": 117,
+      "path": "installed-credentials/attach-from-stdin.log",
+      "sha256": "efa63a4907effd580b0f82ca36eca8dc95992e8f4ec9acf723295bf2c21d761a"
+    },
+    {
+      "bytes": 10,
+      "path": "installed-credentials/attached-resolution-before-transport-exec.log",
+      "sha256": "a9f982d8cb8dbc81e6965814c7d33f2249d63fbd3467f8331ddca475f7e4377e"
+    },
+    {
+      "bytes": 317,
+      "path": "installed-credentials/attached-resolution-before-transport-final.log",
+      "sha256": "442bb80d26d783ea47b3b08ec206a3f024cb6d841e943fce9c9a0f9eb853847a"
+    },
+    {
+      "bytes": 459,
+      "path": "installed-credentials/caps-before-attachment.log",
+      "sha256": "06084ead3ec453adaf27a905a0dc66adfd6a542e61b5cd84d280a57e6e8ed2c0"
+    },
+    {
+      "bytes": 10,
+      "path": "installed-credentials/default-disabled-exec.log",
+      "sha256": "a9f982d8cb8dbc81e6965814c7d33f2249d63fbd3467f8331ddca475f7e4377e"
+    },
+    {
+      "bytes": 348,
+      "path": "installed-credentials/default-disabled-final.log",
+      "sha256": "ee9295bbaf647375a1f7d6422daa424ef18831961a62a5112a2c4c14a4aa8275"
+    },
+    {
+      "bytes": 161,
+      "path": "installed-credentials/detach-persistent-file.log",
+      "sha256": "af3411a3aba04c6e7156970cbd1fef4a9eed12a010732f36660ecf438e9b3e0a"
+    },
+    {
+      "bytes": 424,
+      "path": "installed-credentials/doctor-local-attachment.log",
+      "sha256": "8c4b285c144f265a24e3124ccd406f1841ae65e002e5300bb601bec6b83942be"
+    },
+    {
+      "bytes": 10,
+      "path": "installed-credentials/environment-resolution-before-transport-exec.log",
+      "sha256": "a9f982d8cb8dbc81e6965814c7d33f2249d63fbd3467f8331ddca475f7e4377e"
+    },
+    {
+      "bytes": 317,
+      "path": "installed-credentials/environment-resolution-before-transport-final.log",
+      "sha256": "442bb80d26d783ea47b3b08ec206a3f024cb6d841e943fce9c9a0f9eb853847a"
+    },
+    {
+      "bytes": 395,
+      "path": "installed-credentials/environment-wins.log",
+      "sha256": "3de2d64816c3063d48988fa937881913a34cf011fc6aa65ec61f4bb19a2fb1ed"
+    },
+    {
+      "bytes": 117,
+      "path": "installed-credentials/explicit-replacement.log",
+      "sha256": "efa63a4907effd580b0f82ca36eca8dc95992e8f4ec9acf723295bf2c21d761a"
+    },
+    {
+      "bytes": 398,
+      "path": "installed-credentials/fresh-process-persistent-status.log",
+      "sha256": "10619ac30eb57739cafd341c7fe7bb36a49f1ae3ee6dbca6e403c70f789a64a5"
+    },
+    {
+      "bytes": 162,
+      "path": "installed-credentials/idempotent-detach.log",
+      "sha256": "e7e59e76d9a947cfc5425bd0d4aa595ed48d2a76655a5cceac7f4fbbf8fa2c6a"
+    },
+    {
+      "bytes": 10,
+      "path": "installed-credentials/invalid-environment-no-fallback-exec.log",
+      "sha256": "a9f982d8cb8dbc81e6965814c7d33f2249d63fbd3467f8331ddca475f7e4377e"
+    },
+    {
+      "bytes": 316,
+      "path": "installed-credentials/invalid-environment-no-fallback-final.log",
+      "sha256": "ca58a63926607ef143e9e31f676cdb3b6f0161826b9c007bb0d81f9350be74bd"
+    },
+    {
+      "bytes": 34,
+      "path": "installed-credentials/kill-session.log",
+      "sha256": "d3b054868940271f5907011afac670f3099df71bef1ce9bb2bd3979ba13248f1"
+    },
+    {
+      "bytes": 428,
+      "path": "installed-credentials/private-install.log",
+      "sha256": "4056a43b6ce278c6ed678ae3b8436121ba7d0cfff7a285a6914ba16034537d30"
+    },
+    {
+      "bytes": 176,
+      "path": "installed-credentials/private-uninstall.log",
+      "sha256": "bb232eee0347bbdc929cec5d4742ecf73be8105378963f23c9cb7a37a4a561c0"
+    },
+    {
+      "bytes": 93,
+      "path": "installed-credentials/replacement-needs-opt-in.log",
+      "sha256": "e41496866b621d3e9cf51dd22a6377ee8482d855b6be32737ad0e02ad0d0e39b"
+    },
+    {
+      "bytes": 27,
+      "path": "installed-credentials/start-persistent-session.log",
+      "sha256": "d367cc9daddd1ac53e466ebb6d81f8ed25c1d6d839e321d11880891364a940ee"
+    },
+    {
+      "bytes": 382,
+      "path": "installed-credentials/status-after-detach.log",
+      "sha256": "7591358be22c78528421133ea092261bc1576273d7eac502cb8fc20b26b296bf"
+    },
+    {
+      "bytes": 381,
+      "path": "installed-credentials/status-before-attachment.log",
+      "sha256": "25013d7c02e45f200995f05ef554c715a6c145b655b88821a3e0c6685805d1e1"
+    },
+    {
+      "bytes": 5062,
+      "path": "installed-credentials/receipt.json",
+      "sha256": "1a5a50084fa9ca211cdd83343665f0b4091f02a5d0fb21b090952aa3200865ce"
+    }
+  ],
+  "full_rust_suite_rerun_in_this_followup": false,
+  "installed_credential_runner": {
+    "path": "bench/jev/results/six-angle-acceptance-20260917/installed-credentials/runner.py",
+    "sha256": "f15d170fe7eea58b576cff1b26095b5c968c71888f34e2be3e6d971530d24b80"
+  },
+  "limits": [
+    "Actual fresh private-install workflow used synthetic credentials and refused all native transport admissions.",
+    "Frozen inference was not rerun.",
+    "Historical failed quality bars and missing observations remain unchanged.",
+    "Cancelled memory/RAG prototypes were not executed or packaged."
+  ],
+  "new_provider_calls": 0,
+  "schema": "azdaja.goal_reconciliation_evidence.v1",
+  "source_head": "f10de42aad79bde8b7cb29ffc06ed688f8b7c95d"
+}
