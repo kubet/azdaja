@@ -1,0 +1,283 @@
+{
+  "conclusions": {
+    "agreement_authorizes_approval": false,
+    "default_jev_parity": false,
+    "independent_holdout_transfer": false,
+    "new_inference_requests": 0,
+    "observed_total_errors_similar_at_transferred_threshold": true,
+    "same_false_negative_risk": false,
+    "statistical_equivalence_established": false,
+    "universal_replacement_established": false
+  },
+  "cost": {
+    "dollar_ratio": null,
+    "generative_subscription_marginal_usd": null,
+    "invoice_observed": false,
+    "jev_input_estimate_usd": "0.11545926",
+    "rate_usd_per_million_input_tokens": ".042"
+  },
+  "criteria": {
+    "control": {
+      "accuracy_on_judged": 0.9691629955947136,
+      "automatic_approval": false,
+      "corrected_vs_fresh_control": 0,
+      "coverage": 1.0,
+      "decision_range_due_only_to_unresolved": [
+        139,
+        139
+      ],
+      "errors": 7,
+      "fn": 0,
+      "fp": 7,
+      "judged": 227,
+      "known_ham": 139,
+      "observed": 227,
+      "regressed_vs_fresh_control": 0,
+      "signed_count_error": 7,
+      "sum_ham_probability": "138.35",
+      "tn": 88,
+      "tp": 132,
+      "unresolved": 0
+    },
+    "control_inverse_agreement": {
+      "accuracy_on_judged": 0.9733333333333334,
+      "automatic_approval": false,
+      "coverage": 0.9911894273127754,
+      "decision_range_due_only_to_unresolved": [
+        138,
+        140
+      ],
+      "errors": 6,
+      "fn": 0,
+      "fp": 6,
+      "judged": 225,
+      "known_ham": 138,
+      "observed": 227,
+      "signed_count_error": null,
+      "tn": 87,
+      "tp": 132,
+      "unresolved": 2
+    },
+    "criteria_ham": {
+      "accuracy_on_judged": 0.9647577092511013,
+      "automatic_approval": false,
+      "corrected_vs_fresh_control": 1,
+      "coverage": 1.0,
+      "decision_range_due_only_to_unresolved": [
+        140,
+        140
+      ],
+      "errors": 8,
+      "fn": 0,
+      "fp": 8,
+      "judged": 227,
+      "known_ham": 140,
+      "observed": 227,
+      "regressed_vs_fresh_control": 2,
+      "signed_count_error": 8,
+      "sum_ham_probability": "136.46",
+      "tn": 87,
+      "tp": 132,
+      "unresolved": 0
+    },
+    "criteria_ham_inverse_agreement": {
+      "accuracy_on_judged": 0.9732142857142857,
+      "automatic_approval": false,
+      "coverage": 0.986784140969163,
+      "decision_range_due_only_to_unresolved": [
+        138,
+        141
+      ],
+      "errors": 6,
+      "fn": 0,
+      "fp": 6,
+      "judged": 224,
+      "known_ham": 138,
+      "observed": 227,
+      "signed_count_error": null,
+      "tn": 86,
+      "tp": 132,
+      "unresolved": 3
+    },
+    "inverse_spam": {
+      "accuracy_on_judged": 0.9691629955947136,
+      "automatic_approval": false,
+      "corrected_vs_fresh_control": 1,
+      "coverage": 1.0,
+      "decision_range_due_only_to_unresolved": [
+        139,
+        139
+      ],
+      "errors": 7,
+      "fn": 0,
+      "fp": 7,
+      "judged": 227,
+      "known_ham": 139,
+      "observed": 227,
+      "regressed_vs_fresh_control": 1,
+      "signed_count_error": 7,
+      "sum_ham_probability": "137.34",
+      "tn": 88,
+      "tp": 132,
+      "unresolved": 0
+    }
+  },
+  "observed_occurrences": 17469,
+  "official_ham": 8638,
+  "paired": {
+    "declared_transferred": {
+      "agreement_coverage": 0.9734386627740569,
+      "agreement_error_rate": 0.008938547486033519,
+      "agreements": 17005,
+      "baseline_losses": 234,
+      "baseline_wins": 230,
+      "disagreements": 464,
+      "joint_correct": 16853,
+      "observed": 17469,
+      "shared_errors": 152
+    },
+    "original_p_ge_0.5": {
+      "agreement_coverage": 0.9684584120441926,
+      "agreement_error_rate": 0.015072703629270599,
+      "agreements": 16918,
+      "baseline_losses": 131,
+      "baseline_wins": 420,
+      "disagreements": 551,
+      "joint_correct": 16663,
+      "observed": 17469,
+      "shared_errors": 255
+    }
+  },
+  "probability_count": {
+    "improves_over_threshold_0_5": false,
+    "signed_error": "649.38",
+    "sum_noul": "9287.38"
+  },
+  "schema": "azdaja.asymmetry.matched_comparison.v1",
+  "scores": {
+    "baseline": {
+      "absolute_count_error": 376,
+      "accuracy": 0.9779037151525559,
+      "correct": 17083,
+      "errors": 386,
+      "false_negative_rate": 0.0005788376939106274,
+      "false_positive_rate": 0.04314347186049145,
+      "fn": 5,
+      "fp": 381,
+      "gold_ham": 8638,
+      "observed": 17469,
+      "predicted_ham": 9014,
+      "signed_count_error": 376,
+      "tn": 8450,
+      "tp": 8633
+    },
+    "declared_transferred": {
+      "absolute_count_error": 112,
+      "accuracy": 0.9781326921976072,
+      "correct": 17087,
+      "errors": 382,
+      "false_negative_rate": 0.015628617735586943,
+      "false_positive_rate": 0.02796965236100102,
+      "fn": 135,
+      "fp": 247,
+      "gold_ham": 8638,
+      "observed": 17469,
+      "predicted_ham": 8750,
+      "signed_count_error": 112,
+      "threshold": 0.74,
+      "tn": 8584,
+      "tp": 8503
+    },
+    "original_p_ge_0.5": {
+      "absolute_count_error": 607,
+      "accuracy": 0.9613601236476044,
+      "correct": 16794,
+      "errors": 675,
+      "false_negative_rate": 0.003936096318592266,
+      "false_positive_rate": 0.07258521118786095,
+      "fn": 34,
+      "fp": 641,
+      "gold_ham": 8638,
+      "observed": 17469,
+      "predicted_ham": 9245,
+      "signed_count_error": 607,
+      "threshold": 0.5,
+      "tn": 8190,
+      "tp": 8604
+    }
+  },
+  "source_hashes": {
+    "bench/jev/asymmetry/baseline/replay-validation.json": "ea12f3f8e8b9f9981cefcf591841fda3ab85964bec5b8f9005698fb46a2a6edc",
+    "bench/jev/asymmetry/baseline/results/paired-20260917.json": "f3280fdb20ac1b38c0a55b4a4f77056dfac6e4550402730941ba3942daa40717",
+    "bench/jev/asymmetry/criteria/results/grade-20260917.json": "65765977c90ffa37d8d53834768bc657a00e6bd950b9640d68b8f3010cfb3ea8",
+    "bench/jev/asymmetry/fp_analysis/analysis.json": "9fd960726a5f9c2a133cf7bcab75d61834629b7e0eabf18c1b7d7b079086336d",
+    "bench/jev/asymmetry/threshold/transfer-result.json": "cd2534e4ccdf6a4faede912e1f9de7949499f527159e28457aace68fa684ba9a",
+    "bench/jev/second_reader/results/row651-live-20260917/receipt.json": "03ae785f69708ab66d69998158ce03bd7db2fed6bab9fb4eddfe4881dfd38d72",
+    "bench/jev/second_reader/results/row651-replay.json": "a0aebef2d01d12bb8442483dfe58c1750a8c0bf821b3494a559762219507406f"
+  },
+  "timing": {
+    "generative_interrupted_full_wall_seconds": 3533.122038782807,
+    "generative_known_controller_median_seconds": 23.421234000008553,
+    "generative_native_median_seconds": 22.8125,
+    "generative_native_seconds_sum": 2541.001,
+    "generative_unknown_controller_durations": 1,
+    "historical_not_randomized_concurrent": true,
+    "jev_controller_median_seconds": 1.4780171464954037,
+    "jev_full_wall_seconds": 210.0126917079906,
+    "jev_native_median_seconds": 1.247,
+    "ratio_of_controller_medians": 15.846388558849773,
+    "ratio_of_native_medians": 18.293905372894947
+  },
+  "usage": {
+    "generative": {
+      "billing_known": false,
+      "entered_turns": 112,
+      "failed_identity_unknown_events": 0,
+      "logical_request_ids": 112,
+      "observed_models": [
+        "gpt-5.6-sol"
+      ],
+      "observed_providers": [
+        "OpenAI"
+      ],
+      "physical_attempt_events": 112,
+      "setup_attempts": 0,
+      "succeeded_events": 112,
+      "usage": {
+        "cache_read_tokens": {
+          "known_total": 0,
+          "observed_events": 112,
+          "unknown_entered_events": 0
+        },
+        "cache_write_tokens": {
+          "known_total": 0,
+          "observed_events": 112,
+          "unknown_entered_events": 0
+        },
+        "input_tokens": {
+          "known_total": 2452510,
+          "observed_events": 112,
+          "unknown_entered_events": 0
+        },
+        "output_tokens": {
+          "known_total": 189608,
+          "observed_events": 112,
+          "unknown_entered_events": 0
+        },
+        "reasoning_tokens": {
+          "known_total": 0,
+          "observed_events": 112,
+          "unknown_entered_events": 0
+        }
+      }
+    },
+    "jev": {
+      "known_input_tokens": 2749030,
+      "known_output_tokens": 357302,
+      "questions": 17469,
+      "requests": 112,
+      "unknown_input_attempts": 0,
+      "unknown_output_attempts": 0
+    }
+  }
+}

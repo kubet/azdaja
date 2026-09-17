@@ -1,0 +1,51 @@
+{
+  "all_requested_delivery_complete": false,
+  "checks": [
+    {
+      "exit": 0,
+      "name": "paired_public",
+      "seconds": 1.7619505409966223,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "407ae0e4e9837aabfdd109bcacb705aa636837e7c3c25375b0336f6099656a6f"
+    },
+    {
+      "exit": 0,
+      "name": "criteria_public",
+      "seconds": 0.18429883301723748,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "f50768ffa2fbf13a1bb889acb51723615839a2a0d7b2dd4f2c666e4d2656043a"
+    },
+    {
+      "exit": 0,
+      "name": "threshold_public",
+      "seconds": 0.8591342910076492,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "f87fc8646e554bbdaaf98a865fb2149c670e2c8ad394990b33c8b001b84b9189"
+    },
+    {
+      "exit": 1,
+      "name": "existing_output_refusal",
+      "seconds": 0.056234417017549276,
+      "stderr_sha256": "35ea6e3948c08e34e15e76515690ab0aa1eea5209e5a87b43fc018342a4ae610",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "exit": 1,
+      "name": "dangling_output_refusal",
+      "seconds": 0.05581749998964369,
+      "stderr_sha256": "35ea6e3948c08e34e15e76515690ab0aa1eea5209e5a87b43fc018342a4ae610",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "email_delivery": "blocked_no_authorized_sender",
+  "independent_terminal_review": "all112 source/request/raw/reentry/trace events and three matrices independently matched; fresh replay byte-equivalent",
+  "matched_reports_unchanged": true,
+  "new_inference_requests": 0,
+  "new_provider_calls": 0,
+  "owned_private_runtime_absent": true,
+  "quality": "original675,transferred382,generative386 item errors, not general equivalence",
+  "real_workflow_evidence": "terminal native receipts retain all112 generative and112 typed calls; these checks replay them without new inference",
+  "repaired_documentation_defect": "threshold replay requires the retained --output path; actual corrected command passed",
+  "schema": "azdaja.asymmetry.final_public_acceptance.v1",
+  "status": "passed"
+}

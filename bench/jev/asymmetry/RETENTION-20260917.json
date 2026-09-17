@@ -1,0 +1,2759 @@
+{
+  "email_sent": false,
+  "files": {
+    "bench/jev/asymmetry/RESULTS.md": {
+      "bytes": 12886,
+      "sha256": "a7c9c1752bf82a4d4c0aff49f8b25ffb0f4d7e41ab3d6fc5d47f6f2a591cbd29"
+    },
+    "bench/jev/asymmetry/baseline/CONTINUATION-FROZEN.started": {
+      "bytes": 107,
+      "sha256": "227451ae923106a421f489bee254eb5cf70fb974bc4cc18179ec3bf8950bb980"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/final-reduction-cell.json": {
+      "bytes": 518,
+      "sha256": "757beb40432d34bb1387989038f03c89a1cc0e9cdb8080cd603e4371de122cf5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/final-reduction.json": {
+      "bytes": 113,
+      "sha256": "4674496a444f6daa0768786a2a40b66d23f07bdc42f393b9e7a9aeacc381e23d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/initialize-cell.json": {
+      "bytes": 62,
+      "sha256": "20990af07f05fd8fb176f94b638232079c9c01cc408a7228e7819445c429184d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/model-trace.jsonl": {
+      "bytes": 54630,
+      "sha256": "6d1df3a04460f7e37fc19ec13db8b3f86868b0397041381492e9fdddb455bf0e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-001-answer.json": {
+      "bytes": 2137,
+      "sha256": "fd75824753cd8dfa6b63b6865b91e50cbb2d77e7abc0ea6d33e0b4104edb0e0f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-001-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-001-prompt.json": {
+      "bytes": 90334,
+      "sha256": "d8379ff9b3fff6d02f76d06d9888ec69c50ed0950481a582c8f883a465cc5360"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-001-raw.json": {
+      "bytes": 2780,
+      "sha256": "9c4e39d62d3776b2e56110092872112795f98caf13bbcd5f97b55f7c3bbd88f3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-001-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-001-reentry.json": {
+      "bytes": 2245,
+      "sha256": "1a979612f13d843b243fa755761a8d6d529ff9c30c19a04a8b47fdd0e990b924"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-002-answer.json": {
+      "bytes": 2106,
+      "sha256": "601f0426e39d14c7fa07c53455af35ad9881fb83e86e1a38d218e00a4c0f5426"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-002-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-002-prompt.json": {
+      "bytes": 90231,
+      "sha256": "1a4054e1d490d061b99fc74bea0c0b257b16ef1c4a171e8ff200c4275db1fb7f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-002-raw.json": {
+      "bytes": 2741,
+      "sha256": "c9de4e948b47ed9b371e57221f6b5409ef2cd961ae2526a3c26396e171ccf074"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-002-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-002-reentry.json": {
+      "bytes": 2214,
+      "sha256": "aa595d68d6f97d608b93e2850308931e63a5d6b2933d04ad19645696c1a21c05"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-003-answer.json": {
+      "bytes": 2168,
+      "sha256": "25006e111a886e97691e63b89b02e29ae9d19d2938959f511b844beb26856030"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-003-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-003-prompt.json": {
+      "bytes": 90073,
+      "sha256": "b184fa02374d1b188f282f5b0a4255843a40bfe88a7bab119d945a5e2a447069"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-003-raw.json": {
+      "bytes": 2815,
+      "sha256": "ea19282a11c9a285064e0479de8b9778d2827c654c2535921bd88829f0b32522"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-003-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-003-reentry.json": {
+      "bytes": 2276,
+      "sha256": "f5c705cd97b720faee79887bbbc11b14e00682ebea72384ad090b802eb926123"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-004-answer.json": {
+      "bytes": 2124,
+      "sha256": "c11e1d8b3e8af305c5b1406404fcca5d9de4d40e482e246999b8bc4ca5b92d89"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-004-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-004-prompt.json": {
+      "bytes": 90348,
+      "sha256": "5d326143ed716a5f8a620b4318bf8af7020ac23f0a15f4927ff3439f3439b2f5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-004-raw.json": {
+      "bytes": 2763,
+      "sha256": "be1acb32f48753e5308ec31090da1fe685311ee7faa5935fdf6e5ad89f009b2e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-004-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-004-reentry.json": {
+      "bytes": 2232,
+      "sha256": "8708e979a88359f297ea439fe67aebe30a149292775a8c3cf0e3db4cf65a0a86"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-005-answer.json": {
+      "bytes": 2133,
+      "sha256": "26f4098eee840162cdda89c8f53d57806bd49fc433f12901379422615de5b04d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-005-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-005-prompt.json": {
+      "bytes": 90025,
+      "sha256": "77650acfa281ed4acf7a14e856d2a458ce7e8c5cc2ce22c427d6cf373929d451"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-005-raw.json": {
+      "bytes": 2776,
+      "sha256": "4574aa4a477b1827a72b9c4709610ce546543708b9584bfa9e2dc5b296508a3a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-005-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-005-reentry.json": {
+      "bytes": 2241,
+      "sha256": "b4db8bbbc185988949e2f0861263948fb80058e0c688fef3475f3e03b4ffeb07"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-006-answer.json": {
+      "bytes": 2142,
+      "sha256": "52d46fd6e6db999d3a0eb1d91cd93b5352bf07cad69098b04906fa51837e8d28"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-006-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-006-prompt.json": {
+      "bytes": 90001,
+      "sha256": "e3be078ef39a733e7c5e9126a2149adadd1c553f706654066f63be48c5c3911a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-006-raw.json": {
+      "bytes": 2785,
+      "sha256": "6de0f3cc153bca4d28938864a3ee2cc7bc4af9dbbdea8ce9af1fcc950873e98f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-006-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-006-reentry.json": {
+      "bytes": 2250,
+      "sha256": "1b5612f37478ca7304499ff4924e76e4950320546d67ac36224fb705af92ae9e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-007-answer.json": {
+      "bytes": 2120,
+      "sha256": "289753cd14185f492007ba2223d5c368a19f3ecc3dc05d1b2c16d2ad380a028c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-007-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-007-prompt.json": {
+      "bytes": 89882,
+      "sha256": "3446ff4c9b7a0ddadd9db916e8d375bcf2b6c2529274e0fa037d7bd7b8364c27"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-007-raw.json": {
+      "bytes": 2759,
+      "sha256": "91b0d3edebd3e1f6b94984b508e17a672e0f5fac0222c8c32dc01d1c5459ac6f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-007-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-007-reentry.json": {
+      "bytes": 2228,
+      "sha256": "05144c46ab2b1851a0f660b8aa4ee87cf591fae1e2442a0109bc22d6444d743f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-008-answer.json": {
+      "bytes": 2099,
+      "sha256": "d2756f89737e871b8344b68da4055807d6e222d665b051850ff71d65b7b11e11"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-008-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-008-prompt.json": {
+      "bytes": 90278,
+      "sha256": "cef29c91ad59fab3e1a1c0673a56ac439c63f9c5ba573530e055d04046b6eea8"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-008-raw.json": {
+      "bytes": 2734,
+      "sha256": "a12f4e5a165ebd79aa676a8daa4d2323eefc3a7ed15df7df66fbd462f5e8881a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-008-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-008-reentry.json": {
+      "bytes": 2207,
+      "sha256": "2b4fe8eaf1a563c69a24643ace2f07aae63ddae4bb66dfcc88ea6644f4a53c14"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-009-answer.json": {
+      "bytes": 2099,
+      "sha256": "41cfd76e1cfce53f82522dd83620534ac72edcbf2273f71ce6e763a6a7399671"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-009-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-009-prompt.json": {
+      "bytes": 90205,
+      "sha256": "5e2035d01964f5936ec0a01ee35c1bdfe79395b6c512184927fd4b88a3964290"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-009-raw.json": {
+      "bytes": 2734,
+      "sha256": "e18d21696047585286c16d23b29d5d1c71d6da5986fc32b1a82da23e7d92cb87"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-009-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-009-reentry.json": {
+      "bytes": 2207,
+      "sha256": "1bb545fc6139c6095a8523be9ae92c8abd7200a7fb4c8ba885b5b123c5d90d4a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-010-answer.json": {
+      "bytes": 2123,
+      "sha256": "37445e31fa50ee2683bfb992c428ddf789434b9e936bdd8c872b9fe959c6168d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-010-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-010-prompt.json": {
+      "bytes": 90019,
+      "sha256": "e44548007fd8377d095a78b7cfe603a72832f9431234e63f49f99d76a26b5b42"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-010-raw.json": {
+      "bytes": 2762,
+      "sha256": "b3d25df77b9174245374be8889375dc65b148e6bff969f452e4bbf89a4e9a50d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-010-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-010-reentry.json": {
+      "bytes": 2231,
+      "sha256": "0721be2489afa329cb32f10621b1096f8b35443050e1f74850e9e17b4e400f5f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-011-answer.json": {
+      "bytes": 2122,
+      "sha256": "51629ac952fd932f9ddcdf030250201d0d5420ab4ab1b1638efe6439b14463c1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-011-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-011-prompt.json": {
+      "bytes": 89934,
+      "sha256": "7312482f1ae8a6ec453503db6a00a908e7470bf9f97454179061be3bc9961fe0"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-011-raw.json": {
+      "bytes": 2761,
+      "sha256": "fd5107b786a4ccfdaaf7466c5ff73730aaa5bb13e7cc58fbb8cbe0b95e6da8b7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-011-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-011-reentry.json": {
+      "bytes": 2230,
+      "sha256": "ceec2b893acc160bc76adbd4cc37d75fc7fa6a75495821a11bbf00f54b18506f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-012-answer.json": {
+      "bytes": 2136,
+      "sha256": "1911f583ec7105865efd942f5279b9bd6756655f069535bad7a86e9f30d4098f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-012-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-012-prompt.json": {
+      "bytes": 90212,
+      "sha256": "6185f022b8e53ed62f153a96de84a3a99de0450fff062ee78a7b4a03a0611e83"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-012-raw.json": {
+      "bytes": 2779,
+      "sha256": "323656f2686cf51ef5eb27c0887e0d795d51c49880af823642429a2b4e254b9f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-012-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-012-reentry.json": {
+      "bytes": 2244,
+      "sha256": "8494117fed4c6c9eb2363a584b6e5c4864b4d73c378c83552d2ce051ea73c91a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-013-answer.json": {
+      "bytes": 2090,
+      "sha256": "026c3599e854734dbc98ea52439dfaa4fd4b8cdff29742f8bb89bee715f89d58"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-013-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-013-prompt.json": {
+      "bytes": 90163,
+      "sha256": "631468a40bf20475af2c9a79393a2cb95ca1a58e2c6eb4ea9a28af5f656d60b0"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-013-raw.json": {
+      "bytes": 2721,
+      "sha256": "3ce8032be022849f36b3a1ec442511d182915b186635c4b994c02b619c51c403"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-013-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-013-reentry.json": {
+      "bytes": 2198,
+      "sha256": "c4a9d8d02a72249da37383168a276d6a7374c1086fa7f9267de38f9896669c63"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-014-answer.json": {
+      "bytes": 2135,
+      "sha256": "096786cfb159be03021de6fe1e4e0a480eaaac65615014371882f2bad59660b1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-014-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-014-prompt.json": {
+      "bytes": 90196,
+      "sha256": "b8204db7779e43aa662aed97be5603d5b9dde784567736f9dab9bdd9266dfb99"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-014-raw.json": {
+      "bytes": 2778,
+      "sha256": "3733ab9b6ee5e6abd9cef50a75b3156ee7488a4529ed5aac6f1bebdaf8f23776"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-014-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-014-reentry.json": {
+      "bytes": 2243,
+      "sha256": "f46dac4de3dc2839903ef54ef2ccb2b5ae41ee5ddd2eeee1fe0941fd0ebcbdc6"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-015-answer.json": {
+      "bytes": 2100,
+      "sha256": "ea935e74f26436493589b7dcdef0c9f6cce93f1762c213d5397c78a9f8ae7abc"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-015-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-015-prompt.json": {
+      "bytes": 90252,
+      "sha256": "715ed015cee66e360195490b0fe8a45c7c05854e4e5662c0b97a02afc8b455a4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-015-raw.json": {
+      "bytes": 2735,
+      "sha256": "62ca3e61a4e7666c6c49a22b16094a869838f0ddf936f8d9b51105ab41542e82"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-015-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-015-reentry.json": {
+      "bytes": 2208,
+      "sha256": "ad7f7c4309010080327faa93df5b9e8064a951ce3d7be90f2820bf3269db8600"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-016-answer.json": {
+      "bytes": 2128,
+      "sha256": "c78edc8acc9f679f19e59bedd720a026474c101704e4bc3ce64018c23ac35015"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-016-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-016-prompt.json": {
+      "bytes": 90182,
+      "sha256": "26fb50311d9e532856e87ae5299a29ff0a58be0550d9aa5798a9969929e3e8b2"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-016-raw.json": {
+      "bytes": 2767,
+      "sha256": "a3122adfe2e6c08218690b5af8899455bc0bea9a067a635dcfbb90e4fef6e492"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-016-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-016-reentry.json": {
+      "bytes": 2236,
+      "sha256": "50fa6b7cf47fd32c915fce0c434e660519f38ebb91389ea49c8aac5ee4f9705c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-017-answer.json": {
+      "bytes": 2110,
+      "sha256": "df201092b40ad462e2acb96b3ccd3b9a972d751dab7cb96bd0cd267ea57f5f09"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-017-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-017-prompt.json": {
+      "bytes": 90315,
+      "sha256": "5de32a9269e2232ad6144e710949fb85bb6d3a31d7caa0167829c05d94ce3977"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-017-raw.json": {
+      "bytes": 2749,
+      "sha256": "e9ed9adb7fc5b1bb53e976bff493ff64f00b7a44166731aed42f2bf6514c33d7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-017-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-017-reentry.json": {
+      "bytes": 2218,
+      "sha256": "52934e938221b571b46a6dbe175715d7df838de509077bee2a67eaee2714c8f8"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-018-answer.json": {
+      "bytes": 2121,
+      "sha256": "bf9752faaf2ec9d0581a69def361b783c7af6f344a2a5bad9fffd03f440cb8ed"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-018-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-018-prompt.json": {
+      "bytes": 90357,
+      "sha256": "590fb8b356f68e78a7329a69c85fc569e426623f3bcd1aadd967aabd5511b860"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-018-raw.json": {
+      "bytes": 2760,
+      "sha256": "19813890ecf0ba91fd2239f576854f3a8e08d7a9131307cd90b1f12f130ab907"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-018-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-018-reentry.json": {
+      "bytes": 2229,
+      "sha256": "1b86cc56707d5849881ac251e65921cfb7363392d0bd47d082d44cdb7de876a4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-019-answer.json": {
+      "bytes": 2115,
+      "sha256": "759cbfe0d427dd33637e525aae45b1de19d165a35f2dc4322d33a2cfc46ae2b9"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-019-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-019-prompt.json": {
+      "bytes": 90301,
+      "sha256": "b6b1636779f3daf3247922abb667f2bdd8863e97151257c387393e55f86cedbf"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-019-raw.json": {
+      "bytes": 2750,
+      "sha256": "33ec7c245ab839c00a41bcf18ec29b98812e70ea2aed76129d4d98cd3793be8e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-019-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-019-reentry.json": {
+      "bytes": 2223,
+      "sha256": "3afb03936b14ba34f0ad01b67a274d81bde9ff87227619abac53d5e4f68a2701"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-020-answer.json": {
+      "bytes": 2151,
+      "sha256": "f89f695d228502ad6d5ca98907b21730893ead5308204cd21082ab935ed72aee"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-020-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-020-prompt.json": {
+      "bytes": 90333,
+      "sha256": "a0d77a315f73e8dab93c8ef712fb114c62c3779ba506acf9b000fdeeac8acb68"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-020-raw.json": {
+      "bytes": 2798,
+      "sha256": "fbe8c4f232c86d18ef0b4d9f567b6bfab3215c93ebf375574843258e141698ea"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-020-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-020-reentry.json": {
+      "bytes": 2259,
+      "sha256": "3c53602dff0cefb9fdbe8fd18978ea63be6319ad652791b98d885174e7fcd025"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-021-answer.json": {
+      "bytes": 2141,
+      "sha256": "805e5cf5d3663bbe3acfca84f28658ce87ae7876c00ac373d7446d3a5d05ce9f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-021-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-021-prompt.json": {
+      "bytes": 89862,
+      "sha256": "de8e96bf0305904337be3cdf949a901575d309671c16a895c06af9be27c5a3a1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-021-raw.json": {
+      "bytes": 2784,
+      "sha256": "e56b408f8273fb124e99fb4eb259a71c3276022cacce004c0ec4f025032c45be"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-021-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-021-reentry.json": {
+      "bytes": 2249,
+      "sha256": "b02f91125ed1faae094da9f467a80de776e3244603abcdcbe5b4b2fd5cead0f2"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-022-answer.json": {
+      "bytes": 2109,
+      "sha256": "1b7e67d9342376ac6c5fd337acdcb0aa1e84421877604ddab9f2fea1abf2bed7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-022-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-022-prompt.json": {
+      "bytes": 89842,
+      "sha256": "6b35aa9c553ddb359311f6a1f689c1cf2e143ab244d76feac2cba8659b84ad65"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-022-raw.json": {
+      "bytes": 2744,
+      "sha256": "55ba0d1dc9bcd4ca2472542719b45be6a53b154ab016aaec0255c4dcf2fb83c7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-022-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-022-reentry.json": {
+      "bytes": 2217,
+      "sha256": "65562eb8aa4e25ff1ba93ce5cfbfac20670e33fc5a3ccb50423d1d7cfbb69b6b"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-023-answer.json": {
+      "bytes": 2098,
+      "sha256": "9d124ebf4973198b1f7b7df96a8ae1058b78dd11e0895f5a396038b29edb92dd"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-023-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-023-prompt.json": {
+      "bytes": 90048,
+      "sha256": "b6485dccc10b668bad67d60710105a070a649b15182cd6922abe226337d31703"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-023-raw.json": {
+      "bytes": 2729,
+      "sha256": "f1e5f459c2882e1e6d64b9b06fc9a85fb3a33f5d38bb7cab944667f3b65f9901"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-023-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-023-reentry.json": {
+      "bytes": 2206,
+      "sha256": "ea5898677206a656a2ebe9720fdf4d83e4c42b4ee4627483789e7f0edb150aaf"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-024-answer.json": {
+      "bytes": 2136,
+      "sha256": "d6009ae46736cb3b9dd8380f32e6f1f513de4bfad52bba72999d45c6202e2323"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-024-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-024-prompt.json": {
+      "bytes": 89864,
+      "sha256": "e7f2c16ca71fd7a8fe328e025a1508239bbed18c1b0eda1c3791f18f63badf59"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-024-raw.json": {
+      "bytes": 2775,
+      "sha256": "fb07f41b7bdbd6f25dbf18260636d88954ea1d8d867daa0ea72a307fd7c80290"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-024-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-024-reentry.json": {
+      "bytes": 2244,
+      "sha256": "e6aec2256def79481cdac3c7692f18e4130c25f71339bc20519b432c1793092d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-025-answer.json": {
+      "bytes": 2120,
+      "sha256": "cab12c7cf1ea944e6769af4dca769610c956d823879bd1d4e5d120c664191d2f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-025-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-025-prompt.json": {
+      "bytes": 90302,
+      "sha256": "18c9435c6398243b786cde7e6c958d0c0ca7b209bcb524ee9842e1109bf7c5d2"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-025-raw.json": {
+      "bytes": 2759,
+      "sha256": "7498788a548e6bd590e674524c2aeed189a87a04326dc9205dfec6e198d14cbc"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-025-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-025-reentry.json": {
+      "bytes": 2228,
+      "sha256": "51394b7db3789f18741487e69b37b7ecaa9698cca684d134bbc7378fbd5ad477"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-026-answer.json": {
+      "bytes": 2104,
+      "sha256": "16592b92250b7466df6778dd0daf1efc56afbb0021d5da17a5ac7d8cdcd14e0c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-026-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-026-prompt.json": {
+      "bytes": 89943,
+      "sha256": "de8624dff5f246a61f2935070624c27d67f4e04fbe0e0a29e2ce98cc06a4f67e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-026-raw.json": {
+      "bytes": 2739,
+      "sha256": "8d498af200e18170db79d9cdad9554689d4b5911e4d12db0ffc9db777c2b0e11"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-026-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-026-reentry.json": {
+      "bytes": 2212,
+      "sha256": "3c7981563a97a045e2a628d30867520411d8b2a1f4c7f3cee1499771d7a23560"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-027-answer.json": {
+      "bytes": 2123,
+      "sha256": "5f3c2baf7bdcd3980c0f6dcfa0125e6312da1a06720132e74c1a7e6beb003228"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-027-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-027-prompt.json": {
+      "bytes": 90185,
+      "sha256": "11abc86ee957870aa1a593272ba5f5bbbfe89f1e32fd94bf25cd677f704dc82c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-027-raw.json": {
+      "bytes": 2762,
+      "sha256": "150517c082526287ee52ec5f18e18b30aadd7149490d7bad0ab57541799ca2b4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-027-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-027-reentry.json": {
+      "bytes": 2231,
+      "sha256": "c69fa9ff612b18f1925e55a6e85a1f7401d1466e67709a413ff3928f93fc7613"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-028-answer.json": {
+      "bytes": 2120,
+      "sha256": "d991d5f071eb8245fc02a3f56a30ff2c6055d6cb21306321a74720532fc816e6"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-028-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-028-prompt.json": {
+      "bytes": 89901,
+      "sha256": "a05f2a4e1a2b685fdca760315a7ab8c80e132d6ad684fac9c302f987cbe0884f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-028-raw.json": {
+      "bytes": 2759,
+      "sha256": "72f31a67175e63ca170d0d10e930ccec4498cf291251fef7e2389d51e4bb172e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-028-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-028-reentry.json": {
+      "bytes": 2228,
+      "sha256": "540f5720a5c86e62acc973c4557c5083f0ab895ee0c8f880f027c075d6c7dcea"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-029-answer.json": {
+      "bytes": 2174,
+      "sha256": "e556afea1aaf9c74632673628ce12830e2136224c6c519b1381ffad6bb33f08f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-029-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-029-prompt.json": {
+      "bytes": 90153,
+      "sha256": "8b9bc61ed41d235c6578d322183ef3e811b575d9121a83691d0240e5712ad1dc"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-029-raw.json": {
+      "bytes": 2825,
+      "sha256": "e97dfe5199aee08469d49e7f7ad32fff76b04c9eec8439623ceeb2e9e5340bee"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-029-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-029-reentry.json": {
+      "bytes": 2282,
+      "sha256": "f2ba0d6b5d357e82142baa7d645d2df897d7457ce5af49ee206f547285689903"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-030-answer.json": {
+      "bytes": 2096,
+      "sha256": "68aefde33923989e1f49c2f372675a5118b804b8f635982e4d7a1c6b30298d66"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-030-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-030-prompt.json": {
+      "bytes": 89959,
+      "sha256": "394f225293b19565115f394f6cc02700a087dfb18c3dbf1ebb85e77b0b129b68"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-030-raw.json": {
+      "bytes": 2727,
+      "sha256": "27fd42eeba56963be5a40d6113af68f9dd5027ee34e662efe68e4b35c2595d92"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-030-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-030-reentry.json": {
+      "bytes": 2204,
+      "sha256": "d2c4308ab4ceb5874ff967f971a702fc3ebaf06197e1bde23ac422953d3691eb"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-031-answer.json": {
+      "bytes": 2118,
+      "sha256": "322dec474ccb8683edc4239016e3c4f74806b041a447c4da15357c28690ad5bb"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-031-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-031-prompt.json": {
+      "bytes": 90372,
+      "sha256": "f8a6cc8ed4d3386212daa8111b828c749a6c247cfbfc9b0432cee476fc93b544"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-031-raw.json": {
+      "bytes": 2757,
+      "sha256": "9c8177f8ad86d3726a5f56b2ae2f1f2465f5adfa12e135d15d9eda5f19cd7043"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-031-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-031-reentry.json": {
+      "bytes": 2226,
+      "sha256": "da6fae6a0b4692605d344d5cb2aa39937b14e9a674e12a236da5e256a9ee2f33"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-032-answer.json": {
+      "bytes": 2121,
+      "sha256": "087442373ef483af9dd61d729129a8957a9628f17576a38bc643732fe2c38280"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-032-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-032-prompt.json": {
+      "bytes": 90161,
+      "sha256": "6a97fa04fe29518f1ab6b49b7e72cf28bf6be7875fb865766fa2ee7066a01eaa"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-032-raw.json": {
+      "bytes": 2760,
+      "sha256": "3b81dc6b0a8d1435b73622a4c943ddb533a3d0572a1d4f636ae4acc73aa44b7f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-032-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-032-reentry.json": {
+      "bytes": 2229,
+      "sha256": "ddb123804ba2af640194431c937aadb623b1570b1bc8f897e6927c14c23faee1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-033-answer.json": {
+      "bytes": 2136,
+      "sha256": "37131fde21e4e318ff55ec6e564c97143fa58a8ba2f016f11f603c995ffc34f8"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-033-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-033-prompt.json": {
+      "bytes": 90190,
+      "sha256": "e350114d6fbc27df87b723987b6a0289e090a2e29ce2e703aa56057122bd3478"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-033-raw.json": {
+      "bytes": 2779,
+      "sha256": "a773db13c74bb6a430f545000248b88f52733fff7d4aec3b7ad36512a1f36032"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-033-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-033-reentry.json": {
+      "bytes": 2244,
+      "sha256": "0faeb96f4e21454b86c2d5741d237b9a61df7c794f6d4f65e5200a76dd2bd83c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-034-answer.json": {
+      "bytes": 2137,
+      "sha256": "1b525e5af1279985643db54b35229c97eb0f5b73ed25c11ceaf45be2a969086d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-034-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-034-prompt.json": {
+      "bytes": 90372,
+      "sha256": "8ed7f203786faa6adac3b9194f33b44d8ade03f2763c61511f0b7af605b07c8d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-034-raw.json": {
+      "bytes": 2780,
+      "sha256": "3920005510bbe6b03947c4fd62f08d327df136a2a164b123ab0285d3c2e55df3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-034-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-034-reentry.json": {
+      "bytes": 2245,
+      "sha256": "bd3decd3a2929e75878888c99aa16c3febaee99d0caeb671e973fa8dce289f7a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-035-answer.json": {
+      "bytes": 2139,
+      "sha256": "ff3197664f2658804d09dba6370bc61e4acee186958a9e6469e1676d6558c055"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-035-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-035-prompt.json": {
+      "bytes": 90038,
+      "sha256": "61a15d62f1d8313bab7f2007c6ee234d01204faf7bdd576090ffb9561f6651d3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-035-raw.json": {
+      "bytes": 2782,
+      "sha256": "dff4895c1608b26b94b862b17fc133b5d06683d44432589aba1118949000dad7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-035-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-035-reentry.json": {
+      "bytes": 2247,
+      "sha256": "d0b18aee01deb419a74ab6631b1ea24530368ebab4eee83e0231b9314a18c61e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-036-answer.json": {
+      "bytes": 2138,
+      "sha256": "6cd6b14a81664b90b1272f209fb361831ab098e3f3a29cfa1c1dac59956b3362"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-036-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-036-prompt.json": {
+      "bytes": 90177,
+      "sha256": "44e9341eeffc4bad92c80e7f0d95ccdc81fb763bf2e490411a9050f5b48644cc"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-036-raw.json": {
+      "bytes": 2781,
+      "sha256": "3e960f45104575368eacb6645677bf134fc9039771c3bf254ec01872d929e760"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-036-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-036-reentry.json": {
+      "bytes": 2246,
+      "sha256": "fb0780cde3fc326c5d6ace651b0ccee9fcda2ec48dc3fe328d1f74f935786f34"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-037-answer.json": {
+      "bytes": 2138,
+      "sha256": "1f7f936216f68fb2aa968cc82a68961ad1e3cf6c3863e0a78d89d94d37e5fa02"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-037-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-037-prompt.json": {
+      "bytes": 90279,
+      "sha256": "44dca2a0afb214376472c3e0956573d0f4535d5a15fdcdb9d832150a202a2acf"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-037-raw.json": {
+      "bytes": 2781,
+      "sha256": "0f149771b96f75f71ef029a3615da7e0416aadd79dce1b644d3c9493c4803b37"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-037-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-037-reentry.json": {
+      "bytes": 2246,
+      "sha256": "a7a1de38ca06e7fb0679a814c5a19e0c9404dcd6030928fb4bd047b623234def"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-038-answer.json": {
+      "bytes": 2167,
+      "sha256": "fdac81a61ec938abef78807685a1625ff45ab003a8d5cd4b8fe985134bdb6703"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-038-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-038-prompt.json": {
+      "bytes": 90310,
+      "sha256": "7e9ddc9ae184720bef9fcc188ab6553ca0e440956795006873d156673a46d6d4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-038-raw.json": {
+      "bytes": 2818,
+      "sha256": "f9408e13d65214388a0dd870d04ef7e461bae7072b2a3c364e67196dc0c67062"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-038-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-038-reentry.json": {
+      "bytes": 2275,
+      "sha256": "bd10561ca7c815af482e452fb0e972e1d1460b8b1be6a7cbd81197608b9d1753"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-039-answer.json": {
+      "bytes": 2117,
+      "sha256": "3be9fa4285e744e3df989af2f2d1a5f5c408cf2378071f74951c5466170d27fb"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-039-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-039-prompt.json": {
+      "bytes": 90206,
+      "sha256": "38ace2eacc7cdbf5f221382d339b45f63b9a14e2288d7dbcec27eefac39749a0"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-039-raw.json": {
+      "bytes": 2756,
+      "sha256": "bd80dd3bc7cbeb7653b82afee9c56c6f02c1045913c989a023c13656c3b4dfea"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-039-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-039-reentry.json": {
+      "bytes": 2225,
+      "sha256": "bed6d1d868538bfb893e4b6082d71439cd68ca43d4403258931115c77727d94d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-040-answer.json": {
+      "bytes": 2181,
+      "sha256": "a41ac8ccdbc7a0db6d23276ffac479114abdac4e55720de0415cc69416f71c25"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-040-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-040-prompt.json": {
+      "bytes": 90234,
+      "sha256": "d92ccbd8bc292f7847300cf4cf743f98e88cdd15b921ec0d5f9724b11c02908e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-040-raw.json": {
+      "bytes": 2832,
+      "sha256": "ca8af2ffe0a0ca0ba74b48362f8b0bdad1528b55c710f010f32cc59edc0f1e60"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-040-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-040-reentry.json": {
+      "bytes": 2289,
+      "sha256": "ef3e8295d9b89c7854b2cbb7d6264556a367ee43a861d087d356e4da61a017a2"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-041-answer.json": {
+      "bytes": 2129,
+      "sha256": "a61d0f9c28e37bb6b71c6d90aba7c3189c3dfa0b749b2c0e65ab53518aef8991"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-041-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-041-prompt.json": {
+      "bytes": 89942,
+      "sha256": "6142b44c1b2d9eedf301f7610fa0b97612dfa8460fc75106845c70be9d3fef38"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-041-raw.json": {
+      "bytes": 2768,
+      "sha256": "5b8dcc815a10d366b615fca394e7f4011bd97ff6a2c4ea84c03d92e0eed31688"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-041-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-041-reentry.json": {
+      "bytes": 2237,
+      "sha256": "0ffd5db46d472f57068fbb8a2fd43ddafc33cb696eccf96ca32404625cc19480"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-042-answer.json": {
+      "bytes": 2125,
+      "sha256": "08de3df3a2a8d0d0f1669d09b33e3109a9e1ed7d713cf141844d9bc594f7830d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-042-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-042-prompt.json": {
+      "bytes": 90294,
+      "sha256": "427c392b8155da03504fd78287aef79b3bb65ef1e17fbd76befff3a1495b10fa"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-042-raw.json": {
+      "bytes": 2764,
+      "sha256": "72eacb8bdfa34dd7b8ce82802acaeed2bc23b827be80f28adfca636b9984e9d0"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-042-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-042-reentry.json": {
+      "bytes": 2233,
+      "sha256": "cbd27213d037730225bb8759f05bef6f207210a617525a51775cf537622f3fe7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-043-answer.json": {
+      "bytes": 2151,
+      "sha256": "e733765c543868e2d5e0cbc07cf3d226044c8faf963dc4978023d09746768dff"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-043-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-043-prompt.json": {
+      "bytes": 90037,
+      "sha256": "72dbbd5e635eadea55dcb03c39a2bc037d4179cc2ecdb68ffd0e51a85f06e19c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-043-raw.json": {
+      "bytes": 2794,
+      "sha256": "c3cd6d70b7ec20dee4e1377c53307e6929ad62000bb94bc14d287e60f9c918f2"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-043-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-043-reentry.json": {
+      "bytes": 2259,
+      "sha256": "2eb9641843cba61af7049bd2f822cea50e7a8f64b183c600beb31f15bf03c3cd"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-044-answer.json": {
+      "bytes": 2161,
+      "sha256": "42087e5d258ac4425708346c5c66d4c6631deba461487e67e3865a578c43783f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-044-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-044-prompt.json": {
+      "bytes": 90339,
+      "sha256": "f9a4248de1659b0e7376bc23acf135c022848a5fa5f83d8869d72214c652e17a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-044-raw.json": {
+      "bytes": 2808,
+      "sha256": "880993805478b1c70d8902cd899d0f8bd4861e869ced6a93bd4597aabfee8a95"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-044-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-044-reentry.json": {
+      "bytes": 2269,
+      "sha256": "f6f3418c920d03148ef05acad01ca3a3a0dc7fbd1b5f444972d026845296fba0"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-045-answer.json": {
+      "bytes": 2138,
+      "sha256": "ddc1f7196b99de8eea1f9f85dd488c23d7a055eb5602c872a6f440f89327bcc3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-045-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-045-prompt.json": {
+      "bytes": 90093,
+      "sha256": "4f119d63b0d34c94cfcb642723ea36dba47656ab12db7ce923354cfd655e210d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-045-raw.json": {
+      "bytes": 2781,
+      "sha256": "48ee00ade057c37b80e943872a2ac5be0dc2c11e5a04838bcbb640a6ca930363"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-045-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-045-reentry.json": {
+      "bytes": 2246,
+      "sha256": "e8bfd582e7aa5f35936767d90ab344838cb1a4eb66b041263d8b6802c50fd187"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-046-answer.json": {
+      "bytes": 2098,
+      "sha256": "3b9ba0151bfebb2e07def23cfe583444ff07ec20f0ee029f1e9e905ff970c850"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-046-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-046-prompt.json": {
+      "bytes": 90226,
+      "sha256": "f3b5b0754639a4d8da7d532920c03cd510bb8070cfcc5599d989638360010e53"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-046-raw.json": {
+      "bytes": 2733,
+      "sha256": "b775446d952cb5a49927f866f4bf9e4fa0f2ded869f5fbc7996e677b1224b73a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-046-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-046-reentry.json": {
+      "bytes": 2206,
+      "sha256": "1560c3645ddc8f6d88f3c06948ab1fb068853d8de7e80cee0b9a000180b14d65"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-047-answer.json": {
+      "bytes": 2130,
+      "sha256": "2b79664b21b8f271af837a01bb1f2275de5ebcb4360217de485b7634e81b8958"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-047-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-047-prompt.json": {
+      "bytes": 90115,
+      "sha256": "15dcadcf8381daa4fd13ac12880cbcb5890c22590fc10780ca06750de60cc638"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-047-raw.json": {
+      "bytes": 2769,
+      "sha256": "b8fc83b0e8bf67a51e95922aa5990621f540daf03626eefbbdeca8dc8da0dd39"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-047-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-047-reentry.json": {
+      "bytes": 2238,
+      "sha256": "1b12297ab9c995d778cad17caacc1900767e636f98b1cddf757727cb24c885c5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-048-answer.json": {
+      "bytes": 2169,
+      "sha256": "a2226ff11e4c298d9c263098b3f3653c8f9ffcbd1cda25597950d4559dd4217e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-048-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-048-prompt.json": {
+      "bytes": 89910,
+      "sha256": "92b86ce21b7b395e8be5a671993ecfd8d7d7fcc5e06ff0b7ff573a460b8266f1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-048-raw.json": {
+      "bytes": 2816,
+      "sha256": "fe0aaaae5a46261da08d6f75fe47c796ed3e6e7a300f612aa2ba7f2876ef1ecf"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-048-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-048-reentry.json": {
+      "bytes": 2277,
+      "sha256": "13bd2323aca1656a25c67a9f47d97989109b54efc442946ea13eab8e5bee9d09"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-049-answer.json": {
+      "bytes": 2090,
+      "sha256": "2bf7d010ef280422cac5fbfa3ac75485eb54155b59fbf174e58af491d7255402"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-049-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-049-prompt.json": {
+      "bytes": 89820,
+      "sha256": "055bb29855a3c4a3da1b6e31a04f54cb1d84b1510ea5f03cdfe0830bd9d29bf3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-049-raw.json": {
+      "bytes": 2721,
+      "sha256": "d130323896ee064b80c21dc7353be82ecd9ce4465bed7a7d09ec7b096167bbd2"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-049-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-049-reentry.json": {
+      "bytes": 2198,
+      "sha256": "b12ad10f54dbbc8eb0f63285ae9f4e7984feabacab76f0d1970bb32cf16c27a5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-050-answer.json": {
+      "bytes": 2120,
+      "sha256": "e5adcfa836b03b33462b2550db9bcec744de37ba1118a7f82c4ebf69cc3a0a61"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-050-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-050-prompt.json": {
+      "bytes": 90356,
+      "sha256": "53516eaeaaee804712be9af9ba8e527bbd880adf7e35adee1bb90cde7e6fd933"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-050-raw.json": {
+      "bytes": 2759,
+      "sha256": "185318ea145d4de7a46764bba4e5c5329ccf9485f75b9c22282fd3e14b084115"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-050-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-050-reentry.json": {
+      "bytes": 2228,
+      "sha256": "2e085da4e2bf1637b42e7a1de3cd489e55d17f334f273997278908868b5f1a36"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-051-answer.json": {
+      "bytes": 2145,
+      "sha256": "79dcb37095802fdf337e3336a2dd833b6b3af1c6654483dee7fd470a3cb56306"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-051-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-051-prompt.json": {
+      "bytes": 90239,
+      "sha256": "962e39bfd9570d2c4750e3d537c7d496f0880560fedf078d25b7791d0dcc3419"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-051-raw.json": {
+      "bytes": 2788,
+      "sha256": "536c7ee7f7943273bd5b05950ee6adeaa30a62282cb9bbcb4ce2128186ad55bb"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-051-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-051-reentry.json": {
+      "bytes": 2253,
+      "sha256": "470ecc3c28fff1f422989809802d3f63d570a306ef6551955ea6a1658e234335"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-052-answer.json": {
+      "bytes": 2153,
+      "sha256": "56e47d2437995d6898362a38cb60a96f77b0f72527418e9880245596ea8958b3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-052-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-052-prompt.json": {
+      "bytes": 90044,
+      "sha256": "3f27fff0be15991c0a3196b4df1000ee51de1848751aa9aeaf53da8e9b6d1bd2"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-052-raw.json": {
+      "bytes": 2800,
+      "sha256": "beff084a22e88fd4b0df0133bbbaa7a8c671f4ac386c7384d5334d3d4d5922f3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-052-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-052-reentry.json": {
+      "bytes": 2261,
+      "sha256": "0d4b05e39af267b859aecb73ade4b19948cd44e0a9532d625272bc27238d9905"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-053-answer.json": {
+      "bytes": 2162,
+      "sha256": "8061851cd908b48948af09f2d021c057aba843cf577f91f28aa8314130659591"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-053-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-053-prompt.json": {
+      "bytes": 90297,
+      "sha256": "0c03d1e4af89be312242ae333ec55976a3d3f935b65744c426ead84ad3432a26"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-053-raw.json": {
+      "bytes": 2809,
+      "sha256": "2ffed07bfe9d76da6ff6fbf3f87ff45f4896a9beffb3a320da083adbaeb59acf"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-053-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-053-reentry.json": {
+      "bytes": 2270,
+      "sha256": "77fa640d06d5942754bdb599b1bb1acef8ee4c3aa386e7b426918cd8bf3baf1b"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-054-answer.json": {
+      "bytes": 2136,
+      "sha256": "12f6aa1d1c1204bb9cc1ff5646413187ddb9014521a757495b0d14d748f632bb"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-054-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-054-prompt.json": {
+      "bytes": 90294,
+      "sha256": "3f95a2d2f5311e0a4b43d8abb0815b8210a3fe0c87c6ab2bfedcd53d5e520125"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-054-raw.json": {
+      "bytes": 2779,
+      "sha256": "6891f336e93314c428eb3b3ff60eeaef3f365f027b5e3c02f4d2604a04100475"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-054-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-054-reentry.json": {
+      "bytes": 2244,
+      "sha256": "a5dbf3cb53130e2ad99a04ca3608a57fdbd6e4cb4afd885b6d20f7918f915523"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-055-answer.json": {
+      "bytes": 2110,
+      "sha256": "152dede61217efca359ea9d55264d687351505789f83014a605dc229006572f3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-055-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-055-prompt.json": {
+      "bytes": 90156,
+      "sha256": "8a87e910c3efb6accaa795e02d24e2c16f195e20f3ef568c01259b112b66fe5c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-055-raw.json": {
+      "bytes": 2745,
+      "sha256": "8a6805155af7a6f482ac02719b86a80673a9fbf47e08799db90b2986ea22c176"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-055-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-055-reentry.json": {
+      "bytes": 2218,
+      "sha256": "772fcd1441cf435a00d2f7e318402fb0ed9a7fb67631d36c5adec02a01dc6c4f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-056-answer.json": {
+      "bytes": 2109,
+      "sha256": "eb652f4039e0a8a7228a92262e7a51c9328aeb3ec19f816b4b02fa9786c8d09f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-056-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-056-prompt.json": {
+      "bytes": 90294,
+      "sha256": "71f267ed979c1156c3514dff43bc9f1f74088c74402da940c83f2bebf823337f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-056-raw.json": {
+      "bytes": 2744,
+      "sha256": "9ac45a74aefd6ed86c4727c048c52247233c1bc012ae0635b9fe7f289de6452f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-056-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-056-reentry.json": {
+      "bytes": 2217,
+      "sha256": "aa4a314b8ff73fa6049cf8f2b7634fdb1c54914c49dd319cd29f0fad66cc9913"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-057-answer.json": {
+      "bytes": 2124,
+      "sha256": "18a410e81883d3e88150d6572d8d73069098d419b5e50713c1b0331a16c758a1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-057-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-057-prompt.json": {
+      "bytes": 89832,
+      "sha256": "03e38998303b59b7345435b444e44ddff8fefa4297bebf8a86d99641d6bb7864"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-057-raw.json": {
+      "bytes": 2763,
+      "sha256": "8cb4fa2e36d21fa9c0e7d0e1955e300c6793c83e56084adebc7b180bec0a0a13"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-057-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-057-reentry.json": {
+      "bytes": 2232,
+      "sha256": "9e40baac92b6287e010c53bc5ac1bc57310ccc721f52fb1fecc18061c1001a98"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-058-answer.json": {
+      "bytes": 2120,
+      "sha256": "ae526752f16a808e6edebb62348fcdfd816095c3b0381c78276d221ae4ac8079"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-058-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-058-prompt.json": {
+      "bytes": 90100,
+      "sha256": "f442f166a5efccb5802ed3c0e3497d0b2e1fc894fd3b5563945b885743a1ea6d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-058-raw.json": {
+      "bytes": 2759,
+      "sha256": "1c8e4bf1c468ad55d887fd551bdb0931ef6ab83b7c89ebfe03bbf62b41b7ca26"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-058-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-058-reentry.json": {
+      "bytes": 2228,
+      "sha256": "6d40db56bd36421b0b6db2f6649d0dc73d86c124ffdf933f5b1331e8a6f64238"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-059-answer.json": {
+      "bytes": 2111,
+      "sha256": "f2bf69d1482aa0db396e0cd95983d0ceb7140a0ee43c7ba56559992a616ed559"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-059-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-059-prompt.json": {
+      "bytes": 89930,
+      "sha256": "046ad38fa82086f35cd3ac358999ac3b09e602e1db85796ce764fbad9ae792f4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-059-raw.json": {
+      "bytes": 2746,
+      "sha256": "e9894806db8085304485596b499e9332dca5e89cf5c725a4801cf0374976255c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-059-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-059-reentry.json": {
+      "bytes": 2219,
+      "sha256": "384cd5518b3c1cf5d2086deab15cbf8309371acceb71f61075f3a9f890c2f9c3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-060-answer.json": {
+      "bytes": 2121,
+      "sha256": "b503234542c162857aecd42cb709cc6f5ef1dd3864d1b8c3504057592898060d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-060-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-060-prompt.json": {
+      "bytes": 89929,
+      "sha256": "08b0421883985995216a5e4f85ce4c699cd08d8da32c82f2147434ec58591a09"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-060-raw.json": {
+      "bytes": 2760,
+      "sha256": "313f9b17cfa3df8349d5b55f3e6fde2660f90f02ed99cf4f0f3c70faf6a42162"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-060-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-060-reentry.json": {
+      "bytes": 2229,
+      "sha256": "ff3485b8de08102188fbce7473844b4fccc93f0451e339b276d8a27e9f33e7a2"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-061-answer.json": {
+      "bytes": 2117,
+      "sha256": "df12134c1ba2ddca02b6c6e0c2a2bc0bf7765b246a9fd3bd756e8b7dfc58322a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-061-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-061-prompt.json": {
+      "bytes": 90314,
+      "sha256": "b263a1fc110d181c316506534df96820e89fc3f00ec54072137e8ee71b1236ca"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-061-raw.json": {
+      "bytes": 2756,
+      "sha256": "37a55cd79be210feba66cd3104f5bc4dd0309e291e2b50e8670b16e8b2d3dfc4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-061-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-061-reentry.json": {
+      "bytes": 2225,
+      "sha256": "e19be3a46b0d291791fd8b9e62fbcb728a869cdac19b5685cc59de1e28bbe313"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-062-answer.json": {
+      "bytes": 2142,
+      "sha256": "812c1f33eb6a9fa9faa595b60c8b46951b568d4f5543f3a2d14a1ec6c80cacdc"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-062-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-062-prompt.json": {
+      "bytes": 89974,
+      "sha256": "a4302729543c5083620718902097db623edc4835a45cef630cb5b0aa7e6c3c0c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-062-raw.json": {
+      "bytes": 2785,
+      "sha256": "f3d0a9e5e91d130207bbcea3dbb471024298eb908e01aa1024d525a09a18f4e2"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-062-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-062-reentry.json": {
+      "bytes": 2250,
+      "sha256": "3f952b40143b1032134c65990f69fe898d0a5cc2fa6c83ec2f69a3dd75ef183f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-063-answer.json": {
+      "bytes": 2104,
+      "sha256": "0f942229b6e47f4a5ad634153218ab4fbc01655d7915cf3ccde1547e49055880"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-063-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-063-prompt.json": {
+      "bytes": 90063,
+      "sha256": "e9ff68d46189dda2089c3163ee5a4ba3d352bdb7f4b72888478c57f49e13c364"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-063-raw.json": {
+      "bytes": 2739,
+      "sha256": "4e98adaffbfa01baed27d82c38f8cdf768a7bf1b3748f36b029f89414e7c9161"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-063-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-063-reentry.json": {
+      "bytes": 2212,
+      "sha256": "165ff1940f305bdf7245bfc167b23fd17f9827c7134ad08479017473d079d791"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-064-answer.json": {
+      "bytes": 2176,
+      "sha256": "34a4bb0bd1b3daa23244cd2385cdb91753eaafb7a95b2120458a71d424954887"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-064-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-064-prompt.json": {
+      "bytes": 90148,
+      "sha256": "a919f390306b1e208e0620a50b076982282f7f7b84be0ea02ba5be2d26653696"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-064-raw.json": {
+      "bytes": 2811,
+      "sha256": "2e33a8a1d3fd054151525073cf2da528b8c1bdb958acd7a4071f0eb0ce427f85"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-064-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-064-reentry.json": {
+      "bytes": 2284,
+      "sha256": "a04631a8878d330fc47244380d54818403bbfa7989738858680a55210f48298f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-065-answer.json": {
+      "bytes": 2280,
+      "sha256": "cb71dbdf1d13d89580cb641cc9afd6f31780f8533502f0ac1ec1247a82bd444b"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-065-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-065-prompt.json": {
+      "bytes": 90147,
+      "sha256": "e106d08996903d91329a54db8882f31f0025e24044a7359030b9ebbdc5bac6fc"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-065-raw.json": {
+      "bytes": 2919,
+      "sha256": "46767253c9c2b7bb751ec55cea86c4521c1b67b90110b93297184576e68bb126"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-065-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-065-reentry.json": {
+      "bytes": 2388,
+      "sha256": "bbdf906270abc6fdde5dbbc26e3d5a47959a8bda838f41f446856555c0d14606"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-066-answer.json": {
+      "bytes": 2246,
+      "sha256": "c2ae69204c5a3557ea62e2e5d0d510e5b16e8718f64163b9fdf4c2ca93a5874a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-066-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-066-prompt.json": {
+      "bytes": 89822,
+      "sha256": "8e360eb93db443fc4289a8846553d28ac5dbf395d21e07c4addf6c029e96180d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-066-raw.json": {
+      "bytes": 2877,
+      "sha256": "00d84834f0d62cacd34605d55037539c1b64120f08732b2aed7c3691b38a2341"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-066-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-066-reentry.json": {
+      "bytes": 2354,
+      "sha256": "de5862c4afb7c02c08ee4b58c812a3d49c3162c020a0df885e0a527dff71aa83"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-067-answer.json": {
+      "bytes": 2271,
+      "sha256": "140c654bea87417a1b4ee30f17f0402127517e44a362388aec0d1a5430abd1da"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-067-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-067-prompt.json": {
+      "bytes": 90224,
+      "sha256": "350ef9114d3174af2e3f3f8ecfd43704780cfc22df6b99952db2a3f95494e149"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-067-raw.json": {
+      "bytes": 2906,
+      "sha256": "4ffe394f13161493941325d790aa655d0f47682aceb942c66346e5d8a3247586"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-067-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-067-reentry.json": {
+      "bytes": 2379,
+      "sha256": "2afaa8994768861496a3a7a7a0009df09fac212d15c9aee0268d27628e3a2f66"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-068-answer.json": {
+      "bytes": 2323,
+      "sha256": "2a24539471d3294391c8dd3f4d5fa799f3f674389ed9886571f24039304cbb6c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-068-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-068-prompt.json": {
+      "bytes": 89979,
+      "sha256": "56e95d0b26e22596ec365e34fc6177beb428dfcdf1c05eb8db98109c5e32e3b6"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-068-raw.json": {
+      "bytes": 2970,
+      "sha256": "922c0abaaba4f86951f62f25f85ef8ca9077871ce995ae7a17dbaf818360359f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-068-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-068-reentry.json": {
+      "bytes": 2431,
+      "sha256": "af277c5412444df529ea010368c13de8890069e1ef139dc3f2133e0fba10ec6f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-069-answer.json": {
+      "bytes": 2268,
+      "sha256": "1a990727a5abdaa34d19346441941ad03dfe14cf0f2ddc694c911b2af8212f8d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-069-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-069-prompt.json": {
+      "bytes": 90189,
+      "sha256": "06574109b29a63b132711f6c51c1692083290ac93a4a2e53583f3d86fb055bd9"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-069-raw.json": {
+      "bytes": 2903,
+      "sha256": "fe9a62d1c1f683980f7daa5ea0f2eaca4de5c438e59598ac18a31c99351df6c4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-069-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-069-reentry.json": {
+      "bytes": 2376,
+      "sha256": "5b0f95c2707e80032208d2dfacf641705fec3133024a10ae183d7930661e910d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-070-answer.json": {
+      "bytes": 2268,
+      "sha256": "aebfba0629ae5586e7c8c0897514b035a9ad1a94cac783b116ae554075120b68"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-070-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-070-prompt.json": {
+      "bytes": 90303,
+      "sha256": "6857b4b24cef1ff12655c94661114e4ac25860a842734d5107b5c6f31d7540cb"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-070-raw.json": {
+      "bytes": 2907,
+      "sha256": "9dca11ef106d113f676bc5b0db04178056089d6930a3ac3c42930083f9baf38d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-070-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-070-reentry.json": {
+      "bytes": 2376,
+      "sha256": "6888404ca25155f1b9d0e5054fa09acb2838504893c059e47eaa819b5d1ed2c4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-071-answer.json": {
+      "bytes": 2263,
+      "sha256": "60d0404830e67a2fd94e764e043997fb3ee66cbd853c2e559c45da9f6b899547"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-071-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-071-prompt.json": {
+      "bytes": 90145,
+      "sha256": "c8171eff148a635182b2d58f8eca253a6bf415580122accf45a4d5b0e99ca125"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-071-raw.json": {
+      "bytes": 2898,
+      "sha256": "b0930600064235e9fcd88e32d850d0bb5b64646b0370e72f0412da41944d3a83"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-071-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-071-reentry.json": {
+      "bytes": 2371,
+      "sha256": "0890c51e9a41af1517777777914c734b837ff152ce221d3a31e39ee3e060f283"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-072-answer.json": {
+      "bytes": 2285,
+      "sha256": "fe0ffc64aa3ea439911e050bdc0bc13167bb757ae4cd8f3419ae1a0b7161423f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-072-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-072-prompt.json": {
+      "bytes": 90023,
+      "sha256": "bbcaf18a14975bde13610959fa69e18e54d9993079492e063583273c8bee2888"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-072-raw.json": {
+      "bytes": 2924,
+      "sha256": "cf4a8816574a03d0819d39f4a22bfd74c11fcbe40208dd10dfd074564192530c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-072-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-072-reentry.json": {
+      "bytes": 2393,
+      "sha256": "f27eb094a16cf4bfbb078415b4aa06964b1db1f3f731aae78e75824d81c3ff3a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-073-answer.json": {
+      "bytes": 2268,
+      "sha256": "bd513b1905e394f65d3d81b7771ffc1da5f7cdc037d5f4c2858c15f93760aa13"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-073-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-073-prompt.json": {
+      "bytes": 90234,
+      "sha256": "9bee13a3a95298879bfc943124dede064f435a1872c59cf274e937001a4c3a35"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-073-raw.json": {
+      "bytes": 2903,
+      "sha256": "cb148f0ecf00a0a04d559624ecfdb0b1fca383c7d4775c607d910d074728ead7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-073-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-073-reentry.json": {
+      "bytes": 2376,
+      "sha256": "42bf43bce48ace243a7b54104d25471995fe2f9fb23f1129d1fa3f355a5166ff"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-074-answer.json": {
+      "bytes": 2287,
+      "sha256": "db5b3193ca4fd4e4ed5f9ad0fcff89c7fbd4a3e072994c02915b6f27c32cea15"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-074-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-074-prompt.json": {
+      "bytes": 89942,
+      "sha256": "c15afcda53a3e230c59f75cded3403f5976eb1e8bb0663d846b0b7bac0429781"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-074-raw.json": {
+      "bytes": 2926,
+      "sha256": "6c19c5a4e4aca44d59bed364d2f861e6750ffad4650df09bb264d6af8a823c8d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-074-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-074-reentry.json": {
+      "bytes": 2395,
+      "sha256": "972ddebf2a78fab7193428c5576e325a53a8ad25cf33a95a8c711d21a546c1f4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-075-answer.json": {
+      "bytes": 2288,
+      "sha256": "5981e47c19e8bb1ce3942bde11e7227193bd989f4514864ccbb973c7eed619d5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-075-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-075-prompt.json": {
+      "bytes": 90037,
+      "sha256": "2c6957dacaa0052e13be6315b7efcb1ab06a815425ff8fe3f425765202bbc6ca"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-075-raw.json": {
+      "bytes": 2927,
+      "sha256": "46106ce2b04d94ac895461b6a7528754ec345e026e12c64dec713104956d3d2d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-075-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-075-reentry.json": {
+      "bytes": 2396,
+      "sha256": "b878f5b9a820ade7d35eff870b91b76fcfb7a58fa616eff9b3fd9d2c0942b069"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-076-answer.json": {
+      "bytes": 2272,
+      "sha256": "377a435afe155890b4f339faa478b8392619518b033d3d4e612a1a48739861a4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-076-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-076-prompt.json": {
+      "bytes": 89917,
+      "sha256": "36d8cdbbb2aab7765091f9cad37f00c84703e67c43b69897eb26810cf1c76813"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-076-raw.json": {
+      "bytes": 2907,
+      "sha256": "154e1970c5967e588925938320ba258792d2ad6849b69a5072f585ad50a9b2f4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-076-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-076-reentry.json": {
+      "bytes": 2380,
+      "sha256": "d9b14bade688d36b4c9b0e407e1f72a5165df701060e0862ed13646269058ed5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-077-answer.json": {
+      "bytes": 2262,
+      "sha256": "bd783131c4146c64559a0bcd4092bba2f212c15fbf1ffc04a3557dff4380ef83"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-077-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-077-prompt.json": {
+      "bytes": 89989,
+      "sha256": "3d0ef7d6ee48e83e19f6fb85a4e9debfe1de6ebc25208904c16317c6448e1e90"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-077-raw.json": {
+      "bytes": 2897,
+      "sha256": "08e2e5792203d189a741d8d7f9b9d64e03f11d4c1d0a716c59a7226c54d9fb41"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-077-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-077-reentry.json": {
+      "bytes": 2370,
+      "sha256": "9f35314ecd5800449f38ade239a8fe98c801a13797ebaa17e48bdc9a5772bb03"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-078-answer.json": {
+      "bytes": 2320,
+      "sha256": "9a7e80b86211a78fa509784112bbf5ce76868c226cccabdee718c6cb1bec5b9b"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-078-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-078-prompt.json": {
+      "bytes": 90137,
+      "sha256": "fd30302ed22dda2339d3090e0f878038d42c98386f21b09336c5a79536f19295"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-078-raw.json": {
+      "bytes": 2967,
+      "sha256": "d5a009113e607e573a6bbe48c0470ad50936b29475beed1ac391dde17aed0298"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-078-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-078-reentry.json": {
+      "bytes": 2428,
+      "sha256": "a2ff298b82a34a42bf3d7012d74c51a816c215a33886132dd7469374cb329f83"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-079-answer.json": {
+      "bytes": 2264,
+      "sha256": "3dedcf72ebc1e6e8dfd5c644927b8769a76de8aa68e619e660627804e79a3bf1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-079-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-079-prompt.json": {
+      "bytes": 90117,
+      "sha256": "521ab4697f0b0d607a008b0acd6b0e0cb9d17a32ac4bf67f0092501bb6be8260"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-079-raw.json": {
+      "bytes": 2899,
+      "sha256": "e76c6a533eedc6bfee3419d4ec1e211c11ac82a9d9307a0cfbb0a295ba0c37e0"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-079-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-079-reentry.json": {
+      "bytes": 2372,
+      "sha256": "f4edafb9a55e549eae88f18c33cf010cb64b1c5381e3633c580b0304be416a25"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-080-answer.json": {
+      "bytes": 2268,
+      "sha256": "149e1b6d5c304b98a3ae81e9062ba61c575dcd6fa2d387902fc920839f5beb38"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-080-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-080-prompt.json": {
+      "bytes": 90022,
+      "sha256": "191c16603907ccae55f1945648a2217eb304fc4dd5175060c0dea118eba1b6df"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-080-raw.json": {
+      "bytes": 2903,
+      "sha256": "7ef743bd62973bb556de0df5281a18012630c3594164263159162dde53fcd520"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-080-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-080-reentry.json": {
+      "bytes": 2376,
+      "sha256": "227e87d00173a957eb3957eb194086a05f9dceff7be13b2bb2ea1fcc4920ce47"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-081-answer.json": {
+      "bytes": 2247,
+      "sha256": "0e6aa72649e03f2cabc3ea050fcc0137ccfc8fca59ca4948ee06343d88d826cb"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-081-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-081-prompt.json": {
+      "bytes": 89858,
+      "sha256": "68b6cf2faa5b5a48d793c2c1fe181e2f4f9a1fc54bf31da48540254090ca839f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-081-raw.json": {
+      "bytes": 2878,
+      "sha256": "f70a7b8f7fc441b71197474ecd68e55ca9386a109ada3fb963b92de830b36701"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-081-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-081-reentry.json": {
+      "bytes": 2355,
+      "sha256": "b7a0199c5d84a07c3ac00aae8f44f05589cc463670ce922227bba9a0f9ad90cf"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-082-answer.json": {
+      "bytes": 2304,
+      "sha256": "1ce127e512242667060f6ab6f82a04c1e978cb1b236bd5135b466c582a73096a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-082-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-082-prompt.json": {
+      "bytes": 90166,
+      "sha256": "d4324dda27e6ffc4ae706e349c2eeac22266bf71489def4cd0a6774016f9058e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-082-raw.json": {
+      "bytes": 2947,
+      "sha256": "1a3fefe367d5fe197b34e2ff7c8f4f2085a0a23ebe96a1a80fd606ad55b92978"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-082-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-082-reentry.json": {
+      "bytes": 2412,
+      "sha256": "037f333bb01a0e212b2250fe7aeb47067a3bcf932c8c8ff5192f589d37d637fb"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-083-answer.json": {
+      "bytes": 2262,
+      "sha256": "0a7d7968f422bbd05f9607834a2b012a88a6588e6fe9f65b6bb0878fe77970c1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-083-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-083-prompt.json": {
+      "bytes": 90093,
+      "sha256": "efe5aada31afdbc0b706c2ad5965d095f5af401acad8899119063fce25be3585"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-083-raw.json": {
+      "bytes": 2897,
+      "sha256": "5b34ff7dca2a769bfc6588b76ef5faa23ae17634cca2b7d2496b83be05af54fc"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-083-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-083-reentry.json": {
+      "bytes": 2370,
+      "sha256": "c66c47810e4f465186855ea0dc68a186ca7c16afe0e261973dda8d4f66a8ff17"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-084-answer.json": {
+      "bytes": 2266,
+      "sha256": "6e303b83e4a753ba62f925ee29ad02b76e96c1eb6b7925fb9d23c7034d1369e5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-084-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-084-prompt.json": {
+      "bytes": 89892,
+      "sha256": "f6c4d9ab9fb7a66f0c3067c2c492c18e9ca04293770558baeb47935213eb9190"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-084-raw.json": {
+      "bytes": 2901,
+      "sha256": "8d128bc3f4871997f42040d69d8ee02bf94dce7ae6045b1d5880ac6390d3b908"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-084-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-084-reentry.json": {
+      "bytes": 2374,
+      "sha256": "25f18cd9e1d41636711c0071293128bbc0b4a2196579e1ca40548e43479e688f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-085-answer.json": {
+      "bytes": 2300,
+      "sha256": "41b2b4aab0f21cc69e415d85b9080021d9aa8a4ff0c2200f89bac9c518142e94"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-085-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-085-prompt.json": {
+      "bytes": 90285,
+      "sha256": "5cebc87fd6de23f0c9f6a3c23ffa5609a6e39bd5dad52a2a681da0992c8fbe6b"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-085-raw.json": {
+      "bytes": 2943,
+      "sha256": "349e5ea653fe01d4a9b9eed0bc3519284f4465946bd78cf09a82b748df04b3dd"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-085-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-085-reentry.json": {
+      "bytes": 2408,
+      "sha256": "2f8c41e7c3dda232d18c0206652f156e419124aaf0fd08565b6b308a430d9e38"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-086-answer.json": {
+      "bytes": 2294,
+      "sha256": "7761ffeb555ed7b50c7fe4f4cf6f7d27b36fa87257e30424e55f21c63501a33c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-086-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-086-prompt.json": {
+      "bytes": 90132,
+      "sha256": "12c5d8fef85500cefbb30224cf6267597dea2f1eb4d98b7e73fc25cf750665c3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-086-raw.json": {
+      "bytes": 2937,
+      "sha256": "92d5832d07e6fc7b4f8ca8ead3e50a1214cc0b702caa6263306ca67b4d3cd112"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-086-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-086-reentry.json": {
+      "bytes": 2402,
+      "sha256": "5026b86d7f997daf2bde00d7c22582cae19aec5e3877f6008d7189ae833d7485"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-087-answer.json": {
+      "bytes": 2280,
+      "sha256": "797976e95f16512958d15bfe088a0a32840bce8a97a2f088ab41c6ef9fd16eb3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-087-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-087-prompt.json": {
+      "bytes": 90064,
+      "sha256": "65145b5d4ee898c152f6ea9a14a0cbc74ff1b4b5d408fede2fc7a44ffb7b714e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-087-raw.json": {
+      "bytes": 2919,
+      "sha256": "fa8585452f5b17d4c56a0f87b43741d789f3f10f7cf0a5c85908bdf2ded49a37"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-087-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-087-reentry.json": {
+      "bytes": 2388,
+      "sha256": "952aea610068517ac79725f302a7521cd0374adb1ba62d820da5bae79effabe5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-088-answer.json": {
+      "bytes": 2270,
+      "sha256": "de7b3dd0a1ee6e3d3b0ea73b81b854ea472d52754d5bcb4012eda461cfd104e7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-088-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-088-prompt.json": {
+      "bytes": 89917,
+      "sha256": "df17c1662b740a87d7155199943a70227e0e09dc5a93dee69d080df11fef0809"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-088-raw.json": {
+      "bytes": 2905,
+      "sha256": "3ff31beb4b3653df9ba874cbdc73bbb57f6ffffedebf873393a4821562c9b4a7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-088-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-088-reentry.json": {
+      "bytes": 2378,
+      "sha256": "44b4cd80828ea31a1f86fe4e6f2d5b845feabb775ddbcba0290e4cb96786612c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-089-answer.json": {
+      "bytes": 2260,
+      "sha256": "b7cdc95256f5b284c6ee582c20b07fa8730aaf535d1d7292ad89efa15eaaaef4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-089-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-089-prompt.json": {
+      "bytes": 90071,
+      "sha256": "1cd68a52448ba754382d8b63ab56f0c3e414780b25c1a39962c1a1959dbe9d0c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-089-raw.json": {
+      "bytes": 2895,
+      "sha256": "79819b3577b4e25610b63e13686ea981e3459fea7b08d7db74d67d7a99d5f83b"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-089-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-089-reentry.json": {
+      "bytes": 2368,
+      "sha256": "83376a456c143cf23a374fece6c332e757a20415d39e240620c76198630f10f1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-090-answer.json": {
+      "bytes": 2322,
+      "sha256": "fcda2e5fa1107bc20f57c180803d95ae86732b4308a6ebeb3681b15c3d8148fc"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-090-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-090-prompt.json": {
+      "bytes": 90313,
+      "sha256": "6b7ca53178311478ee4e02b5dc11d4cc1561fbb507be0b847f25a56a35a8f041"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-090-raw.json": {
+      "bytes": 2969,
+      "sha256": "cbcc3808969cca053601c358a5467e837e22cda9a895315fb94eafddb9fb224c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-090-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-090-reentry.json": {
+      "bytes": 2430,
+      "sha256": "23ebcd338b924c7724912a4fd3bea3670611aa5bf4a03ed69a2025c1ce31ae50"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-091-answer.json": {
+      "bytes": 2266,
+      "sha256": "61116e214978ab0c976bb65b9883e350c00f77ef1cf16f38d3fc1125921d35c6"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-091-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-091-prompt.json": {
+      "bytes": 89838,
+      "sha256": "ce99f4f05a89d1075dd0a10f066154978a341e68a6f7fba78a3eeb5ce9208d58"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-091-raw.json": {
+      "bytes": 2901,
+      "sha256": "7989624ce3c215ca5e39679f06f8223ad612c8d71168fe8bfc595494afb77e38"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-091-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-091-reentry.json": {
+      "bytes": 2374,
+      "sha256": "5e7b389e40861d3983f4b71b8169b6c52203822b50d3a5c5c108f1fd55b0364f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-092-answer.json": {
+      "bytes": 2247,
+      "sha256": "5af9fa303c3ead72cd5dccb5527e5d7b1f05776e97f1563f9b1a6c89652e47c3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-092-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-092-prompt.json": {
+      "bytes": 89983,
+      "sha256": "8205b0d367c272cce131e21001e2b471b0deaef8fe1202b89f898ff8f34ccae6"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-092-raw.json": {
+      "bytes": 2878,
+      "sha256": "be0487b3e4ae9b65fbe436c779b2a963b1edc3a4b3ff407cfebb14e0a55ba416"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-092-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-092-reentry.json": {
+      "bytes": 2355,
+      "sha256": "12cd27945f3811365d70f0dff6c882a5874a5b0c25d12679537898058449966f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-093-answer.json": {
+      "bytes": 2242,
+      "sha256": "1151178ec5fb10c5d024885022cfa61d66f94e972e341800474889050bd53ac1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-093-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-093-prompt.json": {
+      "bytes": 89893,
+      "sha256": "e26baa1fc483812253f29cc1b072d12affe26fc2c324973605cd2a1c59bc2e0e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-093-raw.json": {
+      "bytes": 2869,
+      "sha256": "dde5b87bd0f30570c78f41018ef8f6537e3b8d191852cfcf0c832067ae54a247"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-093-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-093-reentry.json": {
+      "bytes": 2350,
+      "sha256": "8fed0ca4c24ea4e279a84672cf002eb8bb08f9e93f21d9b021501a09aa8ba03a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-094-answer.json": {
+      "bytes": 2283,
+      "sha256": "bad003d2735d484c4ac9bc6b9f9913170d9a5f778be095f8bb3a0eed4f90d1ed"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-094-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-094-prompt.json": {
+      "bytes": 90027,
+      "sha256": "25215b106a67cca5593b364981a72ad8411e386abadf924e98b9d39699cd3cc7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-094-raw.json": {
+      "bytes": 2922,
+      "sha256": "6ea0c21ae64f0308ba58ee550f70dda8913923ca2c79a537225fa8fc4bf5f024"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-094-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-094-reentry.json": {
+      "bytes": 2391,
+      "sha256": "2da93e1b501c3e353077f9de0c085b8d2816b67dcd0d49d1956b040cea8b3591"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-095-answer.json": {
+      "bytes": 2305,
+      "sha256": "73f6ef60b4e4aa04c9fada8ec3c7e2b58116837e2305a18330d150b2f1294028"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-095-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-095-prompt.json": {
+      "bytes": 90004,
+      "sha256": "c47458442ac52f22b624416f58f33de9d52f56f213f5a3c1726f3d4e8bac5c24"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-095-raw.json": {
+      "bytes": 2948,
+      "sha256": "59670d6bd172dd351d32f10f5fbfc253435b13b251dc790eebb4a5014a495fda"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-095-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-095-reentry.json": {
+      "bytes": 2413,
+      "sha256": "20b206110248d144fd832088aa9f6e4400909f9d20d2afd422e1a2143913265f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-096-answer.json": {
+      "bytes": 2282,
+      "sha256": "f1fd5da2007d728c602983cfd0a1d022285751108db42747442944cc23ff291c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-096-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-096-prompt.json": {
+      "bytes": 90189,
+      "sha256": "516b0dc90f34e64576e90cfa02f851e09f38e6436c18feac90388fdc70b2c3f6"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-096-raw.json": {
+      "bytes": 2921,
+      "sha256": "a78dbbf48c732cc72a1baf31e488c64a9ba5637f53c52d329f66314d564f6869"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-096-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-096-reentry.json": {
+      "bytes": 2390,
+      "sha256": "893f0810b84d0ce954ffcb3a90ccbdb2e73a432e915cfbc085e08c8d60912e01"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-097-answer.json": {
+      "bytes": 2261,
+      "sha256": "16cc8c90e643a4faf126ff0c136ecc002a23445fce3723ea0da994eec9f17aa5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-097-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-097-prompt.json": {
+      "bytes": 90114,
+      "sha256": "3aba1d4ece3a1788a5be51dd018315607c58845c59502f7b257a149dc5de83b4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-097-raw.json": {
+      "bytes": 2896,
+      "sha256": "7a230c246c04571d5a73c13522e71abe6df876024d322aac74189780735ef64a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-097-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-097-reentry.json": {
+      "bytes": 2369,
+      "sha256": "32ad2e4b334896dcffab08753c3c58291a1e4965388b62c1dd7907cb3e90b5b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-098-answer.json": {
+      "bytes": 2279,
+      "sha256": "e189aafba7d3bcc4ab2b520cb7b44336c513944acfe744bd58709dbe261267de"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-098-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-098-prompt.json": {
+      "bytes": 90310,
+      "sha256": "0dc3e6320944b4da85d1045bcf61c48b132e8ae8bdac58b0f9dc7085d72c3ed3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-098-raw.json": {
+      "bytes": 2918,
+      "sha256": "2bfc3beeffd219a55aeffbc03c527f688c40a7f9530b2e5bef26bad3d695dd6d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-098-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-098-reentry.json": {
+      "bytes": 2387,
+      "sha256": "878d5234f72ab3d4d09e2c37b61ee037cb30746d978b62bf271978396c08cfee"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-099-answer.json": {
+      "bytes": 2274,
+      "sha256": "7a73a14fdaeda86990ceda00451a0be176c41c44a85766dfdba5096160285cf0"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-099-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-099-prompt.json": {
+      "bytes": 90237,
+      "sha256": "2954d723cf9b5aef30f84eebde72bc521f97d34c4ad7644405ab6f5f9be0aedd"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-099-raw.json": {
+      "bytes": 2909,
+      "sha256": "8bcc509ff9bbbe4945dc169ad80bc7ba5ac3e9dcafdc7dac71ca52b70a99de02"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-099-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-099-reentry.json": {
+      "bytes": 2382,
+      "sha256": "2249529e550322b9f55b7d3d543b75affb61b0ae68c15f30152382222cde4bc4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-100-answer.json": {
+      "bytes": 2276,
+      "sha256": "7618213da8d7dd8de5acdf38a2571ef869d18bcf59e80f0324d12d8ddfebeedc"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-100-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-100-prompt.json": {
+      "bytes": 90286,
+      "sha256": "ab4d05d067dc4b0a1cf43346b3e41f42207f9a553bb8932bcc9214ad788aee74"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-100-raw.json": {
+      "bytes": 2911,
+      "sha256": "c9608626f2c06dde02452ed41968d2d78859a1d7a9ca23e625eb8224f1f2b58c"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-100-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-100-reentry.json": {
+      "bytes": 2384,
+      "sha256": "0afcf4e519b936774247d19f43b4f41a49b40ebc3feb6014fd11daf75b8763a5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-101-answer.json": {
+      "bytes": 2296,
+      "sha256": "2a23fc73ff815c239e58ee3cef1252c81efe6f9d93a830ead6e7a24c9ce41379"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-101-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-101-prompt.json": {
+      "bytes": 90301,
+      "sha256": "e91c0e0b8bc905a9d44faf5ee87c9fa8c7ef20cc2af18aaf8c48958a225005b2"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-101-raw.json": {
+      "bytes": 2939,
+      "sha256": "e379a724bea82fdd147e3baa9f9d827c9a64fa67215b58a772609dce0eaa9cd7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-101-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-101-reentry.json": {
+      "bytes": 2404,
+      "sha256": "6579bab93d860f4cef148652d2d5f73a835369931c5f927f7f0a656ba93e0128"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-102-answer.json": {
+      "bytes": 2262,
+      "sha256": "ee257eec885101908db353ee7460c60d57d05d7fdc682fb4317442fadd641ab0"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-102-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-102-prompt.json": {
+      "bytes": 90313,
+      "sha256": "33d8782bc0883fb10a1b182d873693345944625a7adcc4c53c507237c96e58eb"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-102-raw.json": {
+      "bytes": 2897,
+      "sha256": "75090c0fdb93aec83f69e508cd8cf0bbd1097de886a0b0e7d6c62f36eefff283"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-102-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-102-reentry.json": {
+      "bytes": 2370,
+      "sha256": "45a40e898406a1749256bbaba9abc3644b5e9e4a8c0fe0d21aef7de32d8bd12d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-103-answer.json": {
+      "bytes": 2249,
+      "sha256": "18dbc60c316b7b356270d9aa36bc40b5cc89c4a77688309675289aa79bc91557"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-103-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-103-prompt.json": {
+      "bytes": 90217,
+      "sha256": "6efbbc910a808360b30613ec5c9290ddf03f13b39bd6798bf232ebcc8cb242e7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-103-raw.json": {
+      "bytes": 2880,
+      "sha256": "f43511f96310afdc98c8ef34bb919d85f46cab298359d5f03c6f896bdeab19a3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-103-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-103-reentry.json": {
+      "bytes": 2357,
+      "sha256": "40b88123a7a848039d84e43aee9132a8b859c176813712b52a3316739f148a11"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-104-answer.json": {
+      "bytes": 2280,
+      "sha256": "bc587a84a453923559c05a3e8b8d293290c2c1b292527c497620d59aaed254d3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-104-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-104-prompt.json": {
+      "bytes": 90300,
+      "sha256": "019070dac5ed590c1f25109c7717c5269e1ce949d6adc863c00d9cf248692212"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-104-raw.json": {
+      "bytes": 2919,
+      "sha256": "e4e024be53061f63abd3f038417da185f1c5c56aa785d0aa1705c1028c48dcdb"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-104-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-104-reentry.json": {
+      "bytes": 2388,
+      "sha256": "b04701301af27d836b3a7379fe09ba502585ed8ab3006d2db5eccb3c6563a63d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-105-answer.json": {
+      "bytes": 2238,
+      "sha256": "0ab7520b699900415909dbad07854d268c293a6ffa13cfc7de94336b39837901"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-105-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-105-prompt.json": {
+      "bytes": 89859,
+      "sha256": "5f65ce1621e5a27d3bf75dd718655116aac895998800c0cb5280f42f185c91a7"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-105-raw.json": {
+      "bytes": 2869,
+      "sha256": "a598408b3d2d6a434947c4d59c6e239e165dd3da417f61b1975535f36d4e77f5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-105-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-105-reentry.json": {
+      "bytes": 2346,
+      "sha256": "ae599448f575b1afe58b7deb2d6ee6c12006c85a40091c6f2eec679d77fe57a1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-106-answer.json": {
+      "bytes": 2302,
+      "sha256": "f37e9f514e8adb90b4d4b161a63f0cde5b800e4b081e003393adf119080239ef"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-106-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-106-prompt.json": {
+      "bytes": 90377,
+      "sha256": "e037012aac37119000b7c3ee254bf23947de948f6cdb6350cadf30766b0d1581"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-106-raw.json": {
+      "bytes": 2945,
+      "sha256": "2d848d56ec5cf2533f658ee73ad2ec9dca5ae17325fa5ac8b4db59f7c3af3448"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-106-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-106-reentry.json": {
+      "bytes": 2410,
+      "sha256": "56734a252d8404d271320c58e030c513b5db5578f08593ca6a99fe306cc8142a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-107-answer.json": {
+      "bytes": 2223,
+      "sha256": "b054087c82e13861b932a65d36e748c6bc7e8448793457ec49787f8902bd834a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-107-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-107-prompt.json": {
+      "bytes": 90076,
+      "sha256": "e46393e03375c33d7bca547ba63f7fe9705b97961ab07e2e50721c69c123289a"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-107-raw.json": {
+      "bytes": 2850,
+      "sha256": "c486099dc1713604f53da84d30e23914d2959f0d15d523a5247cf7b94a0772b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-107-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-107-reentry.json": {
+      "bytes": 2331,
+      "sha256": "2ab1e58e64f47d67861a23de2865c8f2bda683fba5e63da865881559564d63a3"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-108-answer.json": {
+      "bytes": 2239,
+      "sha256": "e44bb335dca89f7b6e8c183d61a098553eda831e524a3275f44a31780cfe9069"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-108-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-108-prompt.json": {
+      "bytes": 90252,
+      "sha256": "0cb9f497a507e806888dfe7ad25a7320c0e56f8a3f7eaa2e5b995e3ead164912"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-108-raw.json": {
+      "bytes": 2870,
+      "sha256": "f261e19d8606c4239dfa081555325685595fba2a0d1f654b1e50aedca56cfd33"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-108-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-108-reentry.json": {
+      "bytes": 2347,
+      "sha256": "463b34af95c6b98380a45f39b7ab284385f53e43cfc77771aaffb1d11263943f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-109-answer.json": {
+      "bytes": 2304,
+      "sha256": "c4cbbf644ca5045d3c46e2eeb9c22e6a09f3f8f5e3703baf15a81e9cadb00273"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-109-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-109-prompt.json": {
+      "bytes": 89931,
+      "sha256": "61b6389375adeddad6b981c593ff66de24281d19a9773e80b3b9db0c2f67836d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-109-raw.json": {
+      "bytes": 2947,
+      "sha256": "dd973597b6c159f6f25d75ac0701d9238c01b116d1c2ac9be7e65e1323a60ff5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-109-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-109-reentry.json": {
+      "bytes": 2412,
+      "sha256": "490b4cc783c382c9760c4c9ba4a7199f0f6d2830b15a55f06269aa15a2c25de1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-110-answer.json": {
+      "bytes": 2242,
+      "sha256": "19aa2573f4a992fdbce2f40e807041b1d071aaf688b8893f878649ca6958dfdd"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-110-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-110-prompt.json": {
+      "bytes": 90295,
+      "sha256": "b444743ec60c98e4d6fdff26b9f5289eb037150ea1681627fa519be540a65e38"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-110-raw.json": {
+      "bytes": 2873,
+      "sha256": "978fd9a1df8221c4116bd9de6494fadb8031e4f0e09bc709c5e2628c9c40ff4e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-110-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-110-reentry.json": {
+      "bytes": 2350,
+      "sha256": "a0bf327c8728dfb33a348633bd242a19697dbbd15b9700ae518b0815886adecc"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-111-answer.json": {
+      "bytes": 2269,
+      "sha256": "d425a31960693a9ba54b7af172f0dd221d44bd0eb053dff97b23d2169b85dd79"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-111-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-111-prompt.json": {
+      "bytes": 90019,
+      "sha256": "3ecbe0e3d33dbe356de7bd89228ec94ea3efd50206394745c6f234de5bb1e507"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-111-raw.json": {
+      "bytes": 2904,
+      "sha256": "f6665dd5e242e996519259c51787a236aff95904d235bba87995cc3e1294c6da"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-111-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-111-reentry.json": {
+      "bytes": 2377,
+      "sha256": "7feffe183ac55e679e28fdbecac2f25b9df3c7b9b6bd1867be7e4b1977bf448f"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-112-answer.json": {
+      "bytes": 739,
+      "sha256": "67c5a02f2960d92c8e3fab9041c6f4b32b645e66cb5b3d811eb4bd3a2c07ba43"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-112-cell.json": {
+      "bytes": 451,
+      "sha256": "b12f1b55b6b26a01300c4bb03247b9c3d8830a6737078d581a08ba0cc72e57b5"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-112-prompt.json": {
+      "bytes": 29541,
+      "sha256": "b3a5d9fbec674daf292c7cc50a8a753c6ee17f57eb109f1269472d4322ffc2f4"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-112-raw.json": {
+      "bytes": 954,
+      "sha256": "22f1bb1a6eb28e12f6b2c042df87dc5a74da46057304c212e389bc89bb0c5354"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-112-reentry-cell.json": {
+      "bytes": 349,
+      "sha256": "997bd45975a9eda904445c0fc8a37dad40671aff662163d06b4e9dffe000d9d1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/pack-112-reentry.json": {
+      "bytes": 847,
+      "sha256": "8defc8b118a17a076ad1ce788bf30a5304e929b32d27778be9cf1c58899d90c1"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/privacy-cleanup-followthrough.json": {
+      "bytes": 601,
+      "sha256": "24618812f8e4b9d9b71acd5a83d1d73afbfd2b3c34cb6c4fa2621f9557d0080e"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/privacy-cleanup.json": {
+      "bytes": 487,
+      "sha256": "673326fa531fde8282de58189bb485a74ceefee7faf13ba1f62765916cb26c46"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/receipt.json": {
+      "bytes": 385833,
+      "sha256": "4b66391cc54b83a5de9c4fba8c9a2fec1153d8c47e963b21769adf7e8e19b60d"
+    },
+    "bench/jev/asymmetry/baseline/results/continued-20260917/supervisor-result.json": {
+      "bytes": 231,
+      "sha256": "08a7cdfc3091a33d08e32f5dbf376ccb7faf04d75b12c67d7e383cf1106677b5"
+    },
+    "bench/jev/asymmetry/baseline/results/paired-20260917.json": {
+      "bytes": 192783,
+      "sha256": "f3280fdb20ac1b38c0a55b4a4f77056dfac6e4550402730941ba3942daa40717"
+    },
+    "bench/jev/asymmetry/comparison-20260917.json": {
+      "bytes": 8284,
+      "sha256": "b47168e1d9dd1de57e567a11d7d0adaed5e2071a45e802ae58e6e9f2bc8c5e3e"
+    },
+    "bench/jev/asymmetry/public-acceptance-20260917.json": {
+      "bytes": 2277,
+      "sha256": "ccad3e1cf80fbb041a96d68c6b10fe4551eddfea7026a1be29ebb99713a90568"
+    }
+  },
+  "independent_agent_review": {
+    "all112_native_trace_events_verified": true,
+    "all112_raw_and_reentry_rows_verified": true,
+    "all17469_ids_covered": true,
+    "fresh_public_replay_matches": true,
+    "no_remaining_concrete_mismatch_found": true
+  },
+  "new_inference_requests": 0,
+  "original_user_auth_unchanged": true,
+  "production_binary_unchanged": true,
+  "publication_authorized": false,
+  "recorded_at": "2026-09-17T18:47:30.066041+00:00",
+  "scan_limit": "known credential shapes and private file exclusions, not a proof against arbitrary unrecognized secrets",
+  "schema": "azdaja.asymmetry.final_retention.v1"
+}

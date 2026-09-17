@@ -1,0 +1,13 @@
+{
+  "additional_credentials_found": false,
+  "additional_model_calls": 0,
+  "additional_processes_signaled": 0,
+  "additional_runtime_files_archived": 2,
+  "first_cleanup_receipt_unchanged": true,
+  "original_auth_unchanged": true,
+  "owned_server_registry_empty": true,
+  "private_runtime_outside_repository": true,
+  "reason": "private runtime log and empty server registry reappeared after initial broker termination and archive; no matching private socket owner remained at follow-up",
+  "recorded_at": "2026-09-17T18:46:13.665575+00:00",
+  "schema": "azdaja.asymmetry.cleanup_followthrough.v1"
+}
