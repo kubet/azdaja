@@ -1,0 +1,58 @@
+test_archive_evidence_hashes_all_named_legal_variants (test_audit_third_party_notice_inputs.AuditInputTests.test_archive_evidence_hashes_all_named_legal_variants) ... ok
+test_archive_lookup_rejects_checksum_drift_and_ambiguity (test_audit_third_party_notice_inputs.AuditInputTests.test_archive_lookup_rejects_checksum_drift_and_ambiguity) ... ok
+test_archive_rejects_traversal_missing_license_and_identity (test_audit_third_party_notice_inputs.AuditInputTests.test_archive_rejects_traversal_missing_license_and_identity) ... ok
+test_atomic_writer_rejects_symlink_destination (test_audit_third_party_notice_inputs.AuditInputTests.test_atomic_writer_rejects_symlink_destination) ... ok
+test_lock_registry_record_requires_valid_unique_checksum (test_audit_third_party_notice_inputs.AuditInputTests.test_lock_registry_record_requires_valid_unique_checksum) ... ok
+test_tree_parser_preserves_build_and_proc_macro_records (test_audit_third_party_notice_inputs.AuditInputTests.test_tree_parser_preserves_build_and_proc_macro_records) ... ok
+test_atomic_writer_rejects_symlink_destination (test_reconcile_third_party_notice.NoticeReconciliationTests.test_atomic_writer_rejects_symlink_destination) ... ok
+test_current_inputs_reconcile_but_binding_remains_blocked (test_reconcile_third_party_notice.NoticeReconciliationTests.test_current_inputs_reconcile_but_binding_remains_blocked) ... ok
+test_inventory_parser_normalizes_additive_license_syntax (test_reconcile_third_party_notice.NoticeReconciliationTests.test_inventory_parser_normalizes_additive_license_syntax) ... ok
+test_manifest_target_and_checksum_tampering_fail_closed (test_reconcile_third_party_notice.NoticeReconciliationTests.test_manifest_target_and_checksum_tampering_fail_closed) ... ok
+test_notice_inventory_and_legal_hash_tampering_fail_closed (test_reconcile_third_party_notice.NoticeReconciliationTests.test_notice_inventory_and_legal_hash_tampering_fail_closed) ... ok
+test_all_402_occurrences_round_trip_exact_cached_source_bytes (test_verify_third_party_notices.NoticeProvenanceTests.test_all_402_occurrences_round_trip_exact_cached_source_bytes) ... ok
+test_archive_and_registry_provenance_mutations_are_rejected (test_verify_third_party_notices.NoticeProvenanceTests.test_archive_and_registry_provenance_mutations_are_rejected) ... REJECTED [archive checksum mismatch]
+REJECTED [lock checksum mismatch]
+REJECTED [registry source mismatch]
+REJECTED [packaged manifest mismatch]
+ok
+test_assembler_source_gate_accepts_current_and_rejects_tampered_notice_before_copy (test_verify_third_party_notices.NoticeProvenanceTests.test_assembler_source_gate_accepts_current_and_rejects_tampered_notice_before_copy) ... REJECTED [assembler tampered notice before any output mutation]
+ok
+test_feature_and_target_membership_mutations_are_rejected (test_verify_third_party_notices.NoticeProvenanceTests.test_feature_and_target_membership_mutations_are_rejected) ... REJECTED [feature/target membership mismatch]
+REJECTED [feature/target scope mismatch]
+REJECTED [package inventory mismatch]
+REJECTED [feature scope/license table mismatch]
+ok
+test_historical_attribution_mutations_are_rejected (test_verify_third_party_notices.NoticeProvenanceTests.test_historical_attribution_mutations_are_rejected) ... REJECTED [historical attribution binding mismatch]
+REJECTED [historical attribution mismatch]
+ok
+test_missing_and_duplicate_bindings_are_rejected (test_verify_third_party_notices.NoticeProvenanceTests.test_missing_and_duplicate_bindings_are_rejected) ... REJECTED [exactly one Cargo.lock]
+REJECTED [exactly one Cargo.lock]
+ok
+test_missing_or_corrupt_actual_cached_archive_is_rejected (test_verify_third_party_notices.NoticeProvenanceTests.test_missing_or_corrupt_actual_cached_archive_is_rejected) ... REJECTED [expected one regular archive]
+REJECTED [archive checksum mismatch]
+ok
+test_noncanonical_index_or_notice_bytes_are_rejected (test_verify_third_party_notices.NoticeProvenanceTests.test_noncanonical_index_or_notice_bytes_are_rejected) ... REJECTED [index deterministic serialization mismatch]
+REJECTED [index schema/metadata mismatch]
+REJECTED [front matter/input binding mismatch]
+ok
+test_occurrence_attribution_mutations_are_rejected (test_verify_third_party_notices.NoticeProvenanceTests.test_occurrence_attribution_mutations_are_rejected) ... REJECTED [legal-file occurrence attribution mismatch]
+REJECTED [occurrence attribution mismatch]
+ok
+test_packaged_license_mutation_is_rejected (test_verify_third_party_notices.NoticeProvenanceTests.test_packaged_license_mutation_is_rejected) ... REJECTED [packaged license declaration mismatch]
+REJECTED [feature scope/license table mismatch]
+ok
+test_public_verifier_and_legacy_flags_accept_exact_generated_artifacts (test_verify_third_party_notices.NoticeProvenanceTests.test_public_verifier_and_legacy_flags_accept_exact_generated_artifacts) ... ok
+test_source_text_mutation_even_with_self_consistent_hash_is_rejected (test_verify_third_party_notices.NoticeProvenanceTests.test_source_text_mutation_even_with_self_consistent_hash_is_rejected) ... REJECTED [legal-file occurrence attribution mismatch]
+REJECTED [exact source text/byte metadata mismatch]
+REJECTED [source legal text rendering mismatch]
+ok
+test_symlinked_input_is_rejected (test_verify_third_party_notices.NoticeProvenanceTests.test_symlinked_input_is_rejected) ... ok
+test_wrong_lock_and_notice_binding_are_rejected (test_verify_third_party_notices.NoticeProvenanceTests.test_wrong_lock_and_notice_binding_are_rejected) ... REJECTED [supplied lock differs from project lock]
+REJECTED [notice binding]
+REJECTED [index input binding mismatch]
+ok
+
+----------------------------------------------------------------------
+Ran 25 tests in 32.444s
+
+OK

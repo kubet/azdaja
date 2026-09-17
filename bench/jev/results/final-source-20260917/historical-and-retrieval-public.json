@@ -1,0 +1,36 @@
+{
+  "checks": [
+    {
+      "exit": 0,
+      "log_bytes": 4582,
+      "log_sha256": "65212b9e774ef5b522c9b4661357faed845a228527356740e21e6425a66f8747",
+      "name": "historical-public-acceptance",
+      "seconds": 11.223227209004108
+    },
+    {
+      "exit": 0,
+      "log_bytes": 5413,
+      "log_sha256": "9e2b63df7c141973a08f597c0147c42f899a47a55fb24fd19872a81abcd45399",
+      "name": "historical-envelope-and-retrieval-tests",
+      "seconds": 0.307057874975726
+    },
+    {
+      "exit": 0,
+      "log_bytes": 144,
+      "log_sha256": "7f683ec469a348690c820afd89755afc604e1b4027c41b64799f95c102aedb39",
+      "name": "retrieval-public-rank",
+      "seconds": 0.14919020904926583
+    },
+    {
+      "exit": 0,
+      "log_bytes": 2761,
+      "log_sha256": "c4eae9619600651bade534fe129d5cd598db4565a98f54dd96bd1eb4414dbc9b",
+      "name": "retrieval-public-evaluate",
+      "seconds": 0.04509079200215638
+    }
+  ],
+  "live_provider_calls": 0,
+  "pre_native_binary_sha256": "74e74287c6824eeb2420d11191026e72956bee60e409bfbb5716ae85392bb84b",
+  "source_commit": "7852b8130c463e49c3bea057ded68a680aceee75",
+  "status": "passed"
+}

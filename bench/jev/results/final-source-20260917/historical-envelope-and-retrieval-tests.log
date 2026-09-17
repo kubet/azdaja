@@ -1,0 +1,36 @@
+test_audit_suite_selects_explicit_binary_in_fresh_process (bench.jev.acceptance_cli_tests.AcceptanceCliTests.test_audit_suite_selects_explicit_binary_in_fresh_process) ... ok
+test_dangling_receipt_symlink_is_not_followed (bench.jev.acceptance_cli_tests.AcceptanceCliTests.test_dangling_receipt_symlink_is_not_followed) ... ok
+test_existing_receipt_rejected_before_any_checks (bench.jev.acceptance_cli_tests.AcceptanceCliTests.test_existing_receipt_rejected_before_any_checks) ... ok
+test_failed_stage_is_a_failed_receipt_not_success (bench.jev.acceptance_cli_tests.AcceptanceCliTests.test_failed_stage_is_a_failed_receipt_not_success) ... ok
+test_interruption_cannot_emit_success (bench.jev.acceptance_cli_tests.AcceptanceCliTests.test_interruption_cannot_emit_success) ... ok
+test_missing_binary_stops_before_checks_and_output (bench.jev.acceptance_cli_tests.AcceptanceCliTests.test_missing_binary_stops_before_checks_and_output) ... ok
+test_missing_scratch_stops_before_checks_and_output (bench.jev.acceptance_cli_tests.AcceptanceCliTests.test_missing_scratch_stops_before_checks_and_output) ... ok
+test_receipt_creation_race_never_overwrites (bench.jev.acceptance_cli_tests.AcceptanceCliTests.test_receipt_creation_race_never_overwrites) ... ok
+test_strict_fixed_envelope_still_requires_no_output (bench.jev.acceptance_cli_tests.AcceptanceCliTests.test_strict_fixed_envelope_still_requires_no_output) ... ok
+test_strict_parser_or_startup_error_is_not_a_valid_rejection (bench.jev.acceptance_cli_tests.AcceptanceCliTests.test_strict_parser_or_startup_error_is_not_a_valid_rejection) ... ok
+test_success_envelope_has_private_file_and_no_efficacy_upgrade (bench.jev.acceptance_cli_tests.AcceptanceCliTests.test_success_envelope_has_private_file_and_no_efficacy_upgrade) ... ok
+test_bm25_rejects_passage_string_list_as_documents (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_bm25_rejects_passage_string_list_as_documents) ... ok
+test_every_method_id_ties_survive_reordered_input (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_every_method_id_ties_survive_reordered_input) ... ok
+test_identifier_parts_and_negation_no_plain_word_duplication (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_identifier_parts_and_negation_no_plain_word_duplication) ... ok
+test_literal_bm25_scores_and_unique_query_terms (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_literal_bm25_scores_and_unique_query_terms) ... ok
+test_metadata_does_not_enter_ranking (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_metadata_does_not_enter_ranking) ... ok
+test_mmr_diversifies_before_a_higher_scoring_duplicate (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_mmr_diversifies_before_a_higher_scoring_duplicate) ... ok
+test_mmr_zero_relevance_tie_uses_ids_not_input_index (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_mmr_zero_relevance_tie_uses_ids_not_input_index) ... ok
+test_passage_boundaries_and_empty_text (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_passage_boundaries_and_empty_text) ... ok
+test_passage_scores_cover_all_tokens_and_shared_idf (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_passage_scores_cover_all_tokens_and_shared_idf) ... ok
+test_public_cli_existing_and_dangling_output_rejected_before_inputs (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_public_cli_existing_and_dangling_output_rejected_before_inputs) ... ok
+test_raw_reference_does_not_use_normalized_query (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_raw_reference_does_not_use_normalized_query) ... ok
+test_schema_rejects_duplicates_missing_nonstring_and_empty_universes (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_schema_rejects_duplicates_missing_nonstring_and_empty_universes) ... ok
+test_strict_json_duplicate_keys_and_nonfinite_values (bench.jev.usefulness.counterfactual.test_retrieve.RetrievalTests.test_strict_json_duplicate_keys_and_nonfinite_values) ... ok
+test_changed_question_duplicate_task_and_missing_method_refused (bench.jev.usefulness.counterfactual.test_evaluate.EvaluationTests.test_changed_question_duplicate_task_and_missing_method_refused) ... ok
+test_gold_must_refer_to_real_sources (bench.jev.usefulness.counterfactual.test_evaluate.EvaluationTests.test_gold_must_refer_to_real_sources) ... ok
+test_macro_not_micro_and_no_invented_jev_tasks (bench.jev.usefulness.counterfactual.test_evaluate.EvaluationTests.test_macro_not_micro_and_no_invented_jev_tasks) ... ok
+test_missing_duplicate_extra_candidate_refused (bench.jev.usefulness.counterfactual.test_evaluate.EvaluationTests.test_missing_duplicate_extra_candidate_refused) ... ok
+test_or_groups_do_not_double_count_and_bytes_are_utf8 (bench.jev.usefulness.counterfactual.test_evaluate.EvaluationTests.test_or_groups_do_not_double_count_and_bytes_are_utf8) ... ok
+test_output_preflight_precedes_missing_input (bench.jev.usefulness.counterfactual.test_evaluate.EvaluationTests.test_output_preflight_precedes_missing_input) ... ok
+test_raw_reference_mismatch_is_not_comparable (bench.jev.usefulness.counterfactual.test_evaluate.EvaluationTests.test_raw_reference_mismatch_is_not_comparable) ... ok
+
+----------------------------------------------------------------------
+Ran 31 tests in 0.229s
+
+OK

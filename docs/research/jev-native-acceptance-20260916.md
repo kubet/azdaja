@@ -1,5 +1,13 @@
 # Native Jev: usefulness and final-source acceptance
 
+> Historical receipt for executable source `ed0403b`. Its counts, failed notice
+> gate and live-study identities below remain the observations from that run.
+> The notice/custody repair and later clean-source acceptance are recorded
+> separately in [the 2026-09-17 follow-through](jev-final-followthrough-20260917.md).
+> The later [source-selection study](../../bench/jev/span_selection/RESULTS.md)
+> also failed its quality-preserving benefit bar. Neither follow-up relabels
+> this older binary or turns its results into a current-build measurement.
+
 ## Decision first
 
 **The useful angle is optional evidence operations inside the RLM, not a mandatory judge.** Keep complete source and occurrence IDs, use exact code for bookkeeping, ask selected typed semantic questions, retain every returned alternative, and let the RLM inspect evidence or use `llm` where that helps. Neither a confidence cutoff nor entropy alone should decide what evidence survives.

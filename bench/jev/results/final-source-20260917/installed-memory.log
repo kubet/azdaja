@@ -1,0 +1,9 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running tests/installed_project_memory.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/installed_project_memory-40d42bf3dee6a442)
+
+running 2 tests
+test installed_artifact_preserves_cross_home_handoff_and_relocation ... ok
+test installed_artifact_refuses_disabled_writes_and_corrupt_reads_without_fallback ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.16s
+

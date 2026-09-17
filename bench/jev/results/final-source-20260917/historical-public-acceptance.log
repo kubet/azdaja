@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-17T02:13:11.289878+00:00",
+  "runner_sha256": "e307c4f58a89e69f7d460bde4c6f2b1b8ed670da204e8f4a66ce8e725e8dd32d",
+  "live_provider_calls": 0,
+  "status": "passed",
+  "stage": "complete",
+  "checks": {
+    "default_offline": {
+      "status": "offline_plan",
+      "network_calls": 0,
+      "cases": 66
+    },
+    "original_suite": {
+      "passed": 87,
+      "skipped": 0,
+      "test_sha256": {
+        "test_adapter.py": "d9bd4c1e0815b0198c72d7394eb7117202229ba190e3810acba10216685972fd",
+        "test_audit.py": "b626b22470f1edb197b0699e8b54fdc82cf1b84f795bfe8ba52b03d4ae53b981",
+        "test_bridge.py": "46f5ef85967ee54c7354b3502c66857c63cfc1950e77ef91f8082a18b0a9b390",
+        "test_complete_audit.py": "02ea00ae651ea4bb55f9235b94f869f7379351b833c7cac24003763cd41ced03",
+        "test_model_resolution.py": "d30a86e554d132a1f05654433fb6d0d18c3bc8960200820126a99041a206dddf",
+        "test_run.py": "5511158e601a892a46a5baded2fabdd671dacf9bd630312164d190aa10f937b6"
+      }
+    },
+    "engine_public_cli": {
+      "tests": {
+        "run": 20,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "observations": {
+        "M2": {
+          "same_chosen_unary_features": true,
+          "pair_outputs_differ": true,
+          "sufficiency_of_these_chosen_unary_features": "falsified",
+          "fallback": "direct_pair_requests",
+          "fallback_questions": 6,
+          "automatic_collision_discovery": false
+        },
+        "M1_M4_M6": {
+          "occurrences": 72,
+          "unique_source_records": 16,
+          "pair_universe": 2556,
+          "positive_pairs": 336,
+          "matched_python_semantic_questions": 16,
+          "same_plan_python_equal": true,
+          "direct_pair_oracle_evaluations": 2556,
+          "cache_off": {
+            "backend_calls": 72,
+            "questions": 72,
+            "request_bytes": 47360,
+            "response_bytes": 14372,
+            "cache_hits": 0,
+            "completed_calls": 72
+          },
+          "cache_on_after_second_view": {
+            "backend_calls": 16,
+            "questions": 16,
+            "request_bytes": 10549,
+            "response_bytes": 3193,
+            "cache_hits": 128,
+            "completed_calls": 16
+          },
+          "full_ledger_bytes": 34739,
+          "root_summary_bytes": 29,
+          "automatic_plan_generation": false
+        },
+        "wrong_feature_falsifier": {
+          "unique_wrong_features": 1,
+          "wrong_pair_decisions": 96,
+          "structurally_complete": true,
+          "claim_that_exact_join_repairs_semantics": "falsified"
+        },
+        "M3": {
+          "residual_occurrence_ids": [
+            "0",
+            "8",
+            "16"
+          ],
+          "additional_unique_questions": 2,
+          "unknown_pairs_before": 9,
+          "unknown_pairs_after": 3,
+          "complete": false,
+          "real_generative_llm_called": false
+        }
+      },
+      "source_hashes_match_reference": true
+    },
+    "frozen_public_audits": {
+      "pilot-20260916": {
+        "audit_exit": 0,
+        "strict_exit": 2,
+        "occurrences": 68,
+        "unjudged": 68,
+        "complete": false,
+        "strict_result_created": false,
+        "strict_failure_envelope": "matched",
+        "strict_internal_cause": "not distinguished by legacy CLI"
+      },
+      "pilot-alias-20260916": {
+        "audit_exit": 0,
+        "strict_exit": 2,
+        "occurrences": 68,
+        "unjudged": 68,
+        "complete": false,
+        "strict_result_created": false,
+        "strict_failure_envelope": "matched",
+        "strict_internal_cause": "not distinguished by legacy CLI"
+      }
+    },
+    "ordinary_public_cli": {
+      "chars": 1357,
+      "source_sha256": "383fdab03a9349d2e7da2884b4a4bcdb4ddda0f450bd242efc4be77b634e06ed",
+      "persistent_execution": "passed",
+      "native_judge_many": "not_implemented",
+      "native_probe_exit": 1,
+      "execution_after_probe": "passed"
+    }
+  },
+  "semantic_efficacy_established": false,
+  "automatic_planning_established": false,
+  "native_judge_function_implemented": false,
+  "scope": "Provider-free public acceptance of this research snapshot, not live Jev acceptance. Uses a trusted local binary and repository. Does not rerun the Rust library suite or install toolchains.",
+  "reference_receipt_sha256": "128b4a69e81f0b9a96372191171f3a070133d87b4a68f82d7585cd11ab385e3a",
+  "binary_sha256": "74e74287c6824eeb2420d11191026e72956bee60e409bfbb5716ae85392bb84b",
+  "same_binary_as_reference": true
+}

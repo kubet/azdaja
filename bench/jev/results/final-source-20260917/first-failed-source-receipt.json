@@ -1,0 +1,181 @@
+{
+  "checks": [
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features"
+      ],
+      "exit": 101,
+      "log_bytes": 66214,
+      "log_sha256": "43f03253ec8b67a7bce505ee6585b531547e8ab6104efb6f48fbcc886933a5ce",
+      "name": "all-targets-all-features",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 205
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 76
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 137
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 2,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 34
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 18
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 4
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 17
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 16
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 0
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 15
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 53
+        },
+        {
+          "failed": 1,
+          "ignored": 0,
+          "passed": 1
+        }
+      ],
+      "seconds": 475.29760212497786,
+      "status": "failed"
+    }
+  ],
+  "failure": "all-targets-all-features failed with 101",
+  "live_provider_calls": 0,
+  "publication_authorized": false,
+  "published_assets_modified": false,
+  "schema": "azdaja.final_source_followthrough.v1",
+  "source_commit": "7852b8130c463e49c3bea057ded68a680aceee75",
+  "source_tree_clean": true,
+  "status": "failed"
+}

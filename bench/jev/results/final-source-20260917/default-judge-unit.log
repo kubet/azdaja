@@ -1,0 +1,23 @@
+   Compiling azdaja v0.1.17 ($JCODE_SCRATCH_DIR/jev-clean-final-acceptance-20260917-0216/source)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.12s
+     Running unittests src/lib.rs ($JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/deps/azdaja-0f2dc60cae70277d)
+
+running 15 tests
+test judge::tests::integer_token_budget_crossing_and_overflow_stay_terminal ... ok
+test judge::tests::deadline_preflight_and_transport_timeout ... ok
+test judge::tests::budgets_are_debited_and_crossing_retains_usage_without_answers ... ok
+test judge::tests::all_primitives_cache_and_question_mutation ... ok
+test judge::tests::response_size_http_status_and_config_validation ... ok
+test judge::tests::secret_safe_errors_and_poisoned_transport_failure ... ok
+test judge::tests::unavailable_feature_never_reads_credentials ... ok
+test judge::tests::request_cap_allows_cache_without_new_credential_or_observation ... ok
+test judge::tests::malformed_duplicate_extra_missing_ids_and_types ... ok
+test judge::tests::preflight_limits_and_invalid_arguments_do_not_read_credentials ... ok
+test judge::tests::invalid_probabilities_argmax_score_and_legend ... ok
+test judge::tests::model_alias_concrete_and_explicit_expectation ... ok
+test judge::tests::unknown_usage_is_not_zero_billing_and_bad_usage_poisoned ... ok
+test judge::tests::token_counts_are_integers_and_null_is_unknown_not_zero ... ok
+test judge::tests::elapsed_transport_deadline_poisoned_but_usage_retained ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 192 filtered out; finished in 0.06s
+

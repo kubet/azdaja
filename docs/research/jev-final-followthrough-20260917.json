@@ -1,0 +1,1577 @@
+{
+  "checks": [
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "log_bytes": 7353,
+      "log_sha256": "fe956eeb0aff0dd1cf8ec5503d6c0c79296ef586381353207a48144e5b0ff604",
+      "name": "strict-clippy",
+      "seconds": 19.483194749976974,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "format",
+      "seconds": 0.4377450420288369,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "release/verify-third-party-notices.py"
+      ],
+      "exit": 0,
+      "log_bytes": 434,
+      "log_sha256": "c4e5031df0d74e410df04fb0337db0151d4fca9dbcc0694d68b6dc082c0a6e35",
+      "name": "public-notice",
+      "seconds": 1.366435999982059,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "release",
+        "-p",
+        "test_*notice*.py",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 5722,
+      "log_sha256": "1b6315dea7bd4bb9c9eee2737ca292fbadcd0f5f8727f3e4fa3be2ade530b12f",
+      "name": "notice-mutations",
+      "seconds": 32.51816974999383,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "sh",
+        "proof/reproduction/run.sh"
+      ],
+      "exit": 0,
+      "log_bytes": 365,
+      "log_sha256": "c4c4cc56351dcb658336db0b7762ec53ef0ccddc6f0209780107b611186e6e2f",
+      "name": "proof-public",
+      "seconds": 0.2456155419931747,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "proof.reproduction.test_verify",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 2043,
+      "log_sha256": "9db3c65b536f847a8461662eb7ba0ff4fd5407364f49388ed2fa14e3b88afa24",
+      "name": "proof-tests",
+      "seconds": 0.5555648329900578,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--lib",
+        "judge::tests"
+      ],
+      "exit": 0,
+      "log_bytes": 1620,
+      "log_sha256": "4640c04153824570be1129d143cc895873796f84bbfaaf775f932bded9f5f089",
+      "name": "default-judge-unit",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 15
+        }
+      ],
+      "seconds": 4.221224375010934,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--test",
+        "judge_native"
+      ],
+      "exit": 0,
+      "log_bytes": 816,
+      "log_sha256": "ece720d7cf8174710e7152d525ef05a90f0d571135c21cc7f286a24123e27c82",
+      "name": "default-native-boundary",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        }
+      ],
+      "seconds": 5.214144582976587,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "package",
+        "--locked",
+        "--offline",
+        "--all-features"
+      ],
+      "exit": 0,
+      "log_bytes": 3819,
+      "log_sha256": "96633822a5ae54f0fd4e2805001dec1e02c9aa8203d51f7fe4fb1d3ce305812d",
+      "name": "source-package-verify",
+      "seconds": 5.538731084030587,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--no-fail-fast"
+      ],
+      "exit": 0,
+      "log_bytes": 64112,
+      "log_sha256": "ddb30b0db4a9a7cb61d51420b20305b0590dc3deae0623b08ac9921795f7948b",
+      "name": "all-targets-all-features",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 205
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 76
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 137
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 2,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 34
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 18
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 4
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 6
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 17
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 1
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 16
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 8
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 0
+        },
+        {
+          "failed": 0,
+          "ignored": 1,
+          "passed": 15
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 9
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 5
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 53
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        },
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 3
+        }
+      ],
+      "seconds": 506.6410637499648,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "build",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "--bin",
+        "azdaja"
+      ],
+      "exit": 0,
+      "log_bytes": 72,
+      "log_sha256": "c2ccae29be8ebbd8973f3201e5f6646ec32bdad22fe9c3866ff8d1618ed74896",
+      "name": "final-feature-build",
+      "seconds": 0.42322325002169237,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/azdaja-notice-remediation-20260917/target/debug/azdaja",
+        "install",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 390,
+      "log_sha256": "4f9f17eddcb7929cbbbea58b5f186dd05fd65a29f995a103b75f1f37592c5de8",
+      "name": "private-install",
+      "seconds": 0.8313181670382619,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/jev-clean-final-acceptance-20260917-0216/private home with spaces/.claude/skills/azdaja/azdaja",
+        "doctor",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 277,
+      "log_sha256": "01dd7935ef7427aa142c560835ba006b787de1ce65fc678f02f2e9d0095ad703",
+      "name": "private-doctor",
+      "seconds": 0.220148624968715,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "bench.jev.span_selection.run",
+        "--offline",
+        "--azdaja",
+        "$JCODE_SCRATCH_DIR/jev-clean-final-acceptance-20260917-0216/private home with spaces/.claude/skills/azdaja/azdaja",
+        "--scratch",
+        "$JCODE_SCRATCH_DIR/jev-clean-final-acceptance-20260917-0216",
+        "--output",
+        "$JCODE_SCRATCH_DIR/jev-clean-final-acceptance-20260917-0216/installed-span-offline"
+      ],
+      "exit": 0,
+      "log_bytes": 95,
+      "log_sha256": "0cdc07f800240b9a69f300129f4bf8fd3b2338dba70a9dccb3af557ac709d299",
+      "name": "installed-offline-span",
+      "seconds": 0.6551148750004359,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "-m",
+        "unittest",
+        "bench.jev.span_selection.test_kernel",
+        "bench.jev.span_selection.test_runner",
+        "bench.jev.span_selection.test_replay",
+        "-v"
+      ],
+      "exit": 0,
+      "log_bytes": 4951,
+      "log_sha256": "d840b2dab9da34c3d8ca3e9e8c37b79b364764df87344f2a15ba6802ff1c88a0",
+      "name": "installed-native-and-result-tests",
+      "seconds": 1.404391875024885,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--locked",
+        "--offline",
+        "--features",
+        "typesafe",
+        "--test",
+        "installed_project_memory",
+        "--",
+        "--ignored",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "log_bytes": 530,
+      "log_sha256": "93e56ee134690ea43e7ffdfa50be09dfccd7f44afe570faebf79d872dcf10007",
+      "name": "installed-memory",
+      "rust_counts": [
+        {
+          "failed": 0,
+          "ignored": 0,
+          "passed": 2
+        }
+      ],
+      "seconds": 0.3037235000520013,
+      "status": "passed"
+    },
+    {
+      "argv": [
+        "$JCODE_SCRATCH_DIR/jev-clean-final-acceptance-20260917-0216/private home with spaces/.claude/skills/azdaja/azdaja",
+        "uninstall",
+        "claude"
+      ],
+      "exit": 0,
+      "log_bytes": 166,
+      "log_sha256": "d0d866ac185874fe07cbc407d4ab849d369b589a9fd137aa0b7af44f425274bb",
+      "name": "private-uninstall",
+      "seconds": 1.4650845829746686,
+      "status": "passed"
+    }
+  ],
+  "engineering_acceptance": "passed",
+  "final_binary_sha256": "7fbbc3bc543e2a433ca1a5d44942fad48c5a2bc10e6a1383dbbfcea9c7e1c0dd",
+  "frozen_binaries_preserved": [
+    {
+      "sha256": "74e74287c6824eeb2420d11191026e72956bee60e409bfbb5716ae85392bb84b",
+      "study": "pre_native",
+      "unchanged": true
+    },
+    {
+      "sha256": "f75eaca70da9b72d3e5a0510ed057d2d8e7aa35e41ea49744767578ed03b483d",
+      "study": "first_native",
+      "unchanged": true
+    },
+    {
+      "sha256": "0aefe8e63c385b6f926d0f4264440b308d3eaca5c30c9cce6d1d4b0493a7f237",
+      "study": "span_study",
+      "unchanged": true
+    }
+  ],
+  "frozen_live_decision": {
+    "baseline_correct": 18,
+    "benefit_bar_passed": false,
+    "billing": "not_inferred",
+    "interpretation": "observed latency/quality tradeoff, not a quality-preserving win",
+    "median_latency_ratio": 0.45927965946,
+    "methods_commit": "9f38455",
+    "quality_bar_passed": false,
+    "runtime_source_commit": "ed0403baea72d0f2656e405a2e7454dd4393f24e",
+    "tasks": 18,
+    "typed_correct": 17
+  },
+  "full_suite": {
+    "failed": 0,
+    "ignored": 5,
+    "passed": 658
+  },
+  "general_quality_advantage_established": false,
+  "historical_and_retrieval_checks": [
+    {
+      "exit": 0,
+      "log_bytes": 4582,
+      "log_sha256": "65212b9e774ef5b522c9b4661357faed845a228527356740e21e6425a66f8747",
+      "name": "historical-public-acceptance",
+      "seconds": 11.223227209004108
+    },
+    {
+      "exit": 0,
+      "log_bytes": 5413,
+      "log_sha256": "9e2b63df7c141973a08f597c0147c42f899a47a55fb24fd19872a81abcd45399",
+      "name": "historical-envelope-and-retrieval-tests",
+      "seconds": 0.307057874975726
+    },
+    {
+      "exit": 0,
+      "log_bytes": 144,
+      "log_sha256": "7f683ec469a348690c820afd89755afc604e1b4027c41b64799f95c102aedb39",
+      "name": "retrieval-public-rank",
+      "seconds": 0.14919020904926583
+    },
+    {
+      "exit": 0,
+      "log_bytes": 2761,
+      "log_sha256": "c4eae9619600651bade534fe129d5cd598db4565a98f54dd96bd1eb4414dbc9b",
+      "name": "retrieval-public-evaluate",
+      "seconds": 0.04509079200215638
+    }
+  ],
+  "historical_and_retrieval_source_commit": "7852b8130c463e49c3bea057ded68a680aceee75",
+  "hosted_ci_executed": false,
+  "ignored_tests": [
+    "test lexical_relevance_tests::lexical_relevance_release_stress_16m ... ignored, release-only 16M-character stress",
+    "test installed_artifact_preserves_cross_home_handoff_and_relocation ... ignored, requires a separately installed candidate via AZDAJA_INSTALLED_TEST_BINARY",
+    "test installed_artifact_refuses_disabled_writes_and_corrupt_reads_without_fallback ... ignored, requires a separately installed candidate via AZDAJA_INSTALLED_TEST_BINARY",
+    "test offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death ... ignored, release-only acceptance: run with AZDAJA_PRODUCT_BINARY=target/release/azdaja",
+    "test emit_luna_handoff_pilot_receipts ... ignored, explicit preparation of frozen Luna pilot inputs, not an inference-quality test"
+  ],
+  "installed_offline_observation": {
+    "baseline_unjudged": 18,
+    "cleanup_exit": 0,
+    "logical_llm_calls": 0,
+    "status": "offline_public_workflow_passed",
+    "typed_cells_started": 0,
+    "typed_unjudged": 18
+  },
+  "limitations": [
+    "Source-backed notice engineering evidence is not legal-sufficiency approval.",
+    "Final-source acceptance is local macOS ARM64 debug, not hosted CI or cross-platform runtime.",
+    "Historical proof receipts are validated offline, not new provider calls.",
+    "Current optional transport is TypeSafe, not a general plugin framework.",
+    "No automatic planner, RLM-specific moat, session-wide budget or general efficacy established."
+  ],
+  "live_provider_calls_this_followthrough": 0,
+  "logs": [
+    {
+      "original_bytes": 7353,
+      "original_sha256": "fe956eeb0aff0dd1cf8ec5503d6c0c79296ef586381353207a48144e5b0ff604",
+      "path": "bench/jev/results/final-source-20260917/strict-clippy.log",
+      "retained_bytes": 7337,
+      "retained_sha256": "eeb33961d251d793316c612cd5060396ac258e5f9df54ea94a91d2c632e2cbe1",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "path": "bench/jev/results/final-source-20260917/format.log",
+      "retained_bytes": 0,
+      "retained_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 434,
+      "original_sha256": "c4e5031df0d74e410df04fb0337db0151d4fca9dbcc0694d68b6dc082c0a6e35",
+      "path": "bench/jev/results/final-source-20260917/public-notice.log",
+      "retained_bytes": 434,
+      "retained_sha256": "c4e5031df0d74e410df04fb0337db0151d4fca9dbcc0694d68b6dc082c0a6e35",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 5722,
+      "original_sha256": "1b6315dea7bd4bb9c9eee2737ca292fbadcd0f5f8727f3e4fa3be2ade530b12f",
+      "path": "bench/jev/results/final-source-20260917/notice-mutations.log",
+      "retained_bytes": 5722,
+      "retained_sha256": "1b6315dea7bd4bb9c9eee2737ca292fbadcd0f5f8727f3e4fa3be2ade530b12f",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 365,
+      "original_sha256": "c4c4cc56351dcb658336db0b7762ec53ef0ccddc6f0209780107b611186e6e2f",
+      "path": "bench/jev/results/final-source-20260917/proof-public.log",
+      "retained_bytes": 365,
+      "retained_sha256": "c4c4cc56351dcb658336db0b7762ec53ef0ccddc6f0209780107b611186e6e2f",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 2043,
+      "original_sha256": "9db3c65b536f847a8461662eb7ba0ff4fd5407364f49388ed2fa14e3b88afa24",
+      "path": "bench/jev/results/final-source-20260917/proof-tests.log",
+      "retained_bytes": 2043,
+      "retained_sha256": "9db3c65b536f847a8461662eb7ba0ff4fd5407364f49388ed2fa14e3b88afa24",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 1620,
+      "original_sha256": "4640c04153824570be1129d143cc895873796f84bbfaaf775f932bded9f5f089",
+      "path": "bench/jev/results/final-source-20260917/default-judge-unit.log",
+      "retained_bytes": 1588,
+      "retained_sha256": "521ccd677a32e61940b6374ae0611f52cec76aacaa3a94ae136d3ba6d04210a9",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 816,
+      "original_sha256": "ece720d7cf8174710e7152d525ef05a90f0d571135c21cc7f286a24123e27c82",
+      "path": "bench/jev/results/final-source-20260917/default-native-boundary.log",
+      "retained_bytes": 784,
+      "retained_sha256": "c173aaa9021c1cf9639ce7ecea0ed99b30822c21d72185c97ed0624f6b88c191",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 3819,
+      "original_sha256": "96633822a5ae54f0fd4e2805001dec1e02c9aa8203d51f7fe4fb1d3ce305812d",
+      "path": "bench/jev/results/final-source-20260917/source-package-verify.log",
+      "retained_bytes": 3771,
+      "retained_sha256": "f5ab82d298672992436213fbd8019aaca5f4735afb1adbbaa8a1d019f517125f",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 64112,
+      "original_sha256": "ddb30b0db4a9a7cb61d51420b20305b0590dc3deae0623b08ac9921795f7948b",
+      "path": "bench/jev/results/final-source-20260917/all-targets-all-features.log",
+      "retained_bytes": 63600,
+      "retained_sha256": "fbc3039fe9fff3ebde081360c1f4b544193a53561cf792ae98b92d7af0c33592",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 72,
+      "original_sha256": "c2ccae29be8ebbd8973f3201e5f6646ec32bdad22fe9c3866ff8d1618ed74896",
+      "path": "bench/jev/results/final-source-20260917/final-feature-build.log",
+      "retained_bytes": 72,
+      "retained_sha256": "c2ccae29be8ebbd8973f3201e5f6646ec32bdad22fe9c3866ff8d1618ed74896",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 390,
+      "original_sha256": "4f9f17eddcb7929cbbbea58b5f186dd05fd65a29f995a103b75f1f37592c5de8",
+      "path": "bench/jev/results/final-source-20260917/private-install.log",
+      "retained_bytes": 358,
+      "retained_sha256": "5f1ab43ec4154662efd19305e15ffc839b8ec5b677bc3a190e119d892ee24a6c",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 277,
+      "original_sha256": "01dd7935ef7427aa142c560835ba006b787de1ce65fc678f02f2e9d0095ad703",
+      "path": "bench/jev/results/final-source-20260917/private-doctor.log",
+      "retained_bytes": 261,
+      "retained_sha256": "2dbbdb9d299c1d81322948e61d9123a369217e06caa923dfeb05a918323f52b1",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 95,
+      "original_sha256": "0cdc07f800240b9a69f300129f4bf8fd3b2338dba70a9dccb3af557ac709d299",
+      "path": "bench/jev/results/final-source-20260917/installed-offline-span.log",
+      "retained_bytes": 95,
+      "retained_sha256": "0cdc07f800240b9a69f300129f4bf8fd3b2338dba70a9dccb3af557ac709d299",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 4951,
+      "original_sha256": "d840b2dab9da34c3d8ca3e9e8c37b79b364764df87344f2a15ba6802ff1c88a0",
+      "path": "bench/jev/results/final-source-20260917/installed-native-and-result-tests.log",
+      "retained_bytes": 4951,
+      "retained_sha256": "d840b2dab9da34c3d8ca3e9e8c37b79b364764df87344f2a15ba6802ff1c88a0",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 530,
+      "original_sha256": "93e56ee134690ea43e7ffdfa50be09dfccd7f44afe570faebf79d872dcf10007",
+      "path": "bench/jev/results/final-source-20260917/installed-memory.log",
+      "retained_bytes": 514,
+      "retained_sha256": "cddd242a1621f8d0b685180b4e1fd0aa51863b4124c330266157cd42c6b5b74c",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 166,
+      "original_sha256": "d0d866ac185874fe07cbc407d4ab849d369b589a9fd137aa0b7af44f425274bb",
+      "path": "bench/jev/results/final-source-20260917/private-uninstall.log",
+      "retained_bytes": 166,
+      "retained_sha256": "d0d866ac185874fe07cbc407d4ab849d369b589a9fd137aa0b7af44f425274bb",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 11215,
+      "original_sha256": "59b6e68d94c58b0a17df4406da0a87975f0ce8515e062352bf55a7972c33c866",
+      "path": "bench/jev/results/final-source-20260917/final-source-receipt.json",
+      "retained_bytes": 11119,
+      "retained_sha256": "53b055197f26c11d46360b0888d455fbb8c72345fe26c9f62d236d87b048241c",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 6425,
+      "original_sha256": "c75c5a0e8624f46a9495697f347be4a3c556ab0ddcb6517638c74a318ed45e82",
+      "path": "bench/jev/results/final-source-20260917/installed-offline-span-receipt.json",
+      "retained_bytes": 6425,
+      "retained_sha256": "c75c5a0e8624f46a9495697f347be4a3c556ab0ddcb6517638c74a318ed45e82",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 3505,
+      "original_sha256": "d9c8de1b4bd0b78b876e869787f04f8f317f93ea74994a239787a8735c18d278",
+      "path": "bench/jev/results/final-source-20260917/first-failed-source-receipt.json",
+      "retained_bytes": 3505,
+      "retained_sha256": "d9c8de1b4bd0b78b876e869787f04f8f317f93ea74994a239787a8735c18d278",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 66214,
+      "original_sha256": "43f03253ec8b67a7bce505ee6585b531547e8ab6104efb6f48fbcc886933a5ce",
+      "path": "bench/jev/results/final-source-20260917/first-failed-all-targets-all-features.log",
+      "retained_bytes": 65718,
+      "retained_sha256": "9b197775a6ad50d4f2bf3cfe5df1150ce55c1b4009a548667f3af15b6aa6eb2a",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 4582,
+      "original_sha256": "65212b9e774ef5b522c9b4661357faed845a228527356740e21e6425a66f8747",
+      "path": "bench/jev/results/final-source-20260917/historical-public-acceptance.log",
+      "retained_bytes": 4582,
+      "retained_sha256": "65212b9e774ef5b522c9b4661357faed845a228527356740e21e6425a66f8747",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 5413,
+      "original_sha256": "9e2b63df7c141973a08f597c0147c42f899a47a55fb24fd19872a81abcd45399",
+      "path": "bench/jev/results/final-source-20260917/historical-envelope-and-retrieval-tests.log",
+      "retained_bytes": 5413,
+      "retained_sha256": "9e2b63df7c141973a08f597c0147c42f899a47a55fb24fd19872a81abcd45399",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 144,
+      "original_sha256": "7f683ec469a348690c820afd89755afc604e1b4027c41b64799f95c102aedb39",
+      "path": "bench/jev/results/final-source-20260917/retrieval-public-rank.log",
+      "retained_bytes": 128,
+      "retained_sha256": "ca792b068068aa4ec52a041c5eeae09aa9c82008bd4291996b68f5197dcc19e6",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 2761,
+      "original_sha256": "c4eae9619600651bade534fe129d5cd598db4565a98f54dd96bd1eb4414dbc9b",
+      "path": "bench/jev/results/final-source-20260917/retrieval-public-evaluate.log",
+      "retained_bytes": 2761,
+      "retained_sha256": "c4eae9619600651bade534fe129d5cd598db4565a98f54dd96bd1eb4414dbc9b",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 4582,
+      "original_sha256": "65212b9e774ef5b522c9b4661357faed845a228527356740e21e6425a66f8747",
+      "path": "bench/jev/results/final-source-20260917/historical-public-receipt.json",
+      "retained_bytes": 4582,
+      "retained_sha256": "65212b9e774ef5b522c9b4661357faed845a228527356740e21e6425a66f8747",
+      "transformation": "local absolute path prefixes only"
+    },
+    {
+      "original_bytes": 1133,
+      "original_sha256": "ba4623bc645587c774792cf6aeb6342b00f4db9fda31ded1920441214faf82b9",
+      "path": "bench/jev/results/final-source-20260917/historical-and-retrieval-public.json",
+      "retained_bytes": 1133,
+      "retained_sha256": "ba4623bc645587c774792cf6aeb6342b00f4db9fda31ded1920441214faf82b9",
+      "transformation": "local absolute path prefixes only"
+    }
+  ],
+  "original_files_preserved": [
+    {
+      "mode": "0o644",
+      "path": "docs/acceptance-evidence-map.md",
+      "sha256": "f65d28c9a79bb1d1f1c77dfb2158e6bf5ba3b335fbd8f1e3992d10fb4d5b97db"
+    },
+    {
+      "mode": "0o644",
+      "path": "docs/release/acceptance-362ed75-20260906.md",
+      "sha256": "d5f7478e5467dd7e2e31842e52131660156b9d98d35b06d9db44b1a5891a5df8"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/grounding-pilot/README.md",
+      "sha256": "adc4416ff6a57a79ce3b6fe60781eeb8c7522da63df376a2265c29c2456c45dd"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/grounding-pilot/RECONCILIATION.md",
+      "sha256": "24469b745da02dd72ed93a36b2056017c185fd3fc39665124213367dbd4e9090"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/grounding-pilot/baseline-response.json",
+      "sha256": "bde360486770b4a7057fcda4cde9c4890d7f1c92ccc95e030925510615b27d6c"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/grounding-pilot/coverage-response.json",
+      "sha256": "d3cc6f59e6834117c3d8ea135698a32e4e66d2d91c021661e30d51a4e8a1a9dd"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/grounding-pilot/evaluate.py",
+      "sha256": "9202ac78b1353b5aa577eb31ccaa51c71a3d7053b2e019aea45ce41170db000c"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/grounding-pilot/fixtures.json",
+      "sha256": "cb165cbc19444810e2d883423d9365f1110232f3cb67d9eb073a91208829d612"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/grounding-pilot/results/baseline.json",
+      "sha256": "6ae40a6b5689b259c0bd90bf95ef537b0de7597f12aafc3435e7ea24f0728532"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/grounding-pilot/results/coverage-rule.json",
+      "sha256": "5db975e35e5b8a65e61725602014130382b96ef7198ffaaecf91d1f7a68c4962"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/grounding-pilot/results.json",
+      "sha256": "12804e7a28ba09be081428728bdef904d1992900628b654091400f8744ee833c"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/grounding-pilot/test_evaluate.py",
+      "sha256": "24680d7379d70bbe3ef4000588c74c2624cde9c290953565ad1053f74e24db50"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/memory-luna-20260906T1208/Cargo.lock",
+      "sha256": "9fd673bc8ca63325397387465a1c83847f50b2743205963598ec32c83ecf4fc3"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/memory-luna-20260906T1208/Cargo.toml",
+      "sha256": "1f985d2acf896f9ea16d3121f8e4a2e22da9b8b36ab0b4ef23a3794aaff08b10"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/memory-luna-20260906T1208/PROTOCOL.md",
+      "sha256": "219041ba38f89c84de4f23444097442860d2af63f57c177174b07453b8dd17a5"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/memory-luna-20260906T1208/RESULTS.md",
+      "sha256": "f1c9fffad5f6ba28d76e233088212b891c5de92a15390bf037536b0f6a1223fb"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/memory-luna-20260906T1208/baseline.rs",
+      "sha256": "60ebb6a4df5e5bd9106fde3b5c97143dc3203580a1b19851156cc4d20dc5e5e8"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/memory-luna-20260906T1208/corrected.rs",
+      "sha256": "57ecc32d874718b16f7cf29b39aa97193c8f11ae1fb500fff3a36fdfe2216888"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/memory-luna-20260906T1208/grader.rs",
+      "sha256": "86aba9e030d9198dfbeb3ee107ef8bdcb19f46782a7dfd5092d0a05a0b2c1a9e"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/memory-luna-20260906T1208/grader_controls.rs",
+      "sha256": "4d346f05cb72e7390167af31636c5918013a5d23022f4f4caa8470ac71efc7f2"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/memory-luna-20260906T1208/helpful.rs",
+      "sha256": "99395e2e14fe22a9ed5ade4e62b533e48530b1b429387e6931747e3e5a43958e"
+    },
+    {
+      "mode": "0o644",
+      "path": "eval/memory-luna-20260906T1208/performance.rs",
+      "sha256": "271e403ee675adcfe687ff03d4cdae0447b067c1f6ad6ba9c451ad7f0a0482f8"
+    },
+    {
+      "mode": "0o644",
+      "path": "src/jcode_gate.rs",
+      "sha256": "94b2b46712f21e5c8e895f228539dc0ca5b4f5c80503a6ea4725d2d4058287e8"
+    },
+    {
+      "mode": "0o644",
+      "path": "tests/jcode_release_commands.rs",
+      "sha256": "018a266bf32c60d4ddbf9b5a4e5157b7a659c664ee83f1e3b451384b6de97678"
+    },
+    {
+      "mode": "0o644",
+      "path": "tests/memory_recall_precision.rs",
+      "sha256": "5dfbaac708c301a5234689592e1084822b8634786630f9a1bfd07b823e41ec42"
+    }
+  ],
+  "package_sha256": "2273fcb1fa45b0ae0783378e875a9edd085b7499425da6c0055d86de475c33d9",
+  "prior_full_attempt": {
+    "change": "structural source-install assertion corrected and strengthened, no workflow or runtime weakening",
+    "failure": "all-targets-all-features failed with 101",
+    "repair_commit": "4582663aa887024f4f472a510fb14c3c42377eec",
+    "source_commit": "7852b8130c463e49c3bea057ded68a680aceee75",
+    "status": "failed"
+  },
+  "private_install_removed": true,
+  "publication_authorized": false,
+  "published_files_baseline": "44b1e1b6cc78d6c0f67cfe49188e1cf94b7be7f5",
+  "published_files_preserved": [
+    {
+      "path": "LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "assets/config.toml",
+      "sha256": "bfb001168403d2ab2791f017ec358349cb85380e2e246cec6107a3a253c1b862"
+    },
+    {
+      "path": "assets/legacy/README.md",
+      "sha256": "dea948c9ec17f9976243ed399624669ffb3f5e4afd807f900175c95d0381f961"
+    },
+    {
+      "path": "assets/legacy/codex-config-41f19430.toml",
+      "sha256": "69f1e0f0c5150d422a8f218ccbf52c758cbc546eb82aa80c9d6cfb45063a10d7"
+    },
+    {
+      "path": "assets/legacy/codex-config-a9da6615.toml",
+      "sha256": "5bbfd83b6dc49dc2973cb999c32101b64d2f84723af4b1c87c67f701132c4c24"
+    },
+    {
+      "path": "assets/legacy/codex-config-ae85a189.toml",
+      "sha256": "9d7f4c1c2ac188875f0ffee3b2d46d44dadd48e5feaf6bd25210758aff7abe50"
+    },
+    {
+      "path": "assets/legacy/codex-config-e6467dc6.toml",
+      "sha256": "e6467dc6454f343427dd4d4472536d20f29d8e89740b01e59a669d497f84ecd9"
+    },
+    {
+      "path": "assets/legacy/jcode-config-bc956890.toml",
+      "sha256": "bc9568907891304d0861169b4b44e7560ea3bc28402eb17a89da8078a49d74eb"
+    },
+    {
+      "path": "assets/legacy/jcode-config-d890a0fa.toml",
+      "sha256": "d890a0fad3dfb5faacdd3e6040543097433444b938a48a1d7221ba090656498d"
+    },
+    {
+      "path": "assets/legacy/opencode-config-f077082c.toml",
+      "sha256": "f077082c429ca0793747a47518371448500b3a8f4534ebbc071d50e6655271cf"
+    },
+    {
+      "path": "assets/template/SKILL.md",
+      "sha256": "6e3fee0ec75644c275fcd1ad5e3cefb06b7a13bcc28760362c81a4b09c09e73e"
+    },
+    {
+      "path": "site/.nojekyll",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "site/CNAME",
+      "sha256": "47fe09e701cefa8fb811661b5d54e8b296345faf44beb5fc48dada728a5d5067"
+    },
+    {
+      "path": "site/_headers",
+      "sha256": "596efaefa6000b8b5ebe357edfbd362250b9593e64c60de07c1f7e2344829501"
+    },
+    {
+      "path": "site/a7d4c9e12b6f4830d5e8a1c37f9246bb.txt",
+      "sha256": "6d6d160f54523f29d42ae0597895d5ba76ef580f9187dfb84ac123dabc528116"
+    },
+    {
+      "path": "site/apple-touch-icon.png",
+      "sha256": "c73e96d9950dbfeb10043ccc479fe6a9cc3c5fa70298a802e127400a34ba2bdf"
+    },
+    {
+      "path": "site/azdaja-mark.webp",
+      "sha256": "1639344ca58c1b04aaaf2ebd28e80177c8d478a24896ef1f621ce93c7e74beb1"
+    },
+    {
+      "path": "site/demo-50mb.gif",
+      "sha256": "4bb09ae505a38933f9e236b8583b137f3792cdad5670ad59eaa6a8844b4b620e"
+    },
+    {
+      "path": "site/fonts/Cormorant-Garamond-OFL.txt",
+      "sha256": "60700d351cac4650c51f3f9db318d2a420f8b45052dba2715eb5fec41f0f6956"
+    },
+    {
+      "path": "site/fonts/cormorant-light.woff2",
+      "sha256": "ee185375114e22d847ace51ba8fa0293e29c401a541eaccfec6b50448368d755"
+    },
+    {
+      "path": "site/icon-384.png",
+      "sha256": "5bb62dc91da93f267693ac203e8f0020df10e8a7d5c018b03b13a2053eac55d3"
+    },
+    {
+      "path": "site/index.html",
+      "sha256": "1779b33e45e9dec7f64a2389928e506406a8a5fb344f533d08ddff56fcbd3408"
+    },
+    {
+      "path": "site/install",
+      "sha256": "ff8f13a96db348a322baa25a90ea18f006f80d3d2b68e5950cd1b998c9f410da"
+    },
+    {
+      "path": "site/install.ps1",
+      "sha256": "144cf9bcff40118fe25795264c01e636444398f86eae2ddf39ce155edfdbf807"
+    },
+    {
+      "path": "site/og-card.jpg",
+      "sha256": "63d0c6d3d7fb05289d4a61a9b971a3749a20b51f0997d3d6ed765b0b86ed81f0"
+    },
+    {
+      "path": "site/op-4-card.png",
+      "sha256": "4ed31a77ac4bbbc50e5332e171030a52bc0c3877ec4c5654d915793fca7ebc54"
+    },
+    {
+      "path": "site/op-4.html",
+      "sha256": "c287d087a472acee356e637d2f47cd0e027c327c3179cd63271f4edccd45f95e"
+    },
+    {
+      "path": "site/proof.html",
+      "sha256": "eb2e039156087ce472fd2e5a278ed4f13326970b68f37274a237196be858cedb"
+    },
+    {
+      "path": "site/releases/v0.1.10/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.10/SHA256SUMS",
+      "sha256": "01b99f89905fc308d1472dd9f2d48f4bacbee0427c5a4f2e0d61c90d3db9da87"
+    },
+    {
+      "path": "site/releases/v0.1.10/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.10/azdaja-v0.1.10-darwin-arm64",
+      "sha256": "7199bcd8ffd6490c3c21b3498e7d48b320d07267c88f376edeec9e988e603dc2"
+    },
+    {
+      "path": "site/releases/v0.1.10/azdaja-v0.1.10-linux-x86_64",
+      "sha256": "aa651d5becb653e47c0bacb575b134d0135875568e00ef1339e2c747a7255edf"
+    },
+    {
+      "path": "site/releases/v0.1.11/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.11/SHA256SUMS",
+      "sha256": "ac06f239de8f174be4d146635ed2e0f9546cc261e7de5a813129eebd8d76d475"
+    },
+    {
+      "path": "site/releases/v0.1.11/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.11/azdaja-v0.1.11-darwin-arm64",
+      "sha256": "a61cf686d0dc5958d9b57df6b4b3172a6b212df532a47615dcfb54c8e6ac1efb"
+    },
+    {
+      "path": "site/releases/v0.1.11/azdaja-v0.1.11-linux-x86_64",
+      "sha256": "c2e16f60b626890ef0a0b02ed2af04349994b337c14a9311ae4e04798d75fc27"
+    },
+    {
+      "path": "site/releases/v0.1.12/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.12/SHA256SUMS",
+      "sha256": "08bc23a2566d17474b4f9172476695d4c56c0f89d3259048fee2179ccbe62ce0"
+    },
+    {
+      "path": "site/releases/v0.1.12/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.12/azdaja-v0.1.12-darwin-arm64",
+      "sha256": "4e0463d0661eba4ee8e844fd351f9896719d8473fa0c17947078883bfd8dca29"
+    },
+    {
+      "path": "site/releases/v0.1.12/azdaja-v0.1.12-darwin-x86_64",
+      "sha256": "78fc11691454176c67933ecd631c92a2efd424e1b15bd354b55920614bc94f2e"
+    },
+    {
+      "path": "site/releases/v0.1.12/azdaja-v0.1.12-linux-x86_64",
+      "sha256": "d8127b720053d10ccde553151a7a88adcc92e16a8679f818b8ec1292a79ab7ab"
+    },
+    {
+      "path": "site/releases/v0.1.13/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.13/SHA256SUMS",
+      "sha256": "0f7afa2b2f6b8f1201093547ac4fa082765cd39401935b30c4c403dabed14e9f"
+    },
+    {
+      "path": "site/releases/v0.1.13/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.13/azdaja-v0.1.13-darwin-arm64",
+      "sha256": "888bb7654052862e3d3dcf13495ac2e05fa0e0c0c6779cd8bb27a6a6d4293e91"
+    },
+    {
+      "path": "site/releases/v0.1.13/azdaja-v0.1.13-darwin-x86_64",
+      "sha256": "1e37f38c9c4b785cbd88e8cb18b484cb04aee0c623176aa5c28f846203b604ea"
+    },
+    {
+      "path": "site/releases/v0.1.13/azdaja-v0.1.13-linux-x86_64",
+      "sha256": "d59f3a2e90f13edb5bbca3960b29530012f1236cd9e91297b11e73bee45ebe42"
+    },
+    {
+      "path": "site/releases/v0.1.14/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.14/PROVENANCE.json",
+      "sha256": "c596d63e63daa5037b64eb55483b8bc87591714f162d2faafb0daed566a1d202"
+    },
+    {
+      "path": "site/releases/v0.1.14/SHA256SUMS",
+      "sha256": "192ba0722ea11326f52093471e62f5ed5a14894571f19ed086275f21a6985419"
+    },
+    {
+      "path": "site/releases/v0.1.14/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.14/azdaja-v0.1.14-darwin-arm64",
+      "sha256": "808d20868c8f2ab45e96774cf9aeb2bc3f950db88da756e482023099e64220c4"
+    },
+    {
+      "path": "site/releases/v0.1.14/azdaja-v0.1.14-darwin-x86_64",
+      "sha256": "73550c7f8e9185a6f37235936cc3e2eae577e34d9089392fe8546b94ce845eb5"
+    },
+    {
+      "path": "site/releases/v0.1.14/azdaja-v0.1.14-linux-x86_64",
+      "sha256": "970ebfc18dafc0c72e1d6e29ff29e75944dfd0707b0e3a8669d7ed851837295f"
+    },
+    {
+      "path": "site/releases/v0.1.15/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.15/PROVENANCE.json",
+      "sha256": "4da785b50185d12f5271c0db7b4d5fa6a657c337d4a472c3130e41ea453084a6"
+    },
+    {
+      "path": "site/releases/v0.1.15/SHA256SUMS",
+      "sha256": "3a31e4dc4b9897fa966233afce50cae626ca35b3e53019230c63edb1f49b6f79"
+    },
+    {
+      "path": "site/releases/v0.1.15/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.15/azdaja-v0.1.15-darwin-arm64",
+      "sha256": "6083c766db6210d11443843d034c527880ff5241831c27045128d366702783f9"
+    },
+    {
+      "path": "site/releases/v0.1.15/azdaja-v0.1.15-darwin-x86_64",
+      "sha256": "819b2b59286a9472f54123772c4be08b9abcf1d2ec325f7c87161926272a0808"
+    },
+    {
+      "path": "site/releases/v0.1.15/azdaja-v0.1.15-linux-x86_64",
+      "sha256": "efcd58908242a22aaa64f0e57c66ebab3fdbba3f54b5d6116d6e43f117e62cff"
+    },
+    {
+      "path": "site/releases/v0.1.16/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.16/PROVENANCE.json",
+      "sha256": "daf24d1d1c7a9aec0598b3b1d9bf260081c6316c6f9b4ac65ce4a6d1fa844eb3"
+    },
+    {
+      "path": "site/releases/v0.1.16/SHA256SUMS",
+      "sha256": "ce2b710cdf7dc4d7f80c5e83e144e3abccf202da50151bccb88ca860cb7ff648"
+    },
+    {
+      "path": "site/releases/v0.1.16/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.16/azdaja-v0.1.16-darwin-arm64",
+      "sha256": "09ec5d1f429ad9c07f7ee211dc2e0dca6ca9fb89775d441cddcbf2b2a6e4e6ef"
+    },
+    {
+      "path": "site/releases/v0.1.16/azdaja-v0.1.16-darwin-x86_64",
+      "sha256": "0671a3c9f5a7e16b828e22c7b8d46e7aead5dbfc18d10e51deabc8ec640c98a2"
+    },
+    {
+      "path": "site/releases/v0.1.16/azdaja-v0.1.16-linux-x86_64",
+      "sha256": "31869e1d2a5c715eed8bec892a43347ddac642b0c77e081386fb72824982fcbe"
+    },
+    {
+      "path": "site/releases/v0.1.17/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.17/PROVENANCE.json",
+      "sha256": "2eaedf8b511fba017c48075ec5761848daadfd8157978396fb11bb71c14e3858"
+    },
+    {
+      "path": "site/releases/v0.1.17/SHA256SUMS",
+      "sha256": "fc1c6f72239e246bec6f87160fe2317a3da70af26f72ecc7f737d64313b5ae81"
+    },
+    {
+      "path": "site/releases/v0.1.17/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.17/azdaja-v0.1.17-darwin-arm64",
+      "sha256": "4f0815c4afa4746e4769f9f020873992e8afa77e0a81128e42a6c45f74327a60"
+    },
+    {
+      "path": "site/releases/v0.1.17/azdaja-v0.1.17-darwin-x86_64",
+      "sha256": "cb6044c22cb063c31743db6f0108ac64488a43de8d229c42fa8407b268fbd742"
+    },
+    {
+      "path": "site/releases/v0.1.17/azdaja-v0.1.17-linux-x86_64",
+      "sha256": "5f6ee6c3d3f6af46eb2c3897a4778f3c763e4d4829e83954c44cc90719e2ee2e"
+    },
+    {
+      "path": "site/releases/v0.1.2/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.2/SHA256SUMS",
+      "sha256": "e7348881a31468f87f43e7f90056a88ec80d1ce1f57706b6788544200728b383"
+    },
+    {
+      "path": "site/releases/v0.1.2/THIRD-PARTY-NOTICES.md",
+      "sha256": "ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6"
+    },
+    {
+      "path": "site/releases/v0.1.2/azdaja-v0.1.2-darwin-arm64",
+      "sha256": "74f3fabadb19d0121eae6663fec06387c449961091be2f7c01bea1cb043c13bd"
+    },
+    {
+      "path": "site/releases/v0.1.2/azdaja-v0.1.2-linux-x86_64",
+      "sha256": "62770d1bdb9b9ab5623cd2a757738493555b1e990ddac958ccb4dceeea61061c"
+    },
+    {
+      "path": "site/releases/v0.1.3/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.3/SHA256SUMS",
+      "sha256": "40e01fa3e147754f0885ba9aa83078994fa2995fb42f6b5a68df1f79ae6d2664"
+    },
+    {
+      "path": "site/releases/v0.1.3/THIRD-PARTY-NOTICES.md",
+      "sha256": "ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6"
+    },
+    {
+      "path": "site/releases/v0.1.3/azdaja-v0.1.3-darwin-arm64",
+      "sha256": "6898a1d47b6edf0b1b3759a56102603f3486704e16b332bc1060bd044e8e0948"
+    },
+    {
+      "path": "site/releases/v0.1.3/azdaja-v0.1.3-linux-x86_64",
+      "sha256": "99b96b85b1d9d03917fcc7b4958ec61750addd400e4b32996a6d0ca47ac1c10c"
+    },
+    {
+      "path": "site/releases/v0.1.4/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.4/SHA256SUMS",
+      "sha256": "c03c027e8b71a52e3678c6afb78878827b1f9352ea3ae1015b81642dd9254831"
+    },
+    {
+      "path": "site/releases/v0.1.4/THIRD-PARTY-NOTICES.md",
+      "sha256": "ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6"
+    },
+    {
+      "path": "site/releases/v0.1.4/azdaja-v0.1.4-darwin-arm64",
+      "sha256": "6966f6a4b930c00cf9188d5a8c741fe93388cfb243a9ae4bec804dee35c455c6"
+    },
+    {
+      "path": "site/releases/v0.1.4/azdaja-v0.1.4-linux-x86_64",
+      "sha256": "750d8029fe398b225608a74c2f931f96ee1b3d91ec0a901f91ccf314471dd4a5"
+    },
+    {
+      "path": "site/releases/v0.1.5/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.5/SHA256SUMS",
+      "sha256": "51275c64ac1f64293e24c177e59bf819b18686f19d5ca74432c35588ab338ba7"
+    },
+    {
+      "path": "site/releases/v0.1.5/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.5/azdaja-v0.1.5-darwin-arm64",
+      "sha256": "3c8470c2205ff81444999f9736e4d96edc3e52414acdd5c3e45bcc2feaf9972d"
+    },
+    {
+      "path": "site/releases/v0.1.5/azdaja-v0.1.5-linux-x86_64",
+      "sha256": "4a44948f1594a50335147f0e879597e6f6596f8353e8a7b11639ee1013b610a1"
+    },
+    {
+      "path": "site/releases/v0.1.6/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.6/SHA256SUMS",
+      "sha256": "68c3f4faefd09aeafb8afdfe14ec01bd5ac40d90af83fb0823f082ccb7f9d629"
+    },
+    {
+      "path": "site/releases/v0.1.6/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.6/azdaja-v0.1.6-darwin-arm64",
+      "sha256": "b9eb0e8ccb27814d486df367f971d9a38b07b2d0b668e00d42e452e679f442f8"
+    },
+    {
+      "path": "site/releases/v0.1.6/azdaja-v0.1.6-linux-x86_64",
+      "sha256": "8aad10fdf6db52dcb743fe2644367e7653ab63f2b81d73c73875c113ee0c2a46"
+    },
+    {
+      "path": "site/releases/v0.1.7/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.7/SHA256SUMS",
+      "sha256": "0bf57f8a6e00f1fe56a89544f18983291227f006dea63d525fe0b838f8c8f1c1"
+    },
+    {
+      "path": "site/releases/v0.1.7/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.7/azdaja-v0.1.7-darwin-arm64",
+      "sha256": "d15e5d5e25bbe5c2f8dcfc7f4091649d30021c18b6890a4b90eeb6b752b5c20f"
+    },
+    {
+      "path": "site/releases/v0.1.7/azdaja-v0.1.7-linux-x86_64",
+      "sha256": "559de5dc6b8abdaf65d72e59f69be6a152361184405f1085f9ae3bee23b195c5"
+    },
+    {
+      "path": "site/releases/v0.1.8/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.8/SHA256SUMS",
+      "sha256": "3434e063f48fcceff8fe56ee713eef78286464c692fdea8bc261258b800ba4fa"
+    },
+    {
+      "path": "site/releases/v0.1.8/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.8/azdaja-v0.1.8-darwin-arm64",
+      "sha256": "5042c2e6a90fda0600b569607a7e725ebf7da4b75c5e422914f5cc53d91b48cf"
+    },
+    {
+      "path": "site/releases/v0.1.8/azdaja-v0.1.8-linux-x86_64",
+      "sha256": "91522c8fe155aa27983cfa743770065af5f83d9e5f11c7f883a2bb079ca0b39d"
+    },
+    {
+      "path": "site/releases/v0.1.9/LICENSE",
+      "sha256": "45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096"
+    },
+    {
+      "path": "site/releases/v0.1.9/SHA256SUMS",
+      "sha256": "5368485538571f035820299a7b133eb5260acbd1ef1e3adf48812654245514a2"
+    },
+    {
+      "path": "site/releases/v0.1.9/THIRD-PARTY-NOTICES.md",
+      "sha256": "0ca6a9e083b01cda3ac7017682f3b10b106f132c144a230436694e43d8f79bd3"
+    },
+    {
+      "path": "site/releases/v0.1.9/azdaja-v0.1.9-darwin-arm64",
+      "sha256": "fd2a3e84a441bc892f7d49e7ce2bdf551a95a794db6a2ab10f062b10e04b8128"
+    },
+    {
+      "path": "site/releases/v0.1.9/azdaja-v0.1.9-linux-x86_64",
+      "sha256": "32b837852f718d3257892d04f50ee8cc33eca8c1a225e3fca61ef75384dba0c7"
+    },
+    {
+      "path": "site/robots.txt",
+      "sha256": "fed0036da0f3950ba46fc896a65989bc2ca687d18c327fb776e884af15b2cb2b"
+    },
+    {
+      "path": "site/saga.html",
+      "sha256": "0ce9dd335c74f32e4e71521af15832004eec504052fbbc293d55244d8a2203e8"
+    },
+    {
+      "path": "site/sitemap.xml",
+      "sha256": "c5b4f97f77b439f5555db1b9020731fadc5c4538fd740867e94fba59d738b89d"
+    },
+    {
+      "path": "site/styles.css",
+      "sha256": "8a75af45a99bdecd0cde01ef27cec8e87d237b06fa3052bcaeffd4eb54d01269"
+    },
+    {
+      "path": "site/vercel.json",
+      "sha256": "8af345dd97b5520a351e58eba595d0d2d3b2a0d6797973edae877297b8ecef4a"
+    }
+  ],
+  "recorded_at": "2026-09-17T02:29:11.328209+00:00",
+  "released_ancestor": "ca320c3607116447a506d6c8429489f1b30157a9",
+  "remaining_exclusions": [
+    "release-only 16M-character stress",
+    "release-only 50 MiB acceptance",
+    "frozen Luna pilot input preparation"
+  ],
+  "requirements_map": "docs/research/jev-final-followthrough-20260917.md",
+  "rust_test_groups": {
+    "tests/claude_nonblocking.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 3
+    },
+    "tests/claude_profile_hooks.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 5
+    },
+    "tests/cli_ux.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 9
+    },
+    "tests/config_repair_model.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 2
+    },
+    "tests/e2e.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 137
+    },
+    "tests/feedback_channel.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 1
+    },
+    "tests/installed_project_memory.rs": {
+      "failed": 0,
+      "ignored": 2,
+      "passed": 1
+    },
+    "tests/jcode_release_commands.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 2
+    },
+    "tests/judge_native.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 5
+    },
+    "tests/lifecycle_ux.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 34
+    },
+    "tests/memory_export.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 18
+    },
+    "tests/memory_recall.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 8
+    },
+    "tests/memory_recall_contract.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 4
+    },
+    "tests/memory_recall_paths.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 6
+    },
+    "tests/memory_recall_reliability.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 17
+    },
+    "tests/memory_recall_review.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 3
+    },
+    "tests/monty_compat.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 1
+    },
+    "tests/notice_distribution.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 16
+    },
+    "tests/process_xdg.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 8
+    },
+    "tests/product_50mb.rs": {
+      "failed": 0,
+      "ignored": 1,
+      "passed": 0
+    },
+    "tests/project_memory.rs": {
+      "failed": 0,
+      "ignored": 1,
+      "passed": 15
+    },
+    "tests/project_memory_worktrees.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 5
+    },
+    "tests/public_surface.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 2
+    },
+    "tests/publication_verifier.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 9
+    },
+    "tests/recent_overview.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 2
+    },
+    "tests/release_promotion.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 5
+    },
+    "tests/site_installer.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 53
+    },
+    "tests/source_install_artifact_gate.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 3
+    },
+    "tests/windows_installer.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 3
+    },
+    "unittests src/lib.rs": {
+      "failed": 0,
+      "ignored": 1,
+      "passed": 205
+    },
+    "unittests src/main.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 76
+    }
+  },
+  "schema": "azdaja.jev_final_followthrough.v1",
+  "source_commit": "4582663aa887024f4f472a510fb14c3c42377eec",
+  "source_tree_clean_after": true,
+  "subsequently_exercised_ignored_tests": 2,
+  "user_install_modified": false
+}

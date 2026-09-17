@@ -1,0 +1,136 @@
+{
+  "Q1_at_4": {
+    "mmr_diverse": {
+      "selected_ids": [
+        "E09",
+        "E14",
+        "E15",
+        "E08"
+      ],
+      "covered_groups": 2,
+      "total_groups": 4,
+      "coverage_fraction": 0.5,
+      "complete": false,
+      "missing_groups": [
+        [
+          "E12"
+        ],
+        [
+          "E13"
+        ]
+      ],
+      "selected_text_bytes": 7871
+    },
+    "normalized_bm25": {
+      "selected_ids": [
+        "E09",
+        "E14",
+        "E15",
+        "E16"
+      ],
+      "covered_groups": 2,
+      "total_groups": 4,
+      "coverage_fraction": 0.5,
+      "complete": false,
+      "missing_groups": [
+        [
+          "E12"
+        ],
+        [
+          "E13"
+        ]
+      ],
+      "selected_text_bytes": 8370
+    },
+    "passage_rrf": {
+      "selected_ids": [
+        "E09",
+        "E14",
+        "E15",
+        "E16"
+      ],
+      "covered_groups": 2,
+      "total_groups": 4,
+      "coverage_fraction": 0.5,
+      "complete": false,
+      "missing_groups": [
+        [
+          "E12"
+        ],
+        [
+          "E13"
+        ]
+      ],
+      "selected_text_bytes": 8370
+    },
+    "raw_bm25": {
+      "selected_ids": [
+        "E09",
+        "E15",
+        "E14",
+        "E03"
+      ],
+      "covered_groups": 2,
+      "total_groups": 4,
+      "coverage_fraction": 0.5,
+      "complete": false,
+      "missing_groups": [
+        [
+          "E12"
+        ],
+        [
+          "E13"
+        ]
+      ],
+      "selected_text_bytes": 7319
+    },
+    "jev_retained": {
+      "selected_ids": [
+        "E13",
+        "E09",
+        "E14",
+        "E12"
+      ],
+      "covered_groups": 4,
+      "total_groups": 4,
+      "coverage_fraction": 1.0,
+      "complete": true,
+      "missing_groups": [],
+      "selected_text_bytes": 8016
+    }
+  },
+  "all_seven_at_4": {
+    "mmr_diverse": {
+      "tasks": 7,
+      "macro_group_coverage": 0.7738095238095238,
+      "fully_covered_tasks": 3,
+      "covered_groups": 13,
+      "total_groups": 18,
+      "mean_selected_text_bytes": 6543.714285714285
+    },
+    "normalized_bm25": {
+      "tasks": 7,
+      "macro_group_coverage": 0.7738095238095238,
+      "fully_covered_tasks": 3,
+      "covered_groups": 13,
+      "total_groups": 18,
+      "mean_selected_text_bytes": 6733.428571428572
+    },
+    "passage_rrf": {
+      "tasks": 7,
+      "macro_group_coverage": 0.7738095238095238,
+      "fully_covered_tasks": 3,
+      "covered_groups": 13,
+      "total_groups": 18,
+      "mean_selected_text_bytes": 6694.571428571428
+    },
+    "raw_bm25": {
+      "tasks": 7,
+      "macro_group_coverage": 0.7738095238095238,
+      "fully_covered_tasks": 3,
+      "covered_groups": 13,
+      "total_groups": 18,
+      "mean_selected_text_bytes": 6793.857142857143
+    }
+  }
+}

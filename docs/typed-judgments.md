@@ -2,13 +2,15 @@
 
 Development source capability, not a promise that an existing installed release includes it.
 
-**Publication is not cleared.** The repository's third-party notice is historical
-and its bound lockfile differs from the current `Cargo.lock`. The existing
-`python3 release/verify-third-party-notices.py` gate rejects that mismatch. The
-optional `typesafe` feature adds a dependency closure that has not received a
-fresh notice audit. Local workflow tests do not authorize distributing these
-artifacts. Keep publication blocked until that audit and binding are completed;
-do not relabel the old notice or change its hash merely to make a test pass.
+**Development source only, not a published Jev feature.** The formerly stale
+notice gate has been repaired with a source-backed inventory for both default
+and optional `typesafe` dependencies. The actual
+`python3 release/verify-third-party-notices.py` command passes, while the old
+notice and published installer/assets remain unchanged. This is an engineering
+check, not a legal-completeness determination or publication authorization.
+The frozen published installer intentionally rejects this unpublished notice.
+See the [final source follow-through](research/jev-final-followthrough-20260917.md)
+for exact build identities, installed acceptance and remaining limits.
 
 ## The useful boundary
 
@@ -103,3 +105,12 @@ The operators themselves are not novel. LOTUS, Palimpzest, DocETL and other syst
 ## Current practical evaluation
 
 The [seven-task development panel](../bench/jev/usefulness/README.md) and [frozen live plan](../bench/jev/usefulness/LIVE_PLAN.md) compare full-context self-review with full-distribution-informed review through the actual native CLI. They use source-backed developer decisions, not synthetic gold labels alone. The plan also includes one small retrieval diagnostic. This panel cannot establish automatic planning, large-corpus performance or superiority to matched Python. The [actual native run](../bench/jev/usefulness/RESULTS.md) improved required-source coverage from 2/4 to 4/4 in one top-4 retrieval diagnostic, but did not improve final-answer quality over full-context self-review. Both answer arms missed the same pre-transfer privacy safeguard. That negative result is why generic judging is not made mandatory.
+
+A separate [exact-source selection study](../bench/jev/span_selection/RESULTS.md)
+completed 18 tasks through the actual installed native evaluator with identical
+candidates and questions in both arms. Jev scored 17/18 versus 18/18 for the
+generative selector. Its median observed block latency was 1.162s versus 2.529s,
+but it confused ambiguity with absence, so both the predeclared quality and
+benefit bars failed. No threshold or extra repair call was chosen after that
+failure. The [consolidated angle and application portfolio](research/jev-angle-of-attack-20260917.md)
+separates these observations from untested orchestration, memory and ETL ideas.

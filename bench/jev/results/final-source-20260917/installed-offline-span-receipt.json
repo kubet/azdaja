@@ -1,0 +1,254 @@
+{
+  "automatic_planning": false,
+  "baseline_observed": 0,
+  "baseline_rows": [],
+  "baseline_unjudged": 18,
+  "billing": "not_inferred",
+  "binary_sha256": "7fbbc3bc543e2a433ca1a5d44942fad48c5a2bc10e6a1383dbbfcea9c7e1c0dd",
+  "cleanup_exit": 0,
+  "confirmed_typed_requests": 0,
+  "elapsed_seconds": 0.5787862500292249,
+  "events": [
+    {
+      "command": "start",
+      "exit": 0,
+      "seconds": 0.01096325000980869,
+      "stderr_bytes": 0,
+      "stdout_bytes": 17
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.009946167003363371,
+      "stderr_bytes": 0,
+      "stdout_bytes": 54
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.01060245803091675,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006324291985947639,
+      "stderr_bytes": 0,
+      "stdout_bytes": 339
+    },
+    {
+      "command": "load",
+      "exit": 0,
+      "seconds": 0.008507041027769446,
+      "stderr_bytes": 0,
+      "stdout_bytes": 56
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.015659082971978933,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006401667022146285,
+      "stderr_bytes": 0,
+      "stdout_bytes": 24185
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.012147834000643343,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006383459025528282,
+      "stderr_bytes": 0,
+      "stdout_bytes": 24185
+    },
+    {
+      "command": "exec",
+      "exit": 0,
+      "seconds": 0.01662245800253004,
+      "stderr_bytes": 0,
+      "stdout_bytes": 0
+    },
+    {
+      "command": "final",
+      "exit": 0,
+      "seconds": 0.006819207977969199,
+      "stderr_bytes": 0,
+      "stdout_bytes": 43309
+    }
+  ],
+  "expected_typed_model": "jev-1.13.0",
+  "generative_trace": {
+    "entered_turns": 0,
+    "failed_identity_unknown_events": 0,
+    "logical_request_ids": 0,
+    "observed_models": [],
+    "observed_providers": [],
+    "outcomes": [],
+    "physical_attempt_events": 0,
+    "setup_attempts": 0
+  },
+  "input_hashes": {
+    "PLAN.md": "7f8676f8c6ede12a2bcfb7133ccb42ff8f8ab91cb5dc6922703e4f69d70a924a",
+    "fixtures/gold.json": "e3f5310da620da284803e283e97b47ce862af16ea65f48c03f587958f0fac2d9",
+    "fixtures/inputs.json": "d6759090b2f116fe856a19044bd65f82b65a3f9fca31978d8f75740e29e7bbbc",
+    "kernel.py": "babd42293ee39e4b86b9c995973ae578010cfd80d8532dceec98489304c102d8",
+    "run.py": "dd13b5a4942d19abfc26b3bc923aec254501c5a74aeff94f2a113728a42deb85"
+  },
+  "known_typed_input_tokens": 0,
+  "lexical_projection": {
+    "correct": 7,
+    "observed": 18,
+    "rows": [
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s01",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s02",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s03",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s04",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s05",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": true,
+        "id": "s06",
+        "provenance_correct": false,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s07",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s08",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s09",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s10",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s11",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": true,
+        "id": "s12",
+        "provenance_correct": false,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s13",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s14",
+        "provenance_correct": true,
+        "value_correct": true
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s15",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s16",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": false,
+        "false_selection_for_unresolved": false,
+        "id": "s17",
+        "provenance_correct": true,
+        "value_correct": false
+      },
+      {
+        "correct": true,
+        "false_selection_for_unresolved": false,
+        "id": "s18",
+        "provenance_correct": true,
+        "value_correct": true
+      }
+    ],
+    "unjudged": 0
+  },
+  "logical_llm_calls": 0,
+  "mode": "offline",
+  "requested_generative_model": "gpt-5.6-sol",
+  "requested_typed_model": "jev-latest",
+  "schema_version": 1,
+  "status": "offline_public_workflow_passed",
+  "typed_attempts_with_unknown_usage": 0,
+  "typed_cells_started": 0,
+  "typed_observed": 0,
+  "typed_questions": 0,
+  "typed_rows": [],
+  "typed_unjudged": 18
+}
