@@ -1,0 +1,21 @@
+{
+  "independent_review": {
+    "completed_7201_second_receipt": "rejected",
+    "stopped_7201_second_receipt": "retained_partial_with_usage_and_timing"
+  },
+  "live_baseline_status_at_replay_freeze": "running",
+  "offline_tests": {
+    "failed": 0,
+    "passed": 27,
+    "seconds": 38.793,
+    "source": "immutable interrupted prefix plus synthetic suffix, no live continuation outcome"
+  },
+  "ongoing_outcome_reads": false,
+  "provider_calls": 0,
+  "recorded_at": "2026-09-17T18:36:16.107349+00:00",
+  "schema": "azdaja.asymmetry.paired_replay_validation.v1",
+  "source_sha256": {
+    "replay.py": "91d6c3b1a95219b626f7d978bd09a683ae0bc97c6b17be697778f3726ce30651",
+    "test_replay.py": "27d61c12ba1ce0db1ff676d925221bfbd6f66adc122d5a348d40cbbccb7642a9"
+  }
+}
