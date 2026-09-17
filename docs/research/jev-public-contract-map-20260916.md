@@ -104,6 +104,8 @@ The JSON map lists every field separately. The compact table groups related fiel
 
 ## Whole-result acceptance remains honestly qualified
 
+**2026-09-17 follow-up:** [The bounded notice audit](../release/jev-notice-followthrough-20260917.md) distinguishes the Rust test's stale candidate-version failure from the separate verifier's lock-hash failure. It confirms 191 unchanged default source records and 51 additional optional-feature closure records, and identifies four historical line-ending byte-fidelity discrepancies. Neither the notice nor its gate was relaxed. This is additional blocker diagnosis, not publication clearance or answer-quality evidence.
+
 The full unchanged executable-source suite observed **659 passed, 1 failed, 5 ignored**. The one failure is `current_notice_front_matter_tracks_canonical_version_targets_and_table_membership`. The actual notice verifier also rejected the historical notice/current-lock mismatch. A fresh optional-feature dependency notice audit remains outstanding. Two ignored installed-artifact tests were explicitly run afterward against the private installed candidate and passed. Release-only stress/50 MiB and fresh live host claims remain outside the verified result.
 
 The [earlier acceptance map](jev-native-acceptance-20260916.md) and [counterfactual verification](../../bench/jev/usefulness/counterfactual/verification.json) remain unchanged. The new observations close the current public data/configuration integration checks. They do not turn the negative final-answer result into a positive one, clear publication or establish the untested application angles.
