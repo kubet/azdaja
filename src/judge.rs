@@ -91,6 +91,10 @@ pub struct JudgeEngine {
     cache_hits: usize,
     known_input_tokens: u64,
     unknown_input_usage_requests: usize,
+    known_output_tokens: u64,
+    unknown_output_usage_requests: usize,
+    successful_requests: usize,
+    total_wall: Duration,
     poisoned: bool,
     transport_available: bool,
     deadline: Option<Instant>,
@@ -120,6 +124,10 @@ impl JudgeEngine {
             cache_hits: 0,
             known_input_tokens: 0,
             unknown_input_usage_requests: 0,
+            known_output_tokens: 0,
+            unknown_output_usage_requests: 0,
+            successful_requests: 0,
+            total_wall: Duration::ZERO,
             poisoned: false,
             transport_available: true,
             deadline: None,
@@ -148,9 +156,23 @@ impl JudgeEngine {
             "cached_requests": self.cache.len(), "known_input_tokens": self.known_input_tokens,
             "unknown_input_usage_requests": self.unknown_input_usage_requests,
             "input_usage_complete": self.unknown_input_usage_requests == 0,
+            "known_output_tokens": self.known_output_tokens,
+            "unknown_output_usage_requests": self.unknown_output_usage_requests,
+            "output_usage_complete": self.unknown_output_usage_requests == 0,
+            "successful_requests": self.successful_requests,
+            "failed_attempts": self.attempts.saturating_sub(self.successful_requests),
+            "total_wall_ns": self.total_wall.as_nanos(),
             "billing": "not_inferred"})
     }
     pub fn evaluate(&mut self, state: Value, questions: Value) -> Result<Value> {
+        // Account for failed, cached and preflight-rejected evaluations as well as
+        // successful transport. No model-written value participates in this ledger.
+        let started = Instant::now();
+        let result = self.evaluate_inner(state, questions);
+        self.total_wall += started.elapsed();
+        result
+    }
+    fn evaluate_inner(&mut self, state: Value, questions: Value) -> Result<Value> {
         let started = Instant::now();
         ensure!(self.config.enabled, "judge: disabled");
         self.config.validate()?;
@@ -209,6 +231,7 @@ impl JudgeEngine {
         self.attempts += 1;
         self.questions += count;
         self.unknown_input_usage_requests += 1;
+        self.unknown_output_usage_requests += 1;
         // Every failure after this point poisons this cell, including transport and schema errors.
         self.poisoned = true;
         let raw = (self.transport)(&self.config, &bytes, &key, timeout).map_err(|error| {
@@ -232,6 +255,22 @@ impl JudgeEngine {
             "judge: credential leakage refused"
         );
         let input_usage = validate_usage(body.get("usage"))?;
+        // Validated provider-reported usage remains known even when a later
+        // response/domain/deadline/budget check rejects the answer.
+        if let Some(output) = body
+            .get("usage")
+            .and_then(|usage| usage.get("output_tokens"))
+            .filter(|value| !value.is_null())
+            .map(token_count)
+            .transpose()?
+            .flatten()
+        {
+            self.known_output_tokens = self
+                .known_output_tokens
+                .checked_add(output)
+                .ok_or_else(|| anyhow::anyhow!("judge: output token accounting overflow"))?;
+            self.unknown_output_usage_requests -= 1;
+        }
         if let Some(input) = input_usage {
             self.known_input_tokens = self
                 .known_input_tokens
@@ -246,6 +285,7 @@ impl JudgeEngine {
         validate_response(&body, &questions, &self.config)?;
         self.remaining_timeout()?;
         self.poisoned = false;
+        self.successful_requests += 1;
         self.cache.insert(bytes, body.clone());
         Ok(annotate(body, &digest, false, started))
     }
@@ -628,6 +668,73 @@ mod tests {
         );
         assert_eq!(e.stats()["questions"], 6);
         assert_eq!((credentials.get(), calls.get()), (2, 2));
+    }
+    #[test]
+    fn solo_accounting_preserves_physical_usage_across_cache_and_failure() {
+        let (mut e, _, calls) = fixture(&config(), response());
+        e.evaluate(json!("source"), questions()).unwrap();
+        e.evaluate(json!("source"), questions()).unwrap();
+        let stats = e.stats();
+        assert_eq!(calls.get(), 1);
+        assert_eq!(stats["attempts"], 1);
+        assert_eq!(stats["successful_requests"], 1);
+        assert_eq!(stats["failed_attempts"], 0);
+        assert_eq!(stats["known_input_tokens"], 10);
+        assert_eq!(stats["known_output_tokens"], 4);
+        assert_eq!(stats["unknown_output_usage_requests"], 0);
+        assert_eq!(stats["output_usage_complete"], true);
+        assert!(stats["total_wall_ns"].as_u64().unwrap() > 0);
+
+        let c = JudgeConfig {
+            max_input_tokens_per_cell: 9,
+            ..config()
+        };
+        let (mut rejected, _, calls) = fixture(&c, response());
+        assert!(rejected.evaluate(json!("source"), questions()).is_err());
+        let stats = rejected.stats();
+        assert_eq!(calls.get(), 1);
+        assert_eq!(stats["failed_attempts"], 1);
+        assert_eq!(stats["successful_requests"], 0);
+        assert_eq!(stats["known_input_tokens"], 10);
+        assert_eq!(stats["known_output_tokens"], 4);
+        assert_eq!(stats["output_usage_complete"], true);
+        assert!(stats["total_wall_ns"].as_u64().unwrap() > 0);
+    }
+
+    #[test]
+    fn solo_accounting_missing_and_malformed_usage_remains_unknown() {
+        let mut body = response();
+        body["usage"]
+            .as_object_mut()
+            .unwrap()
+            .remove("output_tokens");
+        let (mut e, _, _) = fixture(&config(), body);
+        e.evaluate(json!("source"), questions()).unwrap();
+        assert_eq!(e.stats()["known_output_tokens"], 0);
+        assert_eq!(e.stats()["unknown_output_usage_requests"], 1);
+        assert_eq!(e.stats()["output_usage_complete"], false);
+        let (mut e, _, calls) = engine(&config(), b"not json".to_vec());
+        assert!(e.evaluate(json!("source"), questions()).is_err());
+        let stats = e.stats();
+        assert_eq!(calls.get(), 1);
+        assert_eq!(stats["failed_attempts"], 1);
+        assert_eq!(stats["successful_requests"], 0);
+        assert_eq!(stats["unknown_input_usage_requests"], 1);
+        assert_eq!(stats["unknown_output_usage_requests"], 1);
+        assert!(stats["total_wall_ns"].as_u64().unwrap() > 0);
+        assert!(e.evaluate(json!("source"), questions()).is_err());
+        assert_eq!(e.stats()["attempts"], 1);
+    }
+
+    #[test]
+    fn solo_accounting_preflight_and_stats_do_not_create_semantic_evidence() {
+        let (mut e, _, calls) = fixture(&config(), response());
+        assert_eq!(e.stats()["successful_requests"], 0);
+        assert!(e.evaluate(json!("source"), json!({})).is_err());
+        assert_eq!(e.stats()["successful_requests"], 0);
+        assert_eq!(e.stats()["attempts"], 0);
+        assert_eq!(e.stats()["unknown_output_usage_requests"], 0);
+        assert_eq!(calls.get(), 0);
     }
     #[test]
     fn model_alias_concrete_and_explicit_expectation() {

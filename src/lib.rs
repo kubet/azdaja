@@ -3768,6 +3768,8 @@ pub struct ExecResult {
     pub semantic_calls: usize,
     /// Gross monotonic wall spent inside logical model-call batches during this cell.
     pub sub_call_wall_ns: u128,
+    /// Host-owned per-cell typed request/usage/timing snapshot, including failures.
+    pub judge_stats: serde_json::Value,
     pub semantic_projection: Option<SemanticProjectionProvenance>,
     pub record_coverage: Option<RecordCoverageProvenance>,
     pub failure_kind: ExecFailureKind,
@@ -5054,6 +5056,7 @@ type RunCellOutcome = (
     Option<String>,
     Option<SemanticProjectionProvenance>,
     Option<RecordCoverageProvenance>,
+    serde_json::Value,
 );
 
 fn model_call_entered_turn_limit(name: &str) -> u32 {
@@ -6063,6 +6066,15 @@ fn external(
                 }
             }
             let values = values?;
+            if semantic_phase.is_none()
+                && capabilities.allow_relevance
+                && cfg.judge.enabled
+                && cfg!(feature = "typesafe")
+            {
+                *state.semantic_call_count = state
+                    .semantic_call_count
+                    .saturating_add(values.iter().filter(|value| value.is_ok()).count());
+            }
             if batch {
                 Ok(MontyObject::List(
                     values
@@ -6243,6 +6255,7 @@ fn run_cell(
                 failure_line,
                 exact_line_ledgers.projection,
                 record_coverage.completed,
+                judge.stats(),
             );
         }
     };
@@ -6272,6 +6285,7 @@ fn run_cell(
                     None,
                     exact_line_ledgers.projection,
                     record_coverage.completed,
+                    judge.stats(),
                 );
             }
             ReplProgress::FunctionCall(call) => {
@@ -6330,6 +6344,7 @@ fn run_cell(
                             failure_line,
                             exact_line_ledgers.projection,
                             record_coverage.completed,
+                            judge.stats(),
                         );
                     }
                 }
@@ -6361,6 +6376,7 @@ fn run_cell(
                         failure_line,
                         exact_line_ledgers.projection,
                         record_coverage.completed,
+                        judge.stats(),
                     );
                 }
             },
@@ -6391,6 +6407,7 @@ fn run_cell(
                         failure_line,
                         exact_line_ledgers.projection,
                         record_coverage.completed,
+                        judge.stats(),
                     );
                 }
             },
@@ -6408,6 +6425,7 @@ fn run_cell(
                     None,
                     exact_line_ledgers.projection,
                     record_coverage.completed,
+                    judge.stats(),
                 );
             }
         }
@@ -6741,6 +6759,7 @@ fn structural_sample(text: &str, total: usize) -> Result<String> {
 }
 
 pub struct SoloSession {
+    last_judge_stats: serde_json::Value,
     repl: Option<MontyRepl>,
     sub_model: String,
     answer: Option<String>,
@@ -6755,6 +6774,10 @@ pub struct SoloSession {
     source_aggregate: Option<observability::SourceLocalAggregate>,
 }
 impl SoloSession {
+    /// Trusted metadata survives cell failure and is never read from model output.
+    pub fn last_judge_stats(&self) -> &serde_json::Value {
+        &self.last_judge_stats
+    }
     pub fn new(cfg: &Config, sub_model: Option<String>) -> Result<Self> {
         let tracker = ResourceTracker::new(
             ResourceLimits::default().max_duration(Duration::from_secs(cfg.cell_timeout)),
@@ -6763,6 +6786,7 @@ impl SoloSession {
         repl.feed_run(PRELUDE, vec![], PrintWriter::Disabled)
             .context("Monty capability canary failed")?;
         Ok(Self {
+            last_judge_stats: serde_json::Value::Null,
             repl: Some(repl),
             sub_model: sub_model.unwrap_or_else(|| cfg.default_model.clone()),
             answer: None,
@@ -6955,6 +6979,7 @@ impl SoloSession {
         cfg: &Config,
         allow_projection_private: bool,
     ) -> Result<ExecResult> {
+        self.last_judge_stats = serde_json::Value::Null;
         self.answer = None;
         self.answer_error = None;
         self.answer_json = None;
@@ -6975,6 +7000,7 @@ impl SoloSession {
             mut failure_line,
             semantic_projection,
             record_coverage,
+            judge_stats,
         ) = run_cell(
             repl,
             code,
@@ -6987,6 +7013,7 @@ impl SoloSession {
                 authoritative_records: self.authoritative_records.as_deref(),
             },
         );
+        self.last_judge_stats = judge_stats.clone();
         if provider_interrupted() {
             self.repl = Some(repl);
             bail!("provider interrupted")
@@ -7036,6 +7063,7 @@ impl SoloSession {
             external_calls,
             semantic_calls,
             sub_call_wall_ns: sub_call_wall.as_nanos(),
+            judge_stats,
             semantic_projection,
             record_coverage,
             failure_kind: exec_failure_kind(exception),
@@ -7092,6 +7120,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         mut failure_line,
         semantic_projection,
         record_coverage,
+        judge_stats,
     ) = run_cell(repl, code, cfg, model, RunCellContext::default());
     if provider_interrupted() {
         bail!("provider interrupted")
@@ -7141,6 +7170,7 @@ pub fn exec(sid: &str, code: &str, cfg: &Config) -> Result<ExecResult> {
         external_calls,
         semantic_calls,
         sub_call_wall_ns: sub_call_wall.as_nanos(),
+        judge_stats,
         semantic_projection,
         record_coverage,
         failure_kind: exec_failure_kind(exception),
@@ -13245,7 +13275,7 @@ mod lexical_relevance_tests {
         let cfg = Config::default();
         let mut session = SoloSession::new(&cfg, None).unwrap();
         let repl = session.repl.take().unwrap();
-        let (_, _, success, _, calls, _, _, failure, _, _, _) = run_cell(
+        let (_, _, success, _, calls, _, _, failure, _, _, _, _) = run_cell(
             repl,
             "lexical_relevance('source', 'query', 4000)",
             &cfg,
@@ -13825,7 +13855,7 @@ FINAL(len(selected))"#;
         let cfg = Config::default();
         let mut session = SoloSession::new(&cfg, None).unwrap();
         let repl = session.repl.take().unwrap();
-        let (_, _, success, _, calls, _, _, failure, _, _, _) = run_cell(
+        let (_, _, success, _, calls, _, _, failure, _, _, _, _) = run_cell(
             repl,
             "exact_line_records('Row: x', 'Row: ')",
             &cfg,
@@ -14059,7 +14089,7 @@ mod exact_line_ledger_projection_tests {
         let mut repl = MontyRepl::new("ordinary", tracker, CompileOptions::default());
         repl.feed_run(PRELUDE, vec![], PrintWriter::Disabled)
             .unwrap();
-        let (_, _, success, _, calls, _, _, failure, _, provenance, _) = run_cell(
+        let (_, _, success, _, calls, _, _, failure, _, provenance, _, _) = run_cell(
             repl,
             "exact_line_ledger('Row: x', 'Row: ')",
             &cfg,
