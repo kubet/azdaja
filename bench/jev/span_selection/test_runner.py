@@ -98,7 +98,9 @@ class RunnerTests(unittest.TestCase):
             path.write_text('\n'.join(json.dumps(x) for x in (a,b,b)))
             with self.assertRaisesRegex(r.Stop, 'generative_transport_attempt_cap'):
                 r.trace_summary(path)
-            setup=dict(a,entered_turn=None)
+            setup=dict(a)
+            for optional in ('entered_turn','model','provider'):
+                del setup[optional]
             after_setup=dict(b,entered_turn=1)
             path.write_text('\n'.join(json.dumps(x) for x in (setup,after_setup)))
             observed=r.trace_summary(path)

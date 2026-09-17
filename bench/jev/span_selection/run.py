@@ -119,15 +119,15 @@ def trace_summary(path):
            for e in events):
         raise Stop('generative_trace_contract')
     ids = {e['request_id'] for e in events}
-    if any(sum(e['request_id'] == rid and e['entered_turn'] is not None for e in events) > 2
-           or sum(e['request_id'] == rid and e['entered_turn'] is None for e in events) > 4 for rid in ids):
+    if any(sum(e['request_id'] == rid and e.get('entered_turn') is not None for e in events) > 2
+           or sum(e['request_id'] == rid and e.get('entered_turn') is None for e in events) > 4 for rid in ids):
         raise Stop('generative_transport_attempt_cap')
     succeeded = [e for e in events if e.get('outcome') == 'succeeded']
     if any(not isinstance(e.get('model'), str) or not isinstance(e.get('provider'), str)
            or e.get('entered_turn') is None for e in succeeded):
         raise Stop('generative_success_identity_missing')
-    return {'physical_attempt_events': len(events), 'entered_turns': sum(e['entered_turn'] is not None for e in events),
-            'setup_attempts': sum(e['entered_turn'] is None for e in events),
+    return {'physical_attempt_events': len(events), 'entered_turns': sum(e.get('entered_turn') is not None for e in events),
+            'setup_attempts': sum(e.get('entered_turn') is None for e in events),
             'failed_identity_unknown_events': sum(e.get('outcome') != 'succeeded' and
                 (e.get('model') is None or e.get('provider') is None) for e in events),
             'logical_request_ids': len(ids), 'observed_models': sorted({e['model'] for e in succeeded}),
