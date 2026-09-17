@@ -1,0 +1,1 @@
+{"code":"p=json.loads(offline_payload)\nanswer={}\nfor qid in p[\"pack\"][\"questions\"]: answer[qid]=\"no\"\nobservations[p[\"name\"]]=answer\nFINAL({\"hash\":sha256(offline_payload),\"ids\":sorted(answer.keys()),\"attempts\":judge_stats()[\"attempts\"]})\n"}

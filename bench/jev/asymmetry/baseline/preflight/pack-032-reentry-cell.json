@@ -1,0 +1,1 @@
+{"code":"p=json.loads(binding_payload)\nassert sorted(p[\"answer\"].keys()) == sorted(p[\"ids\"])\nassert all(value in [\"yes\",\"no\"] for value in p[\"answer\"].values())\nobservations[p[\"name\"]]=p[\"answer\"]\nFINAL({\"binding_sha256\":sha256(binding_payload),\"answer\":observations[p[\"name\"]],\"attempts\":judge_stats()[\"attempts\"]})\n"}
