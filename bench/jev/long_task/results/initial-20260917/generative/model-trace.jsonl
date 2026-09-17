@@ -1,0 +1,1 @@
+{"schema_version":2,"event":"model_attempt","timestamp_ms":1789679975501,"depth":0,"request_id":"73432-1789679914600888000-1","attempt":1,"entered_turn":1,"session_id":"session_horse_1789679915345_6994ee96b514da36","category":"turn","outcome":"failed","error":"provider_call_failed","error_category":"timeout","stage":"turn","latency_ms":60009}
