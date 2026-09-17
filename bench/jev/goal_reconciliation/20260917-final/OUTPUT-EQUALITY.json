@@ -1,0 +1,51 @@
+[
+  {
+    "byte_equal": true,
+    "bytes": 34954,
+    "fresh_output": "angle.json",
+    "retained_path": "bench/jev/goal_reconciliation/20260917/angle-replay.json",
+    "sha256": "a27fb2dcf1a421bca098e107ed3ec1c8e999f2915d1ee5773218f51b626fb8c5"
+  },
+  {
+    "byte_equal": true,
+    "bytes": 2001,
+    "fresh_output": "measurement.json",
+    "retained_path": "bench/jev/goal_reconciliation/20260917/measurement-audit.json",
+    "sha256": "8e09a314254c5583493d29904684656bc9cc713346ce3bd604f7b13fa5ee270b"
+  },
+  {
+    "byte_equal": true,
+    "bytes": 192783,
+    "fresh_output": "paired.json",
+    "retained_path": "bench/jev/asymmetry/baseline/results/paired-20260917.json",
+    "sha256": "f3280fdb20ac1b38c0a55b4a4f77056dfac6e4550402730941ba3942daa40717"
+  },
+  {
+    "byte_equal": true,
+    "bytes": 14879,
+    "fresh_output": "criteria.json",
+    "retained_path": "bench/jev/asymmetry/criteria/results/grade-20260917.json",
+    "sha256": "65765977c90ffa37d8d53834768bc657a00e6bd950b9640d68b8f3010cfb3ea8"
+  },
+  {
+    "byte_equal": true,
+    "bytes": 2928423,
+    "fresh_output": "calibration.json",
+    "retained_path": "bench/jev/row651_labels/result.json",
+    "sha256": "65f5bf14c9c3546cc030b95adcfaaa10ec3b40586fdc06f7bdfc469f92242e13"
+  },
+  {
+    "byte_equal": true,
+    "bytes": 1765776,
+    "fresh_output": "fp-analysis/analysis.json",
+    "retained_path": "bench/jev/asymmetry/fp_analysis/analysis.json",
+    "sha256": "9fd960726a5f9c2a133cf7bcab75d61834629b7e0eabf18c1b7d7b079086336d"
+  },
+  {
+    "byte_equal": true,
+    "bytes": 440030,
+    "fresh_output": "fp-analysis/errors.jsonl",
+    "retained_path": "bench/jev/asymmetry/fp_analysis/errors.jsonl",
+    "sha256": "09fff8522b8ee93a9a2092bf712f9d36f23b1f07d145dc8943ab692b257ff4c7"
+  }
+]

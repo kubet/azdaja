@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/vukasinkubet/dev/azdaja/bench/jev/asymmetry/baseline/replay.py", line 426, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/Users/vukasinkubet/dev/azdaja/bench/jev/asymmetry/baseline/replay.py", line 416, in main
+    require(not os.path.lexists(args.output), 'output exists')
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/vukasinkubet/dev/azdaja/bench/jev/asymmetry/baseline/replay.py", line 33, in require
+    raise ValueError(reason)
+ValueError: output exists

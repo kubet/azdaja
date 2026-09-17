@@ -1,0 +1,1 @@
+{"observed": 17469, "tp": 8633, "tn": 8450, "fp": 381, "fn": 5, "correct": 17083, "accuracy": 0.9779037151525559, "predicted_ham": 9014, "gold_ham": 8638, "signed_count_error": 376, "absolute_count_error": 376}

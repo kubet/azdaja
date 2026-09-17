@@ -1,0 +1,549 @@
+{
+  "accepted_runtime_packaging_and_release_inputs_unchanged": true,
+  "binary_sha256": "13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32",
+  "checks": [
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "unittest",
+        "bench.jev.angle_analysis.test_report",
+        "bench.jev.row651_labels.test_audit",
+        "bench.jev.measurement_followthrough.test_followthrough",
+        "bench.jev.second_reader.diagnostic.test_diagnostic",
+        "bench.jev.second_reader.review.test_metrics",
+        "bench.jev.second_reader.row651.test_prepare",
+        "bench.jev.second_reader.test_large_run",
+        "bench.jev.second_reader.test_policy_run",
+        "bench.jev.second_reader.test_policy_study",
+        "bench.jev.second_reader.test_replays",
+        "bench.jev.asymmetry.baseline.test_continue",
+        "bench.jev.asymmetry.baseline.test_replay",
+        "bench.jev.asymmetry.baseline.test_run",
+        "bench.jev.asymmetry.criteria.test_grade",
+        "bench.jev.asymmetry.criteria.test_prepare",
+        "bench.jev.asymmetry.criteria.test_run",
+        "bench.jev.asymmetry.fp_analysis.test_analyze",
+        "bench.jev.asymmetry.provider_report.test_build",
+        "bench.jev.asymmetry.threshold.test_train",
+        "bench.jev.asymmetry.threshold.test_transfer",
+        "bench.jev.test_measurement_audit",
+        "-v"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "name": "mapped-offline-tests",
+      "seconds": 78.225845457986,
+      "stderr_sha256": "af892a6edd55d6f0f1c15da145fe7a8bd7251c2840717a532af3b7aa52af3287",
+      "stdout_sha256": "8c7e0a3b1e464f095c9adeb24d8862f350325cd11ea4fa33788680b4eff01a15"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "/Users/vukasinkubet/dev/azdaja/bench/jev/results/six-angle-acceptance-20260917/installed-credentials/runner.py",
+        "--azdaja",
+        "/Users/vukasinkubet/.jcode/scratch/jev-ingest-native-e75d836-azdaja",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-final-goal-reconciliation-f56qqrtx/installed-credentials"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "name": "installed-credential-workflow",
+      "seconds": 2.3738886659266427,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "646a9b039c920c79664e85612d1aa563415b0a3980963fe72973d456272b874e"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.angle_analysis.report",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-final-goal-reconciliation-f56qqrtx/angle.json"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "name": "angle-public",
+      "seconds": 1.5200334170367569,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "6926cdaf705ab0ea10f5f5ba6390415ba3e4bb07309ef87bfc0ef0e4eb4f4aaf"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.measurement_audit",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-final-goal-reconciliation-f56qqrtx/measurement.json"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "name": "measurement-public",
+      "seconds": 0.17767279199324548,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "3a89c88cc6c1f6cc0aac0ecc7f97efffcd654f5bcb83e8dbdbb289dc0dcfb7d2"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.row651_labels.audit",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-final-goal-reconciliation-f56qqrtx/calibration.json"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "name": "calibration-public",
+      "seconds": 0.6748569590272382,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "a272863fa6b1c79667b090fa9919ba40c7095c85a4a3c60130eaa98afa30a5d4"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.second_reader.replay_large",
+        "bench/jev/second_reader/results/row651-live-20260917"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "name": "second-reader-large",
+      "seconds": 0.5076653329888359,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "bebbcdf586a072851ec5756783eff285bfd6b4ae0503b26aac22a48db92ebbd6"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.second_reader.replay_policy",
+        "bench/jev/second_reader/results/policy-live-20260917"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "name": "second-reader-policy",
+      "seconds": 0.19210049998946488,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "5df9dda43053e2353a8b4bc5329147abadc5e2f1c50bf11c9dba040e82d53b9b"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.asymmetry.baseline.replay",
+        "--receipt-dir",
+        "bench/jev/asymmetry/baseline/results/continued-20260917",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-final-goal-reconciliation-f56qqrtx/paired.json"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "name": "paired-public",
+      "seconds": 1.5699679999379441,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "407ae0e4e9837aabfdd109bcacb705aa636837e7c3c25375b0336f6099656a6f"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.asymmetry.criteria.grade",
+        "--receipt-dir",
+        "bench/jev/asymmetry/criteria/results/native-20260917",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-final-goal-reconciliation-f56qqrtx/criteria.json"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "name": "criteria-public",
+      "seconds": 0.18432766606565565,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "f50768ffa2fbf13a1bb889acb51723615839a2a0d7b2dd4f2c666e4d2656043a"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.asymmetry.threshold.transfer",
+        "--output",
+        "bench/jev/asymmetry/threshold/transfer-result.json",
+        "--replay"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "name": "threshold-public",
+      "seconds": 0.8211202080128714,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "f87fc8646e554bbdaaf98a865fb2149c670e2c8ad394990b33c8b001b84b9189"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.asymmetry.fp_analysis.analyze",
+        "--output-dir",
+        "/Users/vukasinkubet/.jcode/scratch/jev-final-goal-reconciliation-f56qqrtx/fp-analysis"
+      ],
+      "exit": 0,
+      "expected_exit": 0,
+      "name": "fp-analysis-public",
+      "seconds": 0.6024346670601517,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "810be1476abc1a61adc8b737c72204d9dadc8e06707d6d9cc705dad38081b8f8"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.asymmetry.baseline.replay",
+        "--receipt-dir",
+        "bench/jev/asymmetry/baseline/results/continued-20260917",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-final-goal-reconciliation-f56qqrtx/paired.json"
+      ],
+      "exit": 1,
+      "expected_exit": 1,
+      "name": "existing-output-refusal",
+      "seconds": 0.055727708037011325,
+      "stderr_sha256": "35ea6e3948c08e34e15e76515690ab0aa1eea5209e5a87b43fc018342a4ae610",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.asymmetry.baseline.replay",
+        "--receipt-dir",
+        "bench/jev/asymmetry/baseline/results/continued-20260917",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-final-goal-reconciliation-f56qqrtx/dangling-output"
+      ],
+      "exit": 1,
+      "expected_exit": 1,
+      "name": "dangling-output-refusal",
+      "seconds": 0.05489987495820969,
+      "stderr_sha256": "35ea6e3948c08e34e15e76515690ab0aa1eea5209e5a87b43fc018342a4ae610",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "closed_live_panels_reopened": false,
+  "frozen_results_unchanged": true,
+  "full_rust_suite_rerun": false,
+  "installed_public_commands": 23,
+  "new_inference_requests": 0,
+  "no_provider_or_sender_discovery": true,
+  "observed": {
+    "angles": {
+      "cascade": "failed_exact_answer_bar",
+      "choice_descent": "failed_source_set_bar",
+      "gate": "failed_exact_answer_bar",
+      "memory": "partial_handoff_gain_incomplete",
+      "reuse": "ordinary_cache_mechanism_only_no_distinct_incremental_engine",
+      "verifier": "failed_screen_bar"
+    },
+    "criteria_report_sha256": "65765977c90ffa37d8d53834768bc657a00e6bd950b9640d68b8f3010cfb3ea8",
+    "measurement": {
+      "continuation_completed": true,
+      "cumulative_accounting": {
+        "confirmed_typed_requests": 12,
+        "known_typed_input_tokens": 81574,
+        "known_typed_output_tokens": 7551,
+        "logical_llm_calls": 12,
+        "typed_calls_started": 12,
+        "typed_questions": 300,
+        "typed_unknown_output_usage": 1,
+        "typed_unknown_usage": 0
+      },
+      "exact_successful_models_and_provider": true,
+      "flat_unjudged_typed_cases": 25,
+      "official_row645_aligned_occurrences": 2177,
+      "official_row645_may_gold": 132,
+      "original_receipt_remains_stopped": true,
+      "private_cleanup": {
+        "default_attachment_bytes_and_modes_unchanged": true,
+        "experimental_attachment_removed": true,
+        "experimental_oauth_copy_and_link_removed": true,
+        "live_user_install_changed": false,
+        "owned_bridge_stopped": true,
+        "provider_calls": 0,
+        "schema": "azdaja.measurement_private_cleanup.v1"
+      },
+      "repeated_attempted_pairs": 0,
+      "retained_grades_recomputed_not_trusted": true,
+      "row645_error_sets": {
+        "generative": {
+          "correct": 220,
+          "false_negative_ids": [],
+          "false_negatives": 0,
+          "false_positive_ids": [
+            "r0044",
+            "r0503",
+            "r0514",
+            "r1383",
+            "r1394",
+            "r1581",
+            "r1747"
+          ],
+          "false_positives": 7,
+          "observed": 227,
+          "predicted_ham": 139
+        },
+        "typed": {
+          "correct": 220,
+          "false_negative_ids": [],
+          "false_negatives": 0,
+          "false_positive_ids": [
+            "r0044",
+            "r0503",
+            "r0576",
+            "r1383",
+            "r1394",
+            "r1747",
+            "r1856"
+          ],
+          "false_positives": 7,
+          "observed": 227,
+          "predicted_ham": 139
+        }
+      },
+      "source_and_fixture_freezes": true,
+      "verifier_observed_per_arm": {
+        "generative": 200,
+        "typed": 200
+      }
+    },
+    "paired_report_sha256": "f3280fdb20ac1b38c0a55b4a4f77056dfac6e4550402730941ba3942daa40717",
+    "row651_metrics": {
+      "accuracy": 0.9613601236476044,
+      "brier_score": 0.028811792317820138,
+      "correct": 16794,
+      "false_negatives": 34,
+      "false_positives": 641,
+      "gold_ham": 8638,
+      "observed": 17469,
+      "positive_probability_reliability": {
+        "10": {
+          "bins": [
+            {
+              "lower": 0.0,
+              "mean_p_ham": 0.03509272245597631,
+              "n": 6417,
+              "observed_ham_fraction": 0.0006233442418575658,
+              "upper": 0.1,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.1,
+              "mean_p_ham": 0.135012077294686,
+              "n": 828,
+              "observed_ham_fraction": 0.004830917874396135,
+              "upper": 0.2,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.2,
+              "mean_p_ham": 0.2416818181818182,
+              "n": 440,
+              "observed_ham_fraction": 0.011363636363636364,
+              "upper": 0.3,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.3,
+              "mean_p_ham": 0.34775510204081633,
+              "n": 294,
+              "observed_ham_fraction": 0.017006802721088437,
+              "upper": 0.4,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.4,
+              "mean_p_ham": 0.44379591836734694,
+              "n": 245,
+              "observed_ham_fraction": 0.0653061224489796,
+              "upper": 0.5,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.5,
+              "mean_p_ham": 0.5409905660377359,
+              "n": 212,
+              "observed_ham_fraction": 0.09905660377358491,
+              "upper": 0.6,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.6,
+              "mean_p_ham": 0.641359223300971,
+              "n": 206,
+              "observed_ham_fraction": 0.2524271844660194,
+              "upper": 0.7,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.7,
+              "mean_p_ham": 0.7475700934579439,
+              "n": 214,
+              "observed_ham_fraction": 0.3925233644859813,
+              "upper": 0.8,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.8,
+              "mean_p_ham": 0.8558974358974359,
+              "n": 507,
+              "observed_ham_fraction": 0.7633136094674556,
+              "upper": 0.9,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.9,
+              "mean_p_ham": 0.9613076733283987,
+              "n": 8106,
+              "observed_ham_fraction": 0.994325191216383,
+              "upper": 1.0,
+              "upper_inclusive": true
+            }
+          ],
+          "ece": 0.06781498654759861
+        },
+        "5": {
+          "bins": [
+            {
+              "lower": 0.0,
+              "mean_p_ham": 0.04651207729468599,
+              "n": 7245,
+              "observed_ham_fraction": 0.0011042097998619738,
+              "upper": 0.2,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.2,
+              "mean_p_ham": 0.2841689373297003,
+              "n": 734,
+              "observed_ham_fraction": 0.013623978201634877,
+              "upper": 0.4,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.4,
+              "mean_p_ham": 0.4888840262582057,
+              "n": 457,
+              "observed_ham_fraction": 0.08096280087527352,
+              "upper": 0.6,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.6,
+              "mean_p_ham": 0.6954761904761906,
+              "n": 420,
+              "observed_ham_fraction": 0.3238095238095238,
+              "upper": 0.8,
+              "upper_inclusive": false
+            },
+            {
+              "lower": 0.8,
+              "mean_p_ham": 0.9551027516544757,
+              "n": 8613,
+              "observed_ham_fraction": 0.9807268083130152,
+              "upper": 1.0,
+              "upper_inclusive": true
+            }
+          ],
+          "ece": 0.0624408953002462
+        }
+      },
+      "predicted_ham": 9245,
+      "signed_count_error": 607,
+      "sum_noul": 9287.38,
+      "sum_noul_minus_gold": 649.3799999999992,
+      "threshold": 0.5,
+      "true_negatives": 8190,
+      "true_positives": 8604
+    }
+  },
+  "offline_tests": {
+    "modules": [
+      "bench.jev.angle_analysis.test_report",
+      "bench.jev.row651_labels.test_audit",
+      "bench.jev.measurement_followthrough.test_followthrough",
+      "bench.jev.second_reader.diagnostic.test_diagnostic",
+      "bench.jev.second_reader.review.test_metrics",
+      "bench.jev.second_reader.row651.test_prepare",
+      "bench.jev.second_reader.test_large_run",
+      "bench.jev.second_reader.test_policy_run",
+      "bench.jev.second_reader.test_policy_study",
+      "bench.jev.second_reader.test_replays",
+      "bench.jev.asymmetry.baseline.test_continue",
+      "bench.jev.asymmetry.baseline.test_replay",
+      "bench.jev.asymmetry.baseline.test_run",
+      "bench.jev.asymmetry.criteria.test_grade",
+      "bench.jev.asymmetry.criteria.test_prepare",
+      "bench.jev.asymmetry.criteria.test_run",
+      "bench.jev.asymmetry.fp_analysis.test_analyze",
+      "bench.jev.asymmetry.provider_report.test_build",
+      "bench.jev.asymmetry.threshold.test_train",
+      "bench.jev.asymmetry.threshold.test_transfer",
+      "bench.jev.test_measurement_audit"
+    ],
+    "passed": 170,
+    "skipped": 0
+  },
+  "provider_report": {
+    "attachments_verified": 5,
+    "delivery_blocked_on_sender": true,
+    "email_sha256": "3b3206efac216f3c72a22a6123ef9531061d7241eded1ec7f9833076c5ae3499",
+    "no_mail_accounts_reinspected": true,
+    "sent": false
+  },
+  "retention_after": [
+    {
+      "files": 685,
+      "manifest": "bench/jev/asymmetry/RETENTION-20260917.json",
+      "sha256": "46ee3409585c2824cbe8a4b27a41afa970f144b880201c0b46b6be2c73d76ff0"
+    },
+    {
+      "files": 66,
+      "manifest": "bench/jev/results/six-angle-acceptance-20260917/RETENTION.json",
+      "sha256": "c6393fc1f07733a410ad954540cc7d89b577b10f05d0d842b6cf1b6958720a15"
+    },
+    {
+      "files": 28,
+      "manifest": "bench/jev/goal_reconciliation/20260917/RETENTION.json",
+      "sha256": "a165f811116fcbed8c2691813a19717dd781f19732bf2635173941ab5ff43508"
+    }
+  ],
+  "retention_before": [
+    {
+      "files": 685,
+      "manifest": "bench/jev/asymmetry/RETENTION-20260917.json",
+      "sha256": "46ee3409585c2824cbe8a4b27a41afa970f144b880201c0b46b6be2c73d76ff0"
+    },
+    {
+      "files": 66,
+      "manifest": "bench/jev/results/six-angle-acceptance-20260917/RETENTION.json",
+      "sha256": "c6393fc1f07733a410ad954540cc7d89b577b10f05d0d842b6cf1b6958720a15"
+    },
+    {
+      "files": 28,
+      "manifest": "bench/jev/goal_reconciliation/20260917/RETENTION.json",
+      "sha256": "a165f811116fcbed8c2691813a19717dd781f19732bf2635173941ab5ff43508"
+    }
+  ],
+  "schema": "azdaja.final_goal_reconciliation.v1",
+  "source_head": "9b75a8997e0deaa6ac6c0571d3a51863b306bac2",
+  "status": "passed"
+}

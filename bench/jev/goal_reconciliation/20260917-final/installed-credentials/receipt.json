@@ -1,0 +1,153 @@
+{
+  "binary_sha256": "13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32",
+  "checks": [
+    {
+      "exit": 0,
+      "log_sha256": "1bfc4041a4f27109efae6191c45c17038639ef091639c9088bbb84c0c1a25da5",
+      "name": "private-install",
+      "seconds": 0.7884692919906229
+    },
+    {
+      "exit": 0,
+      "log_sha256": "06084ead3ec453adaf27a905a0dc66adfd6a542e61b5cd84d280a57e6e8ed2c0",
+      "name": "caps-before-attachment",
+      "seconds": 0.008789999992586672
+    },
+    {
+      "exit": 0,
+      "log_sha256": "25013d7c02e45f200995f05ef554c715a6c145b655b88821a3e0c6685805d1e1",
+      "name": "status-before-attachment",
+      "seconds": 0.006101166014559567
+    },
+    {
+      "exit": 0,
+      "log_sha256": "efa63a4907effd580b0f82ca36eca8dc95992e8f4ec9acf723295bf2c21d761a",
+      "name": "attach-from-stdin",
+      "seconds": 0.02577562490478158
+    },
+    {
+      "exit": 0,
+      "log_sha256": "10619ac30eb57739cafd341c7fe7bb36a49f1ae3ee6dbca6e403c70f789a64a5",
+      "name": "fresh-process-persistent-status",
+      "seconds": 0.005731833050958812
+    },
+    {
+      "exit": 0,
+      "log_sha256": "3de2d64816c3063d48988fa937881913a34cf011fc6aa65ec61f4bb19a2fb1ed",
+      "name": "environment-wins",
+      "seconds": 0.010536084068007767
+    },
+    {
+      "exit": 2,
+      "log_sha256": "e41496866b621d3e9cf51dd22a6377ee8482d855b6be32737ad0e02ad0d0e39b",
+      "name": "replacement-needs-opt-in",
+      "seconds": 0.0054510419722646475
+    },
+    {
+      "exit": 0,
+      "log_sha256": "efa63a4907effd580b0f82ca36eca8dc95992e8f4ec9acf723295bf2c21d761a",
+      "name": "explicit-replacement",
+      "seconds": 0.02333325007930398
+    },
+    {
+      "exit": 0,
+      "log_sha256": "8c4b285c144f265a24e3124ccd406f1841ae65e002e5300bb601bec6b83942be",
+      "name": "doctor-local-attachment",
+      "seconds": 0.006242250092327595
+    },
+    {
+      "exit": 0,
+      "log_sha256": "c15a6f94ed3359116abb910f59b05d65cf5129fe24de8aa05561636e58cbf15b",
+      "name": "start-persistent-session",
+      "seconds": 0.009600333054549992
+    },
+    {
+      "exit": 0,
+      "log_sha256": "a9f982d8cb8dbc81e6965814c7d33f2249d63fbd3467f8331ddca475f7e4377e",
+      "name": "default-disabled-exec",
+      "seconds": 0.007679500035010278
+    },
+    {
+      "exit": 0,
+      "log_sha256": "ee9295bbaf647375a1f7d6422daa424ef18831961a62a5112a2c4c14a4aa8275",
+      "name": "default-disabled-final",
+      "seconds": 0.005269084009341896
+    },
+    {
+      "exit": 0,
+      "log_sha256": "a9f982d8cb8dbc81e6965814c7d33f2249d63fbd3467f8331ddca475f7e4377e",
+      "name": "attached-resolution-before-transport-exec",
+      "seconds": 0.006863959017209709
+    },
+    {
+      "exit": 0,
+      "log_sha256": "442bb80d26d783ea47b3b08ec206a3f024cb6d841e943fce9c9a0f9eb853847a",
+      "name": "attached-resolution-before-transport-final",
+      "seconds": 0.005266749998554587
+    },
+    {
+      "exit": 0,
+      "log_sha256": "a9f982d8cb8dbc81e6965814c7d33f2249d63fbd3467f8331ddca475f7e4377e",
+      "name": "invalid-environment-no-fallback-exec",
+      "seconds": 0.0075124159920960665
+    },
+    {
+      "exit": 0,
+      "log_sha256": "ca58a63926607ef143e9e31f676cdb3b6f0161826b9c007bb0d81f9350be74bd",
+      "name": "invalid-environment-no-fallback-final",
+      "seconds": 0.005580791970714927
+    },
+    {
+      "exit": 0,
+      "log_sha256": "a9f982d8cb8dbc81e6965814c7d33f2249d63fbd3467f8331ddca475f7e4377e",
+      "name": "environment-resolution-before-transport-exec",
+      "seconds": 0.006743250065483153
+    },
+    {
+      "exit": 0,
+      "log_sha256": "442bb80d26d783ea47b3b08ec206a3f024cb6d841e943fce9c9a0f9eb853847a",
+      "name": "environment-resolution-before-transport-final",
+      "seconds": 0.005285833030939102
+    },
+    {
+      "exit": 0,
+      "log_sha256": "0484c0df15fe304804e4b2c4d01a90d66a21c09ea8b75baf8c3d290ba20f612f",
+      "name": "kill-session",
+      "seconds": 0.005390250007621944
+    },
+    {
+      "exit": 0,
+      "log_sha256": "af3411a3aba04c6e7156970cbd1fef4a9eed12a010732f36660ecf438e9b3e0a",
+      "name": "detach-persistent-file",
+      "seconds": 0.009468415984883904
+    },
+    {
+      "exit": 0,
+      "log_sha256": "7591358be22c78528421133ea092261bc1576273d7eac502cb8fc20b26b296bf",
+      "name": "status-after-detach",
+      "seconds": 0.00511074997484684
+    },
+    {
+      "exit": 0,
+      "log_sha256": "e7e59e76d9a947cfc5425bd0d4aa595ed48d2a76655a5cceac7f4fbbf8fa2c6a",
+      "name": "idempotent-detach",
+      "seconds": 0.0051929999608546495
+    },
+    {
+      "exit": 0,
+      "log_sha256": "bb232eee0347bbdc929cec5d4742ecf73be8105378963f23c9cb7a37a4a561c0",
+      "name": "private-uninstall",
+      "seconds": 1.3045061249285936
+    }
+  ],
+  "config_unchanged_by_attach": true,
+  "native_transport_attempts": 0,
+  "persistent_restart_verified": true,
+  "private_file_modes_verified": true,
+  "private_install_removed": true,
+  "provider_calls": 0,
+  "schema": "azdaja.installed_credential_acceptance.v1",
+  "status": "passed",
+  "synthetic_attachment_removed": true,
+  "synthetic_credentials_only": true
+}
