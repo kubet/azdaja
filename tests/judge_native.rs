@@ -214,9 +214,26 @@ fn native_judgment_capabilities_are_static_and_distinguish_transport_from_readin
 #[cfg(unix)]
 #[test]
 fn native_judgment_key_is_not_forwarded_to_custom_generative_provider() {
+    assert_custom_generative_provider_isolates_key(
+        "FINAL(llm('return environment isolation status'))\n",
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn native_judgment_custom_provider_drains_prompt_before_exiting() {
+    // Exceed pipe capacity so a fixture that exits without consuming stdin fails
+    // reliably, rather than racing the production provider's stdin writer.
+    assert_custom_generative_provider_isolates_key("FINAL(llm('x' * (1024 * 1024)))\n");
+}
+
+#[cfg(unix)]
+fn assert_custom_generative_provider_isolates_key(code: &str) {
     let s = Session::new("enabled = true");
     let cfg = azdaja::Config {
-        sub_llm_cmd: "/bin/sh -c 'if [ -n \"$TYPESAFE_API_KEY$AZDAJA_CUSTOM_JUDGE_TEST\" ]; then printf leaked; else printf isolated; fi'".into(),
+        // The stdin writer runs concurrently with the provider. Drain its prompt
+        // before exiting, otherwise even a successful shell can cause BrokenPipe.
+        sub_llm_cmd: "/bin/sh -c '/bin/cat >/dev/null && if [ -n \"$TYPESAFE_API_KEY$AZDAJA_CUSTOM_JUDGE_TEST\" ]; then printf leaked; else printf isolated; fi'".into(),
         judge: azdaja::judge::JudgeConfig {
             key_env: "AZDAJA_CUSTOM_JUDGE_TEST".into(),
             ..Default::default()
@@ -243,12 +260,14 @@ fn native_judgment_key_is_not_forwarded_to_custom_generative_provider() {
         .stdin
         .take()
         .unwrap()
-        .write_all(b"FINAL(llm('return environment isolation status'))\n")
+        .write_all(code.as_bytes())
         .unwrap();
     let result = child.wait_with_output().unwrap();
     assert!(
         result.status.success(),
-        "{}",
+        "status={} stdout={} stderr={}",
+        result.status,
+        String::from_utf8_lossy(&result.stdout),
         String::from_utf8_lossy(&result.stderr)
     );
     assert_eq!(s.ok(&["final", &s.id], "").trim(), "isolated");
