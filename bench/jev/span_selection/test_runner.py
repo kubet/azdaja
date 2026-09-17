@@ -86,16 +86,25 @@ class RunnerTests(unittest.TestCase):
             path = Path(tmp) / 'trace.jsonl'
             self.assertEqual(r.trace_summary(path)['physical_attempt_events'], 0)
             a = dict(event='model_attempt', request_id='synthetic', attempt=1, entered_turn=1,
-                     model=r.GENERATOR, provider='OpenAI', outcome='failed')
-            b = dict(a, attempt=2, outcome='succeeded')
+                     model=None, provider=None, outcome='failed')
+            b = dict(a, attempt=2, entered_turn=2, outcome='succeeded',model=r.GENERATOR,provider='OpenAI')
             path.write_text('\n'.join(json.dumps(x) for x in (a,b)))
             observed = r.trace_summary(path)
             self.assertEqual(observed['physical_attempt_events'], 2)
             self.assertEqual(observed['logical_request_ids'], 1)
             self.assertEqual(observed['entered_turns'], 2)
+            self.assertEqual(observed['failed_identity_unknown_events'],1)
+            self.assertEqual(observed['observed_models'],[r.GENERATOR])
             path.write_text('\n'.join(json.dumps(x) for x in (a,b,b)))
             with self.assertRaisesRegex(r.Stop, 'generative_transport_attempt_cap'):
                 r.trace_summary(path)
+            setup=dict(a,entered_turn=None)
+            after_setup=dict(b,entered_turn=1)
+            path.write_text('\n'.join(json.dumps(x) for x in (setup,after_setup)))
+            observed=r.trace_summary(path)
+            self.assertEqual(observed['physical_attempt_events'],2)
+            self.assertEqual(observed['setup_attempts'],1)
+            self.assertEqual(observed['entered_turns'],1)
 
     def native(self, root, receipt=None, key=None):
         work, out = root/'work', root/'out'

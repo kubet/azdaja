@@ -29,7 +29,7 @@ Even a quality pass is not a demonstrated benefit by itself. Require either a st
 
 ## Resource envelope
 
-- At most **3 typed HTTP requests / 18 questions** and **3 logical generative calls**, one of each per block. No root retries. Existing `jcode-api` may use at most two transport turns per logical `llm`; retain its trace and distinguish logical from physical calls.
+- At most **3 typed HTTP requests / 18 questions** and **3 logical generative calls**, one of each per block. No root retries. Existing `jcode-api` may use at most two entered inference turns per logical `llm`, independently of up to four session-setup attempts. Retain its native trace and distinguish logical requests, setup attempts and entered turns. Failed metadata may be unknown, and an entered-turn number is an ordinal, not a boolean.
 - Requested generative model `gpt-5.6-sol`, provider `openai`, medium reasoning. Requested typed alias `jev-latest`, expected returned string `jev-1.13.0` observed previously. A mismatched string stops, not repins. A reported string is not authenticated immutable weights.
 - At most 150,000 cumulative known typed input tokens, 131,072 request bytes, 262,144 response bytes, 20 seconds per typed request, 180 seconds per generative cell, 12 minutes for the entire run. Missing usage remains unknown. Preserve known crossing usage, stop further calls, never infer a dollar cap.
 - Order is baseline then typed in block 1, typed then baseline in block 2, baseline then typed in block 3. Grade only after both outputs in a block, except transport/contract/resource failures stop immediately. No best-of sampling.
