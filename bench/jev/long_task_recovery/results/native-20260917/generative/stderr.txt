@@ -1,0 +1,5 @@
+error: solo root repair failed after LineLimit: solo solve cell runtime error: Traceback (most recent call last):
+  File "<python-input-3>", line 40, in <module>
+    out={"source_sha256":sha256(ctx.encode("utf-8")).hexdigest(),"contracts":M,"queries":Q}; FINAL(out)
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+RuntimeError: sha256 requires exactly one string

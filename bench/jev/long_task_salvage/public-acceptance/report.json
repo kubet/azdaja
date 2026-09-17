@@ -1,0 +1,519 @@
+{
+  "schema_version": 1,
+  "evaluation": "public_solo_local_stub_acceptance",
+  "real_model": false,
+  "provider_mode": "local deterministic Python stub",
+  "scope": "Interface and accounting only, not legal accuracy or model quality",
+  "corpus": "/Users/vukasinkubet/dev/azdaja/bench/jev/long_task/fixtures/corpus.json",
+  "contracts": 102,
+  "expected": {
+    "source_sha256": "13becf55040029ba2521a62e91ced46591375ca63c53e88a4ad3ec94ee006310",
+    "characters": 4833847
+  },
+  "cases": {
+    "before_enabled": {
+      "binary": "/Users/vukasinkubet/.jcode/scratch/jev-ingest-native-e75d836-azdaja",
+      "binary_sha256": "13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32",
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/jev-ingest-native-e75d836-azdaja",
+        "solo",
+        "Return the SHA-256 and character count of the complete original ctx.",
+        "-f",
+        "/Users/vukasinkubet/dev/azdaja/bench/jev/long_task/fixtures/corpus.json"
+      ],
+      "returncode": 0,
+      "result": {
+        "characters": 4833847,
+        "source_sha256": "13becf55040029ba2521a62e91ced46591375ca63c53e88a4ad3ec94ee006310",
+        "stats": {
+          "attempts": 0,
+          "billing": "not_inferred",
+          "cache_hits": 0,
+          "cached_requests": 0,
+          "enabled": true,
+          "input_usage_complete": true,
+          "known_input_tokens": 0,
+          "poisoned": false,
+          "provider_requests": 0,
+          "questions": 0,
+          "transport_available": true,
+          "unknown_input_usage_requests": 0
+        }
+      },
+      "checks": {
+        "exit_success": true,
+        "complete_corpus_result": true,
+        "root_prompt_retained": true,
+        "root_prompt_in_host_trace": true,
+        "model_trace_present": true,
+        "single_root_attempt": true,
+        "host_runtime_success": true,
+        "no_generative_children": true,
+        "zero_typed_result_stats": false,
+        "host_zero_typed_cells": false,
+        "host_result_stats_agree": false,
+        "optional_capabilities_advertised": false
+      },
+      "passed": false,
+      "missing_capabilities": [
+        "judge_many(state, questions)",
+        "judge_stats()",
+        "llm(prompt)",
+        "llm_batch(prompts)"
+      ],
+      "prompt_sha256": "72c02a0cb79397a093b75ffd48b641d35057694f5fae17b85dc5053d0b024a46",
+      "prompt_characters": 12113,
+      "host_runtime": [
+        {
+          "schema_version": 3,
+          "event": "solo_runtime",
+          "request_id": "44006-1789682716595802000-1",
+          "outcome": "succeeded",
+          "exec_invocation_count": 1,
+          "exec_wall_ns": 269723792,
+          "snapshot_save_count": 1,
+          "snapshot_save_wall_ns": 3414583,
+          "snapshot_load_count": 0,
+          "snapshot_load_wall_ns": 0,
+          "sub_call_count": 0,
+          "semantic_call_count": 0,
+          "sub_call_wall_ns": 0,
+          "projection_ledger_calls": null,
+          "projection_calls": null,
+          "projection_ledger_occurrences": null,
+          "projection_selected_occurrences": null,
+          "projection_unique_targets": null,
+          "projection_manifest_callers": null,
+          "projection_expanded_outputs": null
+        }
+      ],
+      "model_trace": [
+        {
+          "schema_version": 2,
+          "event": "model_attempt",
+          "timestamp_ms": 1789682716642,
+          "depth": 0,
+          "request_id": "44006-1789682716595802000-1",
+          "attempt": 1,
+          "entered_turn": 1,
+          "session_id": null,
+          "category": "turn",
+          "outcome": "succeeded",
+          "model": "gpt-5.6-sol",
+          "latency_ms": 26,
+          "degraded_transport": false,
+          "failed_attempts_before_success": 0
+        }
+      ],
+      "artifact_directory": "/Users/vukasinkubet/.jcode/scratch/jev-native-hash-contract-acceptance-20260917-2206/before-enabled"
+    },
+    "before_disabled": {
+      "binary": "/Users/vukasinkubet/.jcode/scratch/jev-ingest-native-e75d836-azdaja",
+      "binary_sha256": "13fbd5bd15f12df039ff2481fba04d1577dffd1e632c269cd65940c0c758ac32",
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/jev-ingest-native-e75d836-azdaja",
+        "solo",
+        "Return the SHA-256 and character count of the complete original ctx.",
+        "-f",
+        "/Users/vukasinkubet/dev/azdaja/bench/jev/long_task/fixtures/corpus.json"
+      ],
+      "returncode": 0,
+      "result": {
+        "characters": 4833847,
+        "source_sha256": "13becf55040029ba2521a62e91ced46591375ca63c53e88a4ad3ec94ee006310"
+      },
+      "checks": {
+        "exit_success": true,
+        "complete_corpus_result": true,
+        "root_prompt_retained": true,
+        "root_prompt_in_host_trace": true,
+        "model_trace_present": true,
+        "single_root_attempt": true,
+        "host_runtime_success": true,
+        "no_generative_children": true
+      },
+      "passed": true,
+      "missing_capabilities": [
+        "judge_many(state, questions)",
+        "judge_stats()",
+        "llm(prompt)",
+        "llm_batch(prompts)"
+      ],
+      "prompt_sha256": "72c02a0cb79397a093b75ffd48b641d35057694f5fae17b85dc5053d0b024a46",
+      "prompt_characters": 12113,
+      "host_runtime": [
+        {
+          "schema_version": 3,
+          "event": "solo_runtime",
+          "request_id": "44308-1789682718660715000-1",
+          "outcome": "succeeded",
+          "exec_invocation_count": 1,
+          "exec_wall_ns": 264192875,
+          "snapshot_save_count": 1,
+          "snapshot_save_wall_ns": 4127250,
+          "snapshot_load_count": 0,
+          "snapshot_load_wall_ns": 0,
+          "sub_call_count": 0,
+          "semantic_call_count": 0,
+          "sub_call_wall_ns": 0,
+          "projection_ledger_calls": null,
+          "projection_calls": null,
+          "projection_ledger_occurrences": null,
+          "projection_selected_occurrences": null,
+          "projection_unique_targets": null,
+          "projection_manifest_callers": null,
+          "projection_expanded_outputs": null
+        }
+      ],
+      "model_trace": [
+        {
+          "schema_version": 2,
+          "event": "model_attempt",
+          "timestamp_ms": 1789682718704,
+          "depth": 0,
+          "request_id": "44308-1789682718660715000-1",
+          "attempt": 1,
+          "entered_turn": 1,
+          "session_id": null,
+          "category": "turn",
+          "outcome": "succeeded",
+          "model": "gpt-5.6-sol",
+          "latency_ms": 32,
+          "degraded_transport": false,
+          "failed_attempts_before_success": 0
+        }
+      ],
+      "artifact_directory": "/Users/vukasinkubet/.jcode/scratch/jev-native-hash-contract-acceptance-20260917-2206/before-disabled"
+    },
+    "after_enabled": {
+      "binary": "/Users/vukasinkubet/.jcode/scratch/jev-solo-repair-target/debug/azdaja",
+      "binary_sha256": "7b321d4e56295a2b54d1a3a1a1dcd3eb6b52f5f826bd83bf88e36b2f13a4a681",
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/jev-solo-repair-target/debug/azdaja",
+        "solo",
+        "Return the SHA-256 and character count of the complete original ctx.",
+        "-f",
+        "/Users/vukasinkubet/dev/azdaja/bench/jev/long_task/fixtures/corpus.json"
+      ],
+      "returncode": 0,
+      "result": {
+        "characters": 4833847,
+        "source_sha256": "13becf55040029ba2521a62e91ced46591375ca63c53e88a4ad3ec94ee006310",
+        "stats": {
+          "attempts": 0,
+          "billing": "not_inferred",
+          "cache_hits": 0,
+          "cached_requests": 0,
+          "enabled": true,
+          "failed_attempts": 0,
+          "input_usage_complete": true,
+          "known_input_tokens": 0,
+          "known_output_tokens": 0,
+          "output_usage_complete": true,
+          "poisoned": false,
+          "provider_requests": 0,
+          "questions": 0,
+          "successful_requests": 0,
+          "total_wall_ns": 0,
+          "transport_available": true,
+          "unknown_input_usage_requests": 0,
+          "unknown_output_usage_requests": 0
+        }
+      },
+      "checks": {
+        "exit_success": true,
+        "complete_corpus_result": true,
+        "root_prompt_retained": true,
+        "root_prompt_in_host_trace": true,
+        "model_trace_present": true,
+        "single_root_attempt": true,
+        "host_runtime_success": true,
+        "no_generative_children": true,
+        "zero_typed_result_stats": true,
+        "host_zero_typed_cells": true,
+        "host_result_stats_agree": true,
+        "optional_capabilities_advertised": true
+      },
+      "passed": true,
+      "missing_capabilities": [],
+      "prompt_sha256": "022edaddea6118b2c374dd2806168ded7a17a9dd21772bf8713e19c366ed22fe",
+      "prompt_characters": 7196,
+      "host_runtime": [
+        {
+          "judge_cells": [
+            {
+              "attempts": 0,
+              "billing": "not_inferred",
+              "cache_hits": 0,
+              "cached_requests": 0,
+              "enabled": true,
+              "failed_attempts": 0,
+              "input_usage_complete": true,
+              "known_input_tokens": 0,
+              "known_output_tokens": 0,
+              "output_usage_complete": true,
+              "poisoned": false,
+              "provider_requests": 0,
+              "questions": 0,
+              "successful_requests": 0,
+              "total_wall_ns": 0,
+              "transport_available": true,
+              "unknown_input_usage_requests": 0,
+              "unknown_output_usage_requests": 0
+            }
+          ],
+          "schema_version": 3,
+          "event": "solo_runtime",
+          "request_id": "44585-1789682720701256000-1",
+          "outcome": "succeeded",
+          "exec_invocation_count": 1,
+          "exec_wall_ns": 264012875,
+          "snapshot_save_count": 1,
+          "snapshot_save_wall_ns": 2687916,
+          "snapshot_load_count": 0,
+          "snapshot_load_wall_ns": 0,
+          "sub_call_count": 0,
+          "semantic_call_count": 0,
+          "sub_call_wall_ns": 0,
+          "projection_ledger_calls": null,
+          "projection_calls": null,
+          "projection_ledger_occurrences": null,
+          "projection_selected_occurrences": null,
+          "projection_unique_targets": null,
+          "projection_manifest_callers": null,
+          "projection_expanded_outputs": null
+        }
+      ],
+      "model_trace": [
+        {
+          "schema_version": 2,
+          "event": "model_attempt",
+          "timestamp_ms": 1789682720746,
+          "depth": 0,
+          "request_id": "44585-1789682720701256000-1",
+          "attempt": 1,
+          "entered_turn": 1,
+          "session_id": null,
+          "category": "turn",
+          "outcome": "succeeded",
+          "model": "gpt-5.6-sol",
+          "latency_ms": 24,
+          "degraded_transport": false,
+          "failed_attempts_before_success": 0
+        }
+      ],
+      "artifact_directory": "/Users/vukasinkubet/.jcode/scratch/jev-native-hash-contract-acceptance-20260917-2206/after-enabled"
+    },
+    "after_disabled": {
+      "binary": "/Users/vukasinkubet/.jcode/scratch/jev-solo-repair-target/debug/azdaja",
+      "binary_sha256": "7b321d4e56295a2b54d1a3a1a1dcd3eb6b52f5f826bd83bf88e36b2f13a4a681",
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/jev-solo-repair-target/debug/azdaja",
+        "solo",
+        "Return the SHA-256 and character count of the complete original ctx.",
+        "-f",
+        "/Users/vukasinkubet/dev/azdaja/bench/jev/long_task/fixtures/corpus.json"
+      ],
+      "returncode": 0,
+      "result": {
+        "characters": 4833847,
+        "source_sha256": "13becf55040029ba2521a62e91ced46591375ca63c53e88a4ad3ec94ee006310"
+      },
+      "checks": {
+        "exit_success": true,
+        "complete_corpus_result": true,
+        "root_prompt_retained": true,
+        "root_prompt_in_host_trace": true,
+        "model_trace_present": true,
+        "single_root_attempt": true,
+        "host_runtime_success": true,
+        "no_generative_children": true
+      },
+      "passed": true,
+      "missing_capabilities": [
+        "judge_many(state, questions)",
+        "judge_stats()",
+        "llm(prompt)",
+        "llm_batch(prompts)"
+      ],
+      "prompt_sha256": "72c02a0cb79397a093b75ffd48b641d35057694f5fae17b85dc5053d0b024a46",
+      "prompt_characters": 12113,
+      "host_runtime": [
+        {
+          "schema_version": 3,
+          "event": "solo_runtime",
+          "request_id": "44842-1789682722716639000-1",
+          "outcome": "succeeded",
+          "exec_invocation_count": 1,
+          "exec_wall_ns": 261372834,
+          "snapshot_save_count": 1,
+          "snapshot_save_wall_ns": 2553750,
+          "snapshot_load_count": 0,
+          "snapshot_load_wall_ns": 0,
+          "sub_call_count": 0,
+          "semantic_call_count": 0,
+          "sub_call_wall_ns": 0,
+          "projection_ledger_calls": null,
+          "projection_calls": null,
+          "projection_ledger_occurrences": null,
+          "projection_selected_occurrences": null,
+          "projection_unique_targets": null,
+          "projection_manifest_callers": null,
+          "projection_expanded_outputs": null
+        }
+      ],
+      "model_trace": [
+        {
+          "schema_version": 2,
+          "event": "model_attempt",
+          "timestamp_ms": 1789682722752,
+          "depth": 0,
+          "request_id": "44842-1789682722716639000-1",
+          "attempt": 1,
+          "entered_turn": 1,
+          "session_id": null,
+          "category": "turn",
+          "outcome": "succeeded",
+          "model": "gpt-5.6-sol",
+          "latency_ms": 24,
+          "degraded_transport": false,
+          "failed_attempts_before_success": 0
+        }
+      ],
+      "artifact_directory": "/Users/vukasinkubet/.jcode/scratch/jev-native-hash-contract-acceptance-20260917-2206/after-disabled"
+    },
+    "feature_off_enabled": {
+      "binary": "/Users/vukasinkubet/.jcode/scratch/jev-native-feature-off-target/debug/azdaja",
+      "binary_sha256": "447c0b89c26547fcfe6a5225800a1101c9ed9ace83c867633f81b338b72060d6",
+      "argv": [
+        "/Users/vukasinkubet/.jcode/scratch/jev-native-feature-off-target/debug/azdaja",
+        "solo",
+        "Return the SHA-256 and character count of the complete original ctx.",
+        "-f",
+        "/Users/vukasinkubet/dev/azdaja/bench/jev/long_task/fixtures/corpus.json"
+      ],
+      "returncode": 0,
+      "result": {
+        "characters": 4833847,
+        "source_sha256": "13becf55040029ba2521a62e91ced46591375ca63c53e88a4ad3ec94ee006310",
+        "stats": {
+          "attempts": 0,
+          "billing": "not_inferred",
+          "cache_hits": 0,
+          "cached_requests": 0,
+          "enabled": true,
+          "failed_attempts": 0,
+          "input_usage_complete": true,
+          "known_input_tokens": 0,
+          "known_output_tokens": 0,
+          "output_usage_complete": true,
+          "poisoned": false,
+          "provider_requests": 0,
+          "questions": 0,
+          "successful_requests": 0,
+          "total_wall_ns": 0,
+          "transport_available": false,
+          "unknown_input_usage_requests": 0,
+          "unknown_output_usage_requests": 0
+        }
+      },
+      "checks": {
+        "exit_success": true,
+        "complete_corpus_result": true,
+        "root_prompt_retained": true,
+        "root_prompt_in_host_trace": true,
+        "model_trace_present": true,
+        "single_root_attempt": true,
+        "host_runtime_success": true,
+        "no_generative_children": true,
+        "zero_typed_result_stats": true,
+        "host_zero_typed_cells": true,
+        "host_result_stats_agree": true,
+        "feature_off_unavailable_notice": true
+      },
+      "passed": true,
+      "missing_capabilities": [
+        "judge_many(state, questions)",
+        "judge_stats()",
+        "llm(prompt)",
+        "llm_batch(prompts)"
+      ],
+      "prompt_sha256": "885fbf92ccfc12fc66a260fe2d9434aefb01d8638f6cc3b287940673e8488fda",
+      "prompt_characters": 12246,
+      "host_runtime": [
+        {
+          "judge_cells": [
+            {
+              "attempts": 0,
+              "billing": "not_inferred",
+              "cache_hits": 0,
+              "cached_requests": 0,
+              "enabled": true,
+              "failed_attempts": 0,
+              "input_usage_complete": true,
+              "known_input_tokens": 0,
+              "known_output_tokens": 0,
+              "output_usage_complete": true,
+              "poisoned": false,
+              "provider_requests": 0,
+              "questions": 0,
+              "successful_requests": 0,
+              "total_wall_ns": 0,
+              "transport_available": false,
+              "unknown_input_usage_requests": 0,
+              "unknown_output_usage_requests": 0
+            }
+          ],
+          "schema_version": 3,
+          "event": "solo_runtime",
+          "request_id": "44932-1789682724799766000-1",
+          "outcome": "succeeded",
+          "exec_invocation_count": 1,
+          "exec_wall_ns": 263585250,
+          "snapshot_save_count": 1,
+          "snapshot_save_wall_ns": 3479250,
+          "snapshot_load_count": 0,
+          "snapshot_load_wall_ns": 0,
+          "sub_call_count": 0,
+          "semantic_call_count": 0,
+          "sub_call_wall_ns": 0,
+          "projection_ledger_calls": null,
+          "projection_calls": null,
+          "projection_ledger_occurrences": null,
+          "projection_selected_occurrences": null,
+          "projection_unique_targets": null,
+          "projection_manifest_callers": null,
+          "projection_expanded_outputs": null
+        }
+      ],
+      "model_trace": [
+        {
+          "schema_version": 2,
+          "event": "model_attempt",
+          "timestamp_ms": 1789682724836,
+          "depth": 0,
+          "request_id": "44932-1789682724799766000-1",
+          "attempt": 1,
+          "entered_turn": 1,
+          "session_id": null,
+          "category": "turn",
+          "outcome": "succeeded",
+          "model": "gpt-5.6-sol",
+          "latency_ms": 25,
+          "degraded_transport": false,
+          "failed_attempts_before_success": 0
+        }
+      ],
+      "artifact_directory": "/Users/vukasinkubet/.jcode/scratch/jev-native-hash-contract-acceptance-20260917-2206/feature-off-enabled"
+    }
+  },
+  "checks": {
+    "after_enabled": true,
+    "after_disabled": true,
+    "before_missing_capability_witness": true,
+    "before_disabled_success": true,
+    "disabled_prompt_byte_identical": true,
+    "feature_off_enabled": true
+  },
+  "passed": true
+}

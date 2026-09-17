@@ -1,0 +1,28 @@
+{
+  "arms": {
+    "generative": {
+      "new_provider_calls": 0,
+      "output_equal_to_retained": true,
+      "receipt_sha256": "e061468d3c9de907fbe2afa50970befac0b4407dd6af32ad67f8c02c96023c83",
+      "status": "completed_outputs_pending_scoring"
+    },
+    "optional_typed": {
+      "new_provider_calls": 0,
+      "output_equal_to_retained": true,
+      "receipt_sha256": "f4ccbcdacf9f3621ef09a395de831c0067084d8adc2642ae2ad3d20f62ce77a4",
+      "status": "completed_outputs_pending_scoring"
+    }
+  },
+  "focused_recovery_tests": 19,
+  "fresh_public_cli": true,
+  "method": "Exact local response replay from retained repository records, not private session files. The native binary is the frozen study binary, not rebuilt current source.",
+  "native_binary_sha256": "bd483035a03570124570f68c44532bb9070815af06f556ada4b4fc2f6370d222",
+  "new_provider_calls": 0,
+  "original_live_success": false,
+  "portable_python_versions": [
+    "3.14.5",
+    "3.9.6"
+  ],
+  "schema": "azdaja.long_task.retained_input_reproduction.v1",
+  "source_commit": "e5da5f224cd7171a8237b4ceb8df21bbf04383f3"
+}

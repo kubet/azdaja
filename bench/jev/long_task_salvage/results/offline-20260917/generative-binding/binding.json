@@ -1,0 +1,13 @@
+{
+  "bundle_omitted_as_redundant": true,
+  "bundle_sha256": "3bb5ea611d7eba45d3029dd2c4687c4a84066c377d065a08ea54065c74045d57",
+  "corrected_code_sha256": "d78704ca7527a82d7d651d9fc5b891ea0cd4130c5e9ca17367d197445811dfaa",
+  "correction": {
+    "new": "sha256(ctx)",
+    "occurrences": 1,
+    "old": "sha256(ctx.encode(\"utf-8\")).hexdigest()"
+  },
+  "original_code_sha256": "e9db3c522306f1788ccfa345aca176c783db555b7312cc070192f166c3eddfef",
+  "reconstruct_with": "bench.jev.long_task_salvage.replay.bundle(records, original_solo_trace)",
+  "records_sha256": "4f02ae18c8d56ad80214e49a485d62c730f789bee47963ba34bdd1b6ef01356a"
+}

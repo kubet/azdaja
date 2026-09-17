@@ -1,0 +1,112 @@
+{
+  "arms": {
+    "generative": {
+      "contracts": 102,
+      "correct_cells": 426,
+      "exact_citations": 189,
+      "exact_leaf_replies": 75,
+      "expert_span_supported_citations": 113,
+      "grade_sha256": "28ee0a92b684335e6f67b8c23c70dbef1b29b1a5bc3c12dcdc2462f71cb6175a",
+      "local_root_replies": 1,
+      "macro_f1": 0.720535178141669,
+      "observed_cells": 510,
+      "predicted_yes": 189,
+      "prediction_sha256": "4cd5b77569df8817f1c4d007bff7d83540403714f7eba3d20b103b0bb2a98402",
+      "structurally_valid": true,
+      "unknown_cells": 8,
+      "used_ledger_records": 76
+    },
+    "optional_typed": {
+      "contracts": 102,
+      "correct_cells": 404,
+      "exact_citations": 165,
+      "exact_leaf_replies": 120,
+      "expert_span_supported_citations": 102,
+      "fresh_audit_macro_f1": 0.6226156115200233,
+      "grade_sha256": "49c6ff516184381d09d037688b9782af362747da40f520dffa12998e73ed298a",
+      "local_root_replies": 1,
+      "observed_cells": 510,
+      "predicted_yes": 165,
+      "prediction_sha256": "49b0d537cf887aa85e2ffbc022fca435263eda142cf06bac6e345d6e6dfeea73",
+      "stored_macro_f1": 0.6226156115200234,
+      "structurally_valid": true,
+      "unknown_cells": 44,
+      "used_ledger_records": 121
+    }
+  },
+  "checks": {
+    "admission_binds_studied_binary": true,
+    "all_leaf_prompt_and_reply_bytes_match_extracted_records": true,
+    "all_original_typed_totals_including_wall_are_zero": true,
+    "both_bundle_bodies_exactly_reconstructible_from_retained_records_original_traces_and_method": true,
+    "bundle_records_hashes_match_extraction_files": true,
+    "fresh_public_grading_exact_numeric_equality_except_one_ulp_caveat": true,
+    "fresh_public_grading_matches_all_discrete_results": true,
+    "native_executed_code_matches_original_with_single_hash_replacement": true,
+    "native_stdout_equals_prediction_json": true,
+    "native_trace_one_local_root_plus_exact_leaf_counts": true,
+    "no_extra_or_duplicate_consumed_prompt_keys": true,
+    "original_live_arms_remain_stopped": true,
+    "original_receipt_hashes_unchanged_since_prior_audit": true,
+    "original_retained_artifact_hashes_match": true,
+    "original_root_prompt_equals_bundle_and_replay_root_prompt": true,
+    "used_ledger_exact_expected_prompt_reply_hash_sets": true
+  },
+  "claims_limits": {
+    "ast_early_hash_guard_implementation_claimed": false,
+    "jev_advantage_established": false,
+    "jev_was_used": false,
+    "offline_replay_latency_is_inference_latency": false,
+    "original_end_to_end_success": false,
+    "prior_unknown_usage_resolved": false
+  },
+  "correction": {
+    "new": "sha256(ctx)",
+    "occurrences_per_arm": 1,
+    "old": "sha256(ctx.encode(\"utf-8\")).hexdigest()",
+    "other_code_changes": 0
+  },
+  "decision": "GO_for_qualified_posthoc_hash_only_offline_salvage_report",
+  "duplicated_bundle_bodies_required_for_reconstruction": false,
+  "precision_caveat": {
+    "arm": "optional_typed",
+    "audit_python_version": "3.9.6",
+    "cross_interpreter_byte_identical_grade_json_claim_supported": false,
+    "difference_ulps": 1,
+    "field": "/aggregate/macro_f1",
+    "fresh_value": 0.6226156115200233,
+    "only_recursive_report_difference": true,
+    "requires_code_change_or_inference": false,
+    "retained_value": 0.6226156115200234,
+    "six_decimal_value_unchanged": true
+  },
+  "retention_requirements": [
+    "Exact extracted records",
+    "Original public failure traces and receipts",
+    "Replay method",
+    "Used ledger",
+    "Predictions and grades"
+  ],
+  "review_actions": {
+    "network_calls": 0,
+    "new_inference_calls": 0,
+    "private_auth_reads": 0,
+    "runtime_provider_replays": 0,
+    "source_edits": 0
+  },
+  "review_completed_utc": "2026-09-17T22:03:48Z",
+  "reviewer": "tigress",
+  "schema": "azdaja.long_task.salvage_independent_review.v1",
+  "scope": "Existing extracted records, public replay artifacts, original public failure artifacts, replay method and fresh offline grading. No additional investigation for this report file.",
+  "studied_binary_sha256": "bd483035a03570124570f68c44532bb9070815af06f556ada4b4fc2f6370d222",
+  "substantive_blockers": [],
+  "summary_sha256": "5047c1414f20f657c323a9f30868eddd351ebb6e7e10e6abc69d43e03ef98b0a",
+  "validation": [
+    "Independent exact-record and used-ledger comparisons",
+    "Native trace executed-code comparison",
+    "Original live receipt and retained-artifact hash checks",
+    "Fresh public grade.py CLI on both predictions, stdout captured in memory",
+    "Recursive full-report comparison",
+    "Pure-function bundle reconstruction"
+  ]
+}

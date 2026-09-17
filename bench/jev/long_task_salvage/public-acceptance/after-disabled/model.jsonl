@@ -1,0 +1,1 @@
+{"schema_version":2,"event":"model_attempt","timestamp_ms":1789682722752,"depth":0,"request_id":"44842-1789682722716639000-1","attempt":1,"entered_turn":1,"session_id":null,"category":"turn","outcome":"succeeded","model":"gpt-5.6-sol","latency_ms":24,"degraded_transport":false,"failed_attempts_before_success":0}
