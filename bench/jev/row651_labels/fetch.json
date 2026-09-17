@@ -1,0 +1,28 @@
+{
+  "source_url": "https://datasets-server.huggingface.co/rows?dataset=oolongbench%2Foolong-synth&config=default&split=validation&offset=651&length=1",
+  "source_http_requests": 1,
+  "inference_requests": 0,
+  "bytes": 5679258,
+  "sha256": "469a5de6ca9b3e274837b5aba129e83e33e8ed1961a5a659521640fd33547f8c",
+  "partial": false,
+  "rows": 1,
+  "row_idx": 651,
+  "truncated_cells": [],
+  "fields": [
+    "answer",
+    "answer_type",
+    "context_len",
+    "context_window_id",
+    "context_window_text",
+    "context_window_text_with_labels",
+    "dataset",
+    "id",
+    "input_subset",
+    "num_labels",
+    "question",
+    "task",
+    "task_group"
+  ],
+  "context_bytes": 2693859,
+  "labeled_context_bytes": 2947256
+}

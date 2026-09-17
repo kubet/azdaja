@@ -1,0 +1,82 @@
+{
+  "all_quality_bars_passed": false,
+  "checks": [
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "unittest",
+        "bench.jev.row651_labels.test_audit",
+        "bench.jev.row645_labels.test_audit",
+        "bench.jev.angle_analysis.test_report",
+        "bench.jev.test_measurement_audit",
+        "bench.jev.second_reader.test_replays",
+        "-v"
+      ],
+      "elapsed_seconds": 11.43423154199263,
+      "exit": 0,
+      "log_sha256": "370d7e1281353c1c915239a4bd5ae52cb88e93ac369e9053003b4d54c9b926ff",
+      "name": "all-mapped-tests"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.angle_analysis.report",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-three-goal-followthrough-20260917/angle-public.json"
+      ],
+      "elapsed_seconds": 1.4663337080273777,
+      "exit": 0,
+      "log_sha256": "6926cdaf705ab0ea10f5f5ba6390415ba3e4bb07309ef87bfc0ef0e4eb4f4aaf",
+      "name": "angle-public"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.measurement_audit",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-three-goal-followthrough-20260917/measurement-public.json"
+      ],
+      "elapsed_seconds": 0.19379754201509058,
+      "exit": 0,
+      "log_sha256": "3a89c88cc6c1f6cc0aac0ecc7f97efffcd654f5bcb83e8dbdbb289dc0dcfb7d2",
+      "name": "measurement-public"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-B",
+        "-m",
+        "bench.jev.row651_labels.audit",
+        "--output",
+        "/Users/vukasinkubet/.jcode/scratch/jev-three-goal-followthrough-20260917/calibration-public.json"
+      ],
+      "elapsed_seconds": 0.7212133330176584,
+      "exit": 0,
+      "log_sha256": "a272863fa6b1c79667b090fa9919ba40c7095c85a4a3c60130eaa98afa30a5d4",
+      "name": "calibration-public"
+    }
+  ],
+  "closed_manifests_unchanged": true,
+  "flat_missing_typed_observations": 25,
+  "full_row_exact_count_passed": false,
+  "independent_decimal_crosscheck": {
+    "brier": "0.02881179231782013853111225600",
+    "ece_10": "0.06781498654759860324002518747",
+    "ece_5": "0.06244089530024615032343007613"
+  },
+  "new_inference_requests": 0,
+  "new_public_data_requests": 1,
+  "public_calibration_matches_retained": true,
+  "result_sha256": "65f5bf14c9c3546cc030b95adcfaaa10ec3b40586fdc06f7bdfc469f92242e13",
+  "runtime_unchanged": true,
+  "schema": "azdaja.three_goal_followthrough.v1",
+  "status": "passed",
+  "tests_passed": 35,
+  "tests_skipped": 0
+}

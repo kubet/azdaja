@@ -1,0 +1,80 @@
+{
+  "files": [
+    {
+      "bytes": 2689,
+      "path": "ACCEPTANCE.json",
+      "sha256": "8f7db1912be54cfbe7283be428c9a9de10059f81160fa2adc1f4051d1d85a136"
+    },
+    {
+      "bytes": 2325,
+      "path": "PLAN.md",
+      "sha256": "7d684962c723d05dedfe46748bbe6f73cd416cd636477bba293ca405c061d19f"
+    },
+    {
+      "bytes": 10183,
+      "path": "RESULTS.md",
+      "sha256": "6135546ecca6286d9299c00c1e0a21502864bcfef49b6b965249b098e99f89cd"
+    },
+    {
+      "bytes": 5824,
+      "path": "all-mapped-tests.log",
+      "sha256": "370d7e1281353c1c915239a4bd5ae52cb88e93ac369e9053003b4d54c9b926ff"
+    },
+    {
+      "bytes": 34954,
+      "path": "angle-public.json",
+      "sha256": "a27fb2dcf1a421bca098e107ed3ec1c8e999f2915d1ee5773218f51b626fb8c5"
+    },
+    {
+      "bytes": 425,
+      "path": "angle-public.log",
+      "sha256": "6926cdaf705ab0ea10f5f5ba6390415ba3e4bb07309ef87bfc0ef0e4eb4f4aaf"
+    },
+    {
+      "bytes": 9454,
+      "path": "audit.py",
+      "sha256": "d5b62dc568d8145df7cc5b8c4628658c382c1f61a802bf42228beba5b5d38781"
+    },
+    {
+      "bytes": 325,
+      "path": "calibration-public.log",
+      "sha256": "a272863fa6b1c79667b090fa9919ba40c7095c85a4a3c60130eaa98afa30a5d4"
+    },
+    {
+      "bytes": 719,
+      "path": "fetch.json",
+      "sha256": "3c483892499e49eabf7fefa4cc9a5f251aadca28abfebc0d3f8be738b6183768"
+    },
+    {
+      "bytes": 2001,
+      "path": "measurement-public.json",
+      "sha256": "8e09a314254c5583493d29904684656bc9cc713346ce3bd604f7b13fa5ee270b"
+    },
+    {
+      "bytes": 80,
+      "path": "measurement-public.log",
+      "sha256": "3a89c88cc6c1f6cc0aac0ecc7f97efffcd654f5bcb83e8dbdbb289dc0dcfb7d2"
+    },
+    {
+      "bytes": 5679258,
+      "path": "official-row651.json",
+      "sha256": "469a5de6ca9b3e274837b5aba129e83e33e8ed1961a5a659521640fd33547f8c"
+    },
+    {
+      "bytes": 2928423,
+      "path": "result.json",
+      "sha256": "65f5bf14c9c3546cc030b95adcfaaa10ec3b40586fdc06f7bdfc469f92242e13"
+    },
+    {
+      "bytes": 7944,
+      "path": "test_audit.py",
+      "sha256": "62b441983692fb121c1e24a9e0af33a5d99558506f9be329196b745fdc2f0898"
+    }
+  ],
+  "historical_inference_artifacts_modified": false,
+  "new_inference_requests": 0,
+  "parent_commit": "50e7001c420785c78d92e5124830dd9c0ff352a0",
+  "production_runtime_modified": false,
+  "public_source_requests": 1,
+  "schema": "azdaja.row651_labels.retention.v1"
+}

@@ -1,0 +1,40 @@
+test_actual_public_audit_and_safe_output_refusals (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_actual_public_audit_and_safe_output_refusals) ... ok
+test_changed_snapshot_refuses_before_any_score (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_changed_snapshot_refuses_before_any_score) ... ok
+test_changed_source_record_or_nonrecord_refuses (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_changed_source_record_or_nonrecord_refuses) ... ok
+test_every_source_occurrence_aligns_with_exact_bytes (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_every_source_occurrence_aligns_with_exact_bytes) ... ok
+test_frozen_report_recomputes_exactly_and_remains_a_count_failure (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_frozen_report_recomputes_exactly_and_remains_a_count_failure) ... ok
+test_join_is_by_id_preserves_multiplicity_and_rejects_missing_extra_duplicate (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_join_is_by_id_preserves_multiplicity_and_rejects_missing_extra_duplicate) ... ok
+test_malformed_probability_gold_duplicate_or_empty_never_scores (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_malformed_probability_gold_duplicate_or_empty_never_scores) ... ok
+test_metrics_match_hand_computed_endpoint_and_threshold_example (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_metrics_match_hand_computed_endpoint_and_threshold_example) ... ok
+test_reordered_labeled_lines_refuse (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_reordered_labeled_lines_refuse) ... ok
+test_truncation_wrong_row_or_metadata_refuses (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_truncation_wrong_row_or_metadata_refuses) ... ok
+test_unlabeled_source_and_label_sum_must_match (bench.jev.row651_labels.test_audit.FullRowLabelTests.test_unlabeled_source_and_label_sum_must_match) ... ok
+test_equal_counts_are_not_equal_errors (bench.jev.row645_labels.test_audit.OfficialGoldTests.test_equal_counts_are_not_equal_errors) ... ok
+test_exact_2177_alignment_and_actual_false_positives (bench.jev.row645_labels.test_audit.OfficialGoldTests.test_exact_2177_alignment_and_actual_false_positives) ... ok
+test_message_edit_cannot_keep_label_alignment (bench.jev.row645_labels.test_audit.OfficialGoldTests.test_message_edit_cannot_keep_label_alignment) ... ok
+test_reordered_labeled_occurrences_refused (bench.jev.row645_labels.test_audit.OfficialGoldTests.test_reordered_labeled_occurrences_refused) ... ok
+test_truncation_and_wrong_row_refused (bench.jev.row645_labels.test_audit.OfficialGoldTests.test_truncation_and_wrong_row_refused) ... ok
+test_actual_retained_result_is_negative_and_usage_is_complete (bench.jev.angle_analysis.test_report.ReportTests.test_actual_retained_result_is_negative_and_usage_is_complete) ... ok
+test_missing_source_artifact_is_rejected (bench.jev.angle_analysis.test_report.ReportTests.test_missing_source_artifact_is_rejected) ... ok
+test_public_cli_refuses_existing_or_dangling_output (bench.jev.angle_analysis.test_report.ReportTests.test_public_cli_refuses_existing_or_dangling_output) ... ok
+test_rehashed_false_win_is_rejected (bench.jev.angle_analysis.test_report.ReportTests.test_rehashed_false_win_is_rejected) ... ok
+test_rehashed_invalid_probability_is_not_a_judgment (bench.jev.angle_analysis.test_report.ReportTests.test_rehashed_invalid_probability_is_not_a_judgment) ... ok
+test_rehashed_receipt_cannot_erase_reported_usage (bench.jev.angle_analysis.test_report.ReportTests.test_rehashed_receipt_cannot_erase_reported_usage) ... ok
+test_rehashed_unmatched_baseline_state_is_rejected (bench.jev.angle_analysis.test_report.ReportTests.test_rehashed_unmatched_baseline_state_is_rejected) ... ok
+test_actual_full_replay_is_negative_but_consistent (bench.jev.test_measurement_audit.FinalMeasurementTests.test_actual_full_replay_is_negative_but_consistent) ... ok
+test_changed_bar_cannot_become_a_rehashed_win (bench.jev.test_measurement_audit.FinalMeasurementTests.test_changed_bar_cannot_become_a_rehashed_win) ... ok
+test_missing_completed_call_is_rejected (bench.jev.test_measurement_audit.FinalMeasurementTests.test_missing_completed_call_is_rejected) ... ok
+test_public_audit_fresh_output_and_refusal_paths (bench.jev.test_measurement_audit.FinalMeasurementTests.test_public_audit_fresh_output_and_refusal_paths) ... ok
+test_actual_full_row_negative_result_and_usage_replays (bench.jev.second_reader.test_replays.RetainedReplayTests.test_actual_full_row_negative_result_and_usage_replays) ... ok
+test_actual_policy_gain_and_ensemble_non_gain_replay (bench.jev.second_reader.test_replays.RetainedReplayTests.test_actual_policy_gain_and_ensemble_non_gain_replay) ... ok
+test_blind_adjudication_input_cannot_gain_gold_after_rehash (bench.jev.second_reader.test_replays.RetainedReplayTests.test_blind_adjudication_input_cannot_gain_gold_after_rehash) ... ok
+test_false_native_win_rejected_even_with_matching_summary (bench.jev.second_reader.test_replays.RetainedReplayTests.test_false_native_win_rejected_even_with_matching_summary) ... ok
+test_impossible_wall_speed_rejected (bench.jev.second_reader.test_replays.RetainedReplayTests.test_impossible_wall_speed_rejected) ... ok
+test_missing_large_pack_is_not_a_complete_answer (bench.jev.second_reader.test_replays.RetainedReplayTests.test_missing_large_pack_is_not_a_complete_answer) ... ok
+test_rehashed_boolean_probability_is_not_semantic_evidence (bench.jev.second_reader.test_replays.RetainedReplayTests.test_rehashed_boolean_probability_is_not_semantic_evidence) ... ok
+test_swapped_source_cannot_be_rehashed_into_coverage (bench.jev.second_reader.test_replays.RetainedReplayTests.test_swapped_source_cannot_be_rehashed_into_coverage) ... ok
+
+----------------------------------------------------------------------
+Ran 35 tests in 11.285s
+
+OK
