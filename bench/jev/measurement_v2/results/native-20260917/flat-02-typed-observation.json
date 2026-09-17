@@ -1,0 +1,1 @@
+{"failure":"judge: probabilities must sum to one","stats":{"attempts":1,"billing":"not_inferred","cache_hits":0,"cached_requests":0,"enabled":true,"input_usage_complete":true,"known_input_tokens":8966,"poisoned":true,"provider_requests":1,"questions":25,"transport_available":true,"unknown_input_usage_requests":0}}

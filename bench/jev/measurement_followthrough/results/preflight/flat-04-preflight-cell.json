@@ -1,0 +1,1 @@
+{"code":"p = json.loads(check_payload)\nFINAL({\"sha256\":sha256(check_payload),\"ids\":list(p[\"questions\"].keys()),\"attempts\":judge_stats()[\"attempts\"]})\n"}
