@@ -1,0 +1,1 @@
+{"code":"p = json.loads(offline_payload)\nobservations[p[\"name\"]] = {\"answers\":{qid:{\"type\":\"noul\",\"noul\":0.5} for qid in p[\"ids\"]}}\nFINAL({\"synthetic\":True,\"attempts\":judge_stats()[\"attempts\"]})\n"}

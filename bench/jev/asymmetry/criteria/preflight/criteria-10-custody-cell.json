@@ -1,0 +1,1 @@
+{"code":"p = json.loads(custody_payload)\nFINAL({\"request_sha256\":sha256(json.dumps(p, sort_keys=True, separators=(\",\",\":\"), ensure_ascii=False)),\"ids\":sorted(p[\"questions\"]),\"attempts\":judge_stats()[\"attempts\"]})\n"}
