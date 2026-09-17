@@ -80,7 +80,7 @@ fn non_tty_bare_command_is_exactly_five_line_help_without_sprite() {
     assert_eq!(
         stdout,
         format!(
-            "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
+            "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory jev\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
             env!("CARGO_PKG_VERSION")
         )
     );

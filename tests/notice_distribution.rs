@@ -162,6 +162,7 @@ fn cargo_package_list_matches_the_reviewed_file_allowlist() {
             "src/dashboard.rs",
             "src/jcode_config.rs",
             "src/jcode_gate.rs",
+            "src/credentials.rs",
             "src/judge.rs",
             "src/lib.rs",
             "src/main.rs",

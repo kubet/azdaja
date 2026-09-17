@@ -105,7 +105,7 @@ fn record_solo_trace(trace: &mut Option<fs::File>, path: Option<&Path>, entry: S
     let result = (|| -> Result<()> {
         let path = path.ok_or_else(|| anyhow!("solo trace path unavailable"))?;
         ensure_private_trace_file(file, path)?;
-        file.write_all(entry.as_bytes())?;
+        file.write_all(azdaja::judge::redact_typesafe_keys(&entry).as_bytes())?;
         file.sync_data()?;
         ensure_private_trace_file(file, path)?;
         Ok(())
@@ -126,13 +126,19 @@ fn preflight_solo_trace(
     };
     let mut file = private_append(path)?;
     ensure_private_trace_file(&file, path)?;
-    writeln!(
-        file,
+    let header = format!(
         "\n=== root request begin request_id={request_id:?} model={model:?} request_chars={} ===",
         prompt.chars().count()
+    );
+    writeln!(file, "{}", azdaja::judge::redact_typesafe_keys(&header))?;
+    file.write_all(azdaja::judge::redact_typesafe_keys(prompt).as_bytes())?;
+    writeln!(
+        file,
+        "{}",
+        azdaja::judge::redact_typesafe_keys(&format!(
+            "\n=== root request end request_id={request_id:?} ==="
+        ))
     )?;
-    file.write_all(prompt.as_bytes())?;
-    writeln!(file, "\n=== root request end request_id={request_id:?} ===")?;
     file.sync_data()?;
     ensure_private_trace_file(&file, path)?;
     Ok(Some(file))
@@ -150,22 +156,60 @@ fn preflight_repair_solo_trace(
         return Ok(());
     };
     ensure_private_trace_file(file, path)?;
-    writeln!(
-        file,
+    let header = format!(
         "\n=== repair request begin request_id={request_id:?} repair_index={repair_index} trigger={trigger:?} request_chars={} ===",
         prompt.chars().count()
-    )?;
-    file.write_all(prompt.as_bytes())?;
+    );
+    writeln!(file, "{}", azdaja::judge::redact_typesafe_keys(&header))?;
+    file.write_all(azdaja::judge::redact_typesafe_keys(prompt).as_bytes())?;
     writeln!(
         file,
-        "\n=== repair request end request_id={request_id:?} repair_index={repair_index} ==="
+        "{}",
+        azdaja::judge::redact_typesafe_keys(&format!(
+            "\n=== repair request end request_id={request_id:?} repair_index={repair_index} ==="
+        ))
     )?;
     file.sync_data()?;
     ensure_private_trace_file(file, path)?;
     Ok(())
 }
 
-const COMMAND_USAGES: [(&str, &str); 13] = [
+#[cfg(test)]
+#[test]
+fn solo_trace_scrubs_synthetic_typesafe_keys_in_headers_and_bodies() {
+    let root = std::env::var_os("JCODE_SCRATCH_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join(format!(
+            "azdaja-trace-redaction-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+    fs::create_dir(&root).unwrap();
+    let path = root.join("trace");
+    let key = "apikey_SYNTHETIC_TRACEONLY";
+    let mut file = preflight_solo_trace(Some(&path), key, key, key).unwrap();
+    preflight_repair_solo_trace(
+        &mut file,
+        Some(&path),
+        key,
+        1,
+        SoloProgramFailureKind::Protocol,
+        key,
+    )
+    .unwrap();
+    record_solo_trace(&mut file, Some(&path), key.to_owned());
+    drop(file);
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(!text.contains(key));
+    assert!(text.matches("[REDACTED_TYPESAFE_KEY]").count() >= 7);
+    fs::remove_dir_all(root).unwrap();
+}
+
+const COMMAND_USAGES: [(&str, &str); 14] = [
     ("start", "Usage: az start"),
     ("load", "Usage: az load <session-id> <path> <variable>"),
     ("exec", "Usage: az exec <session-id>"),
@@ -179,7 +223,7 @@ const COMMAND_USAGES: [(&str, &str); 13] = [
     ),
     (
         "doctor",
-        "Usage: az doctor [jcode|claude|codex|gemini|opencode|all|--caps]",
+        "Usage: az doctor [jcode|claude|codex|gemini|opencode|all|jev|--caps]",
     ),
     ("install", "Usage: az install [TARGET[,TARGET...]|all]"),
     (
@@ -189,6 +233,10 @@ const COMMAND_USAGES: [(&str, &str); 13] = [
     (
         "memory",
         "Usage: az memory <add|list|show|recall|export|import> [--global]",
+    ),
+    (
+        "jev",
+        "Usage: az jev <attach --stdin [--replace]|status|detach> [--key-env NAME]",
     ),
     ("help", "Usage: az help [command]"),
 ];
@@ -233,7 +281,7 @@ fn command_help(args: &[String]) -> Result<bool> {
     // while COMMAND_USAGES remains the canonical public first/error line.
     if matches!(
         args[0].as_str(),
-        "doctor" | "install" | "uninstall" | "memory"
+        "doctor" | "install" | "uninstall" | "memory" | "jev"
     ) {
         return Ok(false);
     }
@@ -262,7 +310,7 @@ fn help(interactive_banner: bool) {
         print!("{}", banner::banner(color));
     }
     println!(
-        "AZDAJA v{VERSION} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt"
+        "AZDAJA v{VERSION} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory jev\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt"
     );
 }
 
@@ -381,6 +429,7 @@ fn run() -> Result<bool> {
                 Ok(true)
             }
             "memory" => memory_cmd(&requested),
+            "jev" => jev_cmd(&requested),
             command => bail!("unknown command '{command}' (run 'az help')"),
         };
     }
@@ -483,6 +532,7 @@ fn run() -> Result<bool> {
         }
         "doctor" => return doctor(&args),
         "memory" => return memory_cmd(&args),
+        "jev" => return jev_cmd(&args),
         "claude-hook" => {
             exact(&args, 1, "claude-hook")?;
             let mut input = String::new();
@@ -786,7 +836,103 @@ fn memory_one_line(text: &str) -> String {
         .collect::<String>()
         .replace('\n', " ")
 }
+fn jev_cmd(args: &[String]) -> Result<bool> {
+    let usage = command_usage("jev").expect("known command");
+    if args.len() == 2 && matches!(args[1].as_str(), "--help" | "-h") {
+        println!(
+            "{usage}\nHost-only credentials. Attach reads one key from bounded stdin, never argv.\nEnvironment overrides attachment. Neither attach nor status enables inference.\nOwner-only plaintext storage is not an encrypted vault. Status never contacts a provider."
+        );
+        return Ok(true);
+    }
+    let Some(action) = args.get(1).map(String::as_str) else {
+        return Err(usage_error("jev"));
+    };
+    if !matches!(action, "attach" | "status" | "detach") {
+        return Err(usage_error("jev"));
+    }
+    let mut name = "TYPESAFE_API_KEY";
+    let mut named = false;
+    let mut stdin = false;
+    let mut replace = false;
+    let mut index = 2;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--key-env" if !named && index + 1 < args.len() => {
+                name = &args[index + 1];
+                named = true;
+                index += 2;
+            }
+            "--stdin" if action == "attach" && !stdin => {
+                stdin = true;
+                index += 1;
+            }
+            "--replace" if action == "attach" && !replace => {
+                replace = true;
+                index += 1;
+            }
+            _ => return Err(usage_error("jev")),
+        }
+    }
+    match action {
+        "attach" => {
+            if !stdin || io::stdin().is_terminal() {
+                return Err(usage_error("jev"));
+            }
+            let mut bytes = Vec::new();
+            io::stdin()
+                .take(8195)
+                .read_to_end(&mut bytes)
+                .map_err(|_| anyhow!("jev: cannot read credential from stdin"))?;
+            if bytes.ends_with(b"\r\n") {
+                bytes.truncate(bytes.len() - 2);
+            } else if bytes.ends_with(b"\n") {
+                bytes.truncate(bytes.len() - 1);
+            }
+            if bytes.len() > 8192 {
+                bail!("jev: invalid credential syntax");
+            }
+            let key =
+                String::from_utf8(bytes).map_err(|_| anyhow!("jev: invalid credential syntax"))?;
+            azdaja::credentials::attach(name, &key, replace)?;
+            println!(
+                "{}",
+                serde_json::json!({"action":"attached", "key_env":name,
+                    "inference_configuration_changed":false})
+            );
+        }
+        "status" => {
+            let mut report = azdaja::credentials::status(name)?;
+            report["typesafe_compiled"] = serde_json::json!(cfg!(feature = "typesafe"));
+            report["runtime_configuration_checked"] = serde_json::json!(false);
+            report["provider_readiness_checked"] = serde_json::json!(false);
+            println!("{report}");
+        }
+        "detach" => {
+            let removed = azdaja::credentials::detach(name)?;
+            println!(
+                "{}",
+                serde_json::json!({"action":"detached", "key_env":name,
+                    "removed":removed, "environment_unchanged":true,
+                    "inference_configuration_changed":false})
+            );
+        }
+        _ => unreachable!(),
+    }
+    Ok(true)
+}
+
 fn doctor(args: &[String]) -> Result<bool> {
+    if args.get(1).is_some_and(|s| s == "jev") {
+        exact(args, 2, "doctor")?;
+        let config = Config::load()?;
+        let mut report = azdaja::credentials::status(&config.judge.key_env)?;
+        report["typesafe_compiled"] = serde_json::json!(cfg!(feature = "typesafe"));
+        report["configured_enabled"] = serde_json::json!(config.judge.enabled);
+        report["runtime_configuration_checked"] = serde_json::json!(true);
+        report["provider_readiness_checked"] = serde_json::json!(false);
+        println!("{report}");
+        return Ok(true);
+    }
     if args.get(1).is_some_and(|s| s == "--caps") {
         exact(args, 2, "doctor")?;
         println!(
@@ -822,7 +968,7 @@ fn doctor(args: &[String]) -> Result<bool> {
         println!(
             "{}",
             concat!(
-                "Usage: az doctor [jcode|claude|codex|gemini|opencode|all|--caps]\n",
+                "Usage: az doctor [jcode|claude|codex|gemini|opencode|all|jev|--caps]\n",
                 "No name: check the configured connection. A tool name checks installed files only.\n",
                 "Examples:\n  az doctor\n  az doctor jcode"
             )

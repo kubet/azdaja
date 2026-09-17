@@ -43,13 +43,53 @@ Keys in `az map`: arrows or `j/k` select, Enter inspects, `d` toggles measured d
 | `memory` | `az memory <add\|list\|show> ...` | Maintain an explicit, bounded, user-authored local ledger of decisions, observations, failures, hypotheses, and disagreements with typed tags and links. Current-folder scope is default; `--global` selects a separate global ledger. |
 | `kill` | `az kill <session-id>` | Remove a session. |
 | `solo` | `az solo <question> (-f <path> \| --repo <directory>) [--model <model>] [--sub-model <model>]` | Run one question over one UTF-8 file or a deterministic bounded repository bundle. |
-| `doctor` | `az doctor [jcode|claude|codex|gemini|opencode|all|--caps]` | Check configured execution or inspect named integration files. |
+| `doctor` | `az doctor [jcode|claude|codex|gemini|opencode|all|jev|--caps]` | Check configured execution or inspect named integration files. `jev` reports local credential/configuration status without a provider call. |
+| `jev` | `az jev <attach --stdin [--replace]\|status\|detach> [--key-env NAME]` | Explicitly manage a host-private TypeSafe credential. Attachment does not enable inference. |
 | `install` | `az install [TARGET[,TARGET...]|all]` | Detect supported tools or atomically install a named comma-separated subset. |
 | `uninstall` | `az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]` | Remove detected integrations, one named scope, or everything. |
 
 Use `az help` for the short overview and `az help <command>` for command-specific help. `--help` remains available. Invalid options or arity print the same canonical usage line on standard error and return status 2.
 
 ## Process and signal custody
+
+### Optional TypeSafe attachment (development source)
+
+`az jev attach --stdin` reads one key from a pipe, never from an argument. A trailing
+newline is allowed. Input is bounded to 8192 bytes. An existing attachment requires
+explicit `--replace`. `az jev status` reports only its SHA-256 fingerprint prefix,
+source and local syntax status. `az jev detach` removes the named stored key and its
+recoverable staging files, not an environment override or configuration.
+
+The exact configured environment variable takes precedence over its attachment.
+An invalid environment value fails instead of falling back. The default name is
+`TYPESAFE_API_KEY`; `--key-env NAME` supports separate named attachments. A custom
+name must also be selected in `[judge].key_env` for inference. `az doctor jev`
+reports the configured name and enabled flag. Neither status command authenticates
+the credential or probes the provider. `az doctor --caps` remains static and does
+not even read credentials or configuration. Bare `az doctor` is different and can
+perform a model canary.
+
+Stored credentials live in `credentials/` under the private user state root
+(`AZDAJA_HOME`, otherwise an absolute XDG state root or the user's state directory).
+Choose a host-private root outside repositories and synchronized folders. On
+macOS/Linux this uses owner-only directories and 0600 regular files with no symlink
+or hardlink following. Existing unsafe permissions are refused, not silently fixed.
+Other platforms refuse persistent storage; the environment route remains available.
+Keys are not written to repository configuration, evaluator variables or agent
+memory. TypeSafe-shaped strings are scrubbed from model/solo traces as defense in
+depth, not a general-purpose secret detector. Never include credentials in source
+material or prompts.
+
+**Boundaries:** this is unencrypted plaintext, not a vault, secure deletion, a
+cross-user key service or protection against another process running as the same
+user. A hard termination during attachment can leave owner-only staging bytes.
+Local status reports `incomplete_attachment`; a subsequent attach/detach for that
+name recovers them under the write lock. `null` means staging was not inspected,
+for example because an environment override won. Attachment and all status paths
+leave `[judge].enabled` unchanged. The optional `typesafe` build feature and an
+explicit host opt-in remain necessary for provider requests.
+
+### Provider processes
 
 On Unix, `SIGINT`, `SIGTERM`, and `SIGHUP` stop the active provider process group and wait for its direct child before returning `128 + signal`. Success, provider error, timeout, and unwind also terminate remaining descendants before pipe workers join, so inherited pipes cannot keep the adapter alive.
 

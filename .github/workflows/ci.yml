@@ -73,6 +73,7 @@ jobs:
               "src/dashboard.rs",
               "src/jcode_config.rs",
               "src/jcode_gate.rs",
+              "src/credentials.rs",
               "src/judge.rs",
               "src/lib.rs",
               "src/main.rs",

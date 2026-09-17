@@ -7721,6 +7721,7 @@ fn command_transport_trace_keeps_requested_model_and_unknown_provider_usage() {
         .env("AZDAJA_HOME", t.join("state"))
         .env("AZDAJA_CONFIG", &cfg)
         .env("AZDAJA_MODEL_TRACE", &trace)
+        .env("AZDAJA_TRACE_RESPONSES", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -7729,7 +7730,7 @@ fn command_transport_trace_keeps_requested_model_and_unknown_provider_usage() {
         .stdin
         .take()
         .unwrap()
-        .write_all(b"print(llm('synthetic'))\n")
+        .write_all(b"print(llm('synthetic apikey_SYNTHETIC_TRACEONLY'))\n")
         .unwrap();
     ok(child.wait_with_output().unwrap());
     let rows: Vec<serde_json::Value> = fs::read_to_string(trace)
@@ -7739,6 +7740,17 @@ fn command_transport_trace_keeps_requested_model_and_unknown_provider_usage() {
         .collect();
     assert_eq!(rows.len(), 1, "{rows:?}");
     let row = &rows[0];
+    assert!(
+        row["response"]
+            .as_str()
+            .unwrap()
+            .contains("[REDACTED_TYPESAFE_KEY]")
+    );
+    assert!(
+        !serde_json::to_string(&rows)
+            .unwrap()
+            .contains("apikey_SYNTHETIC_TRACEONLY")
+    );
     assert_eq!(row["outcome"], "succeeded");
     assert_eq!(row["entered_turn"], 1);
     assert!(row.get("provider").is_none());
@@ -9164,7 +9176,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
         ),
         (
             "doctor",
-            "Usage: az doctor [jcode|claude|codex|gemini|opencode|all|--caps]",
+            "Usage: az doctor [jcode|claude|codex|gemini|opencode|all|jev|--caps]",
         ),
         ("install", "Usage: az install [TARGET[,TARGET...]|all]"),
         (
@@ -9176,9 +9188,13 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
             "Usage: az memory <add|list|show|recall|export|import> [--global]",
         ),
         ("help", "Usage: az help [command]"),
+        (
+            "jev",
+            "Usage: az jev <attach --stdin [--replace]|status|detach> [--key-env NAME]",
+        ),
     ];
     let bare = format!(
-        "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
+        "AZDAJA v{} — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory jev\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n",
         env!("CARGO_PKG_VERSION")
     );
     for name in ["az", "azdaja"] {
@@ -9230,12 +9246,16 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
                     assert!(stdout.starts_with(&format!("{usage}\nAdd: az memory add")));
                     assert!(stdout.contains("Records are explicit, local-first, bounded"));
                 }
+                "jev" => {
+                    assert!(stdout.starts_with(&format!("{usage}\nHost-only credentials.")));
+                    assert!(stdout.contains("Neither attach nor status enables inference."));
+                }
                 _ => assert_eq!(stdout, format!("{usage}\n")),
             }
             assert!(output.stderr.is_empty());
         }
 
-        let invalid: [(&[&str], &str); 13] = [
+        let invalid: [(&[&str], &str); 14] = [
             (&["start", "extra"], expected[0].1),
             (&["load", "only-one"], expected[1].1),
             (&["exec", "session", "extra"], expected[2].1),
@@ -9249,6 +9269,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
             (&["uninstall", "--harness"], expected[10].1),
             (&["memory", "bogus"], expected[11].1),
             (&["help", "start", "extra"], expected[12].1),
+            (&["jev", "status", "--bogus"], expected[13].1),
         ];
         for (args, usage) in invalid {
             let output = Command::new(&executable).args(args).output().unwrap();

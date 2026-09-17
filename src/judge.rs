@@ -99,9 +99,7 @@ impl JudgeEngine {
     pub fn new(config: &JudgeConfig) -> Self {
         let mut engine = Self::with_dependencies(
             config,
-            Box::new(|name| {
-                std::env::var(name).map_err(|_| anyhow::anyhow!("judge: credential unavailable"))
-            }),
+            Box::new(crate::credentials::resolve),
             Box::new(http_request),
         );
         engine.transport_available = cfg!(feature = "typesafe");
@@ -322,7 +320,7 @@ fn valid_id(id: &str) -> bool {
 fn structured(value: &Value) -> bool {
     value.is_string() || value.is_object() || value.is_array()
 }
-fn safe_token(key: &str) -> bool {
+pub(crate) fn safe_token(key: &str) -> bool {
     // RFC 6750 b64token, including common opaque API-key punctuation.
     let base = key.trim_end_matches('=');
     !base.is_empty()
@@ -330,6 +328,16 @@ fn safe_token(key: &str) -> bool {
         && base
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b"-._~+/".contains(&b))
+}
+/// Scrub the documented TypeSafe key shape without reading any credential store.
+/// This is defense in depth for traces, not a guarantee that arbitrary secrets
+/// placed in source text can be identified or safely published.
+pub fn redact_typesafe_keys(text: &str) -> String {
+    static PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    PATTERN
+        .get_or_init(|| regex::Regex::new(r"apikey_[A-Za-z0-9]+_[A-Za-z0-9]+").unwrap())
+        .replace_all(text, "[REDACTED_TYPESAFE_KEY]")
+        .into_owned()
 }
 fn contains_secret(value: &Value, secret: &str) -> bool {
     match value {

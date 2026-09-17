@@ -64,7 +64,11 @@ max_questions_per_cell = 64
 max_input_tokens_per_cell = 100000
 ```
 
-Supply the secret in the named **host environment variable**, using your normal secret management. Never put it in TOML, an RLM prompt, `state`, a question, a note, a committed script, or shell history. The key is not forwarded to custom generative subprocesses. The HTTP destination is fixed, uses TLS, does not follow redirects, use inherited proxies, or automatically retry. Only the explicitly supplied state/questions are sent. This is not automatic secret detection for other private source data. Selecting evidence for an external service remains the caller's responsibility.
+Supply the secret in the named **host environment variable**, using your normal secret management, or attach it once with `az jev attach --stdin` through a private stdin pipe. `az jev status` and `az doctor jev` report local source and syntax status without provider calls. `az jev detach` removes the named attachment. A present environment variable takes precedence, including an invalid value: there is no silent fallback. For a custom `key_env`, pass the same `--key-env NAME` to attachment commands.
+
+Attachment is an owner-only plaintext file under the private host state root, not an encrypted vault or a cross-user secret service. It is supported on macOS/Linux/Android and fails closed elsewhere. It does not enable `[judge]`, change an installed binary, or write to repository memory/configuration. Hard termination can leave a private staging file until the next attachment/replacement or detach recovers it. See [CLI credential boundaries](cli.md) for exact semantics.
+
+Never put the key in argv, TOML, an RLM prompt, `state`, a question, a note, a committed script, or shell history. The key is not forwarded to custom generative subprocesses. The HTTP destination is fixed, uses TLS, does not follow redirects, use inherited proxies, or automatically retry. Only the explicitly supplied state/questions are sent. TypeSafe-shaped trace redaction is defense in depth, not automatic detection of arbitrary secrets in source data. Selecting evidence for an external service remains the caller's responsibility.
 
 The feature is excluded from default Cargo features. `[judge].enabled` defaults to false even in a feature-enabled build. No fallback from a failed typed request to `llm` happens silently.
 

@@ -30,6 +30,7 @@ use std::{
 #[cfg(unix)]
 use std::io::{BufRead, BufReader};
 
+pub mod credentials;
 pub mod jcode_gate;
 pub mod judge;
 pub mod memory;
@@ -9670,7 +9671,7 @@ pub fn preflight_model_trace_sink() -> Result<()> {
 }
 
 fn append_model_trace(row: &ModelTrace) -> Result<()> {
-    let mut bytes = serde_json::to_vec(row)?;
+    let mut bytes = judge::redact_typesafe_keys(&serde_json::to_string(row)?).into_bytes();
     bytes.push(b'\n');
     let Some(mut file) = open_model_trace_sink()? else {
         return Ok(());
