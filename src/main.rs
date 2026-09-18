@@ -9414,6 +9414,12 @@ mod tests {
             ),
         ] {
             let rendered = render_managed_skill(harness, binary);
+            let panel = rendered
+                .split_once("### Historical one-shot exact-panel workflow")
+                .expect("preserved one-shot lane")
+                .1;
+            assert!(rendered.contains("General persistent/artifact workflow"));
+            assert!(rendered.contains("overrides legacy one-lifecycle"));
             assert!(rendered.contains(&format!("## Harness activation: {display}")));
             assert!(rendered.contains(marker));
             if matches!(harness, "claude" | "codex" | "opencode") {
@@ -9441,7 +9447,7 @@ mod tests {
                 assert!(!rendered.contains("## Other-host `solo` lane"));
                 assert!(!rendered.contains("Other hosts: one `solo` call"));
                 if harness == "claude" {
-                    assert_eq!(rendered.matches("workers=6").count(), 4);
+                    assert_eq!(panel.matches("workers=6").count(), 3);
                     assert!(rendered.contains("globally repack them into the fewest prompts"));
                     assert!(rendered.contains("exactly one literal `start`"));
                     assert!(rendered.contains("at most 256 unique items"));
@@ -9466,7 +9472,7 @@ mod tests {
                     assert!(rendered.contains("normal conversational answer"));
                     assert!(rendered.contains("exactly one literal `start`"));
                     assert!(rendered.contains("one adjudication"));
-                    assert_eq!(rendered.matches("workers=6").count(), 4);
+                    assert_eq!(panel.matches("workers=6").count(), 3);
                     assert!(rendered.contains("at most 256 unique items"));
                     assert!(rendered.contains("64 KiB"));
                     assert!(!rendered.contains("at most 40 unique items"));
@@ -9504,6 +9510,17 @@ mod tests {
     #[test]
     fn opencode_standard_lane_is_low_ceremony_and_strict_lane_remains_exact() {
         let rendered = render_managed_skill("opencode", Path::new("/managed/azdaja"));
+        let (general, rendered) = rendered
+            .split_once("### Historical one-shot exact-panel workflow")
+            .expect("separate persistent and one-shot lanes");
+        assert!(general.contains("as many bounded `exec` cells as the task requires"));
+        assert!(general.contains("requested scripts, data, or reports"));
+        assert!(general.contains("Do not make a duplicate mandatory `llm_batch`"));
+        assert!(general.contains("FINAL_VAR(\"variable_name\")"));
+        assert!(
+            general.len() <= 5000,
+            "general workflow guidance must stay bounded"
+        );
         let managed = "'/managed/azdaja'";
 
         assert!(
@@ -9514,11 +9531,11 @@ mod tests {
         assert!(rendered.contains("Run this exact wrapper as one Bash call"));
         assert!(rendered.contains("follow the fallback policy below"));
         assert!(!rendered.contains("No preamble, exploration, temporary script, or second lane"));
-        assert!(rendered.contains("Passive discovery"));
-        assert!(rendered.contains("explicit Azdaja request is"));
+        assert!(general.contains("Passive discovery"));
+        assert!(general.contains("explicit Azdaja request is"));
         assert!(rendered.contains("trap cleanup EXIT"));
         assert!(!rendered.contains("exit 42"));
-        assert_eq!(rendered.matches("workers=6").count(), 4);
+        assert_eq!(rendered.matches("workers=6").count(), 3);
         assert!(rendered.contains("Its source load is the only `load`"));
         assert!(rendered.contains("discard initial shard boundaries"));
         assert!(rendered.contains(&format!(r#"sid="$({managed} start)""#)));
@@ -9644,7 +9661,7 @@ mod tests {
                     );
                 }
             }
-            assert_eq!(rendered.matches("workers=6").count(), 4);
+            assert_eq!(rendered.matches("workers=6").count(), 5);
             assert!(!rendered.contains("workers=12"));
             assert!(!rendered.contains("per-item objects are allowed"));
             assert!(
@@ -9723,7 +9740,7 @@ mod tests {
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
         assert_eq!(
-            digest, "de66dc8abc42ad501977a5787a45ed93801fe02cd4d5594ef5896a1caa21e52a",
+            digest, "e6f8a1a7583d6068abe42f751ae808615162babbd45a0808552112f780b024ba",
             "OpenCode rendered bytes changed"
         );
     }
@@ -10065,19 +10082,19 @@ mod tests {
         let expected = [
             (
                 "default",
-                "c21ba4fd55ac8ec9e78f5eda6a6f2fe42a91c1421cd1feada4ecfe12bd86c55a",
+                "e805fb06dfc9b2cfa79be43fef9ff46b3a7c1fd1a82578d3c2e60058526fd462",
             ),
             (
                 "jcode",
-                "11cf8401ed781b8082e717af81078cd09e813c5f267b2207b1665ae708c83aff",
+                "ea2afcb3f7aa02383dbb53a60d5e4d52e2ec7939a4d827bd46b48b5f8636c1d4",
             ),
             (
                 "codex",
-                "4a19a3433d93fd6d94ac4f6fd69ec7d113788cba3e76e13ce240d82306aa28df",
+                "cf9b84c29d47bf0fe86efb61ed21836bd0dfb515b6bd19beb9ac50730cda80bd",
             ),
             (
                 "gemini",
-                "f9cff26de5e8b52c36f6230e5459a21be910a514800b325cd9dd95488e844196",
+                "6c932dc34937f021f5c8627dc297910199f6beb5929ded439a79f67f05b84d11",
             ),
         ];
         let actual = expected

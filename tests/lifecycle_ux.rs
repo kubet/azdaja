@@ -182,7 +182,14 @@ fn all_harness_install_and_custody_doctor_are_provider_free_and_session_honest()
     assert!(opencode_skill.contains("a mere mention of Azdaja"));
     assert!(!opencode_skill.contains("before Read, Grep, or Bash inspection"));
     assert!(!opencode_skill.contains("**Claude tool setting:**"));
-    assert_eq!(opencode_skill.matches(binary_text).count(), 5);
+    let (general, panel) = opencode_skill
+        .split_once("### Historical one-shot exact-panel workflow")
+        .expect("separate persistent and one-shot lanes");
+    assert!(general.contains("General persistent/artifact workflow"));
+    assert!(general.contains("overrides legacy one-lifecycle"));
+    assert!(general.contains("requested scripts, data, or reports"));
+    assert_eq!(panel.matches(binary_text).count(), 5);
+    assert_eq!(general.matches(binary_text).count(), 6);
     assert!(!opencode_skill.contains("{{BIN}}"));
 
     let one_shot_input = scratch.0.join("one-shot.txt");

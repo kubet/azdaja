@@ -1,0 +1,61 @@
+{
+  "status": "passed",
+  "provider_calls": 0,
+  "five_actual_installs_preserve_historical_panel_bytes": true,
+  "profiles": {
+    "before": {
+      "opencode": {
+        "panel_sha256": "e4b98130b34d3e6ee110967287688ae3dc8c4e7d17a2a7d97979241d704dbaa8",
+        "has_general_route": false,
+        "has_precedence": false
+      },
+      "jcode": {
+        "panel_sha256": "9de79de152f9d4472588b054138ad50e9445b4007746788fc8368d0a949c127b",
+        "has_general_route": false,
+        "has_precedence": false
+      },
+      "claude": {
+        "panel_sha256": "b9e2fe59b5897a23b88a4ac5bc0085eed63eba71bc2efa44fd867b44d360166a",
+        "has_general_route": false,
+        "has_precedence": false
+      },
+      "codex": {
+        "panel_sha256": "452f157ae7bc810caa492cddf05b657d440203594bc71a70d2fc201b1b72a27c",
+        "has_general_route": false,
+        "has_precedence": false
+      },
+      "gemini": {
+        "panel_sha256": "9de79de152f9d4472588b054138ad50e9445b4007746788fc8368d0a949c127b",
+        "has_general_route": false,
+        "has_precedence": false
+      }
+    },
+    "after": {
+      "opencode": {
+        "panel_sha256": "e4b98130b34d3e6ee110967287688ae3dc8c4e7d17a2a7d97979241d704dbaa8",
+        "has_general_route": true,
+        "has_precedence": true
+      },
+      "jcode": {
+        "panel_sha256": "9de79de152f9d4472588b054138ad50e9445b4007746788fc8368d0a949c127b",
+        "has_general_route": true,
+        "has_precedence": true
+      },
+      "claude": {
+        "panel_sha256": "b9e2fe59b5897a23b88a4ac5bc0085eed63eba71bc2efa44fd867b44d360166a",
+        "has_general_route": true,
+        "has_precedence": true
+      },
+      "codex": {
+        "panel_sha256": "452f157ae7bc810caa492cddf05b657d440203594bc71a70d2fc201b1b72a27c",
+        "has_general_route": true,
+        "has_precedence": true
+      },
+      "gemini": {
+        "panel_sha256": "9de79de152f9d4472588b054138ad50e9445b4007746788fc8368d0a949c127b",
+        "has_general_route": true,
+        "has_precedence": true
+      }
+    }
+  }
+}

@@ -12,6 +12,43 @@ description: Use only when the user explicitly chooses Azdaja for the current re
 - On absence or failure, leave host-native tools available.
 - Azdaja is not an OS sandbox.
 
+## Choose exactly one workflow
+
+Use the **general persistent/artifact workflow** for ordinary analysis, coding, reporting, file-producing, or long-running tasks. Use the historical **one-shot exact-panel workflow** below only when the user explicitly requests one exact JSON classification panel as the sole response. Do not combine the two workflows.
+
+For persistent/artifact tasks, this route overrides legacy one-lifecycle and final-tool-call restrictions in harness guidance. Those restrictions apply only to the one-shot lane. Explicit user activation is always required.
+
+### General persistent/artifact workflow
+
+- Azdaja is optional and user-chosen. If it is not explicitly chosen, use host-native tools. Jev is usable for `exec` when a valid host key is available unless configuration explicitly sets `enabled=false`; with no valid key it is off. `solo` is experimental and must be requested explicitly.
+- Prepare ordinary host files before the session as needed. Start one session, load each source file with `load`, and use as many bounded `exec` cells as the task requires. State persists between cells.
+- A normal route is `start`, `load SID FILE NAME`, one or more `exec SID` calls, `final SID`, then `kill SID`. Always clean up an owned session, including on failure. Never hide retries after a paid provider failure.
+- Use generative calls or optional typed calls according to the task. Do not make a duplicate mandatory `llm_batch` call when typed judgments already answer the request. Preserve full raw distributions and source IDs when present. Do not impose a universal confidence threshold, compaction rule, or speed claim.
+- Monty cells have no host I/O. Host-side preparation and artifact writing belong outside cells. Use native `sha256(text)` for UTF-8 text. Verify byte offsets and byte slices on the host side, not from character lengths in a cell.
+- Finish by exporting the requested scripts, data, or reports from the host workflow and return the requested artifact or path. Do not force JSON-only output when the task requests a file or report.
+- Ordinary cells provide `llm(prompt)`, ordered `llm_batch(prompts, workers=8)`, `FINAL(value)`, and `FINAL_VAR("variable_name")`. Optional typed helpers are `judge_many(state, questions)` and `judge_stats()` when host opt-in is enabled. Reject `azdaja_error` and malformed provider results.
+- Cells have preloaded `os`, `re`, `json`, `math`, `collections`, and `datetime`. No imports, generators, `next`, `eval`, `exec`, or introspection. `sha256(text)` returns a hex string. For model calls, optional `model="provider/model"` selects an explicit configured model.
+
+```bash
+set -euo pipefail
+sid="$( {{BIN}} start )"
+trap '{{BIN}} kill "$sid" >/dev/null 2>&1 || true' EXIT
+{{BIN}} load "$sid" ./source.txt source
+{{BIN}} exec "$sid" <<'PY'
+# bounded preparation or analysis cell; state remains available
+PY
+{{BIN}} exec "$sid" <<'PY'
+# later cell may consume prior state and end with FINAL(value)
+PY
+{{BIN}} final "$sid" > artifact.json
+```
+
+The wrapper is illustrative rather than a one-cell restriction. Add host-side file writes and validation around it when the requested deliverable requires them.
+
+### Historical one-shot exact-panel workflow
+
+The following route is retained for compatibility, but is scoped only to explicitly one-shot exact-panel tasks. Its one Bash call, one cell, JSON-only, and semantic-gate requirements do not apply to the general workflow above.
+
 ## Claude Code and OpenCode
 
 **Claude tool setting:** set the one Bash call's `timeout` field to `300000` before sending it; never discover this by timing out first.

@@ -1,0 +1,44 @@
+{
+  "schema": "azdaja.long_workflow.instruction_acceptance.v1",
+  "status": "scoped_checks_passed",
+  "new_provider_calls": 0,
+  "binary_unit_tests": {
+    "passed": 84,
+    "failed": 0
+  },
+  "lifecycle_tests": {
+    "passed": 34,
+    "failed": 0,
+    "segments": 2,
+    "first_command_external_timeout_seconds": 300,
+    "first_segment_completed_tests": 21,
+    "remaining_tests": 13
+  },
+  "new_public_workflow_test": {
+    "passed": 1,
+    "failed": 0
+  },
+  "clippy": "passed: changed binary and two integration targets, typesafe feature, -D warnings",
+  "format": "passed",
+  "proof": "49 artifacts verified; existing bundle evidence only",
+  "full_project_suite_rerun": false,
+  "new_release_or_user_install": false,
+  "performance_claim": "none; live pair uses separately sealed instruction snapshot",
+  "source_sha256": {
+    "assets/template/SKILL.md": "b027c914a16ae56ce28b599cf3ecf9ba50c0f45a01e775efe9365d015e1c3248",
+    "skills/azdaja/SKILL.md": "015ccc22fa00355cf91287c820a13524786ee8049ec80b9b11506dc7f05d7fc3",
+    "src/main.rs": "edf39392172e49ccaf574c9191ce0f1606e978225cf18e72931312f39ea0d478",
+    "tests/lifecycle_ux.rs": "39c67b96fe0eb90dd710ce311a173153033a2c76248d92991587abe64ca4710e",
+    "tests/long_workflow_skill.rs": "667feeda8600bf75510123449ef12bc5ee17c21eef05c5d6893f8df1729f2522"
+  },
+  "receipt_input_sha256": {
+    "installed-profiles.json": "83f38f200e9fc2278c4769e3e4bb227a9c1dc0758a525ebf12efe97d0de70c6d",
+    "full-source-cli.json": "afacfa4e26c1a6069ffd761c41a5a6a160c40132fb6c6e49550288dc547bdcf8",
+    "remaining-lifecycle.json": "6fb9760fb5858482fa069017ac5afab5e4b3352a86b505ebd5aff5051d360ee3"
+  },
+  "artifact_sha256": {
+    "installed-profiles.json": "f09d2e83303fdf68b158fa58aadae6ff83b740d3be547c2553c360d6fdcb6903",
+    "full-source-cli.json": "27648480160e2494a5c57cf29bfbd13a1ca5a826b02a52603fc7dd21edac01d8",
+    "remaining-lifecycle.json": "14cae9e07ee927fee50598063ef9e03e51558ed534ec84cd0120ee000161edbb"
+  }
+}

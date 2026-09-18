@@ -13,6 +13,41 @@ description: Use only when the user explicitly chooses Azdaja for the current re
 - Jcode hook routing requires `AZDAJA_JCODE_ACTIVATION=request`, `session`, or `repository` in the host process environment. Do not set this automatically merely because the skill was loaded.
 - Azdaja is a cooperative workflow tool, not an OS sandbox.
 
+## Choose exactly one workflow
+
+For persistent/artifact tasks, the general route below overrides legacy one-lifecycle and final-tool-call restrictions in harness guidance. Those restrictions apply only to the one-shot lane. Explicit user activation is always required.
+
+Use the **general persistent/artifact workflow** for ordinary analysis, coding, reporting, file-producing, or long-running tasks. Use the historical **one-shot exact-panel workflow** below only when the user explicitly requests one exact JSON classification panel as the sole response. Do not combine the two workflows.
+
+### General persistent/artifact workflow
+
+- Azdaja remains optional and requires explicit user choice. Jev is usable for `exec` when a valid host key is available unless configuration explicitly sets `enabled=false`; with no valid key it is off. `solo` is experimental and must be requested explicitly.
+- Prepare and write ordinary host files as needed. Use `start`, `load SID FILE NAME`, multiple bounded `exec SID` cells with persistent state, `final SID`, and `kill SID`. Clean up owned sessions even on failure.
+- Choose generative calls or optional typed calls according to the task. Typed calls do not require a duplicate `llm_batch`. Preserve full raw distributions and source IDs. Do not claim universal thresholds, compaction, or speedups, and do not retry after a paid provider failure.
+- Finish by exporting the requested scripts, data, or reports from the host workflow and return the requested artifact or path. Do not force JSON-only output when the task requests a file or report.
+- Ordinary cells provide `llm(prompt)`, ordered `llm_batch(prompts, workers=8)`, `FINAL(value)`, and `FINAL_VAR("variable_name")`. Optional typed helpers are `judge_many(state, questions)` and `judge_stats()` when host opt-in is enabled. Reject `azdaja_error` and malformed provider results.
+- Cells have preloaded `os`, `re`, `json`, `math`, `collections`, and `datetime`. No imports, generators, `next`, `eval`, `exec`, or introspection. `sha256(text)` returns a hex string. For model calls, optional `model="provider/model"` selects an explicit configured model.
+
+```bash
+set -euo pipefail
+sid="$(${AZDAJA_BIN} start)"
+trap '"${AZDAJA_BIN}" kill "$sid" >/dev/null 2>&1 || true' EXIT
+"${AZDAJA_BIN}" load "$sid" ./source.txt source
+"${AZDAJA_BIN}" exec "$sid" <<'PY'
+# bounded first cell; state persists
+PY
+"${AZDAJA_BIN}" exec "$sid" <<'PY'
+# bounded later cell ending in FINAL(value) when appropriate
+PY
+"${AZDAJA_BIN}" final "$sid" > artifact.json
+```
+
+The wrapper is illustrative and permits host-side preparation, artifact writing, and validation.
+
+### Historical one-shot exact-panel workflow
+
+The following route is retained for compatibility, but is scoped only to explicitly one-shot exact-panel tasks. Its one Bash call, one cell, JSON-only, and semantic-gate requirements do not apply to the general workflow above.
+
 ## Claude Code and OpenCode
 
 **Claude tool setting:** set the one Bash call's `timeout` field to `300000` before sending it; never discover this by timing out first.

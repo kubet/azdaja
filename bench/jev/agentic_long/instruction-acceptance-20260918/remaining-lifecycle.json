@@ -1,0 +1,72 @@
+{
+  "earlier_observed_passes": 21,
+  "remaining": [
+    {
+      "test": "late_unknown_and_changed_targets_abort_without_touching_other_selected_surfaces",
+      "exit": 0,
+      "seconds": 10.019556666957214
+    },
+    {
+      "test": "legacy_target_flag_remains_compatible_but_hidden_from_help",
+      "exit": 0,
+      "seconds": 1.5739292920334265
+    },
+    {
+      "test": "opencode_doctor_rejects_an_incompatible_agent_skills_shadow",
+      "exit": 0,
+      "seconds": 5.118435584008694
+    },
+    {
+      "test": "opencode_doctor_rejects_project_visible_same_name_skills",
+      "exit": 0,
+      "seconds": 0.9796078329673037
+    },
+    {
+      "test": "replacing_existing_jcode_config_preserves_unix_uid_gid_and_mode",
+      "exit": 0,
+      "seconds": 0.7306550838984549
+    },
+    {
+      "test": "standalone_and_full_all_self_uninstall_preserve_foreign_neighbors",
+      "exit": 0,
+      "seconds": 7.646750083076768
+    },
+    {
+      "test": "standalone_document_quarantine_rolls_back_every_owned_generation_at_every_step",
+      "exit": 0,
+      "seconds": 3.7432092500384897
+    },
+    {
+      "test": "unchanged_absent_jcode_config_is_revalidated_before_uninstall_commit",
+      "exit": 0,
+      "seconds": 1.517170500010252
+    },
+    {
+      "test": "unchanged_absent_jcode_parent_replacement_aborts_without_touching_foreign_tree",
+      "exit": 0,
+      "seconds": 1.4152631249744445
+    },
+    {
+      "test": "unchanged_enabled_jcode_config_is_revalidated_before_reinstall_commit",
+      "exit": 0,
+      "seconds": 1.90061179199256
+    },
+    {
+      "test": "unmanaged_standalone_uninstall_points_to_original_installer_or_cargo",
+      "exit": 0,
+      "seconds": 0.05611616699025035
+    },
+    {
+      "test": "unqualified_uninstall_removes_detected_integrations_and_keeps_standalone_documents",
+      "exit": 0,
+      "seconds": 7.507782292086631
+    },
+    {
+      "test": "upgraded_binary_removes_exact_historical_v2_documents_without_losing_current_custody",
+      "exit": 0,
+      "seconds": 0.5513913340400904
+    }
+  ],
+  "binary_sha256": "0a50e48bc5dcf4b5575209d3746d3cc06210683bb56f23a48ad7a6cbbb62537c",
+  "outer_timeout_not_a_test_failure": true
+}
