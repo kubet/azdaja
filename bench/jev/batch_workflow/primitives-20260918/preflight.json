@@ -1,0 +1,1 @@
+{"credentials_checked": false, "execution_enabled": false, "input_sha256": "8b7e0c0ce8f0e98f186fb3d3be62e75153b95fb5480bb07b1bb9de26f0ca3632", "limits": {"max_input_tokens": 3000, "max_requests": 1, "max_seconds": 30}, "plan_bytes": 960, "provider_requests": 0, "questions": 3, "records": 1, "status": "valid", "typesafe_compiled": true}

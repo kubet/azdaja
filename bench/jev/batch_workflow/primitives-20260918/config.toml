@@ -1,0 +1,7 @@
+[judge]
+enabled=true
+model="jev-latest"
+timeout_secs=20
+max_requests_per_cell=1
+max_questions_per_cell=3
+max_input_tokens_per_cell=3000

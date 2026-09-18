@@ -1,0 +1,49 @@
+import hashlib,json,os,pathlib,subprocess,time
+ROOT=pathlib.Path('/Users/vukasinkubet/dev/azdaja')
+S=pathlib.Path(os.environ['JCODE_SCRATCH_DIR'])
+OUT=S/'jev-primitives-one-20260918'
+B=S/'jev-prod-foundations-typesafe-679adb6'
+sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+assert sha(B)=='679adb6cbffa4e59b335d4a6bd632dc63f8b1eee40489c4e2ebe510719e0cb19'
+OUT.mkdir(mode=0o700)
+def put(name,obj):
+ with (OUT/name).open('x') as f:json.dump(obj,f,sort_keys=True);f.write('\n')
+plan={'id':'public-fictional-ticket','state':{'ticket':'The export button fails in Safari. Export succeeds in Chrome. No data is lost.'},'questions':{'has_workaround':{'type':'noul','instructions':'Does the supplied ticket explicitly describe an available workaround for exporting?'},'route':{'type':'choice','instructions':'Which description best matches the export issue in the supplied ticket?','criteria':{'workaround':'Export is broken in one browser but succeeds in another browser.','blocked':'Export cannot succeed in any browser.','no_issue':'Export succeeds in every browser mentioned.'}},'severity':{'type':'score','instructions':'How severe is the reported export issue, considering only the supplied ticket?','criteria':['Cosmetic issue only; export functionality works everywhere.','Export is broken in one browser, but an available browser provides a workaround.','Export is completely blocked with no workaround.']}}}
+put('plan.jsonl',plan)
+config=OUT/'config.toml';config.write_text('[judge]\nenabled=true\nmodel="jev-latest"\ntimeout_secs=20\nmax_requests_per_cell=1\nmax_questions_per_cell=3\nmax_input_tokens_per_cell=3000\n')
+# Forward existing authorized resolution opaquely. Never read, print or persist key bytes.
+env={k:v for k,v in os.environ.items() if k in ('HOME','AZDAJA_HOME','TYPESAFE_API_KEY','PATH')}
+env['AZDAJA_CONFIG']=str(config)
+args=[str(B),'jev','batch','--input',str(OUT/'plan.jsonl'),'--max-requests','1','--max-input-tokens','3000','--max-seconds','30']
+pre=subprocess.run(args,env=env,capture_output=True,text=True,timeout=10)
+assert pre.returncode==0
+put('preflight.json',json.loads(pre.stdout))
+put('admission.started.json',{'schema':'azdaja.native_primitives.admission.v1','binary_sha256':sha(B),'source_commit':'e0a828e5524ce3a9abbbb9c85d68d5772f1cdba8','head_at_admission':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'plan_sha256':sha(OUT/'plan.jsonl'),'protocol_sha256':sha(ROOT/'bench/jev/batch_workflow/PRIMITIVES.md'),'controller_sha256':sha(pathlib.Path(__file__)),'limit_requests':1,'limit_questions':3,'limit_input_tokens':3000,'limit_seconds':30,'started_unix':time.time(),'retry_authorized':False})
+start=time.monotonic()
+with (OUT/'live.stdout').open('xb') as stdout,(OUT/'live.stderr').open('xb') as stderr:
+ try:
+  live=subprocess.run(args+['--execute','--output',str(OUT/'job')],env=env,stdout=stdout,stderr=stderr,timeout=35)
+  code=live.returncode
+ except subprocess.TimeoutExpired:
+  code=124
+elapsed=time.monotonic()-start
+raw=(OUT/'live.stdout').read_text();summary=json.loads(raw) if raw.strip() else None
+put('terminal.json',{'exit':code,'elapsed_seconds':elapsed,'summary':summary,'further_calls_authorized':False,'billing_known':False})
+if code or summary['status']!='completed':
+ print(json.dumps({'status':'stopped','exit':code,'further_calls_authorized':False}));raise SystemExit(2)
+assert summary['calls']==1 and summary['new_requests']==1 and summary['records']['completed']==1
+assert summary['usage']['questions']==3 and summary['input_usage_complete'] and summary['output_usage_complete']
+record=json.loads((OUT/'job/000000.result.json').read_text());answers=record['observation']['answers']
+assert set(answers)==set(plan['questions'])
+assert {k:v['type'] for k,v in answers.items()}=={k:v['type'] for k,v in plan['questions'].items()}
+assert answers['severity']['legend']=={str(i):v for i,v in enumerate(plan['questions']['severity']['criteria'])}
+before={p.name:sha(p) for p in (OUT/'job').iterdir()}
+# A new private state and empty credential environment must still replay without transport.
+replayenv={'HOME':str(OUT/'absent-home'),'AZDAJA_HOME':str(OUT/'no-credential-state'),'AZDAJA_CONFIG':str(config),'PATH':'/usr/bin:/bin'}
+replay=subprocess.run(args+['--execute','--resume','--output',str(OUT/'job')],env=replayenv,capture_output=True,text=True,timeout=10)
+assert replay.returncode==0
+resume=json.loads(replay.stdout);assert resume['new_requests']==0 and resume['records']['completed']==1
+assert before=={p.name:sha(p) for p in (OUT/'job').iterdir()} and not (OUT/'no-credential-state').exists()
+put('resume.json',resume)
+put('acceptance.json',{'status':'passed','live_requests':1,'questions':3,'generative_calls':0,'resume_new_requests':0,'job_unchanged':True,'binary_sha256':sha(B),'plan_sha256':sha(OUT/'plan.jsonl'),'usage':summary['usage'],'descriptive_answers':answers,'semantic_generalization_established':False,'billing_known':False,'retained':{p.name:sha(p) for p in (OUT/'job').iterdir() if p.name!='.lock'}})
+print(json.dumps({'status':'passed','requests':1,'questions':3,'resume_new_requests':0,'usage':summary['usage'],'answers':answers}))
