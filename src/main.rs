@@ -7156,6 +7156,20 @@ fn extract_solo_python(reply: &str) -> Result<String> {
     Ok(code)
 }
 
+#[cfg(feature = "typesafe")]
+mod solo_preflight;
+
+fn validate_solo_python_for_config(code: &str, cfg: &Config) -> Result<()> {
+    validate_solo_python(code)?;
+    #[cfg(feature = "typesafe")]
+    if cfg.judge.enabled {
+        solo_preflight::validate_native_hash(code)?;
+    }
+    #[cfg(not(feature = "typesafe"))]
+    let _ = cfg;
+    Ok(())
+}
+
 fn validate_solo_python(code: &str) -> Result<()> {
     if code.len() > SOLO_ROOT_CODE_BYTES {
         bail!("solo root Python program exceeds byte limit")
@@ -7761,7 +7775,7 @@ fn execute_solo_reply(
         semantic_calls: 0,
         typed_attempts: 0,
     })?;
-    validate_solo_python(&code).map_err(|error| SoloProgramFailure {
+    validate_solo_python_for_config(&code, cfg).map_err(|error| SoloProgramFailure {
         kind: classify_program_failure(&error.to_string(), SoloProgramFailureKind::Compile),
         error,
         code: Some(code.clone()),

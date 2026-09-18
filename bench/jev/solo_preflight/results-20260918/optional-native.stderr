@@ -1,0 +1,6 @@
+   Compiling azdaja v0.1.17 (/Users/vukasinkubet/dev/azdaja)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.27s
+     Running tests/jev_credentials.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/jev_credentials-5938d5478f0f2875)
+     Running tests/judge_batch_cli.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/judge_batch_cli-02dc10e0f0386f9b)
+     Running tests/judge_native.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/judge_native-2c251e4dff9d49ec)
+     Running tests/judge_solo_preflight.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/judge_solo_preflight-bf29845c3e1b0a03)

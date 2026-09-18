@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Bounded offline shipping checks. No inference admission or credential handling."""
+import hashlib, json, os, pathlib, subprocess, time
+ROOT = pathlib.Path('/Users/vukasinkubet/dev/azdaja')
+SCRATCH = pathlib.Path(os.environ['JCODE_SCRATCH_DIR'])
+OUT = SCRATCH / 'jev-solo-preflight-acceptance-20260918'
+OUT.mkdir(mode=0o700)
+assert ROOT not in OUT.resolve().parents
+ENV = os.environ.copy()
+for key in list(ENV):
+    if any(x in key.upper() for x in ('API_KEY','API_TOKEN','AUTH_TOKEN','SECRET','SOCKET')) or key in ('JCODE_RUNTIME_DIR','RLM_DEPTH','AZDAJA_HOME','AZDAJA_CONFIG','AZDAJA_MODEL_TRACE','AZDAJA_SOLO_TRACE'):
+        ENV.pop(key, None)
+ENV['CARGO_TARGET_DIR'] = str(SCRATCH/'jev-batch-target')
+ENV['PYTHONDONTWRITEBYTECODE'] = '1'
+checks=[]
+def sha(path): return hashlib.sha256(path.read_bytes()).hexdigest()
+def run(name, args, seconds=600):
+    start=time.monotonic()
+    p=subprocess.run(args,cwd=ROOT,env=ENV,capture_output=True,timeout=seconds)
+    (OUT/(name+'.stdout')).write_bytes(p.stdout)
+    (OUT/(name+'.stderr')).write_bytes(p.stderr)
+    row={'name':name,'argv':args,'exit':p.returncode,'seconds':time.monotonic()-start,'stdout_sha256':sha(OUT/(name+'.stdout')),'stderr_sha256':sha(OUT/(name+'.stderr'))}
+    checks.append(row)
+    (OUT/'checks.json').write_text(json.dumps(checks,indent=2)+'\n')
+    print('JCODE_PROGRESS '+json.dumps({'message':name,'exit':p.returncode,'checks_completed':len(checks)}),flush=True)
+    if p.returncode:
+        print(p.stdout.decode(errors='replace')[-8000:]); print(p.stderr.decode(errors='replace')[-8000:])
+        raise SystemExit(p.returncode)
+
+def cargo(*args): return ['cargo','+1.95.0',*args]
+run('format',cargo('fmt','--all','--','--check'))
+run('optional-main',cargo('test','--locked','--offline','--features','typesafe','--bin','azdaja','--','--test-threads=1'))
+run('optional-native',cargo('test','--locked','--offline','--features','typesafe','--test','judge_solo_preflight','--test','judge_native','--test','judge_batch_cli','--test','jev_credentials','--','--nocapture'))
+run('optional-judge-core',cargo('test','--locked','--offline','--features','typesafe','--lib','judge','--','--test-threads=1'))
+optional=SCRATCH/'jev-solo-preflight-typesafe'
+with optional.open('xb') as f: f.write((SCRATCH/'jev-batch-target/debug/azdaja').read_bytes())
+optional.chmod(0o755)
+run('installed-typesafe',['python3','-B','bench/jev/batch_workflow/installed.py','--binary',str(optional),'--output',str(OUT/'installed-typesafe')])
+run('default-main',cargo('test','--locked','--offline','--bin','azdaja','--','--test-threads=1'))
+run('default-native',cargo('test','--locked','--offline','--test','judge_solo_preflight','--test','judge_native','--test','judge_batch_cli','--test','jev_credentials','--','--nocapture'))
+default=SCRATCH/'jev-solo-preflight-default'
+with default.open('xb') as f: f.write((SCRATCH/'jev-batch-target/debug/azdaja').read_bytes())
+default.chmod(0o755)
+run('installed-default',['python3','-B','bench/jev/batch_workflow/installed.py','--binary',str(default),'--output',str(OUT/'installed-default')])
+run('notice-tests',['python3','-B','-m','unittest','release/test_verify_third_party_notices.py','release/test_audit_third_party_notice_inputs.py','release/test_reconcile_third_party_notice.py'],1200)
+run('clippy',cargo('clippy','--all-targets','--all-features','--locked','--offline','--','-D','warnings'))
+run('diff-check',['git','diff','--check'])
+report={'schema':'azdaja.optional_solo_preflight.acceptance.v1','status':'passed','new_inference_requests':0,'model_backend':'explicit local fixture only','checks':checks,'binaries':{'typesafe':{'path':str(optional),'sha256':sha(optional)},'default':{'path':str(default),'sha256':sha(default)}}}
+(OUT/'report.json').write_text(json.dumps(report,indent=2)+'\n')
+print(json.dumps({'status':'passed','checks':len(checks),'out':str(OUT),'new_inference_requests':0}),flush=True)

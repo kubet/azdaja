@@ -2,7 +2,7 @@
 
 Development source capability, not a promise that an existing installed release includes it.
 
-**Development source only, not a published Jev feature.** The formerly stale
+**Available in this source tree, not guaranteed in an existing installed release.** The formerly stale
 notice gate has been repaired with a source-backed inventory for both default
 and optional `typesafe` dependencies. The actual
 `python3 release/verify-third-party-notices.py` command passes, while the old
@@ -106,7 +106,35 @@ Exact serialized requests are cached **within one cell**. `_azdaja.cache_hit` an
 
 The remaining cell wall deadline caps an HTTP call. Known usage crossing the host cap rejects the answer while retaining known usage in `judge_stats()`. If provider usage is absent or invalid, it is unknown, not free. A reported-token cap cannot undo a request already billed. Dollar cost needs separate provider billing evidence. Model strings describe provider-reported identity, not immutable weights; moving aliases may change across requests.
 
-This capability is for **ordinary `exec`**. It does not silently replace the separate `solo` semantic-manifest discipline or a host skill's mandatory semantic gate.
+## Optional `solo` workflow
+
+With both the `typesafe` build feature and `[judge].enabled = true`, `solo`
+advertises `judge_many`, `judge_stats`, `llm` and `llm_batch` to its root model.
+Only successful host-accounted semantic requests satisfy its semantic gate.
+Stats inspection, cache hits and failed preflight are not semantic evidence.
+Typed accounting remains separate in the host-owned `judge_cells` trace.
+Default-disabled and feature-off root prompts and execution retain their prior
+behavior. This does not override an external host skill's mandatory policy.
+
+The native `sha256(text)` helper accepts text and returns hexadecimal text.
+For the opted-in `solo` path, a syntax-aware preflight rejects known mistakes
+such as `sha256(ctx.encode()).hexdigest()` **before the generated cell runs**.
+The existing bounded root-repair mechanism can request corrected code without
+having performed the cell's child reads or typed requests. No code is silently
+rewritten and no already-paid cell is automatically replayed.
+
+This is a narrow lint, not a general typechecker. It checks direct result
+`.digest`/`.hexdigest` access, byte literals, and direct encoding of literal
+text or the unshadowed original `ctx`. Strings and comments are not code.
+Known misuse in unreachable code is still rejected. Any syntactic `sha256`
+binding makes the lint abstain for that program, including nested bindings.
+Aliases, dynamic namespaces and unknown argument types are not inferred.
+The existing program size limits apply, with a 256-level lint traversal bound.
+
+These engineering safeguards do not establish autonomous long-task accuracy
+or a Jev speedup. The [failed live CUAD runs and offline recovery](../bench/jev/long_task_salvage/RESULTS.md)
+remain separate, unchanged evidence. Use the checkpointed batch workflow above
+when you need an explicit durable work list rather than model-authored control.
 
 ## Angles worth testing
 

@@ -5,8 +5,8 @@
 **Feature scope:** `default` and default + `typesafe`, separately qualified below.
 **Engineering status:** deterministic archive-derived corpus; not legal advice or legal-sufficiency approval.
 
-- Bound inputs: `Cargo.lock` SHA-256 `2667713c7c9f40cb305d7846431d36cb4b9451b0b3472958bc8c38b45b01976f`
-- Cargo.toml SHA-256 `383fdab03a9349d2e7da2884b4a4bcdb4ddda0f450bd242efc4be77b634e06ed`
+- Bound inputs: `Cargo.lock` SHA-256 `d4ecce8aa1727ebf115fae73914d6dab0ef047fbbf90537bc04e01088e6d92e3`
+- Cargo.toml SHA-256 `af6cd85c0122441a2e59486166302b7bad9d11c6051922c76e7c68d370805f33`
 
 The root package is excluded. Each feature/target closure is resolved by offline, locked Cargo tree.
 Named legal files and declared license-file paths are inventoried from checksum-verified archives.

@@ -1,0 +1,24 @@
+Jev solo preflight review (read-only, 2026-09-18)
+
+Scope reviewed:
+- src/solo_preflight.rs
+- src/main.rs hook
+- Cargo.toml/Cargo.lock feature wiring
+- tests/judge_solo_preflight.rs
+
+Findings: no concrete production false-positive, safety, repair, or accounting defect found within the bounded review.
+
+Key observations:
+1. Feature/default gating is correct. The module and direct Ruff dependencies are typesafe-only. The hook always runs the legacy Monty validation, then invokes the optional lint only when cfg.judge.enabled under typesafe. Non-typesafe builds do not reference the module.
+2. The hook is before session.exec and before any paid child call. A preflight failure is classified as Compile with the code retained for repair. Existing root retry/limit behavior therefore remains the accounting boundary. The tests cover no child for persistent bad programs, no typed callback entry, and no paid replay.
+3. The lint is deliberately syntactic, not typechecking. It scans unreachable code because the AST visitor traverses the whole parsed module. This matches the documented contract and is covered by the dead-code test. Comments, string literals, and escaped f-string content are not interpreted as code by Ruff AST.
+4. Shadowing is fail-open for the lint by abstaining on broad syntactic binders. The visitor covers ordinary targets through non-Load Name contexts, defs/classes, parameters, aliases/imports, exception names, patterns, type parameters, global/nonlocal, and dynamic namespace indicators. This is conservative and can over-abstain, but does not create a false rejection from an asserted native binding.
+5. The structural checks are intentionally narrow: direct Name('sha256') calls only, direct result digest/hexdigest attributes, direct bytes/string-encode arguments, and direct ctx.encode patterns. Aliases and unknown argument types remain runtime-owned. Native sha256(ctx) remains accepted.
+6. The depth cap is fail-closed and bounded. No obvious counter/accounting mutation occurs on preflight failure; exec_invocation_count and judge stats are only updated after validation and session.exec.
+
+Residual limitations, not defects:
+- This does not prove runtime binding or types and cannot catch dynamic aliases/getattr/rebinding effects not represented by the conservative binder scan.
+- Whole-program abstention may reject lint opportunities when unrelated nested scopes bind sha256 or when globals/locals/exec/eval appear.
+- AST lint has no reachability analysis by design, so unreachable exact misuse is rejected.
+
+No tests were run because the root requested read-only review without broad execution and reported the bounded targeted suite as passing. No credentials, providers, network, or repository files were accessed or edited.

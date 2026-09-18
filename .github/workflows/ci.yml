@@ -84,6 +84,7 @@ jobs:
               "src/memory.rs",
               "src/observability.rs",
               "src/repo_source.rs",
+              "src/solo_preflight.rs",
               "src/tui.rs",
           ]
           assert actual == expected, {"actual": actual, "expected": expected}
@@ -115,6 +116,12 @@ jobs:
         run: |
           cargo test --locked --features typesafe --lib judge_batch::tests
           cargo test --locked --features typesafe --test judge_batch_cli --test jev_credentials
+      - name: Provider-free optional solo preflight and no-paid-replay boundary
+        env:
+          TYPESAFE_API_KEY: ""
+        run: |
+          cargo test --locked --features typesafe --bin azdaja solo_preflight
+          cargo test --locked --features typesafe --test judge_solo_preflight
       - name: Installed optional setup, no-key recovery and source-exact export
         run: |
           python3 -B -m unittest bench.jev.batch_workflow.test_installed

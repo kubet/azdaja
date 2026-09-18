@@ -128,6 +128,8 @@ dependencies = [
  "ratatui",
  "regex",
  "reqwest",
+ "ruff_python_ast",
+ "ruff_python_parser",
  "serde",
  "serde_json",
  "serde_yaml",

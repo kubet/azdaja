@@ -1,0 +1,204 @@
+[
+  {
+    "name": "format",
+    "argv": [
+      "cargo",
+      "+1.95.0",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit": 0,
+    "seconds": 0.4538796249544248,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "optional-main",
+    "argv": [
+      "cargo",
+      "+1.95.0",
+      "test",
+      "--locked",
+      "--offline",
+      "--features",
+      "typesafe",
+      "--bin",
+      "azdaja",
+      "--",
+      "--test-threads=1"
+    ],
+    "exit": 0,
+    "seconds": 0.901331749977544,
+    "stdout_sha256": "c1ec5bbd2ffba523c76a4b9427ee54ed0dc2d2f0cd73f97304cc12ae2cf3c8f1",
+    "stderr_sha256": "fedcf9eaa113e9cb4113d585bfd8fa25aafc06eb1b27cd5cea3459eb98126c6a"
+  },
+  {
+    "name": "optional-native",
+    "argv": [
+      "cargo",
+      "+1.95.0",
+      "test",
+      "--locked",
+      "--offline",
+      "--features",
+      "typesafe",
+      "--test",
+      "judge_solo_preflight",
+      "--test",
+      "judge_native",
+      "--test",
+      "judge_batch_cli",
+      "--test",
+      "jev_credentials",
+      "--",
+      "--nocapture"
+    ],
+    "exit": 0,
+    "seconds": 4.497657333035022,
+    "stdout_sha256": "330298e802eedd890735bc95d7a6678280112d3caf9b13cbe94c66ea1b24a611",
+    "stderr_sha256": "9b04e9fdd4c2a7e9bae3a2b63213e75c410414d2da75484f0f8d75aa99e2d687"
+  },
+  {
+    "name": "optional-judge-core",
+    "argv": [
+      "cargo",
+      "+1.95.0",
+      "test",
+      "--locked",
+      "--offline",
+      "--features",
+      "typesafe",
+      "--lib",
+      "judge",
+      "--",
+      "--test-threads=1"
+    ],
+    "exit": 0,
+    "seconds": 4.957585916039534,
+    "stdout_sha256": "e11487a577482ae651194e5ee929cba765e3b9c66580a32ca97a33150aa8f018",
+    "stderr_sha256": "a34f61f4926760197cd841eba3aae5ff17783d7cc8a6cebb08e2c9764487f12e"
+  },
+  {
+    "name": "installed-typesafe",
+    "argv": [
+      "python3",
+      "-B",
+      "bench/jev/batch_workflow/installed.py",
+      "--binary",
+      "/Users/vukasinkubet/.jcode/scratch/jev-solo-preflight-typesafe",
+      "--output",
+      "/Users/vukasinkubet/.jcode/scratch/jev-solo-preflight-acceptance-20260918/installed-typesafe"
+    ],
+    "exit": 0,
+    "seconds": 6.994225709000602,
+    "stdout_sha256": "1833dd16af2dee81aaedf6cd18dfd3ed6ff6bb5bb3371fec64fa52551571a583",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "default-main",
+    "argv": [
+      "cargo",
+      "+1.95.0",
+      "test",
+      "--locked",
+      "--offline",
+      "--bin",
+      "azdaja",
+      "--",
+      "--test-threads=1"
+    ],
+    "exit": 0,
+    "seconds": 1.9103517499752343,
+    "stdout_sha256": "ca676f1d8703866013a599d0b76cbc69c87987355b9dfa5ae00732719e0fbabb",
+    "stderr_sha256": "279d16915ea6c72db7c44bacfaeff037ee74cf0fcc416aa7c56cd23d05a417bd"
+  },
+  {
+    "name": "default-native",
+    "argv": [
+      "cargo",
+      "+1.95.0",
+      "test",
+      "--locked",
+      "--offline",
+      "--test",
+      "judge_solo_preflight",
+      "--test",
+      "judge_native",
+      "--test",
+      "judge_batch_cli",
+      "--test",
+      "jev_credentials",
+      "--",
+      "--nocapture"
+    ],
+    "exit": 0,
+    "seconds": 3.988255709060468,
+    "stdout_sha256": "e2ac49c5b5cc665551ffd8f351377bfce3dd87370ee6e222b3b32b353e9036a0",
+    "stderr_sha256": "04a251be02817783c410320ed40c916a3797a7ef8d8c064bddf28a59b32b61f1"
+  },
+  {
+    "name": "installed-default",
+    "argv": [
+      "python3",
+      "-B",
+      "bench/jev/batch_workflow/installed.py",
+      "--binary",
+      "/Users/vukasinkubet/.jcode/scratch/jev-solo-preflight-default",
+      "--output",
+      "/Users/vukasinkubet/.jcode/scratch/jev-solo-preflight-acceptance-20260918/installed-default"
+    ],
+    "exit": 0,
+    "seconds": 6.446126875001937,
+    "stdout_sha256": "52f9247a4bf43a2248c6f28ab768ad3c6469537722e20980cab4240336315488",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "notice-tests",
+    "argv": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "release/test_verify_third_party_notices.py",
+      "release/test_audit_third_party_notice_inputs.py",
+      "release/test_reconcile_third_party_notice.py"
+    ],
+    "exit": 0,
+    "seconds": 32.28383066691458,
+    "stdout_sha256": "71d58856625c913f1c6c526b37cee0b58ea85da6f879f9e6f2184a03af20365b",
+    "stderr_sha256": "a629dba699291f08239e849eee4820b3afefe0c3509e72caa462dcf531cbbbc4"
+  },
+  {
+    "name": "clippy",
+    "argv": [
+      "cargo",
+      "+1.95.0",
+      "clippy",
+      "--all-targets",
+      "--all-features",
+      "--locked",
+      "--offline",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "seconds": 4.370017957990058,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "1dc117627b919e590fea9cc1fdf8954dd78f0035b189ae48562fadb7675afcef"
+  },
+  {
+    "name": "diff-check",
+    "argv": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "seconds": 0.032534124911762774,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]

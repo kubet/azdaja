@@ -1,0 +1,49 @@
+
+running 7 tests
+test attachment_rejects_argv_secrets_and_bounded_stdin_without_disclosure ... ok
+test unsafe_staging_is_not_followed_or_deleted ... ok
+test doctor_jev_is_explicit_local_status_and_caps_remains_non_probing ... ok
+test public_attachment_refuses_unsafe_paths_without_changing_existing_bytes_or_modes ... ok
+test interrupted_attachment_is_visible_and_detach_recovers_only_that_key ... ok
+test public_attachment_survives_restart_replacement_and_detach_without_config_or_network ... ok
+test native_resolution_uses_attachment_but_disabled_and_invalid_overrides_never_enter_transport ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+
+running 9 tests
+test input_symlink_and_special_file_are_rejected_without_initialization ... ok
+test fresh_preflight_needs_no_config_but_an_explicit_missing_override_is_not_ignored ... ok
+test batch_help_is_discoverable_and_non_probing ... ok
+test disabled_or_missing_credential_cannot_create_a_transport_intent ... ok
+test default_batch_validates_without_enabling_or_creating_state ... ok
+test live_admission_requires_all_limits_and_explicit_execute ... ok
+test entire_plan_is_validated_before_any_output_or_provider ... ok
+test batch_refuses_invalid_duplicate_options_and_limits ... ok
+test large_source_plan_is_checked_whole_without_a_model ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s
+
+
+running 7 tests
+test native_judgment_config_roundtrips_without_a_secret ... ok
+test native_judgment_capabilities_are_static_and_distinguish_transport_from_readiness ... ok
+test native_judgment_valid_named_arguments_fail_before_network_without_key ... ok
+test native_judgment_key_is_not_forwarded_to_custom_generative_provider ... ok
+test native_judgment_custom_provider_drains_prompt_before_exiting ... ok
+test native_judgments_default_disabled_and_regular_repl_recovers ... ok
+test native_judgment_argument_errors_do_not_enter_provider ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+
+running 6 tests
+test unrelated_failure_after_a_child_is_not_automatically_replayed ... ok
+test disabled_and_feature_off_preserve_legacy_execution ... ok
+test optional_hash_contract_is_repaired_before_any_child_read ... ok
+test known_hash_failure_never_enters_prior_typed_callback ... ok
+test persistent_bad_program_stops_at_existing_root_limit_without_children ... ok
+test valid_hash_and_source_like_literals_work_in_both_modes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.90s
+

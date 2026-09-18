@@ -1,0 +1,24 @@
+   Compiling azdaja v0.1.17 (/Users/vukasinkubet/dev/azdaja)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.17s
+     Running tests/judge_solo_preflight.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/judge_solo_preflight-0d602938be5da4fc)
+
+running 1 test
+
+thread 'optional_hash_contract_is_repaired_before_any_child_read' (12802544) panicked at tests/judge_solo_preflight.rs:102:5:
+status=exit status: 2 roots=1 children=1 stdout= stderr=error: solo solve cell runtime error: Traceback (most recent call last):
+  File "<python-input-3>", line 2, in <module>
+    FINAL({'source_sha256':sha256(ctx.encode('utf-8')).hexdigest(),'characters':len(ctx),'note':note})
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+RuntimeError: sha256 requires exactly one string
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test optional_hash_contract_is_repaired_before_any_child_read ... FAILED
+
+failures:
+
+failures:
+    optional_hash_contract_is_repaired_before_any_child_read
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+
+error: test failed, to rerun pass `--test judge_solo_preflight`

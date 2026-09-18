@@ -1871,8 +1871,8 @@
       "text": "Copyright (c) 2016 Amanieu d'Antras\n\nPermission is hereby granted, free of charge, to any\nperson obtaining a copy of this software and associated\ndocumentation files (the \"Software\"), to deal in the\nSoftware without restriction, including without\nlimitation the rights to use, copy, modify, merge,\npublish, distribute, sublicense, and/or sell copies of\nthe Software, and to permit persons to whom the Software\nis furnished to do so, subject to the following\nconditions:\n\nThe above copyright notice and this permission notice\nshall be included in all copies or substantial portions\nof the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF\nANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED\nTO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A\nPARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT\nSHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR\nIN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER\nDEALINGS IN THE SOFTWARE.\n"
     }
   },
-  "cargo_lock_sha256": "2667713c7c9f40cb305d7846431d36cb4b9451b0b3472958bc8c38b45b01976f",
-  "cargo_manifest_sha256": "383fdab03a9349d2e7da2884b4a4bcdb4ddda0f450bd242efc4be77b634e06ed",
+  "cargo_lock_sha256": "d4ecce8aa1727ebf115fae73914d6dab0ef047fbbf90537bc04e01088e6d92e3",
+  "cargo_manifest_sha256": "af6cd85c0122441a2e59486166302b7bad9d11c6051922c76e7c68d370805f33",
   "claim": "source-backed engineering evidence; not legal-sufficiency approval",
   "feature_union_records": {
     "default": 191,

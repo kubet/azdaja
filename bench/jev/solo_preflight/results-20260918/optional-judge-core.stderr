@@ -1,0 +1,3 @@
+   Compiling azdaja v0.1.17 (/Users/vukasinkubet/dev/azdaja)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.27s
+     Running unittests src/lib.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/azdaja-2e461055eb635878)
