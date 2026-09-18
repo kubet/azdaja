@@ -1,14 +1,14 @@
 {
   "schema": "azdaja.first_party_proof_bundle.v1",
   "bundle": "azdaja-first-party-proof",
-  "source_commit": "5d6b4fcfba49277b6156558d8ef26b2cedac07d6",
+  "source_commit": "e0a828e5524ce3a9abbbb9c85d68d5772f1cdba8",
   "hash_algorithm": "sha256",
   "artifacts": [
     {
       "path": ".github/workflows/ci.yml",
       "role": "ci_verifier",
-      "bytes": 23731,
-      "sha256": "2f0481d9fbaf445f04b9706fe1a8e65aa67fe0608e016fd321b0f3681cee9f50"
+      "bytes": 23397,
+      "sha256": "f04158bb553860856dd4decefd9d9f47f4bee7bb22cfd268cb3e7de4ec94cd19"
     },
     {
       "path": ".github/workflows/release.yml",
@@ -37,14 +37,14 @@
     {
       "path": "Cargo.lock",
       "role": "current_notice_lock_input",
-      "bytes": 77334,
-      "sha256": "d4ecce8aa1727ebf115fae73914d6dab0ef047fbbf90537bc04e01088e6d92e3"
+      "bytes": 77291,
+      "sha256": "2667713c7c9f40cb305d7846431d36cb4b9451b0b3472958bc8c38b45b01976f"
     },
     {
       "path": "Cargo.toml",
       "role": "current_notice_manifest_input",
-      "bytes": 1606,
-      "sha256": "af6cd85c0122441a2e59486166302b7bad9d11c6051922c76e7c68d370805f33"
+      "bytes": 1357,
+      "sha256": "383fdab03a9349d2e7da2884b4a4bcdb4ddda0f450bd242efc4be77b634e06ed"
     },
     {
       "path": "README.md",
@@ -56,7 +56,7 @@
       "path": "THIRD-PARTY-NOTICES.md",
       "role": "current_notice_rendering",
       "bytes": 876906,
-      "sha256": "28ab76b3a12688d8524efeee7c81d55138624fa3342e16536a9196df59b410ad"
+      "sha256": "878ad9a4b424bf19476f9a371ad7eee0a00ea07b0700b552d83ca780f451f2f9"
     },
     {
       "path": "bench/live_fable_suite/run.py",
@@ -212,7 +212,7 @@
       "path": "release/current-third-party-notice.json",
       "role": "current_notice_source_index",
       "bytes": 829864,
-      "sha256": "d8df937361a50348b8b0d17f7fe434d071c232306cb8a24522f2a6904a287bce"
+      "sha256": "da1340ad86326181e58309ef0cf2a140f4ce3c9cb5a0dc03f75945ce4b88d2b7"
     },
     {
       "path": "release/historical/Cargo.lock.notice-inputs",
