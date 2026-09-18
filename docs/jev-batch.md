@@ -1,6 +1,13 @@
 # Checkpointed semantic batches
 
-Development-source feature. Build with `cargo build --locked --release --features typesafe`.
+Development-source feature. From the repository root:
+
+```sh
+cargo build --locked --release --features typesafe
+AZ="$PWD/target/release/azdaja"
+```
+
+The commands below use this build, not a potentially older installed `az` alias.
 
 Use this when a long task has an explicit set of independent semantic questions: reviewing many documents, finding candidate passages, labeling records, or extracting choices from supplied alternatives. **The native runner executes the work list directly.** It does not depend on a planner deciding to use Jev or generating a correct finalization program.
 
@@ -17,7 +24,7 @@ python3 examples/jev_batch_review.py prepare \
   ./incident-archive.txt ./handoff-notes.txt
 
 # Checks the entire plan. No credentials, provider calls, or job directory.
-az jev batch --input ./review-plan/plan.jsonl
+"$AZ" jev batch --input ./review-plan/plan.jsonl
 ```
 
 Select files you are authorized to send. `prepare` preserves exact UTF-8 source windows, hashes and byte offsets. It does not create embeddings, ingest agent memory, silently follow an entire repository, or claim that a window contains all relevant context. Cross-window qualifications and cross-document reasoning need further inspection.
@@ -35,14 +42,14 @@ model = "jev-latest"
 Supply `TYPESAFE_API_KEY` through your normal secret mechanism or the existing `az jev attach --stdin` flow. Never put the key in the plan or command arguments.
 
 ```sh
-az jev batch --input ./review-plan/plan.jsonl \
+"$AZ" jev batch --input ./review-plan/plan.jsonl \
   --execute --output ./review-job \
   --max-requests 256 --max-input-tokens 2000000 --max-seconds 600
 ```
 
 All three job limits must be explicit. Existing per-request byte, question and transport-time limits also apply. Default execution is sequential. No alternate provider, generative fallback or automatic paid retry is used. Progress is emitted on stderr and the final machine-readable summary on stdout.
 
-Each validated result is saved before the next request. These immutable per-request files remain available if a later request fails. Finalization is ordinary native code, with no extra model request or generated hash expression.
+Each validated result is saved before the next request. These immutable per-request files remain available if a later request fails. Stored observations are validated native response JSON, not the original HTTP wire bytes. Finalization is ordinary native code, with no extra model request or generated hash expression.
 
 ## Export a review file
 
@@ -62,7 +69,7 @@ Existing output files are refused.
 Use the **same plan, configuration and limits**:
 
 ```sh
-az jev batch --input ./review-plan/plan.jsonl \
+"$AZ" jev batch --input ./review-plan/plan.jsonl \
   --execute --resume --output ./review-job \
   --max-requests 256 --max-input-tokens 2000000 --max-seconds 600
 ```

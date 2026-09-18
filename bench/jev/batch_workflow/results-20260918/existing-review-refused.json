@@ -1,0 +1,1 @@
+{"credential_env_empty": true, "exit": 2, "seconds": 0.04416625003796071, "stderr": "error: invalid, changed, unsafe or occupied input/output; nothing was sent to a provider\n", "stdout": ""}

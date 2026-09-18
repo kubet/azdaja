@@ -1,0 +1,5 @@
+[judge]
+enabled = true
+model = "jev-latest"
+timeout_secs = 20
+max_input_tokens_per_cell = 100000

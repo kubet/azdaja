@@ -1,0 +1,1 @@
+{"stage": "source_inventory", "reason": "optional build.rs absent", "provider_calls": 0, "admission_created": false, "job_created": false}
