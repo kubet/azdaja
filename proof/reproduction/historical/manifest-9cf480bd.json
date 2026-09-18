@@ -1,7 +1,7 @@
 {
   "schema": "azdaja.first_party_proof_bundle.v1",
   "bundle": "azdaja-first-party-proof",
-  "source_commit": "23fa163e04e3f0cc6385c451335eca7bb5d5b086",
+  "source_commit": "ed875114993af7af454cfb53175fcd37aa7093a6",
   "hash_algorithm": "sha256",
   "artifacts": [
     {
@@ -49,8 +49,8 @@
     {
       "path": "README.md",
       "role": "public_claim_surface",
-      "bytes": 2181,
-      "sha256": "a8381c489114b4dba17514d561bcb8369e8d535c2cd4781cce55a6d6f5faa974"
+      "bytes": 15260,
+      "sha256": "9f83c1f17a8d189f66aa2aa0bca8b3f7761db11041da8bcac8f598dafb1db3b1"
     },
     {
       "path": "THIRD-PARTY-NOTICES.md",
