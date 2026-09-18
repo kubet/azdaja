@@ -1,14 +1,14 @@
 {
   "schema": "azdaja.first_party_proof_bundle.v1",
   "bundle": "azdaja-first-party-proof",
-  "source_commit": "01fdb2e0c1f6ce40ff509e5872d01e70d0bb1dde",
+  "source_commit": "e2630016660396aea5166ebe0e88ef592c600038",
   "hash_algorithm": "sha256",
   "artifacts": [
     {
       "path": ".github/workflows/ci.yml",
       "role": "ci_verifier",
-      "bytes": 25031,
-      "sha256": "98e13c674e2e19402ad1e332f2c69346943bb12a31a2ab7ad5f3011ea21ec57d"
+      "bytes": 23964,
+      "sha256": "a83556fee9f8a7e77f6521186a71f96a4c140a47fc63b17b4cb7466e9914b64a"
     },
     {
       "path": ".github/workflows/release.yml",
@@ -19,8 +19,8 @@
     {
       "path": ".github/workflows/source-install-integrity.yml",
       "role": "source_install_ci_verifier",
-      "bytes": 16153,
-      "sha256": "b6f991f9987f65cd241a582ce14074e2e9e7aeba29272cb3da94ad8b6eb730b9"
+      "bytes": 16056,
+      "sha256": "e767f7255e1b208e759b9fb187984e02cbba196f3c68d84f48d0f6f00e709891"
     },
     {
       "path": ".github/workflows/verify-proof.yml",
@@ -38,25 +38,25 @@
       "path": "Cargo.lock",
       "role": "current_notice_lock_input",
       "bytes": 77334,
-      "sha256": "204f0ad14854e714bea8dc456b1116049226922a3d9bcd0be7f80943cac4a3e5"
+      "sha256": "d4ecce8aa1727ebf115fae73914d6dab0ef047fbbf90537bc04e01088e6d92e3"
     },
     {
       "path": "Cargo.toml",
       "role": "current_notice_manifest_input",
       "bytes": 1606,
-      "sha256": "4ecd6a074e3bfe97b801b0b2e879cd32498005e1f615d40c2ecffb223dd3868b"
+      "sha256": "af6cd85c0122441a2e59486166302b7bad9d11c6051922c76e7c68d370805f33"
     },
     {
       "path": "README.md",
       "role": "public_claim_surface",
-      "bytes": 15260,
-      "sha256": "9f83c1f17a8d189f66aa2aa0bca8b3f7761db11041da8bcac8f598dafb1db3b1"
+      "bytes": 15305,
+      "sha256": "5c0408a3b61ae62d2a399a671e3cda31858fa96d375878135ee3dcab45613528"
     },
     {
       "path": "THIRD-PARTY-NOTICES.md",
       "role": "current_notice_rendering",
       "bytes": 876906,
-      "sha256": "9818dbfbdcad475ccf3cca00944aa976cecb0510991cf2612eb45c96dc7804ef"
+      "sha256": "28ab76b3a12688d8524efeee7c81d55138624fa3342e16536a9196df59b410ad"
     },
     {
       "path": "bench/live_fable_suite/run.py",
@@ -194,7 +194,7 @@
       "path": "release/assemble-standalone-assets.sh",
       "role": "source_backed_notice_packager",
       "bytes": 2139,
-      "sha256": "c0f2d5dd34371cb5c2a65c7c100576a2e2fa9f9fd89b4afa6acccfacbcb69dc0"
+      "sha256": "074a596a46930cf9133532e7646f661703566d997b72e50a1d5d2514cae8f7e4"
     },
     {
       "path": "release/audit-third-party-notice-inputs.py",
@@ -212,7 +212,7 @@
       "path": "release/current-third-party-notice.json",
       "role": "current_notice_source_index",
       "bytes": 829864,
-      "sha256": "4fd1727e86709c27defa0a50b50b4830014eb21995472f451554294076ab31a2"
+      "sha256": "d8df937361a50348b8b0d17f7fe434d071c232306cb8a24522f2a6904a287bce"
     },
     {
       "path": "release/historical/Cargo.lock.notice-inputs",
@@ -278,7 +278,7 @@
       "path": "site/index.html",
       "role": "public_claim_surface",
       "bytes": 3646,
-      "sha256": "201cd15cc4b89e3e88f259f4918fab76d16fd23289872977448f7dcff3503fad"
+      "sha256": "1779b33e45e9dec7f64a2389928e506406a8a5fb344f533d08ddff56fcbd3408"
     },
     {
       "path": "site/proof.html",
@@ -296,7 +296,7 @@
       "path": "tests/public_surface.rs",
       "role": "public_claim_tests",
       "bytes": 9204,
-      "sha256": "aea312fb12da28584899c0edfd0e467219c4bc87d90d668f366b54f3e102e90b"
+      "sha256": "4d6e30106340bf8b3a1b41e83100710b2325015f1e214e48f613e1d569bedcae"
     }
   ],
   "fixture_spec": "proof/reproduction/fixtures/spec.json",
