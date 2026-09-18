@@ -1,0 +1,50 @@
+{
+  "artifacts": {
+    "before-fixture-default.log": "e54c190c096b69c5e07ebf9f77a98bcebd40225cf066aec1d75d696ee9d75633",
+    "capture-command.py.txt": "e0424842e8f597290b0f95dbc2c9b5a71f0cd9d5314746b1e8b26b5494bf8311",
+    "checks.json": "338237ef7a19b38d5708cad5a4deb2be74e4032018193658160b229fdb6bf59f",
+    "clippy.log": "ba28b082b04cf7c963e3450a5f288d95d22c41861e8d0a4854780601b4ed96f8",
+    "composed-default.log": "01e3e2d8e88fd805ebbfd16bd2d46b5af981ca8233bb2957d3ad5d0c932482b6",
+    "composed-typesafe.log": "baf89e2fa98521bf9d9df952de6b64f11f31c51cac5be53dd8b5e5755f6a4624",
+    "diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "independent-review.txt": "989591399ecfce31b1217e0e43d6ac97b883c5c94d1a191db6833505b52e25d0",
+    "installed-default.json": "d8122807aad54a56502a07fecd7c7d4492b62de77300ce950ab4ea68204e2e26",
+    "installed-typesafe.json": "f49b2aaafb2f9010f98b30836f758ecb46e2efe462786dcf22af1892ec31abe9"
+  },
+  "attempt_semantics": "provider_requests=1 records entry into the production transport path; initialization versus send is not distinguished, upstream arrival and billing are not implied",
+  "base_commit": "2bce46876df8cadecc01b19ba58b48d2bff31b8b",
+  "binaries": {
+    "default": {
+      "composed_public_tests_passed": 28,
+      "installed_checks_passed": 23,
+      "sha256": "712bd12c19e9ed08cb0dc918559b5ff9cbb1f0f1ef7d63764004e84eddd6d917",
+      "unchanged_from_2bce468": true
+    },
+    "typesafe": {
+      "composed_public_tests_passed": 33,
+      "installed_checks_passed": 23,
+      "sha256": "ff48b2c7c573b6f2bda4ac0f1f21fb0080bd489ff2bf2dc19a66ff056bee8137",
+      "unchanged_from_2bce468": true
+    }
+  },
+  "earlier_capture_failure": "Bash empty array under set -u stopped before Cargo; Python runner replaced only capture wrapper",
+  "earlier_fixture_failure": "Default classification strategy probes were omitted from local fixture; exact three-role planner added without product changes",
+  "failure_usage": "unknown counters retained; no successful response or token usage fabricated",
+  "hosted_run_observed": false,
+  "new_remote_inference_requests": 0,
+  "original_files_preserved": 40,
+  "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+  "production_and_cargo_and_example_sources_unchanged": true,
+  "readiness": "supervised optional workflows; autonomous successful typed execution and efficacy are not established",
+  "schema": "azdaja.optional_solo_transport.acceptance.v1",
+  "scope": "real compiled public CLI with local root fixture and macOS OS-denied production client transport",
+  "source_of_truth": "RESULTS.md maps each requirement to named tests and observed assertions",
+  "sources": {
+    ".github/workflows/ci.yml": "a83556fee9f8a7e77f6521186a71f96a4c140a47fc63b17b4cb7466e9914b64a",
+    "bench/jev/solo_transport/RESULTS.md": "4b388e086a9e5a24d39f0e9918aef5f1ddddfaa81787ffc5fdd08f380741f69c",
+    "tests/judge_solo_transport.rs": "7f4b0a785db83540e6e83b78363ac90a07ed2324410d0c7784c1266fd0c5edf8"
+  },
+  "status": "local_acceptance_passed",
+  "workflow_registration_static_exact_block_check": true
+}

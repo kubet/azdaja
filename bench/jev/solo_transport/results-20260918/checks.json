@@ -1,0 +1,126 @@
+[
+  {
+    "name": "composed-default",
+    "argv": [
+      "cargo",
+      "+1.95.0",
+      "test",
+      "--locked",
+      "--offline",
+      "--test",
+      "judge_solo_transport",
+      "--test",
+      "judge_solo_preflight",
+      "--test",
+      "judge_native",
+      "--test",
+      "judge_batch_cli",
+      "--test",
+      "jev_credentials",
+      "--",
+      "--test-threads=1"
+    ],
+    "exit": 0,
+    "seconds": 10.014602167066187,
+    "log_sha256": "01e3e2d8e88fd805ebbfd16bd2d46b5af981ca8233bb2957d3ad5d0c932482b6"
+  },
+  {
+    "name": "installed-default",
+    "argv": [
+      "python3",
+      "-B",
+      "bench/jev/batch_workflow/installed.py",
+      "--binary",
+      "/Users/vukasinkubet/.jcode/scratch/jev-solo-transport-acceptance-20260918-final/azdaja-default",
+      "--output",
+      "/Users/vukasinkubet/.jcode/scratch/jev-solo-transport-acceptance-20260918-final/installed-default"
+    ],
+    "exit": 0,
+    "seconds": 7.002240999951027,
+    "log_sha256": "39fa377ee07a43b6592e0c3a2e7573da45937f9c3c4b6c108af63ef79664686f"
+  },
+  {
+    "name": "composed-typesafe",
+    "argv": [
+      "cargo",
+      "+1.95.0",
+      "test",
+      "--locked",
+      "--offline",
+      "--features",
+      "typesafe",
+      "--test",
+      "judge_solo_transport",
+      "--test",
+      "judge_solo_preflight",
+      "--test",
+      "judge_native",
+      "--test",
+      "judge_batch_cli",
+      "--test",
+      "jev_credentials",
+      "--",
+      "--test-threads=1"
+    ],
+    "exit": 0,
+    "seconds": 10.356052667018957,
+    "log_sha256": "baf89e2fa98521bf9d9df952de6b64f11f31c51cac5be53dd8b5e5755f6a4624"
+  },
+  {
+    "name": "installed-typesafe",
+    "argv": [
+      "python3",
+      "-B",
+      "bench/jev/batch_workflow/installed.py",
+      "--binary",
+      "/Users/vukasinkubet/.jcode/scratch/jev-solo-transport-acceptance-20260918-final/azdaja-typesafe",
+      "--output",
+      "/Users/vukasinkubet/.jcode/scratch/jev-solo-transport-acceptance-20260918-final/installed-typesafe"
+    ],
+    "exit": 0,
+    "seconds": 7.268557665986009,
+    "log_sha256": "2a93cddc72e11e41a0faa56f3db340cc4c4e2283407180ba443ee3d04117ada1"
+  },
+  {
+    "name": "clippy",
+    "argv": [
+      "cargo",
+      "+1.95.0",
+      "clippy",
+      "--locked",
+      "--offline",
+      "--all-targets",
+      "--all-features",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit": 0,
+    "seconds": 0.6493138750083745,
+    "log_sha256": "ba28b082b04cf7c963e3450a5f288d95d22c41861e8d0a4854780601b4ed96f8"
+  },
+  {
+    "name": "fmt",
+    "argv": [
+      "cargo",
+      "+1.95.0",
+      "fmt",
+      "--all",
+      "--check"
+    ],
+    "exit": 0,
+    "seconds": 0.603644167073071,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "diff-check",
+    "argv": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "seconds": 0.020456541096791625,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]

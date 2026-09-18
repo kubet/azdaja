@@ -122,6 +122,11 @@ jobs:
         run: |
           cargo test --locked --features typesafe --bin azdaja solo_preflight
           cargo test --locked --features typesafe --test judge_solo_preflight
+      - name: Provider-free solo transport failure under OS network denial
+        if: runner.os == 'macOS'
+        env:
+          TYPESAFE_API_KEY: ""
+        run: cargo test --locked --features typesafe --test judge_solo_transport
       - name: Installed optional setup, no-key recovery and source-exact export
         run: |
           python3 -B -m unittest bench.jev.batch_workflow.test_installed

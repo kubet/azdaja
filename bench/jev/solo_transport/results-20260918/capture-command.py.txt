@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Provider-free composition checks. Exclusive output, never overwrite evidence."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import time
+
+root = Path('/Users/vukasinkubet/dev/azdaja')
+out = Path(os.environ['JCODE_SCRATCH_DIR']) / 'jev-solo-transport-acceptance-20260918-final'
+out.mkdir()
+env = dict(os.environ, CARGO_TARGET_DIR=str(Path(os.environ['JCODE_SCRATCH_DIR']) / 'jev-batch-target'))
+checks = []
+def run(name, argv):
+    start = time.monotonic()
+    with (out / (name + '.log')).open('xb') as log:
+        p = subprocess.run(argv, cwd=root, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=300)
+    item = {'name': name, 'argv': argv, 'exit': p.returncode, 'seconds': time.monotonic()-start,
+            'log_sha256': hashlib.sha256((out / (name + '.log')).read_bytes()).hexdigest()}
+    checks.append(item)
+    (out / 'checks.json').write_text(json.dumps(checks, indent=2) + '\n')
+    print('JCODE_PROGRESS ' + json.dumps({'message': name + ': exit ' + str(p.returncode)}), flush=True)
+    if p.returncode:
+        print((out / (name + '.log')).read_text(), flush=True)
+        raise SystemExit(p.returncode)
+
+base = ['cargo', '+1.95.0']
+for mode in ['default', 'typesafe']:
+    features = ['--features', 'typesafe'] if mode == 'typesafe' else []
+    tests = ['judge_solo_transport', 'judge_solo_preflight', 'judge_native', 'judge_batch_cli', 'jev_credentials']
+    run('composed-' + mode, base + ['test', '--locked', '--offline'] + features + sum([['--test', t] for t in tests], []) + ['--', '--test-threads=1'])
+    binary = out / ('azdaja-' + mode)
+    with binary.open('xb') as f:
+        f.write((Path(env['CARGO_TARGET_DIR']) / 'debug/azdaja').read_bytes())
+    binary.chmod(0o755)
+    run('installed-' + mode, ['python3', '-B', 'bench/jev/batch_workflow/installed.py', '--binary', str(binary), '--output', str(out / ('installed-' + mode))])
+run('clippy', base + ['clippy', '--locked', '--offline', '--all-targets', '--all-features', '--', '-D', 'warnings'])
+run('fmt', base + ['fmt', '--all', '--check'])
+run('diff-check', ['git', 'diff', '--check'])
+print(json.dumps({'status': 'passed', 'out': str(out), 'checks': len(checks), 'new_remote_inference_requests': 0}))
