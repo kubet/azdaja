@@ -1,0 +1,24 @@
+test_actual_cli_outside_repo_isolated_stdlib_and_required_arguments (test_jev_review_queue.QueueTests) ... ok
+test_all_pending_is_full_coverage_not_empty_queue (test_jev_review_queue.QueueTests) ... ok
+test_changed_last_source_rejected_before_render_even_if_input_rebound (test_jev_review_queue.QueueTests) ... ok
+test_changed_response_binding_is_rejected (test_jev_review_queue.QueueTests) ... ok
+test_cli_malformed_schema_and_non_html_output_fail_cleanly (test_jev_review_queue.QueueTests) ... ok
+test_coverage_collapsed_and_wrapping_styles_keep_all_text (test_jev_review_queue.QueueTests) ... ok
+test_deterministic_export_and_no_network_even_when_all_completed (test_jev_review_queue.QueueTests) ... ok
+test_exclusive_helper_rejects_output_created_during_validation (test_jev_review_queue.QueueTests) ... ok
+test_full_coverage_exact_audit_fields_stable_ties_and_extremes (test_jev_review_queue.QueueTests) ... ok
+test_hostile_names_sources_questions_and_answers_are_inert (test_jev_review_queue.QueueTests) ... ok
+test_mixed_criteria_rejected_despite_valid_individual_bindings (test_jev_review_queue.QueueTests) ... ok
+test_nul_text_rejected_before_render_in_source_name_criteria_and_raw_answer (test_jev_review_queue.QueueTests) ... ok
+test_occupied_dangling_and_live_symlink_outputs_unchanged (test_jev_review_queue.QueueTests) ... ok
+test_original_paths_not_required_and_prepared_inputs_remain_unchanged (test_jev_review_queue.QueueTests) ... ok
+test_private_temporary_snapshot_report_and_cleanup_success_and_failure (test_jev_review_queue.QueueTests) ... ok
+test_unicode_boundaries_full_bytes_before_any_render (test_jev_review_queue.QueueTests) ... ok
+test_unknown_ambiguous_and_pending_retained_separately (test_jev_review_queue.QueueTests) ... ok
+test_unsafe_source_and_response_file_symlinks_rejected (test_jev_review_queue.QueueTests) ... ok
+test_wrong_question_shape_rejected_even_for_pending_jobs (test_jev_review_queue.QueueTests) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 1.495s
+
+OK

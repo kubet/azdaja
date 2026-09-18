@@ -1,0 +1,20 @@
+test_every_changed_artifact_and_incomplete_inventory_refused (bench.jev.batch_workflow.test_primitives.PrimitiveCompatibilityTests.test_every_changed_artifact_and_incomplete_inventory_refused) ... ok
+test_native_identity_and_usage_refused_even_rehashed (bench.jev.batch_workflow.test_primitives.PrimitiveCompatibilityTests.test_native_identity_and_usage_refused_even_rehashed) ... ok
+test_public_default_is_portable_and_only_verifies (bench.jev.batch_workflow.test_primitives.PrimitiveCompatibilityTests.test_public_default_is_portable_and_only_verifies) ... ok
+test_replay_rejects_before_binary_or_credentials_on_changed_result (bench.jev.batch_workflow.test_primitives.PrimitiveCompatibilityTests.test_replay_rejects_before_binary_or_credentials_on_changed_result) ... ok
+test_retained_results_preserve_semantic_disagreement_and_limits (bench.jev.batch_workflow.test_primitives.PrimitiveCompatibilityTests.test_retained_results_preserve_semantic_disagreement_and_limits) ... ok
+test_score_domain_legend_and_expectation_refused_even_rehashed (bench.jev.batch_workflow.test_primitives.PrimitiveCompatibilityTests.test_score_domain_legend_and_expectation_refused_even_rehashed) ... ok
+test_symlinks_duplicate_keys_and_nonfinite_values_refused (bench.jev.batch_workflow.test_primitives.PrimitiveCompatibilityTests.test_symlinks_duplicate_keys_and_nonfinite_values_refused) ... ok
+test_default_public_cli_requires_explicit_binary_and_new_output (bench.jev.batch_workflow.test_installed.InstalledAcceptanceTests.test_default_public_cli_requires_explicit_binary_and_new_output) ... ok
+test_existing_and_dangling_outputs_refuse_before_any_process (bench.jev.batch_workflow.test_installed.InstalledAcceptanceTests.test_existing_and_dangling_outputs_refuse_before_any_process) ... ok
+test_private_copy_preserves_bytes_and_uses_owner_only_permissions (bench.jev.batch_workflow.test_installed.InstalledAcceptanceTests.test_private_copy_preserves_bytes_and_uses_owner_only_permissions) ... ok
+test_private_copy_refuses_source_symlink (bench.jev.batch_workflow.test_installed.InstalledAcceptanceTests.test_private_copy_refuses_source_symlink) ... ok
+test_actual_public_cli_outside_repo_rebuilds_all_sources (bench.jev.batch_workflow.test_replay.RetainedBatchTests.test_actual_public_cli_outside_repo_rebuilds_all_sources) ... ok
+test_changed_retained_observation_refuses_before_output (bench.jev.batch_workflow.test_replay.RetainedBatchTests.test_changed_retained_observation_refuses_before_output) ... ok
+test_existing_and_dangling_outputs_are_refused (bench.jev.batch_workflow.test_replay.RetainedBatchTests.test_existing_and_dangling_outputs_are_refused) ... ok
+test_replay_never_opens_network_or_launches_a_provider (bench.jev.batch_workflow.test_replay.RetainedBatchTests.test_replay_never_opens_network_or_launches_a_provider) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 1.460s
+
+OK

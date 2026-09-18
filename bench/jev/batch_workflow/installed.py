@@ -17,9 +17,11 @@ import time
 
 if __package__:
     from . import replay as retained
+    from . import primitives
 else:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import replay as retained
+    import primitives
 
 
 def require(ok, label):
@@ -182,6 +184,17 @@ def run(binary, output):
         partial = [json.loads(line) for line in (output/'partial-review.jsonl').read_text().splitlines()]
         require(len(partial) == 138 and sum(row['status'] == 'completed' for row in partial) == 137,
                 'partial export lost source coverage')
+        receipt['primitive_replay'] = primitives.native_replay(installed)
+        receipt['checks'].append({'name': 'three-primitives-no-key-resume', 'exit': 0,
+                                  'new_requests': 0, 'completed': 1, 'questions': 3})
+        queue = retained.ROOT / 'examples/jev_review_queue.py'
+        for label, source_job in [('completed-review-queue', job), ('partial-review-queue', ambiguous)]:
+            target = output / (label + '.html')
+            call(label, [queue, '--plan', output/'reconstructed/plan',
+                         '--job', source_job, '--output', target], executable=Path(sys.executable))
+            require(target.is_file() and stat.S_IMODE(target.stat().st_mode) == 0o600,
+                    'review queue missing or unsafe')
+            receipt.setdefault('review_queues', {})[label] = retained.sha(target)
         call('uninstall-private', ['uninstall', 'claude'])
         require(not installed.exists(), 'uninstall retained private binary')
         receipt.update(status='passed', completed_windows=138, partial_windows=138,

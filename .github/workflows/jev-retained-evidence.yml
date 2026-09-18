@@ -8,6 +8,8 @@ on:
       - "bench/oolong/**"
       - "examples/jev_batch_review.py"
       - "tests/test_jev_batch_review.py"
+      - "examples/jev_review_queue.py"
+      - "tests/test_jev_review_queue.py"
       - ".github/workflows/jev-retained-evidence.yml"
   pull_request:
     paths:
@@ -15,6 +17,8 @@ on:
       - "bench/oolong/**"
       - "examples/jev_batch_review.py"
       - "tests/test_jev_batch_review.py"
+      - "examples/jev_review_queue.py"
+      - "tests/test_jev_review_queue.py"
       - ".github/workflows/jev-retained-evidence.yml"
   workflow_dispatch:
 
@@ -43,11 +47,20 @@ jobs:
           JCODE_SCRATCH_DIR: ${{ runner.temp }}
         run: |
           python3 -B -m unittest discover -s tests -p test_jev_batch_review.py -v
+          python3 -B -m unittest discover -s tests -p test_jev_review_queue.py -v
           python3 -B -m unittest bench.jev.batch_workflow.test_replay -v
+          python3 -B -m unittest bench.jev.batch_workflow.test_primitives -v
       - name: Rebuild the completed source-linked batch review without a provider
         run: >-
           python3 -B bench/jev/batch_workflow/replay.py
           --output "$RUNNER_TEMP/jev-batch-review"
+      - name: Rebuild the complete static review queue and verify retained primitive compatibility
+        env:
+          JCODE_SCRATCH_DIR: ${{ runner.temp }}
+        run: |
+          python3 -B examples/jev_review_queue.py --plan "$RUNNER_TEMP/jev-batch-review/plan" --job bench/jev/batch_workflow/results-20260918/job --output "$RUNNER_TEMP/jev-review.html"
+          python3 -B bench/jev/batch_workflow/primitives.py > "$RUNNER_TEMP/jev-primitives.json"
+          cp bench/jev/long_task/ATTRIBUTION.md "$RUNNER_TEMP/jev-corpus-attribution.md"
       - name: Estimator and portable evidence boundary tests
         env:
           JCODE_SCRATCH_DIR: ${{ runner.temp }}
@@ -82,5 +95,8 @@ jobs:
             ${{ runner.temp }}/jev-portable-replay.json
             ${{ runner.temp }}/jev-long-task-recovery.json
             ${{ runner.temp }}/jev-batch-review/replay.json
+            ${{ runner.temp }}/jev-primitives.json
+            ${{ runner.temp }}/jev-review.html
+            ${{ runner.temp }}/jev-corpus-attribution.md
           if-no-files-found: error
           retention-days: 30

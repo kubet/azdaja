@@ -1,0 +1,17 @@
+test_escaped_text_stays_bounded_and_long_question_is_rejected (test_jev_batch_review.BatchReviewTests.test_escaped_text_stays_bounded_and_long_question_is_rejected) ... ok
+test_exact_utf8_byte_coverage_and_audit_fields (test_jev_batch_review.BatchReviewTests.test_exact_utf8_byte_coverage_and_audit_fields) ... ok
+test_refuses_bad_inputs_duplicate_and_overwrite (test_jev_batch_review.BatchReviewTests.test_refuses_bad_inputs_duplicate_and_overwrite) ... ok
+test_same_basenames_get_distinct_stable_ids (test_jev_batch_review.BatchReviewTests.test_same_basenames_get_distinct_stable_ids) ... ok
+test_complete_actual_shape_preserves_every_source_byte_and_occurrence (test_jev_batch_review.ReportTests.test_complete_actual_shape_preserves_every_source_byte_and_occurrence) ... ok
+test_invalid_probability_and_boolean_index_rejected (test_jev_batch_review.ReportTests.test_invalid_probability_and_boolean_index_rejected) ... ok
+test_missing_intent_duplicate_json_key_and_output_links_rejected (test_jev_batch_review.ReportTests.test_missing_intent_duplicate_json_key_and_output_links_rejected) ... ok
+test_one_multibyte_character_and_final_newline_do_not_make_extra_requests (test_jev_batch_review.ReportTests.test_one_multibyte_character_and_final_newline_do_not_make_extra_requests) ... ok
+test_partial_does_not_omit_unknown_or_unattempted_windows (test_jev_batch_review.ReportTests.test_partial_does_not_omit_unknown_or_unattempted_windows) ... ok
+test_rehashed_plan_text_cannot_bypass_original_source_bytes (test_jev_batch_review.ReportTests.test_rehashed_plan_text_cannot_bypass_original_source_bytes) ... ok
+test_symlinked_provider_result_rejected (test_jev_batch_review.ReportTests.test_symlinked_provider_result_rejected) ... ok
+test_wrong_wire_hash_and_swapped_id_rejected (test_jev_batch_review.ReportTests.test_wrong_wire_hash_and_swapped_id_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.623s
+
+OK

@@ -64,6 +64,25 @@ The exporter verifies native request hashes and reconstructs every source hash b
 writing. It does not discard low scores or convert a probability into an approval.
 Existing output files are refused.
 
+For a standalone, read-only browser queue instead of JSONL:
+
+```sh
+python3 examples/jev_review_queue.py \
+  --plan ./review-plan --job ./review-job --output ./review.html
+# Open review.html locally in your browser.
+```
+
+The optional queue ranks completed windows by the raw Noul value for the **same
+question**, with stable-ID ties. It rejects mixed questions. Every window remains
+available in full, including low scores, unknown/in-flight work and pending work.
+Expand an item to inspect its exact text, source hash and byte offsets. The actual
+question and coverage are displayed. There is no JavaScript, remote resource,
+telemetry, model call or automatic approval. The HTML contains the full source:
+protect it like the input documents. Export requires a new `.html` file and writes
+it with owner-only permissions. Rankings are review aids, not verified truth.
+The HTML view refuses NUL characters rather than silently changing them during
+browser parsing. The JSONL exporter remains available for such inputs.
+
 ## Resume without repeating completed work
 
 Use the **same plan, configuration and limits**:

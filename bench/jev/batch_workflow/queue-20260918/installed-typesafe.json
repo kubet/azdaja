@@ -1,0 +1,247 @@
+{
+  "ambiguous_resume_new_requests": 0,
+  "binary_sha256": "679adb6cbffa4e59b335d4a6bd632dc63f8b1eee40489c4e2ebe510719e0cb19",
+  "checks": [
+    {
+      "exit": 0,
+      "name": "install-private",
+      "seconds": 0.8016834169393405,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "fa1c1cc4ef28ca79e165b72ed2124eab15c0be3824388d05091162cfeeae934a"
+    },
+    {
+      "exit": 0,
+      "name": "static-discovery",
+      "seconds": 0.008614124963060021,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "42e0a9b116568c0d6e93959db475693f0ce976e0b42457bf1b5fb35b1fdca9bf"
+    },
+    {
+      "exit": 0,
+      "name": "stdin-attach",
+      "seconds": 0.029044040944427252,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "44662189876bd65485716a38fb4e82f82e7d80f1b663645d05567cddd23c14bd"
+    },
+    {
+      "exit": 0,
+      "name": "restart-status",
+      "seconds": 0.006491958978585899,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "8b79a4c4919db38b28edec350a745f16bbf5352faaed338ad842383799d5f967"
+    },
+    {
+      "exit": 0,
+      "name": "environment-precedence",
+      "seconds": 0.005427250056527555,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "29b96308af3e9c3d3f69cca4699fe72409dc43c2be6e68bfed24ee2ff892b82b"
+    },
+    {
+      "exit": 0,
+      "name": "local-readiness",
+      "seconds": 0.0058017909759655595,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "d36b6e90f2f9ad4c8faeae828d634c5288eadee6f161ccb3db0fa567bb24c724"
+    },
+    {
+      "exit": 0,
+      "name": "attached-offline-plan",
+      "seconds": 0.008884625043720007,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "a5fe0c8f1e26029df91a073d356fdbdc2f810a4d3bd0e102c5f41c25952bf6fa"
+    },
+    {
+      "exit": 2,
+      "name": "attached-still-disabled",
+      "seconds": 0.0072110421024262905,
+      "stderr_sha256": "a14b9d5f96aea1571ddfb3e8b03a2e3934c1b4ff1287fda1e156eca4d3a032e3",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "exit": 0,
+      "name": "ordinary-session-start",
+      "seconds": 0.008953916956670582,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "4ecd572d596b3a511ca0120b362617faa95f85ab86a18204372a4f882ada4fe9"
+    },
+    {
+      "exit": 0,
+      "name": "ordinary-session-exec",
+      "seconds": 0.006928082904778421,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "exit": 0,
+      "name": "ordinary-session-final",
+      "seconds": 0.005396583001129329,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049"
+    },
+    {
+      "exit": 0,
+      "name": "ordinary-session-kill",
+      "seconds": 0.005184208042919636,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "557140799b17dbec488b1087d5ebb6bfecf4b44eb4e4abb8149c77b275d7e86e"
+    },
+    {
+      "exit": 0,
+      "name": "detach",
+      "seconds": 0.008869707933627069,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "48f9c990f33499c11d9f644e10f6f9ddade6d649b540f537b554dc8a2702250f"
+    },
+    {
+      "exit": 0,
+      "name": "detached-status",
+      "seconds": 0.005568374996073544,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "9ee730318abecfcd6bd0a8488a074a5d74b6bc7fdf7cb7c4a6557d07112fc214"
+    },
+    {
+      "exit": 0,
+      "name": "completed-no-key-resume",
+      "seconds": 0.6862134579569101,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "d64474f7f1e78fafea920cc87ff3571fe08066d9e1025e9a775658dac668d0c8"
+    },
+    {
+      "exit": 1,
+      "name": "ambiguous-no-key-resume",
+      "seconds": 0.6930893749231473,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "a0661500ddaf7ca4bb8869802197c65bfb60bddaaf9f8ccfbf632485f08a14b4"
+    },
+    {
+      "exit": 1,
+      "name": "synthetic-failure-no-key-resume",
+      "seconds": 0.6852547089802101,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "428754e5a6b1d294fba01ba1db0e28e0545219c28bc561dd5f2c16fc9e1fdbc6"
+    },
+    {
+      "exit": 1,
+      "name": "legacy-failure-no-key-resume",
+      "seconds": 0.6870254999957979,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "31baec29a0e27da9bad5a5857c56ed5180c331ea0ce5b13ecace084569805ed2"
+    },
+    {
+      "exit": 2,
+      "name": "malformed-diagnostic-refused",
+      "seconds": 0.6855498750228435,
+      "stderr_sha256": "52a0502334c4f63fa11a5d07b1af6b973185520124b85329fe5e1a255f3dd1d9",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "completed": 1,
+      "exit": 0,
+      "name": "three-primitives-no-key-resume",
+      "new_requests": 0,
+      "questions": 3
+    },
+    {
+      "exit": 0,
+      "name": "completed-review-queue",
+      "seconds": 0.16583245899528265,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "exit": 0,
+      "name": "partial-review-queue",
+      "seconds": 0.1619197919499129,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "exit": 0,
+      "name": "uninstall-private",
+      "seconds": 1.341708500054665,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "d0d866ac185874fe07cbc407d4ab849d369b589a9fd137aa0b7af44f425274bb"
+    }
+  ],
+  "completed_resume_new_requests": 0,
+  "completed_windows": 138,
+  "failure_fixture_is_synthetic": true,
+  "new_provider_calls": 0,
+  "partial_windows": 138,
+  "primitive_replay": {
+    "answers": {
+      "has_workaround": {
+        "noul": 0.47,
+        "type": "noul"
+      },
+      "route": {
+        "choice": "workaround",
+        "confidence": 1.0,
+        "probabilities": {
+          "blocked": 0.0,
+          "no_issue": 0.0,
+          "workaround": 1.0
+        },
+        "type": "choice"
+      },
+      "severity": {
+        "confidence": 1.0,
+        "legend": {
+          "0": "Cosmetic issue only; export functionality works everywhere.",
+          "1": "Export is broken in one browser, but an available browser provides a workaround.",
+          "2": "Export is completely blocked with no workaround."
+        },
+        "probabilities": {
+          "0": 0.0,
+          "1": 1.0,
+          "2": 0.0
+        },
+        "score": 1.0,
+        "type": "score"
+      }
+    },
+    "billing_known": false,
+    "current_native_replay": {
+      "binary_sha256": "679adb6cbffa4e59b335d4a6bd632dc63f8b1eee40489c4e2ebe510719e0cb19",
+      "completed": 1,
+      "job_unchanged": true,
+      "new_requests": 0,
+      "questions": 3
+    },
+    "historical_binary_bytes_verified": false,
+    "new_provider_calls": 0,
+    "original_requests": 1,
+    "provider_authenticity_independently_verified": false,
+    "questions": 3,
+    "requested_model": "jev-latest",
+    "returned_model": "jev-1.13.0",
+    "semantic_caution": "Noul returned0.47 despite the explicit browser workaround. Choice selected workaround and Score selected level1. No rerun or accuracy claim.",
+    "semantic_generalization_established": false,
+    "status": "retained_compatibility_verified",
+    "usage": {
+      "attempts": 1,
+      "failed_attempts": 0,
+      "known_input_tokens": 468,
+      "known_output_tokens": 77,
+      "questions": 3,
+      "successful_requests": 1,
+      "total_wall_ns": 808053000,
+      "unknown_input_usage_requests": 0,
+      "unknown_output_usage_requests": 0
+    }
+  },
+  "private_install_removed": true,
+  "review_queues": {
+    "completed-review-queue": "62159e2bdefadd6f09138da04aa3caadaebee061a1038d61a9745f2f8c30c208",
+    "partial-review-queue": "3dc8a4b6e2e868b5b896852f34398b67d38a76d8a8f4a3497b40851c123d83b5"
+  },
+  "review_sha256": "3298a9791b4bf8f36f4ae988452ce0a48c3d151fb15bbb85b473b135d813ff41",
+  "schema": "azdaja.batch.installed_acceptance.v1",
+  "scope": "current private installation, optionality, retained-job replay and export",
+  "source_bytes": 4779822,
+  "status": "passed",
+  "synthetic_attachment_removed": true,
+  "synthetic_credentials_only": true,
+  "typesafe_compiled": true
+}
