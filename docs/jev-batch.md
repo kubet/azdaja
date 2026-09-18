@@ -80,6 +80,14 @@ Before a request can leave the process, the runner durably records its intent. I
 
 Provider failures and unknown input usage stop further admission. Reported-token limits cannot undo a response already billed. Known output usage and unknown counters remain visible. Token usage is not an invoice.
 
+Failed native requests retain a bounded `failure` category in their result file.
+The summary exposes it as `last_failure`, including on a no-key resume. Categories
+distinguish `http_status` (numeric status only), `transport`, `deadline`,
+`credential`, `usage_limit`, `response_validation`, and `other`. Historical failed
+records without a category report `not_recorded`. Arbitrary error text, response
+bodies and credentials are never copied into this diagnostic. A category does not
+authorize a retry or establish whether a failed request was billed.
+
 ## Work-list format
 
 One JSON object per line:

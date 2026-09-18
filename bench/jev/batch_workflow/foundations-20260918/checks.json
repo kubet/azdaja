@@ -1,0 +1,95 @@
+{
+  "checks": [
+    {
+      "check": "format",
+      "exit": 0
+    },
+    {
+      "check": "typed-native",
+      "exit": 0
+    },
+    {
+      "check": "typed-public",
+      "exit": 0
+    },
+    {
+      "check": "default-native",
+      "exit": 0
+    },
+    {
+      "check": "default-public",
+      "exit": 0
+    },
+    {
+      "check": "default-build",
+      "exit": 0
+    },
+    {
+      "check": "default-installed",
+      "exit": 0
+    },
+    {
+      "check": "python39",
+      "exit": 0
+    },
+    {
+      "check": "clippy",
+      "exit": 0
+    },
+    {
+      "check": "proof",
+      "exit": 1
+    }
+  ],
+  "current_head_hosted_acceptance": "not_yet_run",
+  "final_checks": [
+    {
+      "check": "format",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "check": "hosted-help-default",
+      "log_sha256": "9cc21b1bee5a3491bfa362d8199101a4e76abe48cc721a21e4e52b8a16248473"
+    },
+    {
+      "check": "hosted-help-typesafe",
+      "log_sha256": "9c5de0ba5621e4ff0a685ddc3b4b0b104c791813d1d703f4a2f9d40f3acf8297"
+    },
+    {
+      "check": "installed-typesafe",
+      "log_sha256": "874aa4a449b776bf888198d2d252acbe64325eb2b416b9d2fb8c44025b6d2154"
+    },
+    {
+      "check": "lint",
+      "log_sha256": "e609e4f2efe187dee6b28999c5833696d3f9aac7bc06403b36502c52f169c516"
+    },
+    {
+      "check": "package",
+      "log_sha256": "bd1a2a195d971ca4c9ef1c866a6062eb0efc3e11e28e4ebe7d887c18d8ee49a4"
+    },
+    {
+      "check": "python",
+      "log_sha256": "2dca47b1bd3fc4ed5f1fd8d2c3da47b51dba0cf810f1ba07743e4052f89045c7"
+    }
+  ],
+  "full_local_suite_rerun": false,
+  "limits": [
+    "No new live transport or model-quality measurement",
+    "Synthetic failure envelope tests replay only",
+    "Historical138 successful requests unchanged",
+    "Proof manifest requires rebinding after CI source change"
+  ],
+  "local_scoped_acceptance": "passed",
+  "new_provider_calls": 0,
+  "prior_head_hosted_full_ci": "failed_stale_help_assertion",
+  "schema": "azdaja.optional_foundations.acceptance.v1",
+  "sources": {
+    ".github/workflows/ci.yml": "f04158bb553860856dd4decefd9d9f47f4bee7bb22cfd268cb3e7de4ec94cd19",
+    "bench/jev/batch_workflow/installed.py": "30af28515e5860c4329f9596ee44f21ab24a2fd8343b9dfd580fb2cb077fb1e0",
+    "bench/jev/batch_workflow/test_installed.py": "fed35b30280f7f0a66417f13a8570095783281df4375a29841d58a9a0ce3096b",
+    "docs/jev-batch.md": "d14ed5c7a0b78ae40425584209742260568ed82fe74ec692004c31ac30783e6f",
+    "src/judge_batch.rs": "634ed45c12a056f220b3bcacc1918f8f4f1cd5eaf253a261656860d5af1c6197",
+    "tests/e2e.rs": "76125004b4731f815d99e37fc1c8b710587f32843c27d9c2ee528be2d9b5a6d0",
+    "tests/judge_batch_cli.rs": "96cca7f91c775aec0cb17fbbb8b73143f530ad33cb55e195b752781cd12b10c8"
+  }
+}

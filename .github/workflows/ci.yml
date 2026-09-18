@@ -109,7 +109,21 @@ jobs:
         env:
           TYPESAFE_API_KEY: ""
         run: cargo test --locked --features typesafe --test judge_native
+      - name: Provider-free optional batch and credential boundaries
+        env:
+          TYPESAFE_API_KEY: ""
+        run: |
+          cargo test --locked --features typesafe --lib judge_batch::tests
+          cargo test --locked --features typesafe --test judge_batch_cli --test jev_credentials
+      - name: Installed optional setup, no-key recovery and source-exact export
+        run: |
+          python3 -B -m unittest bench.jev.batch_workflow.test_installed
+          python3 -B bench/jev/batch_workflow/installed.py --binary target/debug/azdaja --output "${{ runner.temp }}/jev-installed-typesafe"
       - run: cargo build --release --locked
+      - name: Installed feature-off workflow remains provider-free
+        run: >-
+          python3 -B bench/jev/batch_workflow/installed.py
+          --binary target/release/azdaja --output "${{ runner.temp }}/jev-installed-default"
       - name: Verify advertised Linux glibc floor
         if: runner.os == 'Linux'
         shell: bash

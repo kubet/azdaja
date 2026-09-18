@@ -38,13 +38,18 @@ impl Fixture {
         fs::write(self.root.join("plan.jsonl"), text).unwrap();
     }
     fn invoke(&self, args: &[&str]) -> Output {
+        self.invoke_with_override(args, true)
+    }
+    fn invoke_with_override(&self, args: &[&str], explicit_config: bool) -> Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_azdaja"));
         command
             .env_clear()
             .current_dir(&self.root)
             .env("HOME", self.root.join("home"))
-            .env("AZDAJA_HOME", self.root.join("state"))
-            .env("AZDAJA_CONFIG", self.root.join("config.toml"));
+            .env("AZDAJA_HOME", self.root.join("state"));
+        if explicit_config {
+            command.env("AZDAJA_CONFIG", self.root.join("config.toml"));
+        }
         #[cfg(windows)]
         if let Some(root) = std::env::var_os("SystemRoot") {
             command.env("SystemRoot", root);
@@ -119,6 +124,25 @@ fn default_batch_validates_without_enabling_or_creating_state() {
         assert!(report.is_object());
         f.no_state();
     }
+}
+
+#[test]
+fn fresh_preflight_needs_no_config_but_an_explicit_missing_override_is_not_ignored() {
+    let f = Fixture::new(false);
+    f.plan(&row("fresh").to_string());
+    fs::remove_file(f.root.join("config.toml")).unwrap();
+    let args = ["jev", "batch", "--input", "plan.jsonl"];
+    let fresh = f.invoke_with_override(&args, false);
+    assert!(fresh.status.success(), "{}", text(&fresh));
+    let report: Value = serde_json::from_slice(&fresh.stdout).unwrap();
+    assert_eq!(report["provider_requests"], 0);
+    assert_eq!(report["execution_enabled"], false);
+    assert_eq!(report["credentials_checked"], false);
+    f.no_state();
+    let explicit = f.invoke_with_override(&args, true);
+    assert_eq!(explicit.status.code(), Some(2));
+    assert!(text(&explicit).contains("file is missing"));
+    f.no_state();
 }
 
 #[test]

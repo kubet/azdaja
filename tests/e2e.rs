@@ -9247,8 +9247,28 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
                     assert!(stdout.contains("Records are explicit, local-first, bounded"));
                 }
                 "jev" => {
-                    assert!(stdout.starts_with(&format!("{usage}\nHost-only credentials.")));
+                    let batch_usage = "Usage: az jev batch --input PLAN.jsonl [--execute [--resume] --output DIR --max-requests N --max-input-tokens N --max-seconds N]";
+                    assert!(
+                        stdout.starts_with(&format!(
+                            "{usage}\n{batch_usage}\nHost-only credentials."
+                        ))
+                    );
                     assert!(stdout.contains("Neither attach nor status enables inference."));
+                    assert!(
+                        stdout.contains("Batch validates the whole JSONL plan offline by default.")
+                    );
+                    let batch_help = Command::new(&executable)
+                        .args(["jev", "batch", "--help"])
+                        .output()
+                        .unwrap();
+                    assert!(batch_help.status.success());
+                    assert!(batch_help.stderr.is_empty());
+                    let batch_help = String::from_utf8(batch_help.stdout).unwrap();
+                    assert!(batch_help.starts_with(&format!("{batch_usage}\n")));
+                    assert!(batch_help.contains(
+                        "Default: validate only, with no credentials, network, or job files."
+                    ));
+                    assert!(batch_help.contains("Execution requires a typesafe build, [judge].enabled=true and all three explicit job limits."));
                 }
                 _ => assert_eq!(stdout, format!("{usage}\n")),
             }

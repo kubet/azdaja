@@ -258,6 +258,78 @@ struct Record {
     observation: Option<Value>,
     stats: Value,
     finished_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    failure: Option<Failure>,
+}
+
+// Persist only our fixed vocabulary. Never retain a provider body, URL, error
+// chain, credential, or source excerpt as a diagnostic.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum Failure {
+    Transport {},
+    HttpStatus { status: u16 },
+    Deadline {},
+    Credential {},
+    UsageLimit {},
+    ResponseValidation {},
+    Other {},
+    NotRecorded {},
+}
+impl Failure {
+    fn from_error(error: &anyhow::Error) -> Self {
+        let text = error.to_string();
+        if let Some(status) = text.strip_prefix("judge: HTTP status ")
+            && status.len() == 3
+            && status.bytes().all(|b| b.is_ascii_digit())
+            && let Ok(status) = status.parse::<u16>()
+            && (100..=599).contains(&status)
+        {
+            return Self::HttpStatus { status };
+        }
+        match text.as_str() {
+            "judge: transport failed" => Self::Transport {},
+            "judge: cell deadline exceeded" => Self::Deadline {},
+            "judge: credential unavailable"
+            | "judge: invalid credential syntax"
+            | "judge: credential leakage refused" => Self::Credential {},
+            "judge: request limit exceeded"
+            | "judge: question limit exceeded"
+            | "judge: input token limit exhausted"
+            | "judge: output token accounting overflow"
+            | "judge: input token accounting overflow"
+            | "judge: reported input token limit exceeded" => Self::UsageLimit {},
+            "judge: response byte limit exceeded"
+            | "judge: malformed or duplicate response JSON"
+            | "judge: expected object"
+            | "judge: unexpected or missing fields"
+            | "judge: expected finite number"
+            | "judge: expected finite nonnegative number"
+            | "judge: probability out of range"
+            | "judge: expected nonnegative integer token count"
+            | "judge: probability domain mismatch"
+            | "judge: probabilities must sum to one"
+            | "judge: invalid returned model"
+            | "judge: returned model does not match expected model"
+            | "judge: answer IDs do not cover questions exactly"
+            | "judge: answer type mismatch"
+            | "judge: choice outside domain"
+            | "judge: choice is not an argmax"
+            | "judge: score legend mismatch"
+            | "judge: score does not match weighted probabilities" => Self::ResponseValidation {},
+            _ => Self::Other {},
+        }
+    }
+
+    fn validate(self) -> Result<()> {
+        if let Self::HttpStatus { status } = self {
+            ensure!(
+                (100..=599).contains(&status),
+                "batch: invalid failure status"
+            );
+        }
+        Ok(())
+    }
 }
 fn expected_intent(plan: &Plan, index: usize) -> Intent {
     Intent {
@@ -344,9 +416,12 @@ fn validate_record(
     );
     let mut checked = Totals::default();
     checked.add(s)?;
+    if let Some(failure) = record.failure {
+        failure.validate()?;
+    }
     if record.status == "completed" {
         ensure!(
-            attempts == 1 && success == 1 && s["poisoned"] == false,
+            attempts == 1 && success == 1 && s["poisoned"] == false && record.failure.is_none(),
             "batch: incomplete success accounting"
         );
         let mut body = record
@@ -406,8 +481,9 @@ fn summary(
     new_attempts: u64,
     reason: Option<&str>,
     ambiguous: bool,
+    failure: Option<Failure>,
 ) -> Value {
-    json!({"schema":"azdaja.judge_batch.summary.v1",
+    let mut value = json!({"schema":"azdaja.judge_batch.summary.v1",
         "status":if reason.is_none(){"completed"}else{"stopped"},"stop_reason":reason,
         "input_sha256":plan.binding["input_sha256"],
         "records":{"total":plan.entries.len(),"completed":completed,"pending":plan.entries.len()-completed},
@@ -415,7 +491,11 @@ fn summary(
         "unresolved_inflight_requests":u64::from(ambiguous),
         "input_usage_complete":!ambiguous && totals.unknown_input_usage_requests==0,
         "output_usage_complete":!ambiguous && totals.unknown_output_usage_requests==0,
-        "billing":"not_inferred"})
+        "billing":"not_inferred"});
+    if let Some(failure) = failure {
+        value["last_failure"] = json!(failure);
+    }
+    value
 }
 
 pub fn run(
@@ -515,6 +595,7 @@ where
     let mut totals = Totals::default();
     let mut completed = 0;
     let mut reason = None;
+    let mut last_failure = None;
     let mut ambiguous = false;
     let mut next = plan.entries.len();
     let mut gap = false;
@@ -541,6 +622,7 @@ where
                 completed += 1;
             } else {
                 reason = Some("previous_request_failed");
+                last_failure = Some(record.failure.unwrap_or(Failure::NotRecorded {}));
                 gap = true;
             }
             if record.finished_unix_ms > manifest.deadline_unix_ms {
@@ -564,10 +646,18 @@ where
         reason = Some("unknown_input_usage");
     }
     if reason.is_some() {
-        return Ok(summary(&plan, &totals, completed, 0, reason, ambiguous));
+        return Ok(summary(
+            &plan,
+            &totals,
+            completed,
+            0,
+            reason,
+            ambiguous,
+            last_failure,
+        ));
     }
     if completed == plan.entries.len() {
-        return Ok(summary(&plan, &totals, completed, 0, None, false));
+        return Ok(summary(&plan, &totals, completed, 0, None, false, None));
     }
     let now = now_ms()?;
     ensure!(
@@ -582,6 +672,7 @@ where
             0,
             Some("original_deadline_exceeded"),
             false,
+            None,
         ));
     }
     if resume {
@@ -620,6 +711,7 @@ where
         store.write_new(&format!("{index:06}.intent.json"), &intent)?;
         let (result, stats) = evaluate(entry, &cfg, deadline);
         let ok = result.is_ok();
+        let failure = result.as_ref().err().map(Failure::from_error);
         let record = Record {
             schema: "azdaja.judge_batch.result.v1".into(),
             intent,
@@ -627,6 +719,7 @@ where
             observation: result.ok(),
             stats,
             finished_unix_ms: now_ms()?,
+            failure,
         };
         validate_record(&record, &plan, index, config, &manifest)?;
         store.write_new(&format!("{index:06}.result.json"), &record)?;
@@ -641,6 +734,7 @@ where
         );
         if !ok {
             reason = Some("request_failed");
+            last_failure = failure;
             break;
         }
         if totals.unknown_input_usage_requests > 0 {
@@ -659,6 +753,7 @@ where
         new_attempts,
         reason,
         false,
+        last_failure,
     ))
 }
 
@@ -747,6 +842,184 @@ mod tests {
             (result, engine.stats())
         }
     }
+    #[test]
+    fn failed_job_keeps_safe_diagnostic_across_no_key_resume() {
+        let f = Fixture::new();
+        let calls = Rc::new(Cell::new(0));
+        let run = run_with(
+            &f.input,
+            &f.job,
+            &config(),
+            &limits(),
+            false,
+            |_| Ok(()),
+            evaluator(calls.clone(), Some(0), false),
+        )
+        .unwrap();
+        let record: Value =
+            serde_json::from_slice(&fs::read(f.job.join("000000.result.json")).unwrap()).unwrap();
+        assert_eq!(record["failure"]["kind"], "transport");
+        assert_eq!(run["last_failure"]["kind"], "transport");
+        let replay = run_with(
+            &f.input,
+            &f.job,
+            &config(),
+            &limits(),
+            true,
+            |_| panic!("must not resolve credentials"),
+            |_, _, _| panic!("must not retry a paid failure"),
+        )
+        .unwrap();
+        assert_eq!(replay["last_failure"], run["last_failure"]);
+        assert_eq!(replay["new_requests"], 0);
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn failed_job_never_persists_arbitrary_error_text() {
+        let f = Fixture::new();
+        let calls = Rc::new(Cell::new(0));
+        let mut original = evaluator(calls, Some(0), false);
+        let private = "private-source-and-credential-do-not-retain";
+        let report = run_with(
+            &f.input,
+            &f.job,
+            &config(),
+            &limits(),
+            false,
+            |_| Ok(()),
+            |entry, cfg, deadline| {
+                let (_, stats) = original(entry, cfg, deadline);
+                (Err(anyhow!(private)), stats)
+            },
+        )
+        .unwrap();
+        assert_eq!(report["last_failure"]["kind"], "other");
+        assert!(!report.to_string().contains(private));
+        for item in fs::read_dir(&f.job).unwrap() {
+            let bytes = fs::read(item.unwrap().path()).unwrap();
+            assert!(!String::from_utf8_lossy(&bytes).contains(private));
+        }
+    }
+
+    #[test]
+    fn diagnostic_vocabulary_is_bounded_and_never_copies_error_suffixes() {
+        for (message, expected) in [
+            ("judge: transport failed", Failure::Transport {}),
+            (
+                "judge: HTTP status 429",
+                Failure::HttpStatus { status: 429 },
+            ),
+            (
+                "judge: HTTP status 401",
+                Failure::HttpStatus { status: 401 },
+            ),
+            ("judge: cell deadline exceeded", Failure::Deadline {}),
+            ("judge: credential unavailable", Failure::Credential {}),
+            ("judge: credential leakage refused", Failure::Credential {}),
+            (
+                "judge: reported input token limit exceeded",
+                Failure::UsageLimit {},
+            ),
+            (
+                "judge: probabilities must sum to one",
+                Failure::ResponseValidation {},
+            ),
+            ("judge: HTTP status 999", Failure::Other {}),
+            ("judge: HTTP status 429 secret", Failure::Other {}),
+            ("judge: transport failed: secret", Failure::Other {}),
+            ("judge: credential unavailable: secret", Failure::Other {}),
+        ] {
+            assert_eq!(Failure::from_error(&anyhow!(message)), expected);
+            assert!(
+                !json!(Failure::from_error(&anyhow!(message)))
+                    .to_string()
+                    .contains("secret")
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_failed_record_and_invalid_diagnostics_never_retry() {
+        let f = Fixture::new();
+        run_with(
+            &f.input,
+            &f.job,
+            &config(),
+            &limits(),
+            false,
+            |_| Ok(()),
+            evaluator(Rc::new(Cell::new(0)), Some(0), false),
+        )
+        .unwrap();
+        let path = f.job.join("000000.result.json");
+        let mut record: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        record.as_object_mut().unwrap().remove("failure");
+        fs::write(&path, serde_json::to_vec(&record).unwrap()).unwrap();
+        let resume = || {
+            run_with(
+                &f.input,
+                &f.job,
+                &config(),
+                &limits(),
+                true,
+                |_| panic!("must not resolve credentials"),
+                |_, _, _| panic!("must not retry"),
+            )
+        };
+        let report = resume().unwrap();
+        assert_eq!(report["last_failure"]["kind"], "not_recorded");
+        assert_eq!(report["new_requests"], 0);
+        for failure in [
+            json!({"kind":"http_status", "status":429}),
+            json!({"kind":"http_status", "status":999}),
+            json!({"kind":"http_status", "status":true}),
+            json!({"kind":"transport", "private":"should not be accepted"}),
+            json!({"kind":"unrecognized"}),
+        ] {
+            record["failure"] = failure.clone();
+            fs::write(&path, serde_json::to_vec(&record).unwrap()).unwrap();
+            if failure == json!({"kind":"http_status", "status":429}) {
+                assert_eq!(resume().unwrap()["last_failure"], failure);
+            } else {
+                assert!(resume().is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn completed_records_remain_compatible_and_cannot_claim_a_failure() {
+        let f = Fixture::new();
+        let report = run_with(
+            &f.input,
+            &f.job,
+            &config(),
+            &limits(),
+            false,
+            |_| Ok(()),
+            evaluator(Rc::new(Cell::new(0)), None, false),
+        )
+        .unwrap();
+        assert!(report.get("last_failure").is_none());
+        let path = f.job.join("000000.result.json");
+        let mut record: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert!(record.get("failure").is_none());
+        record["failure"] = json!({"kind":"transport"});
+        fs::write(path, serde_json::to_vec(&record).unwrap()).unwrap();
+        assert!(
+            run_with(
+                &f.input,
+                &f.job,
+                &config(),
+                &limits(),
+                true,
+                |_| panic!("preflight"),
+                |_, _, _| panic!("evaluate")
+            )
+            .is_err()
+        );
+    }
+
     #[test]
     fn native_success_resume_does_not_resolve_credentials_or_call_again() {
         let f = Fixture::new();
