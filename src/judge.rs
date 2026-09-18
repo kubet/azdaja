@@ -1181,4 +1181,20 @@ mod tests {
             assert!(serde_json::from_value::<JudgeConfig>(json!({"enabled": value})).is_err());
         }
     }
+
+    #[test]
+    fn direct_solo_api_requires_explicit_opt_in_without_credential_resolution() {
+        for configured in [None, Some(false), Some(true)] {
+            let mut cfg = crate::Config::default();
+            cfg.judge.enabled = configured;
+            let expected = configured == Some(true);
+            assert_eq!(cfg.with_explicit_solo_judge().judge.enabled, Some(expected));
+            let mut session = crate::SoloSession::new(&cfg, None).unwrap();
+            let result = session.exec("FINAL(judge_stats())", &cfg).unwrap();
+            assert!(result.success, "{:?}", result.output);
+            assert_eq!(result.judge_stats["enabled"], expected);
+            assert_eq!(result.judge_stats["provider_requests"], 0);
+            assert_eq!(result.judge_stats["total_wall_ns"], 0);
+        }
+    }
 }

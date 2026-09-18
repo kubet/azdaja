@@ -1,5 +1,5 @@
 {
   "name": "azdaja",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Virtual memory for language models with a bounded model-facing surface"
 }

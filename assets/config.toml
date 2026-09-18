@@ -15,9 +15,10 @@ clean_patterns = []
 
 # Optional native typed judgments in exec and solo. Official release builds
 # include the transport; source builds use `cargo build --features typesafe`.
-# A valid configured environment key or attachment enables automatic mode.
+# A valid configured environment key or attachment enables automatic exec/batch mode.
 # No key means off. Set enabled = false to force off even with a key.
 # Set enabled = true for explicit mode. Never put the API key in this file.
+# Autonomous solo requires explicit true and remains experimental, not auto-enabled.
 # Only explicit state/questions passed to judge_many leave the evaluator.
 [judge]
 # enabled = false

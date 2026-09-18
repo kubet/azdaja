@@ -229,9 +229,9 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads()
         std::process::id()
     ));
     fs::create_dir(&dist).unwrap();
-    let darwin = dist.join("azdaja-v0.1.17-darwin-arm64");
-    let darwin_x86_64 = dist.join("azdaja-v0.1.17-darwin-x86_64");
-    let linux = dist.join("azdaja-v0.1.17-linux-x86_64");
+    let darwin = dist.join("azdaja-v0.1.18-darwin-arm64");
+    let darwin_x86_64 = dist.join("azdaja-v0.1.18-darwin-x86_64");
+    let linux = dist.join("azdaja-v0.1.18-linux-x86_64");
     fs::write(&darwin, b"raw darwin binary").unwrap();
     fs::write(&darwin_x86_64, b"raw darwin x86-64 binary").unwrap();
     fs::write(&linux, b"raw linux binary").unwrap();
@@ -263,9 +263,9 @@ fn standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads()
     let lines: Vec<_> = sums.lines().collect();
     assert_eq!(lines.len(), 5);
     for name in [
-        "azdaja-v0.1.17-darwin-arm64",
-        "azdaja-v0.1.17-darwin-x86_64",
-        "azdaja-v0.1.17-linux-x86_64",
+        "azdaja-v0.1.18-darwin-arm64",
+        "azdaja-v0.1.18-darwin-x86_64",
+        "azdaja-v0.1.18-linux-x86_64",
         "LICENSE",
         "THIRD-PARTY-NOTICES.md",
     ] {
@@ -413,7 +413,9 @@ fn ci_builds_every_documented_standalone_target_explicitly() {
             "missing mandatory CI matrix entry: {entry}"
         );
     }
-    assert!(job.contains("cargo build --release --locked --target \"${{ matrix.rust_target }}\""));
+    assert!(job.contains(
+        "cargo build --release --locked --features typesafe --target \"${{ matrix.rust_target }}\""
+    ));
     assert!(job.contains("Verify standalone target architecture"));
     assert!(job.contains("unreviewed standalone target"));
 }
@@ -424,7 +426,7 @@ fn candidate_fixture_server_avoids_reverse_dns_on_hosted_macos() {
     let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap();
     let step = ci
         .split_once(
-            "      - name: Validate current binary with frozen installer, plain help, and 50 MiB path\n",
+            "      - name: Validate official binary with current installer, plain help, and 50 MiB path\n",
         )
         .expect("candidate validation step must exist")
         .1
@@ -457,7 +459,7 @@ fn ci_windows_safety_is_strict_and_retains_exact_commit_candidates() {
     assert!(job.contains("cargo test --lib --bin azdaja --locked -- --test-threads=1"));
     assert!(job.contains(".\\target\\release\\azdaja.exe --version"));
     assert!(job.contains(".\\target\\release\\azdaja.exe doctor --caps"));
-    assert!(job.contains("azdaja-v0.1.17-windows-x86_64.exe"));
+    assert!(job.contains("azdaja-v0.1.18-windows-x86_64.exe"));
     assert!(
         job.contains(
             "azdaja-standalone-windows-x86_64-${{ github.sha }}-${{ github.run_attempt }}"
@@ -633,8 +635,15 @@ fn published_notice_license_and_font_artifacts_remain_frozen() {
     ))
     .unwrap();
     for (path, digest) in frozen {
+        // Rolling installer selectors advance with each release. Preserve their
+        // previous exact bytes against the unchanged historical inventory.
+        let preserved_path = match path.as_str() {
+            "site/install" => "release/historical/install-v0.1.17.sh",
+            "site/install.ps1" => "release/historical/install-v0.1.17.ps1",
+            _ => &path,
+        };
         assert_eq!(
-            sha256(&root.join(&path)),
+            sha256(&root.join(preserved_path)),
             digest,
             "published artifact changed: {path}"
         );
@@ -763,20 +772,14 @@ fn source_backed_notice_workflows_prepare_all_targets_without_adding_cargo_to_pr
 }
 
 #[test]
-fn workflow_installer_fixtures_remain_historical_and_distinct_from_current_notice_gate() {
+fn workflow_installer_fixtures_use_current_notice_and_keep_frozen_rejection() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     for file in ["ci.yml", "source-install-integrity.yml"] {
         let workflow = fs::read_to_string(root.join(".github/workflows").join(file)).unwrap();
-        assert!(!workflow.contains("cp LICENSE THIRD-PARTY-NOTICES.md"));
-        assert!(workflow.contains("cp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md \"$fixture/THIRD-PARTY-NOTICES.md\""));
-        assert!(workflow.contains("cmp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md"));
-        assert!(
-            workflow.contains("393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2")
-        );
-        assert!(
-            workflow.contains("frozen")
-                && workflow.contains("Current notice verification is separate")
-        );
+        assert!(workflow.contains("cp THIRD-PARTY-NOTICES.md \"$fixture/THIRD-PARTY-NOTICES.md\""));
+        assert!(workflow.contains("cmp THIRD-PARTY-NOTICES.md"));
+        assert!(workflow.contains("The frozen installer rejection test remains separate"));
+        assert!(!workflow.contains("cp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md"));
     }
     let source =
         fs::read_to_string(root.join(".github/workflows/source-install-integrity.yml")).unwrap();
@@ -798,4 +801,30 @@ fn workflow_installer_fixtures_remain_historical_and_distinct_from_current_notic
             .unwrap();
         assert_eq!(step["env"]["TYPESAFE_API_KEY"].as_str(), Some(""));
     }
+}
+
+#[test]
+fn official_candidates_compile_typesafe_without_relabeling_feature_off_coverage() {
+    let ci = include_str!("../.github/workflows/ci.yml");
+    assert!(ci.contains(
+        "cargo build --release --locked --no-default-features --target-dir target/feature-off"
+    ));
+    assert!(ci.contains("--binary target/feature-off/release/azdaja"));
+    assert!(ci.contains("target/feature-off/release/azdaja doctor --caps"));
+    assert!(ci.contains("[\"typesafe_compiled\"] is False"));
+    assert!(ci.contains("[\"typesafe_compiled\"] is True"));
+    assert!(ci.contains("--test jev_activation"));
+    for line in ci
+        .lines()
+        .filter(|line| line.contains("cargo ") && line.contains("--release"))
+    {
+        assert!(
+            line.contains("--features typesafe")
+                || line.contains("--target-dir target/feature-off"),
+            "unclassified release binary builder: {line}"
+        );
+    }
+    let source = include_str!("../.github/workflows/source-install-integrity.yml");
+    assert!(source.contains("cargo install --path . --locked --features typesafe --root"));
+    assert!(source.contains("caps[\"typed_judgments\"][\"typesafe_compiled\"] is True"));
 }

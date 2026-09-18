@@ -200,6 +200,8 @@ fn native_judgment_capabilities_are_static_and_distinguish_transport_from_readin
                 "host_opt_in_required": true,
                 "default_activation_mode": "auto_when_configured_credential_is_valid",
                 "explicit_disable_supported": true,
+                "auto_activation_scopes": ["exec", "batch"],
+                "solo_requires_explicit_enable": true,
                 "runtime_configuration_checked": false,
                 "credentials_checked": false,
                 "cache_and_budget_scope": "cell"

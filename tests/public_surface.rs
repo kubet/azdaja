@@ -148,8 +148,8 @@ fn public_site_exposes_machine_readable_search_metadata() {
     for field in [
         "\"@type\": \"SoftwareApplication\"",
         "\"url\": \"https://azdaja.dev/\"",
-        "\"softwareVersion\": \"0.1.17\"",
-        "\"downloadUrl\": \"https://github.com/kubet/azdaja/releases/tag/v0.1.17\"",
+        "\"softwareVersion\": \"0.1.18\"",
+        "\"downloadUrl\": \"https://github.com/kubet/azdaja/releases/tag/v0.1.18\"",
         "\"codeRepository\": \"https://github.com/kubet/azdaja\"",
     ] {
         assert!(site.contains(field), "site metadata is missing {field}");

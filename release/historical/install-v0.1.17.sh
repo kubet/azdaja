@@ -2,7 +2,7 @@
 set -eu
 set -f
 
-VERSION=0.1.18
+VERSION=0.1.17
 GLIBC_MIN=2.35
 RELEASE_BASE=https://azdaja.dev/releases/v$VERSION
 HARNESS=
@@ -831,7 +831,7 @@ manifest_sha256 "$LINUX_ASSET" >/dev/null
 EXPECTED_LICENSE_SHA256=$(manifest_sha256 LICENSE)
 EXPECTED_NOTICES_SHA256=$(manifest_sha256 THIRD-PARTY-NOTICES.md)
 ROOT_LICENSE_SHA256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096
-ROOT_NOTICES_SHA256=9818dbfbdcad475ccf3cca00944aa976cecb0510991cf2612eb45c96dc7804ef
+ROOT_NOTICES_SHA256=393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2
 [ "$EXPECTED_LICENSE_SHA256" = "$ROOT_LICENSE_SHA256" ] || fail 'SHA256SUMS does not bind the exact Azdaja LICENSE'
 [ "$EXPECTED_NOTICES_SHA256" = "$ROOT_NOTICES_SHA256" ] || fail 'SHA256SUMS does not bind the exact reviewed THIRD-PARTY-NOTICES.md'
 
@@ -858,7 +858,6 @@ V015_CODEX_CONFIG_SHA256=e6467dc6454f343427dd4d4472536d20f29d8e89740b01e59a669d4
 V015_OPENCODE_CONFIG_SHA256=f077082c429ca0793747a47518371448500b3a8f4534ebbc071d50e6655271cf
 DOC_OWNER_V1_MAGIC=azdaja-installer-owned-docs-v1
 LEGACY_NOTICES_SHA256=dde4b0d189ff4fbc79748212bc0fc90bbf75dd27a4f23aaddbb24624e6e8cabb
-HISTORICAL_V2_NOTICES_SHA256=393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2
 PREVIOUS_V2_NOTICES_SHA256=ee908558c8d5f0d2080400558db351d8f24fb7ad3ca902c904822d97d7b5eac6
 printf '%s\n' "$OWNER_MAGIC" > "$TMP/config-owner.expected"
 printf '%s\n' "$DOC_OWNER_V1_MAGIC" > "$TMP/doc-owner-v1.expected"
@@ -867,12 +866,6 @@ azdaja-installer-owned-docs-v2
 schema=azdaja-managed-documents-v2
 LICENSE.sha256=$ROOT_LICENSE_SHA256
 THIRD-PARTY-NOTICES.md.sha256=$ROOT_NOTICES_SHA256
-EOF
-cat > "$TMP/doc-owner-v2.historical.expected" <<EOF
-azdaja-installer-owned-docs-v2
-schema=azdaja-managed-documents-v2
-LICENSE.sha256=$ROOT_LICENSE_SHA256
-THIRD-PARTY-NOTICES.md.sha256=$HISTORICAL_V2_NOTICES_SHA256
 EOF
 cat > "$TMP/doc-owner-v2.previous.expected" <<EOF
 azdaja-installer-owned-docs-v2
@@ -918,12 +911,6 @@ if [ -e "$DOC_DIR" ] || [ -L "$DOC_DIR" ]; then
     cmp -s "$DOC_LICENSE" "$TMP/LICENSE" || fail "refusing changed Azdaja LICENSE: $DOC_LICENSE"
     cmp -s "$DOC_NOTICES" "$TMP/THIRD-PARTY-NOTICES.md" || fail "refusing changed Azdaja notices: $DOC_NOTICES"
     DOC_STATE=owned-v2
-  elif cmp -s "$DOC_OWNER" "$TMP/doc-owner-v2.historical.expected"; then
-    [ "$(sha256_file "$DOC_LICENSE")" = "$ROOT_LICENSE_SHA256" ] || \
-      fail "refusing changed historical Azdaja LICENSE: $DOC_LICENSE"
-    [ "$(sha256_file "$DOC_NOTICES")" = "$HISTORICAL_V2_NOTICES_SHA256" ] || \
-      fail "refusing changed historical Azdaja notices: $DOC_NOTICES"
-    DOC_STATE=historical-v2
   elif cmp -s "$DOC_OWNER" "$TMP/doc-owner-v2.previous.expected"; then
     [ "$(sha256_file "$DOC_LICENSE")" = "$ROOT_LICENSE_SHA256" ] || \
       fail "refusing changed previous Azdaja LICENSE: $DOC_LICENSE"
@@ -1065,7 +1052,7 @@ BIN_DIR_WAS_DIR=false
 TRANSACTION_ACTIVE=true
 announce 'Staging files'
 
-if [ "$DOC_STATE" = legacy-v1 ] || [ "$DOC_STATE" = previous-v2 ] || [ "$DOC_STATE" = historical-v2 ]; then
+if [ "$DOC_STATE" = legacy-v1 ] || [ "$DOC_STATE" = previous-v2 ]; then
   DOC_MIGRATION_STATE=$DOC_STATE
   DOC_PREVIOUS=$DOC_DIR.azdaja-docs-previous.$$
   [ ! -e "$DOC_PREVIOUS" ] && [ ! -L "$DOC_PREVIOUS" ] || \
@@ -1088,12 +1075,6 @@ if [ "$DOC_STATE" = legacy-v1 ] || [ "$DOC_STATE" = previous-v2 ] || [ "$DOC_STA
   [ "$(sha256_file "$PREVIOUS_LICENSE")" = "$ROOT_LICENSE_SHA256" ] || \
     fail "previous Azdaja LICENSE changed during migration"
   case "$DOC_MIGRATION_STATE" in
-    historical-v2)
-      cmp -s "$PREVIOUS_OWNER" "$TMP/doc-owner-v2.historical.expected" || \
-        fail "historical Azdaja marker changed during migration"
-      [ "$(sha256_file "$PREVIOUS_NOTICES")" = "$HISTORICAL_V2_NOTICES_SHA256" ] || \
-        fail "historical Azdaja notices changed during migration"
-      ;;
     previous-v2)
       cmp -s "$PREVIOUS_OWNER" "$TMP/doc-owner-v2.previous.expected" || \
         fail "previous Azdaja marker changed during migration"

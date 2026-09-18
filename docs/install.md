@@ -33,7 +33,8 @@ Cargo installs the canonical binary but no short alias or tool integration. Comp
 Official v0.1.18 binaries include the optional Jev transport. Add `--features
 typesafe` to a Cargo build/install for the same capability, or omit it to exclude
 that transport. Supplying the configured TypeSafe environment key or attaching it
-with `azdaja jev attach --stdin` opts into automatic Jev mode on later execution.
+with `azdaja jev attach --stdin` opts into automatic Jev mode on later `exec` and
+explicitly executed batches, not autonomous `solo`.
 No key means off, and `[judge] enabled = false` always keeps it off. Setup and
 `doctor --caps` never make provider calls. `doctor jev` checks only local policy
 and credential syntax, not provider authentication. Existing explicit false

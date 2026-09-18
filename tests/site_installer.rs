@@ -150,11 +150,16 @@ fn sha256(path: &Path) -> String {
 }
 
 const DOCUMENT_OWNER_V1: &[u8] = b"azdaja-installer-owned-docs-v1\n";
-// The immutable site installer still accepts this exact historical generation.
+// The previous release generation remains recognized for an exact-byte upgrade.
 const DOCUMENT_OWNER_FROZEN_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
 THIRD-PARTY-NOTICES.md.sha256=393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2\n";
+fn current_document_owner() -> Vec<u8> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    format!("azdaja-installer-owned-docs-v2\nschema=azdaja-managed-documents-v2\nLICENSE.sha256={}\nTHIRD-PARTY-NOTICES.md.sha256={}\n",
+        sha256(&root.join("LICENSE")), sha256(&root.join("THIRD-PARTY-NOTICES.md"))).into_bytes()
+}
 const DOCUMENT_OWNER_PREVIOUS_V2: &[u8] = b"azdaja-installer-owned-docs-v2\n\
 schema=azdaja-managed-documents-v2\n\
 LICENSE.sha256=45dd135e23e0e915b3dd61095d46eb45a8f59bbc53dadface6affbd1c76d7096\n\
@@ -333,16 +338,16 @@ fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     let release = root.join(name);
     fs::create_dir_all(&release).unwrap();
     for asset in [
-        "azdaja-v0.1.17-darwin-arm64",
-        "azdaja-v0.1.17-darwin-x86_64",
-        "azdaja-v0.1.17-linux-x86_64",
+        "azdaja-v0.1.18-darwin-arm64",
+        "azdaja-v0.1.18-darwin-x86_64",
+        "azdaja-v0.1.18-linux-x86_64",
     ] {
         fs::copy(candidate, release.join(asset)).unwrap();
     }
     let source = Path::new(env!("CARGO_MANIFEST_DIR"));
     fs::copy(source.join("LICENSE"), release.join("LICENSE")).unwrap();
     fs::copy(
-        source.join("release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md"),
+        source.join("THIRD-PARTY-NOTICES.md"),
         release.join("THIRD-PARTY-NOTICES.md"),
     )
     .unwrap();
@@ -351,7 +356,7 @@ fn write_release(root: &Path, name: &str, candidate: &Path, digest: &str) {
     fs::write(
         release.join("SHA256SUMS"),
         format!(
-            "{digest}  azdaja-v0.1.17-darwin-arm64\n{digest}  azdaja-v0.1.17-darwin-x86_64\n{digest}  azdaja-v0.1.17-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
+            "{digest}  azdaja-v0.1.18-darwin-arm64\n{digest}  azdaja-v0.1.18-darwin-x86_64\n{digest}  azdaja-v0.1.18-linux-x86_64\n{license_digest}  LICENSE\n{notices_digest}  THIRD-PARTY-NOTICES.md\n"
         ),
     )
     .unwrap();
@@ -368,7 +373,11 @@ struct InstallRun<'a> {
     path: &'a str,
 }
 fn run_installer_with_jcode_home(run: InstallRun<'_>, jcode_home: Option<&Path>) -> Output {
-    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("site/install");
+    run_installer_script(run, jcode_home, "site/install")
+}
+
+fn run_installer_script(run: InstallRun<'_>, jcode_home: Option<&Path>, script: &str) -> Output {
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join(script);
     let detected_tools = run.home.join(".detected-tools");
     let path = if detected_tools.is_dir() {
         format!("{}:{}", detected_tools.display(), run.path)
@@ -480,7 +489,7 @@ fn installer_line<'a>(stdout: &'a str, prefix: &str) -> &'a str {
 fn assert_installer_preamble(stdout: &str) {
     assert!(
         stdout.starts_with(
-            "Azdaja installer v0.1.17\nProvider-free install. No model provider will be called.\n"
+            "Azdaja installer v0.1.18\nProvider-free install. No model provider will be called.\n"
         ),
         "{stdout}"
     );
@@ -627,7 +636,7 @@ fn assert_alias_identity_and_local_caps(home: &Path, bin: &Path, path: &str) {
             let help = String::from_utf8(short_output.stdout).unwrap();
             assert_eq!(
                 help,
-                "AZDAJA v0.1.17 — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory jev\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
+                "AZDAJA v0.1.18 — virtual memory for language models\nUsage: az <command>\nCommands: help solo map install doctor start load exec final list kill uninstall memory jev\nInstall: az install  (auto-detects supported tools)\nExample: az solo \"summarize this file\" -f ./document.txt\n"
             );
         }
     }
@@ -674,7 +683,7 @@ fn installers_are_identical_and_bind_current_assets_and_sums() {
     );
 
     let text = String::from_utf8(site).unwrap();
-    assert_eq!(text.matches("VERSION=0.1.17").count(), 1);
+    assert_eq!(text.matches("VERSION=0.1.18").count(), 1);
     assert!(text.contains("RELEASE_BASE=https://azdaja.dev/releases/v$VERSION"));
     assert!(text.contains("$BASE_URL/SHA256SUMS"));
     assert!(text.contains("azdaja-v$VERSION-darwin-arm64"));
@@ -758,8 +767,8 @@ fn interactive_selection_installs_only_the_chosen_detected_subset() {
     assert_installer_preamble(&stdout);
     for phase in [
         "Plan:\n",
-        "Downloading azdaja v0.1.17...\n",
-        "Downloading azdaja v0.1.17... ok\n",
+        "Downloading azdaja v0.1.18...\n",
+        "Downloading azdaja v0.1.18... ok\n",
         "Verifying SHA-256...\n",
         "Verifying SHA-256... ok\n",
         "Checking destinations...\n",
@@ -780,7 +789,7 @@ fn interactive_selection_installs_only_the_chosen_detected_subset() {
     }
     assert_eq!(
         installer_line(&stdout, "Installed:"),
-        "Installed: azdaja v0.1.17"
+        "Installed: azdaja v0.1.18"
     );
     assert_eq!(
         installer_line(&stdout, "Integrations:"),
@@ -1761,7 +1770,7 @@ fn linux_glibc_floor_refuses_below_and_accepts_exact_boundary_and_above() {
         assert_installer_preamble(&stdout);
         assert_eq!(
             installer_line(&stdout, "Installed:"),
-            "Installed: azdaja v0.1.17"
+            "Installed: azdaja v0.1.18"
         );
         assert!(bin.join("azdaja").is_file());
     }
@@ -1883,7 +1892,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
         assert_installer_preamble(&stdout);
         assert_eq!(
             installer_line(&stdout, "Installed:"),
-            "Installed: azdaja v0.1.17"
+            "Installed: azdaja v0.1.18"
         );
         assert_eq!(
             installer_line(&stdout, "Integrations:"),
@@ -1901,9 +1910,9 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     }
     let requests = fs::read_to_string(&server.log).unwrap();
     assert!(requests.contains("/good/SHA256SUMS"));
-    assert!(requests.contains("/good/azdaja-v0.1.17-darwin-arm64"));
-    assert!(requests.contains("/good/azdaja-v0.1.17-darwin-x86_64"));
-    assert!(requests.contains("/good/azdaja-v0.1.17-linux-x86_64"));
+    assert!(requests.contains("/good/azdaja-v0.1.18-darwin-arm64"));
+    assert!(requests.contains("/good/azdaja-v0.1.18-darwin-x86_64"));
+    assert!(requests.contains("/good/azdaja-v0.1.18-linux-x86_64"));
 
     let home = scratch.0.join("atomic-home");
     let bin = home.join("bin");
@@ -1939,7 +1948,7 @@ fn local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route() 
     });
     assert_success(&good);
     let version = Command::new(&existing).arg("--version").output().unwrap();
-    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.17 "));
+    assert!(String::from_utf8_lossy(&version.stdout).starts_with("azdaja 0.1.18 "));
     assert_alias_identity_and_local_caps(&home, &bin, &system_path);
 
     let home = scratch.0.join("path-home");
@@ -3283,39 +3292,45 @@ fn frozen_installer_rejects_current_unpublished_notice_even_with_matching_downlo
         &sha256(&candidate),
     );
     let release = fixture_root.join("current-notice");
-    let old_digest = sha256(&release.join("THIRD-PARTY-NOTICES.md"));
-    assert_eq!(
-        old_digest,
-        "393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2"
-    );
-    fs::write(
-        release.join("THIRD-PARTY-NOTICES.md"),
-        include_bytes!("../THIRD-PARTY-NOTICES.md"),
-    )
-    .unwrap();
-    let current_digest = sha256(&release.join("THIRD-PARTY-NOTICES.md"));
-    assert_ne!(current_digest, old_digest);
+    // Keep the historical script byte-exact, but serve current notice bytes with
+    // an honest manifest under the old names it requests. It must reject the
+    // new notice before executing the candidate or touching the destination.
+    for suffix in ["darwin-arm64", "darwin-x86_64", "linux-x86_64"] {
+        fs::rename(
+            release.join(format!("azdaja-v0.1.18-{suffix}")),
+            release.join(format!("azdaja-v0.1.17-{suffix}")),
+        )
+        .unwrap();
+    }
     let sums = fs::read_to_string(release.join("SHA256SUMS")).unwrap();
     fs::write(
         release.join("SHA256SUMS"),
-        sums.replace(&old_digest, &current_digest),
+        sums.replace("v0.1.18", "v0.1.17"),
     )
     .unwrap();
+    assert_ne!(
+        sha256(&release.join("THIRD-PARTY-NOTICES.md")),
+        "393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2"
+    );
     let server = FixtureServer::start(&scratch.0, &fixture_root);
     let home = scratch.0.join("home");
     fs::create_dir(&home).unwrap();
     mark_detected(&home, "claude");
     let before = tree_identity(&home);
-    let output = run_installer(InstallRun {
-        home: &home,
-        base: &format!("{}/current-notice", server.base),
-        os: "Darwin",
-        arch: "arm64",
-        glibc_version: None,
-        harness: Some("claude"),
-        bin_dir: Some(&home.join("bin")),
-        path: "/usr/bin:/bin",
-    });
+    let output = run_installer_script(
+        InstallRun {
+            home: &home,
+            base: &format!("{}/current-notice", server.base),
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: Some("claude"),
+            bin_dir: Some(&home.join("bin")),
+            path: "/usr/bin:/bin",
+        },
+        None,
+        "release/historical/install-v0.1.17.sh",
+    );
     assert!(!output.status.success());
     assert!(
         String::from_utf8_lossy(&output.stderr)
@@ -3428,11 +3443,11 @@ fn exact_legacy_v1_documents_migrate_to_fixed_v2_and_reinstall_exactly() {
     assert_success(&run_once());
     assert_eq!(
         fs::read(docs.join(".azdaja-managed")).unwrap(),
-        DOCUMENT_OWNER_FROZEN_V2
+        current_document_owner()
     );
     assert_eq!(
         fs::read(docs.join("THIRD-PARTY-NOTICES.md")).unwrap(),
-        include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md")
+        include_bytes!("../THIRD-PARTY-NOTICES.md")
     );
     let migrated = tree_identity(&docs);
     assert_success(&run_once());
@@ -3479,11 +3494,66 @@ fn exact_published_previous_v2_documents_migrate_to_current_and_reinstall() {
     assert_success(&run_once());
     assert_eq!(
         fs::read(docs.join(".azdaja-managed")).unwrap(),
-        DOCUMENT_OWNER_FROZEN_V2
+        current_document_owner()
     );
     assert_eq!(
         fs::read(docs.join("THIRD-PARTY-NOTICES.md")).unwrap(),
-        include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md")
+        include_bytes!("../THIRD-PARTY-NOTICES.md")
+    );
+    let migrated = tree_identity(&docs);
+    assert_success(&run_once());
+    assert_eq!(tree_identity(&docs), migrated);
+    assert!(fs::read_dir(docs.parent().unwrap()).unwrap().all(|entry| {
+        !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains("azdaja-docs-previous")
+    }));
+}
+
+#[test]
+fn exact_published_historical_v2_documents_migrate_to_current_and_reinstall() {
+    let scratch = Scratch::new();
+    let fixture_root = scratch.0.join("releases");
+    fs::create_dir(&fixture_root).unwrap();
+    let candidate = local_candidate(&scratch.0);
+    write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
+    let server = FixtureServer::start(&scratch.0, &fixture_root);
+    let base = format!("{}/good", server.base);
+    let home = scratch.0.join("historical-v2-home");
+    fs::create_dir(&home).unwrap();
+    mark_detected(&home, "claude");
+    let docs = home.join(".local/share/azdaja");
+    write_managed_documents(
+        &docs,
+        DOCUMENT_OWNER_FROZEN_V2,
+        include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md"),
+    );
+    assert_eq!(
+        sha256(&docs.join("THIRD-PARTY-NOTICES.md")),
+        "393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2"
+    );
+    let run_once = || {
+        run_installer(InstallRun {
+            home: &home,
+            base: &base,
+            os: "Darwin",
+            arch: "arm64",
+            glibc_version: None,
+            harness: Some("claude"),
+            bin_dir: Some(&home.join("bin")),
+            path: "/usr/bin:/bin",
+        })
+    };
+    assert_success(&run_once());
+    assert_eq!(
+        fs::read(docs.join(".azdaja-managed")).unwrap(),
+        current_document_owner()
+    );
+    assert_eq!(
+        fs::read(docs.join("THIRD-PARTY-NOTICES.md")).unwrap(),
+        include_bytes!("../THIRD-PARTY-NOTICES.md")
     );
     let migrated = tree_identity(&docs);
     assert_success(&run_once());
@@ -3506,7 +3576,14 @@ fn mutated_owned_documents_and_marker_declared_fake_v2_refuse_before_home_mutati
     write_release(&fixture_root, "good", &candidate, &sha256(&candidate));
     let server = FixtureServer::start(&scratch.0, &fixture_root);
     let base = format!("{}/good", server.base);
-    for state in ["mutated-v1", "mutated-previous-v2", "fake-v2"] {
+    for state in [
+        "mutated-v1",
+        "mutated-previous-v2",
+        "mutated-historical-v2",
+        "historical-marker-current-body",
+        "current-marker-historical-body",
+        "fake-v2",
+    ] {
         if state == "mutated-v1" && legacy_notices().is_none() {
             continue;
         }
@@ -3519,6 +3596,27 @@ fn mutated_owned_documents_and_marker_declared_fake_v2_refuse_before_home_mutati
                 let mut notices = legacy_notices().unwrap();
                 notices.extend_from_slice(b"mutated");
                 write_managed_documents(&docs, DOCUMENT_OWNER_V1, &notices);
+            }
+            "mutated-historical-v2" => {
+                let mut notices =
+                    include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md")
+                        .to_vec();
+                notices.extend_from_slice(b"mutated");
+                write_managed_documents(&docs, DOCUMENT_OWNER_FROZEN_V2, &notices);
+            }
+            "historical-marker-current-body" => {
+                write_managed_documents(
+                    &docs,
+                    DOCUMENT_OWNER_FROZEN_V2,
+                    include_bytes!("../THIRD-PARTY-NOTICES.md"),
+                );
+            }
+            "current-marker-historical-body" => {
+                write_managed_documents(
+                    &docs,
+                    &current_document_owner(),
+                    include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md"),
+                );
             }
             "mutated-previous-v2" => {
                 let mut notices = PREVIOUS_V2_NOTICES.to_vec();
@@ -3561,6 +3659,11 @@ fn previous_document_migrations_roll_back_exactly_after_injected_harness_failure
         DOCUMENT_OWNER_PREVIOUS_V2,
         PREVIOUS_V2_NOTICES.to_vec(),
     )];
+    cases.push((
+        "historical-v2",
+        DOCUMENT_OWNER_FROZEN_V2,
+        include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md").to_vec(),
+    ));
     if let Some(notices) = legacy_notices() {
         cases.push(("legacy-v1", DOCUMENT_OWNER_V1, notices));
     }
@@ -3646,11 +3749,11 @@ fn custom_xdg_unicode_space_apostrophe_reinstall_is_exact_and_idempotent() {
     );
     assert_eq!(
         fs::read(docs.join("THIRD-PARTY-NOTICES.md")).unwrap(),
-        include_bytes!("../release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md")
+        include_bytes!("../THIRD-PARTY-NOTICES.md")
     );
     assert_eq!(
         fs::read(docs.join(".azdaja-managed")).unwrap(),
-        DOCUMENT_OWNER_FROZEN_V2
+        current_document_owner()
     );
     let before = tree_identity(&docs);
     let second = assert_success(&run_once());

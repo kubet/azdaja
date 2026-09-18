@@ -42,7 +42,7 @@ jobs:
           cargo test --locked --offline --test site_installer
           frozen_installer_rejects_current_unpublished_notice_even_with_matching_download_checksum
           -- --exact --test-threads=1
-      - name: Install current source and check frozen-installer compatibility
+      - name: Install current feature-enabled source and check current-installer compatibility
         shell: bash
         run: |
           set -euo pipefail
@@ -57,9 +57,9 @@ jobs:
           }
           trap cleanup EXIT
 
-          cargo build --release --locked
+          cargo build --release --locked --features typesafe
           AZDAJA_PRODUCT_BINARY=target/release/azdaja \
-            cargo test --release --locked --test product_50mb \
+            cargo test --release --locked --features typesafe --test product_50mb \
             offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death \
             -- --ignored --exact --test-threads=1
 
@@ -81,10 +81,10 @@ jobs:
           done
 
           CARGO_TARGET_DIR="$scratch/cargo-target" \
-            cargo install --path . --locked --root "$source_root"
+            cargo install --path . --locked --features typesafe --root "$source_root"
           source_binary="$source_root/bin/azdaja"
           test -x "$source_binary"
-          test "$("$source_binary" --version)" = "azdaja 0.1.17 (monty 0.0.21)"
+          test "$("$source_binary" --version)" = "azdaja 0.1.18 (monty 0.0.21)"
           HOME="$source_home" PATH="$guard:$PATH" \
             "$source_binary" doctor --caps > "$scratch/source-caps.json"
           python3 - "$scratch/source-caps.json" <<'PY'
@@ -93,7 +93,8 @@ jobs:
           import sys
 
           caps = json.loads(pathlib.Path(sys.argv[1]).read_text())
-          assert caps["azdaja"] == "0.1.17", caps
+          assert caps["azdaja"] == "0.1.18", caps
+          assert caps["typed_judgments"]["typesafe_compiled"] is True, caps
           assert caps["monty"] == "0.0.21", caps
           assert caps["dump_version"] == 5, caps
           assert "persistent-repl" in caps["capabilities"], caps
@@ -103,17 +104,17 @@ jobs:
           test -z "$(find "$source_home" -mindepth 1 -print -quit)"
 
           case "$(uname -s)-$(uname -m)" in
-            Darwin-arm64) asset=azdaja-v0.1.17-darwin-arm64 ;;
-            Linux-x86_64) asset=azdaja-v0.1.17-linux-x86_64 ;;
+            Darwin-arm64) asset=azdaja-v0.1.18-darwin-arm64 ;;
+            Linux-x86_64) asset=azdaja-v0.1.18-linux-x86_64 ;;
             *) printf 'unsupported CI host: %s-%s\n' "$(uname -s)" "$(uname -m)" >&2; exit 1 ;;
           esac
-          cp "$source_binary" "$fixture/azdaja-v0.1.17-darwin-arm64"
-          cp "$source_binary" "$fixture/azdaja-v0.1.17-darwin-x86_64"
-          cp "$source_binary" "$fixture/azdaja-v0.1.17-linux-x86_64"
-          # This immutable installer accepts the frozen historical notice only.
-          # Current notice verification is separate; this is not publication approval.
+          cp "$source_binary" "$fixture/azdaja-v0.1.18-darwin-arm64"
+          cp "$source_binary" "$fixture/azdaja-v0.1.18-darwin-x86_64"
+          cp "$source_binary" "$fixture/azdaja-v0.1.18-linux-x86_64"
+          # The current installer accepts the source-backed current notice.
+          # The frozen installer rejection test remains separate; this is not publication approval.
           cp LICENSE "$fixture/"
-          cp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md "$fixture/THIRD-PARTY-NOTICES.md"
+          cp THIRD-PARTY-NOTICES.md "$fixture/THIRD-PARTY-NOTICES.md"
           digest="$(python3 - "$source_binary" <<'PY'
           import hashlib
           import pathlib
@@ -126,11 +127,11 @@ jobs:
           import pathlib
           import sys
           fixture, binary_digest = pathlib.Path(sys.argv[1]), sys.argv[2]
-          assert hashlib.sha256((fixture / "THIRD-PARTY-NOTICES.md").read_bytes()).hexdigest() == "393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2"
+          assert (fixture / "THIRD-PARTY-NOTICES.md").read_bytes() == pathlib.Path("THIRD-PARTY-NOTICES.md").read_bytes()
           payloads = [
-              ("azdaja-v0.1.17-darwin-arm64", binary_digest),
-              ("azdaja-v0.1.17-darwin-x86_64", binary_digest),
-              ("azdaja-v0.1.17-linux-x86_64", binary_digest),
+              ("azdaja-v0.1.18-darwin-arm64", binary_digest),
+              ("azdaja-v0.1.18-darwin-x86_64", binary_digest),
+              ("azdaja-v0.1.18-linux-x86_64", binary_digest),
               ("LICENSE", hashlib.sha256((fixture / "LICENSE").read_bytes()).hexdigest()),
               ("THIRD-PARTY-NOTICES.md", hashlib.sha256((fixture / "THIRD-PARTY-NOTICES.md").read_bytes()).hexdigest()),
           ]
@@ -180,17 +181,17 @@ jobs:
             PATH="$guard:/usr/bin:/bin:/usr/sbin:/sbin" command -v az >/dev/null
           fi
           cmp LICENSE "$install_home/.local/share/azdaja/LICENSE"
-          cmp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md "$install_home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
+          cmp THIRD-PARTY-NOTICES.md "$install_home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
 
           # Refuse a green run that registered zero or unexpected ignored tests.
-          cargo +1.95.0 test --release --locked --test installed_project_memory \
+          cargo +1.95.0 test --release --locked --features typesafe --test installed_project_memory \
             -- --ignored --list > "$scratch/installed-artifact-tests"
           grep -Fx 'installed_artifact_preserves_cross_home_handoff_and_relocation: test' "$scratch/installed-artifact-tests"
           grep -Fx 'installed_artifact_refuses_disabled_writes_and_corrupt_reads_without_fallback: test' "$scratch/installed-artifact-tests"
           test "$(grep -c ': test$' "$scratch/installed-artifact-tests")" -eq 2
           # Exercise the installed bytes, never Cargo's test-built CLI substitute.
           AZDAJA_INSTALLED_TEST_BINARY="$installed" PATH="$guard:$PATH" \
-            cargo +1.95.0 test --release --locked --test installed_project_memory \
+            cargo +1.95.0 test --release --locked --features typesafe --test installed_project_memory \
             -- --ignored --test-threads=1
           test ! -e "$marker"
 
@@ -315,7 +316,7 @@ jobs:
           )
 
           cat > "$scratch/expected-help" <<'EOF'
-          AZDAJA v0.1.17 — virtual memory for language models
+          AZDAJA v0.1.18 — virtual memory for language models
           Usage: az <command>
           Commands: help solo map install doctor start load exec final list kill uninstall memory jev
           Install: az install  (auto-detects supported tools)

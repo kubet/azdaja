@@ -6124,7 +6124,7 @@ exit 9
     assert!(dst.join("azdaja").is_file());
     let skill = fs::read_to_string(dst.join("SKILL.md")).unwrap();
     assert!(
-        skill.contains("Azdaja 0.1.17") && skill.contains(dst.join("azdaja").to_str().unwrap())
+        skill.contains("Azdaja 0.1.18") && skill.contains(dst.join("azdaja").to_str().unwrap())
     );
     assert!(skill.contains("explicit user activation"));
     assert!(!skill.contains("A matching task means invoke this skill now"));
@@ -9253,7 +9253,8 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
                             "{usage}\n{batch_usage}\nHost-only credentials."
                         ))
                     );
-                    assert!(stdout.contains("Neither attach nor status enables inference."));
+                    assert!(stdout.contains("Attach and status perform no inference."));
+                    assert!(stdout.contains("A valid configured key enables automatic Jev mode for later exec and explicitly executed batches, not autonomous solo; [judge].enabled=false overrides it."));
                     assert!(
                         stdout.contains("Batch validates the whole JSONL plan offline by default.")
                     );
@@ -9268,7 +9269,7 @@ fn command_help_usage_and_bare_text_are_identical_through_both_names() {
                     assert!(batch_help.contains(
                         "Default: validate only, with no credentials, network, or job files."
                     ));
-                    assert!(batch_help.contains("Execution requires a typesafe build, [judge].enabled=true and all three explicit job limits."));
+                    assert!(batch_help.contains("Execution requires a typesafe build, a valid configured key, enabled automatic or explicit Jev mode, and all three explicit job limits. [judge].enabled=false always disables execution."));
                 }
                 _ => assert_eq!(stdout, format!("{usage}\n")),
             }

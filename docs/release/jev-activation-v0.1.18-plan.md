@@ -16,7 +16,7 @@ Environment presence is authoritative, including invalid, empty and non-Unicode 
 | Automatic environment activation | Actual start/exec/final/kill with synthetic named keys | Host `judge_stats().enabled` follows build and local key validity with zero attempts |
 | Persistent attachment and detach | Actual attach/status, fresh CLI invocation, exec, detach | Auto follows retained key then turns off, config bytes unchanged |
 | Explicit false and custom names | Actual CLI with attached and environment keys | False wins, only configured name considered, invalid override does not fall back |
-| Optional solo capability contract | Actual solo with stdin-draining local root fixture | Effective-on advertises typed API, off preserves old contract, synthetic key not forwarded |
+| Exclude unproven automatic solo use | Actual solo with stdin-draining local root fixture, plus direct SoloSession API | Auto with a key preserves old contract, only explicit true advertises typed API when compiled, feature-off says unavailable, synthetic key not forwarded |
 | No automatic spending | Help/caps/offline batch and missing-approval/limits cases | No provider attempt or batch intent created |
 | Old completed/ambiguous jobs | Current installed.py with retained native jobs | Completed resume makes zero new requests, ambiguous intent is never retried |
 | Batch/primitive composition | Native engine, batch, credential, solo preflight/transport suites plus installed exporter/queue | Existing source bindings, budgets, failure/unknown accounting and secret boundaries hold |

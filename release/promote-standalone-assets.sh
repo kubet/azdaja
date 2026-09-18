@@ -16,7 +16,7 @@ RUN_ID=$2
 RUN_ATTEMPT=$3
 CANDIDATE_ROOT=$4
 OUTPUT_DIR=$5
-VERSION=0.1.17
+VERSION=0.1.18
 
 fail() {
   printf 'promote-standalone-assets: %s\n' "$1" >&2

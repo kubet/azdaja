@@ -840,7 +840,7 @@ fn jev_cmd(args: &[String]) -> Result<bool> {
     let usage = command_usage("jev").expect("known command");
     if args.len() == 2 && matches!(args[1].as_str(), "--help" | "-h") {
         println!(
-            "{usage}\n{JEV_BATCH_USAGE}\nHost-only credentials. Attach reads one key from bounded stdin, never argv.\nEnvironment overrides attachment. A valid configured key enables automatic Jev mode on later execution; [judge].enabled=false overrides it.\nAttach and status perform no inference. Owner-only plaintext storage is not an encrypted vault. Status never contacts a provider.\nBatch validates the whole JSONL plan offline by default. --execute sends selected state to TypeSafe."
+            "{usage}\n{JEV_BATCH_USAGE}\nHost-only credentials. Attach reads one key from bounded stdin, never argv.\nEnvironment overrides attachment. A valid configured key enables automatic Jev mode for later exec and explicitly executed batches, not autonomous solo; [judge].enabled=false overrides it.\nAttach and status perform no inference. Owner-only plaintext storage is not an encrypted vault. Status never contacts a provider.\nBatch validates the whole JSONL plan offline by default. --execute sends selected state to TypeSafe."
         );
         return Ok(true);
     }
@@ -1017,6 +1017,9 @@ fn doctor(args: &[String]) -> Result<bool> {
                     .enabled
                     .unwrap_or(report["syntax_valid"] == true)
         );
+        report["auto_activation_scopes"] = serde_json::json!(["exec", "batch"]);
+        report["solo_effective_enabled"] =
+            serde_json::json!(cfg!(feature = "typesafe") && config.judge.is_enabled());
         report["runtime_configuration_checked"] = serde_json::json!(true);
         report["provider_readiness_checked"] = serde_json::json!(false);
         println!("{report}");
@@ -1042,6 +1045,8 @@ fn doctor(args: &[String]) -> Result<bool> {
                     "enabled_by_default": false,
                     "default_activation_mode": "auto_when_configured_credential_is_valid",
                     "explicit_disable_supported": true,
+                    "auto_activation_scopes": ["exec", "batch"],
+                    "solo_requires_explicit_enable": true,
                     "host_opt_in_required": true,
                     "runtime_configuration_checked": false,
                     "credentials_checked": false,
@@ -8376,7 +8381,7 @@ fn parse_solo_args(args: &[String]) -> Result<SoloArgs> {
 }
 
 fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
-    let resolved_config = cfg.with_resolved_judge();
+    let resolved_config = cfg.with_explicit_solo_judge();
     let cfg = &resolved_config;
     let SoloArgs {
         question,

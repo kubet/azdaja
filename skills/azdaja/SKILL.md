@@ -3,7 +3,7 @@ name: azdaja
 description: Use only when the user explicitly chooses Azdaja for the current request, session, or repository.
 ---
 
-# Azdaja 0.1.17
+# Azdaja 0.1.18
 
 ## Managed-skill awareness and route
 

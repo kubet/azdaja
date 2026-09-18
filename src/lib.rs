@@ -705,6 +705,14 @@ impl Config {
         config
     }
 
+    /// Autonomous solo is not an automatically activated Jev product path.
+    /// Keep the existing explicit experiment available without probing keys.
+    pub fn with_explicit_solo_judge(&self) -> Self {
+        let mut config = self.clone();
+        config.judge.enabled = Some(self.judge.is_enabled());
+        config
+    }
+
     pub fn load() -> Result<Self> {
         // Validate both authoritative overrides before any configuration can select a provider.
         // This also makes an invalid AZDAJA_HOME fail closed for stdin-based adapters that do not
@@ -6990,6 +6998,8 @@ impl SoloSession {
         cfg: &Config,
         allow_projection_private: bool,
     ) -> Result<ExecResult> {
+        let explicit_config = cfg.with_explicit_solo_judge();
+        let cfg = &explicit_config;
         self.last_judge_stats = serde_json::Value::Null;
         self.answer = None;
         self.answer_error = None;

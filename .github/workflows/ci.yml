@@ -115,7 +115,7 @@ jobs:
           TYPESAFE_API_KEY: ""
         run: |
           cargo test --locked --features typesafe --lib judge_batch::tests
-          cargo test --locked --features typesafe --test judge_batch_cli --test jev_credentials
+          cargo test --locked --features typesafe --test judge_batch_cli --test jev_credentials --test jev_activation
       - name: Provider-free optional solo preflight and no-paid-replay boundary
         env:
           TYPESAFE_API_KEY: ""
@@ -131,11 +131,24 @@ jobs:
         run: |
           python3 -B -m unittest bench.jev.batch_workflow.test_installed
           python3 -B bench/jev/batch_workflow/installed.py --binary target/debug/azdaja --output "${{ runner.temp }}/jev-installed-typesafe"
-      - run: cargo build --release --locked
+      - run: cargo build --release --locked --no-default-features --target-dir target/feature-off
+      - name: Assert genuinely feature-off installed test binary
+        run: >-
+          target/feature-off/release/azdaja doctor --caps |
+          python3 -c 'import json,sys; assert json.load(sys.stdin)["typed_judgments"]["typesafe_compiled"] is False'
       - name: Installed feature-off workflow remains provider-free
         run: >-
           python3 -B bench/jev/batch_workflow/installed.py
-          --binary target/release/azdaja --output "${{ runner.temp }}/jev-installed-default"
+          --binary target/feature-off/release/azdaja --output "${{ runner.temp }}/jev-installed-default"
+      - run: cargo build --release --locked --features typesafe
+      - name: Assert official binary includes optional TypeSafe support
+        run: >-
+          target/release/azdaja doctor --caps |
+          python3 -c 'import json,sys; assert json.load(sys.stdin)["typed_judgments"]["typesafe_compiled"] is True'
+      - name: Installed official feature-enabled binary remains optional
+        run: >-
+          python3 -B bench/jev/batch_workflow/installed.py
+          --binary target/release/azdaja --output "${{ runner.temp }}/jev-installed-release-typesafe"
       - name: Verify advertised Linux glibc floor
         if: runner.os == 'Linux'
         shell: bash
@@ -146,7 +159,7 @@ jobs:
       - name: Release-only 50 MiB product acceptance
         run: >-
           AZDAJA_PRODUCT_BINARY=target/release/azdaja
-          cargo test --release --locked --test product_50mb
+          cargo test --release --locked --features typesafe --test product_50mb
           offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death
           -- --ignored --exact --test-threads=1
       - run: target/release/azdaja --version
@@ -157,7 +170,7 @@ jobs:
       # Manual runs validate and retain exact candidate bytes for reviewed promotion.
       # These artifacts are not releases and must never be bound directly into site/install.
       # They may only be promoted by release/promote-standalone-assets.sh after review.
-      - name: Validate current binary with frozen installer, plain help, and 50 MiB path
+      - name: Validate official binary with current installer, plain help, and 50 MiB path
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
@@ -191,23 +204,23 @@ jobs:
             Darwin-arm64|Darwin-x86_64|Linux-x86_64) ;;
             *) printf 'unsupported CI host: %s-%s\n' "$(uname -s)" "$(uname -m)" >&2; exit 1 ;;
           esac
-          cp "$candidate" "$fixture/azdaja-v0.1.17-darwin-arm64"
-          cp "$candidate" "$fixture/azdaja-v0.1.17-darwin-x86_64"
-          cp "$candidate" "$fixture/azdaja-v0.1.17-linux-x86_64"
-          # This immutable installer accepts the frozen historical notice only.
-          # Current notice verification is separate; this is not publication approval.
+          cp "$candidate" "$fixture/azdaja-v0.1.18-darwin-arm64"
+          cp "$candidate" "$fixture/azdaja-v0.1.18-darwin-x86_64"
+          cp "$candidate" "$fixture/azdaja-v0.1.18-linux-x86_64"
+          # The current installer accepts the source-backed current notice.
+          # The frozen installer rejection test remains separate; this is not publication approval.
           cp LICENSE "$fixture/"
-          cp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md "$fixture/THIRD-PARTY-NOTICES.md"
+          cp THIRD-PARTY-NOTICES.md "$fixture/THIRD-PARTY-NOTICES.md"
           python3 - "$fixture" "$digest" <<'PY'
           import hashlib
           import pathlib
           import sys
           fixture, binary_digest = pathlib.Path(sys.argv[1]), sys.argv[2]
-          assert hashlib.sha256((fixture / "THIRD-PARTY-NOTICES.md").read_bytes()).hexdigest() == "393cfd092b543059d376b96134e7dadf2da5e2f5e76df84d9edbca42d22f62d2"
+          assert (fixture / "THIRD-PARTY-NOTICES.md").read_bytes() == pathlib.Path("THIRD-PARTY-NOTICES.md").read_bytes()
           payloads = [
-              ("azdaja-v0.1.17-darwin-arm64", binary_digest),
-              ("azdaja-v0.1.17-darwin-x86_64", binary_digest),
-              ("azdaja-v0.1.17-linux-x86_64", binary_digest),
+              ("azdaja-v0.1.18-darwin-arm64", binary_digest),
+              ("azdaja-v0.1.18-darwin-x86_64", binary_digest),
+              ("azdaja-v0.1.18-linux-x86_64", binary_digest),
               ("LICENSE", hashlib.sha256((fixture / "LICENSE").read_bytes()).hexdigest()),
               ("THIRD-PARTY-NOTICES.md", hashlib.sha256((fixture / "THIRD-PARTY-NOTICES.md").read_bytes()).hexdigest()),
           ]
@@ -274,10 +287,10 @@ jobs:
             PATH="$guard:/usr/bin:/bin:/usr/sbin:/sbin" command -v az >/dev/null
           fi
           cmp LICENSE "$home/.local/share/azdaja/LICENSE"
-          cmp release/historical/THIRD-PARTY-NOTICES-pre-v0.1.17.md "$home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
+          cmp THIRD-PARTY-NOTICES.md "$home/.local/share/azdaja/THIRD-PARTY-NOTICES.md"
 
           cat > "$scratch/expected-help" <<'EOF'
-          AZDAJA v0.1.17 — virtual memory for language models
+          AZDAJA v0.1.18 — virtual memory for language models
           Usage: az <command>
           Commands: help solo map install doctor start load exec final list kill uninstall memory jev
           Install: az install  (auto-detects supported tools)
@@ -297,7 +310,7 @@ jobs:
           test ! -e "$marker"
 
           AZDAJA_PRODUCT_BINARY=target/release/azdaja \
-            cargo test --release --locked --test product_50mb \
+            cargo test --release --locked --features typesafe --test product_50mb \
             offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death \
             -- --ignored --exact --test-threads=1
           test ! -e "$marker"
@@ -333,12 +346,14 @@ jobs:
           import subprocess
 
           source = pathlib.Path("target/release/azdaja")
+          caps = json.loads(subprocess.check_output([str(source), "doctor", "--caps"], text=True))
+          assert caps["typed_judgments"]["typesafe_compiled"] is True
           host = subprocess.check_output(["rustc", "-vV"], text=True)
           host = next(line.split(": ", 1)[1] for line in host.splitlines() if line.startswith("host: "))
           assets = {
-              "aarch64-apple-darwin": "azdaja-v0.1.17-darwin-arm64",
-              "x86_64-apple-darwin": "azdaja-v0.1.17-darwin-x86_64",
-              "x86_64-unknown-linux-gnu": "azdaja-v0.1.17-linux-x86_64",
+              "aarch64-apple-darwin": "azdaja-v0.1.18-darwin-arm64",
+              "x86_64-apple-darwin": "azdaja-v0.1.18-darwin-x86_64",
+              "x86_64-unknown-linux-gnu": "azdaja-v0.1.18-linux-x86_64",
           }
           if host not in assets:
               raise SystemExit(f"unsupported standalone target: {host}")
@@ -362,7 +377,7 @@ jobs:
           if not architecture_valid:
               raise SystemExit(f"binary architecture validation failed for {host}")
           reported_version = subprocess.check_output([str(source), "--version"], text=True).strip()
-          if reported_version != "azdaja 0.1.17 (monty 0.0.21)":
+          if reported_version != "azdaja 0.1.18 (monty 0.0.21)":
               raise SystemExit(f"unexpected binary version: {reported_version}")
           receipt = {
               "schema_version": 1,
@@ -373,7 +388,7 @@ jobs:
               "asset_name": asset_name,
               "bytes": len(data),
               "sha256": hashlib.sha256(data).hexdigest(),
-              "version": "0.1.17",
+              "version": "0.1.18",
               "architecture_validation": True,
               "publication_authorized": False,
           }
@@ -417,7 +432,7 @@ jobs:
         with:
           key: standalone-${{ matrix.rust_target }}
       - name: Build documented standalone target
-        run: cargo build --release --locked --target "${{ matrix.rust_target }}"
+        run: cargo build --release --locked --features typesafe --target "${{ matrix.rust_target }}"
       - name: Verify standalone target architecture
         shell: bash
         env:
@@ -453,7 +468,7 @@ jobs:
           set -euo pipefail
           mkdir release-candidate
           cp "target/${{ matrix.rust_target }}/release/azdaja" \
-            "release-candidate/azdaja-v0.1.17-${{ matrix.asset }}"
+            "release-candidate/azdaja-v0.1.18-${{ matrix.asset }}"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: github.event_name == 'workflow_dispatch'
         with:
@@ -488,17 +503,17 @@ jobs:
             exit $status
           }
       - run: cargo test --lib --bin azdaja --locked -- --test-threads=1
-      - run: cargo build --release --locked
+      - run: cargo build --release --locked --features typesafe
       - run: .\target\release\azdaja.exe --version
       - run: .\target\release\azdaja.exe doctor --caps
       - name: Validate Windows installer and tamper refusal
         shell: pwsh
         run: |
           $scratch = Join-Path $env:RUNNER_TEMP "azdaja-windows-installer-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $release = Join-Path $scratch "v0.1.17"
+          $release = Join-Path $scratch "v0.1.18"
           $install = Join-Path $scratch "installed"
           $tamperedInstall = Join-Path $scratch "tampered-installed"
-          $asset = "azdaja-v0.1.17-windows-x86_64.exe"
+          $asset = "azdaja-v0.1.18-windows-x86_64.exe"
           try {
             New-Item -ItemType Directory -Path $release -Force | Out-Null
             Copy-Item .\target\release\azdaja.exe (Join-Path $release $asset)
@@ -538,7 +553,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path release-candidate | Out-Null
           Copy-Item .\target\release\azdaja.exe `
-            .\release-candidate\azdaja-v0.1.17-windows-x86_64.exe
+            .\release-candidate\azdaja-v0.1.18-windows-x86_64.exe
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: github.event_name == 'workflow_dispatch'
         with:

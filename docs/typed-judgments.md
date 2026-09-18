@@ -46,7 +46,7 @@ cargo build --locked --features typesafe --bin azdaja
 ```
 
 No `[judge]` configuration is needed for automatic mode. An omitted `enabled`
-field enables the engine on later execution only when the build supports it and
+field enables the engine for later `exec` and explicitly executed batches only when the build supports it and
 the exact configured credential is locally usable. No key means off. Optional
 configuration in a host-selected `AZDAJA_CONFIG` TOML file:
 
@@ -66,7 +66,7 @@ max_input_tokens_per_cell = 100000
 
 Supply the secret in the named **host environment variable**, using your normal secret management, or attach it once with `az jev attach --stdin` through a private stdin pipe. `az jev status` and `az doctor jev` report local source and syntax status without provider calls. `az jev detach` removes the named attachment. A present environment variable takes precedence, including an invalid value: there is no silent fallback. For a custom `key_env`, pass the same `--key-env NAME` to attachment commands.
 
-Attachment is an owner-only plaintext file under the private host state root, not an encrypted vault or a cross-user secret service. It is supported on macOS/Linux/Android and fails closed elsewhere. Attachment does not change configuration or start inference, but in automatic mode it enables Jev for later `exec`, `solo` and explicitly executed batches. Detaching disables automatic mode on later invocations if no environment override remains. Hard termination can leave a private staging file until the next attachment/replacement or detach recovers it. See [CLI credential boundaries](cli.md) for exact semantics.
+Attachment is an owner-only plaintext file under the private host state root, not an encrypted vault or a cross-user secret service. It is supported on macOS/Linux/Android and fails closed elsewhere. Attachment does not change configuration or start inference, but in automatic mode it enables Jev for later `exec` and explicitly executed batches, not autonomous `solo`. Detaching disables automatic mode on later invocations if no environment override remains. Hard termination can leave a private staging file until the next attachment/replacement or detach recovers it. See [CLI credential boundaries](cli.md) for exact semantics.
 
 Never put the key in argv, TOML, an RLM prompt, `state`, a question, a note, a committed script, or shell history. The key is not forwarded to custom generative subprocesses. The HTTP destination is fixed, uses TLS, does not follow redirects, use inherited proxies, or automatically retry. Only the explicitly supplied state/questions are sent. TypeSafe-shaped trace redaction is defense in depth, not automatic detection of arbitrary secrets in source data. Selecting evidence for an external service remains the caller's responsibility.
 
@@ -111,10 +111,13 @@ Exact serialized requests are cached **within one cell**. `_azdaja.cache_hit` an
 
 The remaining cell wall deadline caps an HTTP call. Known usage crossing the host cap rejects the answer while retaining known usage in `judge_stats()`. If provider usage is absent or invalid, it is unknown, not free. A reported-token cap cannot undo a request already billed. Dollar cost needs separate provider billing evidence. Model strings describe provider-reported identity, not immutable weights; moving aliases may change across requests.
 
-## Optional `solo` workflow
+## Experimental, explicitly enabled `solo` workflow
 
-With the `typesafe` build feature and effective activation (automatic with a key,
-or explicit `enabled = true`), `solo`
+Automatic key-based activation does **not** enable Jev in autonomous `solo`.
+The previous long-task experiment did not establish successful end-to-end Jev
+usefulness. This is not a recommended production performance path. The existing
+explicit experimental opt-in remains available: with `typesafe` and
+`[judge].enabled = true`, `solo`
 advertises `judge_many`, `judge_stats`, `llm` and `llm_batch` to its root model.
 Only successful host-accounted semantic requests satisfy its semantic gate.
 Stats inspection, cache hits and failed preflight are not semantic evidence.

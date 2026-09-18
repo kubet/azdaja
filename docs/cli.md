@@ -68,7 +68,9 @@ name must also be selected in `[judge].key_env` for inference. `az doctor jev`
 reports the configured name, `activation_mode` (`auto`, `enabled`, `disabled`),
 `configured_enabled` (`null`, `true`, `false`) and `effective_enabled`. Automatic
 mode requires a locally valid named credential and a TypeSafe-capable build.
-These are local policy/syntax observations, not proof of remote readiness.
+`auto_activation_scopes` is `exec` and `batch`. `solo_effective_enabled` reports
+the separate explicit experimental opt-in. These are local policy/syntax
+observations, not proof of remote readiness.
 Neither status command authenticates
 the credential or probes the provider. `az doctor --caps` remains static and does
 not even read credentials or configuration. Bare `az doctor` is different and can
@@ -93,7 +95,8 @@ name recovers them under the write lock. `null` means staging was not inspected,
 for example because an environment override won. Attachment and all status paths
 leave `[judge].enabled` unchanged and make no inference requests. Starting with
 v0.1.18, an omitted `enabled` field means automatic activation from the configured
-key. Providing a key therefore opts into Jev on later execution. Explicit
+key. Providing a key therefore opts into Jev on later `exec` and explicitly
+executed batches, not autonomous `solo`. Explicit
 `enabled = false` always wins, and no key means off. Official release binaries
 include the optional transport. Default Cargo builds do not. `jev batch` still
 requires `--execute` and all three job limits, regardless of key presence.

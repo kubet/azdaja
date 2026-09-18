@@ -42,12 +42,6 @@ cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.18 --locked -
 
 `azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.
 
-Jev is optional. Official v0.1.18 binaries include its transport, and a configured
-TypeSafe key enables it on later execution. Without a key it stays off.
-`[judge] enabled = false` overrides key-based activation. Source builds can omit
-`--features typesafe` to exclude the transport entirely. See
-[typed judgments](docs/typed-judgments.md) for local attachment and request limits.
-
 `az install` finds supported tools automatically. To target one tool, run `az install jcode`; to install every integration, run `az install all`. Then run the exact `az doctor` command printed by install before reloading the tool. See [edge cases and lifecycle details](docs/install.md) for platform checks, registry reloads, configuration paths, Cargo setup, and safe removal.
 
 The Jcode integration also installs a byte-owned hook block in `JCODE_HOME/config.toml`. Broad repository reads receive a memory handoff: run the challenged `azdaja solo ... --repo .` command once after replacing `<user task>` with the current request, then continue from its answer. Do not retry the blocked broad read. Narrow reads, Git control, builds, tests, lint, and formatting remain available. Existing foreign hooks are never overwritten, and uninstall removes only the exact Azdaja-managed block.
@@ -94,7 +88,7 @@ Commands: `help`, `solo`, `map`, `install`, `doctor`, `start`, `load`, `exec`, `
 
 See the [CLI reference](docs/cli.md) for signatures, process custody, signal behavior, temporary files, and configuration errors.
 
-**Optional typed judgments (development source):** `judge_many(state, questions)` can return TypeSafe Jev probabilities beside ordinary `llm` calls in the persistent evaluator. Both the `typesafe` build feature and host `[judge]` opt-in are required. It preserves distributions rather than enforcing a semantic confidence cutoff. See the [native interface, example, limits and practical use cases](docs/typed-judgments.md). Existing providers do not require it.
+**Optional Jev:** typed judgments, resumable batches and source-linked review. Set `TYPESAFE_API_KEY` in the host environment or pipe it from a secret manager into `az jev attach --stdin`, then check `az jev status`. No key means off. Key activation covers `exec` and explicitly budgeted batches, not autonomous `solo`. `[judge] enabled = false` overrides it. [Examples](docs/typed-judgments.md).
 
 ## Results
 
