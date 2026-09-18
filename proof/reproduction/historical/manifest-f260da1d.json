@@ -1,7 +1,7 @@
 {
   "schema": "azdaja.first_party_proof_bundle.v1",
   "bundle": "azdaja-first-party-proof",
-  "source_commit": "ed875114993af7af454cfb53175fcd37aa7093a6",
+  "source_commit": "01fdb2e0c1f6ce40ff509e5872d01e70d0bb1dde",
   "hash_algorithm": "sha256",
   "artifacts": [
     {
