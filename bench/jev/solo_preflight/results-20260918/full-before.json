@@ -1,0 +1,24 @@
+{
+  "schema": "azdaja.optional_solo_preflight.full_suite.v1",
+  "argv": [
+    "cargo",
+    "+1.95.0",
+    "test",
+    "--all",
+    "--locked",
+    "--offline",
+    "--",
+    "--test-threads=1"
+  ],
+  "status": "failed",
+  "exit": 101,
+  "timed_out": false,
+  "seconds": 598.0375256250845,
+  "log_sha256": "c09bc735503b8c90743fa438aecec1af6913540ea98d7affb21d528a9a2aefd0",
+  "targets": 24,
+  "passed": 612,
+  "failed": 1,
+  "ignored": 3,
+  "new_remote_inference_requests": 0,
+  "scope": "Real whole-project Cargo suite. Provider fixtures are local. Existing ignored acceptance tests remain ignored."
+}

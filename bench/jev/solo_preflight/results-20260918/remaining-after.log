@@ -1,0 +1,198 @@
+   Compiling azdaja v0.1.17 (/Users/vukasinkubet/dev/azdaja)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.07s
+     Running tests/notice_distribution.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/notice_distribution-c92843e4492d0024)
+
+running 16 tests
+test candidate_fixture_server_avoids_reverse_dns_on_hosted_macos ... ok
+test cargo_package_list_matches_the_reviewed_file_allowlist ... ok
+test ci_builds_every_documented_standalone_target_explicitly ... ok
+test ci_windows_safety_is_strict_and_retains_exact_commit_candidates ... ok
+test current_notice_front_matter_tracks_canonical_version_targets_and_table_membership ... ok
+test current_notice_matches_every_feature_qualified_cargo_closure ... ok
+test promoted_v0114_assets_are_bound_to_exact_workflow_receipt ... ok
+test public_platform_claims_include_every_installer_target ... ok
+test published_notice_license_and_font_artifacts_remain_frozen ... ok
+test readme_has_exactly_three_install_blocks_and_readme_site_link_notices ... ok
+test release_publication_is_manual_exact_tag_nonoverwriting_and_attested ... ok
+test reviewed_notice_license_and_font_ofl_bytes_are_preserved ... ok
+test source_backed_notice_workflows_prepare_all_targets_without_adding_cargo_to_proof ... ok
+test standalone_release_assembler_keeps_raw_binaries_and_checksums_five_payloads ... ok
+test workflow_installer_fixtures_remain_historical_and_distinct_from_current_notice_gate ... ok
+test workflow_release_identity_matches_current_package_version ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.89s
+
+     Running tests/process_xdg.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/process_xdg-2df816e5b4d3fe3b)
+
+running 8 tests
+test direct_success_and_error_cannot_leave_background_descendants_or_orphan_writes ... ok
+test empty_and_relative_xdg_roots_fall_back_to_home_not_cwd ... ok
+test invalid_authoritative_overrides_fail_before_provider_entry ... ok
+test rust_targets_use_absolute_xdg_fallback_and_unicode_paths_and_reject_bad_jcode_home ... ok
+test shell_ignores_empty_and_relative_xdg_config_during_detection ... ok
+test term_and_hup_clean_prompt_and_descendants_with_conventional_status ... ok
+test timeout_is_an_overall_pipe_deadline_and_removes_the_process_group ... ok
+test unicode_absolute_config_and_state_overrides_remain_supported ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.90s
+
+     Running tests/product_50mb.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/product_50mb-ad87c3274e8d4c9b)
+
+running 1 test
+test offline_scripted_harness_answers_three_real_world_50_mib_files_without_a_death ... ignored, release-only acceptance: run with AZDAJA_PRODUCT_BINARY=target/release/azdaja
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/project_memory.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/project_memory-9b3e72791ed45cb7)
+
+running 16 tests
+test authoritative_home_and_explicit_modes_have_consistent_precedence ... ok
+test concurrent_first_use_keeps_every_acknowledged_project_note ... ok
+test corrupt_project_ledger_is_refused_without_rewriting_or_personal_fallback ... ok
+test emit_luna_handoff_pilot_receipts ... ignored, explicit preparation of frozen Luna pilot inputs, not an inference-quality test
+test empty_project_recall_is_read_only_and_reports_project_scope ... ok
+test existing_invalid_project_ledger_entries_are_refused_without_exposure_or_repair ... ok
+test explicit_global_memory_remains_separate_when_project_memory_is_off ... ok
+test explicit_project_memory_off_does_not_create_a_project_store ... ok
+test invalid_authoritative_home_and_forced_project_outside_git_fail_without_fallback ... ok
+test kind_filtered_list_and_show_use_the_project_store_across_homes ... ok
+test legacy_memory_is_explicitly_accessible_not_silently_merged_or_migrated ... ok
+test preexisting_empty_project_directories_are_not_initialized_by_read_commands ... ok
+test project_notes_keep_file_tags_after_repository_relocation_and_stay_git_ignored ... ok
+test repo_local_handoff_crosses_homes_and_subdirectories_without_global_leakage ... ok
+test symlinked_project_store_is_refused_without_touching_the_target ... ok
+test unsafe_project_directory_is_refused_without_permission_repair ... ok
+
+test result: ok. 15 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+     Running tests/project_memory_worktrees.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/project_memory_worktrees-f60b832fe86f7809)
+
+running 5 tests
+test cold_global_and_legacy_read_commands_do_not_initialize_personal_state ... ok
+test linked_worktrees_isolate_notes_but_share_handoffs_between_fresh_agents ... ok
+test ordinary_clone_excludes_private_notes_and_requires_an_explicit_new_handoff ... ok
+test populated_project_reads_do_not_recreate_the_actual_writer_lock ... ok
+test unsafe_existing_reader_custody_is_refused_without_repair_or_exposure ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+
+     Running tests/public_surface.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/public_surface-ac4c8b3e25e6c93f)
+
+running 2 tests
+test public_site_exposes_machine_readable_search_metadata ... ok
+test public_surface_leads_with_the_product_contract_not_capacity_marketing ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/publication_verifier.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/publication_verifier-03ab44c9b07f7b0e)
+
+running 9 tests
+test publication_verifier_accepts_complete_matching_boundaries ... ok
+test publication_verifier_rejects_a_non_semver_release_selector ... ok
+test publication_verifier_rejects_a_tag_without_the_intel_payload ... ok
+test publication_verifier_rejects_a_two_binary_github_manifest ... ok
+test publication_verifier_rejects_an_installer_without_the_intel_route ... ok
+test publication_verifier_rejects_mismatched_provenance ... ok
+test publication_verifier_requires_an_explicit_version ... ok
+test release_note_requires_the_post_publication_verifier ... ok
+test workflow_dispatch_runs_the_read_only_publication_verifier ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.59s
+
+     Running tests/recent_overview.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/recent_overview-c3c3746c4a0cb182)
+
+running 2 tests
+test bare_tty_shows_private_bounded_recent_projects_in_recency_order ... ok
+test non_tty_and_explicit_commands_remain_help_or_command_output_without_state ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.44s
+
+     Running tests/release_promotion.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/release_promotion-32c63ee6f1e25ce9)
+
+running 5 tests
+test promotion_accepts_a_logical_symlink_alias_of_the_source_repository ... ok
+test promotion_rejects_dirty_or_mismatched_source_commit ... ok
+test promotion_rejects_omission_extra_symlink_and_tamper_atomically ... ok
+test promotion_rejects_receipt_identity_and_wrong_magic_atomically ... ok
+test promotion_succeeds_with_exact_payloads_and_is_deterministic ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+
+     Running tests/site_installer.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/site_installer-70c6cfcd7af90876)
+
+running 53 tests
+test adjacent_config_ownership_preserves_custom_state_and_generic_config ... ok
+test alias_safety_failures_leave_home_and_foreign_paths_unchanged ... ok
+test all_harness_preflight_refuses_unknown_late_target_before_valid_first_target_changes ... ok
+test ambiguous_adjacent_config_states_refuse_before_install_mutation ... ok
+test bare_installer_without_a_terminal_requires_an_explicit_selection ... ok
+test custom_xdg_unicode_space_apostrophe_reinstall_is_exact_and_idempotent ... ok
+test exact_legacy_jcode_configs_migrate_but_customized_bytes_are_preserved ... ok
+test exact_legacy_v1_documents_migrate_to_fixed_v2_and_reinstall_exactly ... ok
+test exact_published_previous_v2_documents_migrate_to_current_and_reinstall ... ok
+test exact_v015_luna_configs_migrate_to_sol_but_customized_bytes_are_preserved ... ok
+test foreign_az_anywhere_on_path_skips_alias_without_changing_resolution ... ok
+test foreign_document_directory_file_symlink_and_hardlink_refuse_without_mutation ... ok
+test frozen_installer_rejects_current_unpublished_notice_even_with_matching_download_checksum ... ok
+test installed_alias_matches_solo_through_a_provider_free_fixture ... ok
+test installed_memory_transfer::duplicate_context_cannot_be_hidden_by_record_map_collection - should panic ... ok
+test installers_are_identical_and_bind_current_assets_and_sums ... ok
+test interactive_selection_installs_only_the_chosen_detected_subset ... ok
+test late_harness_failure_rolls_back_fresh_documents_and_standalone_surfaces ... ok
+test license_and_notice_checksum_missing_or_mismatch_is_zero_home_mutation ... ok
+test linux_glibc_floor_refuses_below_and_accepts_exact_boundary_and_above ... ok
+test linux_local_selector_requires_fake_glibc_instead_of_reading_the_host ... ok
+test local_fixture_alias_delta_matrix_covers_platform_routes_and_update_states ... ok
+test local_http_fixture_covers_platform_checksum_atomic_path_and_selected_route ... ok
+test mutated_owned_documents_and_marker_declared_fake_v2_refuse_before_home_mutation ... ok
+test native_linux_musl_and_missing_getconf_refuse_without_curl_or_home_mutation ... ok
+test ordinary_installs_reject_validation_overrides_before_mutation ... ok
+test previous_document_migrations_roll_back_exactly_after_injected_harness_failure ... ok
+test public_v014_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v015_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v015_binary_headers_match_the_advertised_platforms ... ok
+test public_v015_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v016_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v016_binary_headers_match_the_advertised_platforms ... ok
+test public_v016_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v017_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v017_binary_headers_match_the_advertised_platforms ... ok
+test public_v017_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v018_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v018_binary_headers_match_the_advertised_platforms ... ok
+test public_v018_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v019_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v019_binary_headers_match_the_advertised_platforms ... ok
+test public_v019_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v020_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v020_binary_headers_match_the_advertised_platforms ... ok
+test public_v020_site_assets_match_the_bound_checksum_manifest ... ok
+test public_v021_binaries_expose_the_installer_config_staging_protocol ... ok
+test public_v021_binary_headers_match_the_advertised_platforms ... ok
+test public_v021_site_assets_match_the_bound_checksum_manifest ... ok
+test stale_integration_directories_do_not_count_as_found_tools ... ok
+test standalone_installer_honors_authoritative_custom_jcode_home ... ok
+test symlinked_harness_target_refuses_without_touching_link_or_target ... ok
+test unowned_hardlinked_harness_refuses_without_inode_link_or_mode_mutation ... ok
+
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 114.78s
+
+     Running tests/source_install_artifact_gate.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/source_install_artifact_gate-80ca9ccf495b73d8)
+
+running 4 tests
+test hosted_help_fixtures_match_the_actual_current_public_command ... ok
+test source_install_ci_runs_registered_artifact_tests_against_verified_installed_bytes ... ok
+test source_install_ci_separates_current_notice_audit_from_frozen_installer_compatibility ... ok
+test source_install_handoff_explicitly_activates_its_shared_session ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/windows_installer.rs (/Users/vukasinkubet/.jcode/scratch/jev-batch-target/debug/deps/windows_installer-eb9e5522bb5514d9)
+
+running 3 tests
+test windows_ci_runs_the_real_installer_and_rejects_tampering ... ok
+test windows_installer_is_served_uncached_as_plain_text ... ok
+test windows_installer_is_versioned_hashed_atomic_and_fail_closed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

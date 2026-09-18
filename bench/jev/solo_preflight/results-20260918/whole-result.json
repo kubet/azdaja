@@ -1,0 +1,320 @@
+{
+  "checks": [
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "test",
+        "--doc",
+        "--locked",
+        "--offline"
+      ],
+      "exit": 0,
+      "log_sha256": "a7c3a803dcc256f0840d656ac28b599439747443a2f75da9eec0958ba995221f",
+      "name": "doc-tests",
+      "seconds": 1.338945832918398
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "final-format",
+      "seconds": 0.4642954170703888
+    },
+    {
+      "argv": [
+        "cargo",
+        "+1.95.0",
+        "clippy",
+        "--all-targets",
+        "--all-features",
+        "--locked",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit": 0,
+      "log_sha256": "07c20894da3a6a05f3da3ff36e6d2f13b0f5b5258e1063ff9f992e8c8797dbae",
+      "name": "final-clippy",
+      "seconds": 0.7803259999491274
+    }
+  ],
+  "corrected_test_sha256": "207ba8302bf3544418d4470a69b7d82b9dc0ead8ce17de3fb06a638943c5ba3c",
+  "correction": "Added exactly that source file to the expected list. No assertion removed or loosened. No production change.",
+  "first_whole_command_passed": false,
+  "hosted_acceptance": "pending publication",
+  "initial_failure": "Only the duplicated exact package allowlist in tests/notice_distribution.rs omitted src/solo_preflight.rs. The full failed log is retained.",
+  "logs": {
+    "full-before.json": "8c5a28c1bf688486ea132a7180345731091869afc3a85bada928c12b1c24d199",
+    "full-before.log": "c09bc735503b8c90743fa438aecec1af6913540ea98d7affb21d528a9a2aefd0",
+    "remaining-after.json": "5366c2510571641929772aa8fb8ff070f71be14972d4de04a2069836933f0516",
+    "remaining-after.log": "1af71f14154d7363adbf65ebbdd7a64c5174774b621aad7b6a4a1afa2a35a142",
+    "target-coverage.json": "bac6cc77e37673a7fda160987c0f16613478d3af160c4918150639d46f37accc"
+  },
+  "new_remote_inference_requests": 0,
+  "production_source_unchanged_from_scoped_acceptance": true,
+  "schema": "azdaja.optional_solo_preflight.whole_result.v1",
+  "status": "passed_target_matrix_after_test_expectation_fix",
+  "target_results": {
+    "tests/claude_nonblocking.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 3,
+      "status": "ok"
+    },
+    "tests/claude_profile_hooks.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 5,
+      "status": "ok"
+    },
+    "tests/cli_ux.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 9,
+      "status": "ok"
+    },
+    "tests/config_repair_model.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 2,
+      "status": "ok"
+    },
+    "tests/e2e.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 137,
+      "status": "ok"
+    },
+    "tests/feedback_channel.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 1,
+      "status": "ok"
+    },
+    "tests/installed_project_memory.rs": {
+      "failed": 0,
+      "ignored": 2,
+      "log": "full-before.log",
+      "passed": 1,
+      "status": "ok"
+    },
+    "tests/jcode_release_commands.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 2,
+      "status": "ok"
+    },
+    "tests/jev_credentials.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 7,
+      "status": "ok"
+    },
+    "tests/judge_batch_cli.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 9,
+      "status": "ok"
+    },
+    "tests/judge_native.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 7,
+      "status": "ok"
+    },
+    "tests/judge_solo_preflight.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 3,
+      "status": "ok"
+    },
+    "tests/lifecycle_ux.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 34,
+      "status": "ok"
+    },
+    "tests/memory_export.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 18,
+      "status": "ok"
+    },
+    "tests/memory_recall.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 8,
+      "status": "ok"
+    },
+    "tests/memory_recall_contract.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 4,
+      "status": "ok"
+    },
+    "tests/memory_recall_paths.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 6,
+      "status": "ok"
+    },
+    "tests/memory_recall_precision.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 9,
+      "status": "ok"
+    },
+    "tests/memory_recall_reliability.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 17,
+      "status": "ok"
+    },
+    "tests/memory_recall_review.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 3,
+      "status": "ok"
+    },
+    "tests/monty_compat.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 1,
+      "status": "ok"
+    },
+    "tests/notice_distribution.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "remaining-after.log",
+      "passed": 16,
+      "status": "ok"
+    },
+    "tests/process_xdg.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "remaining-after.log",
+      "passed": 8,
+      "status": "ok"
+    },
+    "tests/product_50mb.rs": {
+      "failed": 0,
+      "ignored": 1,
+      "log": "remaining-after.log",
+      "passed": 0,
+      "status": "ok"
+    },
+    "tests/project_memory.rs": {
+      "failed": 0,
+      "ignored": 1,
+      "log": "remaining-after.log",
+      "passed": 15,
+      "status": "ok"
+    },
+    "tests/project_memory_worktrees.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "remaining-after.log",
+      "passed": 5,
+      "status": "ok"
+    },
+    "tests/public_surface.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "remaining-after.log",
+      "passed": 2,
+      "status": "ok"
+    },
+    "tests/publication_verifier.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "remaining-after.log",
+      "passed": 9,
+      "status": "ok"
+    },
+    "tests/recent_overview.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "remaining-after.log",
+      "passed": 2,
+      "status": "ok"
+    },
+    "tests/release_promotion.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "remaining-after.log",
+      "passed": 5,
+      "status": "ok"
+    },
+    "tests/site_installer.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "remaining-after.log",
+      "passed": 53,
+      "status": "ok"
+    },
+    "tests/source_install_artifact_gate.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "remaining-after.log",
+      "passed": 4,
+      "status": "ok"
+    },
+    "tests/windows_installer.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "remaining-after.log",
+      "passed": 3,
+      "status": "ok"
+    },
+    "unittests src/lib.rs": {
+      "failed": 0,
+      "ignored": 1,
+      "log": "full-before.log",
+      "passed": 227,
+      "status": "ok"
+    },
+    "unittests src/main.rs": {
+      "failed": 0,
+      "ignored": 0,
+      "log": "full-before.log",
+      "passed": 84,
+      "status": "ok"
+    }
+  },
+  "targets": 35,
+  "tests_ignored": 5,
+  "tests_passed": 719,
+  "tracked_tests_passed": 710,
+  "untracked_original_test_targets": [
+    "memory_recall_precision"
+  ]
+}
