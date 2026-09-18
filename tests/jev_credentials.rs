@@ -5,8 +5,9 @@ use std::fs;
 use std::io::Write;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 const KEY: &str = "apikey_SYNTHETICATTACH_0123456789abcdef0123456789abcdef";
@@ -31,7 +32,7 @@ impl Fixture {
     fn state(&self) -> PathBuf {
         self.0.join("state")
     }
-    fn run(&self, args: &[&str], input: Option<&[u8]>, vars: &[(&str, &str)]) -> Output {
+    fn command(&self, args: &[&str], vars: &[(&str, &str)]) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_azdaja"));
         command
             .args(args)
@@ -47,13 +48,41 @@ impl Fixture {
         for (name, value) in vars {
             command.env(name, value);
         }
-        let mut child = command.spawn().unwrap();
-        if let Some(bytes) = input {
-            child.stdin.take().unwrap().write_all(bytes).unwrap();
+        command
+    }
+    fn run(&self, args: &[&str], input: Option<&[u8]>, vars: &[(&str, &str)]) -> Output {
+        Self::finish_child(self.command(args, vars).spawn().unwrap(), input)
+    }
+    fn finish_child(mut child: Child, input: Option<&[u8]>) -> Output {
+        let write_result = if let Some(bytes) = input {
+            child.stdin.take().unwrap().write_all(bytes)
         } else {
             drop(child.stdin.take());
+            Ok(())
+        };
+        let output = child.wait_with_output().unwrap();
+        // A refusal may close stdin first. Preserve its output for the caller's
+        // assertions, but never hide an incomplete write to a successful child.
+        match write_result {
+            Ok(()) => {}
+            Err(error)
+                if error.kind() == std::io::ErrorKind::BrokenPipe && !output.status.success() => {}
+            Err(error) => panic!("writing child stdin failed: {error}"),
         }
-        child.wait_with_output().unwrap()
+        output
+    }
+    fn run_after_exit(&self, args: &[&str], input: &[u8], vars: &[(&str, &str)]) -> Output {
+        let mut child = self.command(args, vars).spawn().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while child.try_wait().unwrap().is_none() {
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("CLI did not exit before the bounded stdin-write witness");
+            }
+            std::thread::yield_now();
+        }
+        Self::finish_child(child, Some(input))
     }
     fn ok(&self, args: &[&str], input: Option<&[u8]>, vars: &[(&str, &str)]) -> Value {
         let output = self.run(args, input, vars);
@@ -98,6 +127,40 @@ impl Drop for Fixture {
 
 fn mode(path: &Path) -> u32 {
     fs::symlink_metadata(path).unwrap().permissions().mode() & 0o777
+}
+
+#[test]
+fn invalid_args_refuse_before_stdin_write_without_losing_output() {
+    let f = Fixture::new();
+    let args = ["jev", "attach", "--stdin", "--stdin"];
+    let expected = f.run(&args, None, &[]);
+    let actual = f.run_after_exit(&args, KEY.as_bytes(), &[]);
+    assert_eq!(actual.status, expected.status);
+    assert_eq!(actual.stdout, expected.stdout);
+    assert_eq!(actual.stderr, expected.stderr);
+}
+
+#[test]
+fn unsafe_status_refuses_before_stdin_write_without_changing_storage() {
+    let f = Fixture::new();
+    f.attach(KEY);
+    let path = f.key_file();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+    let args = ["jev", "status", "--key-env", NAME];
+    let expected = f.run(&args, None, &[]);
+    let actual = f.run_after_exit(&args, OTHER.as_bytes(), &[]);
+    assert!(!actual.status.success());
+    assert_eq!(actual.status, expected.status);
+    assert_eq!(actual.stdout, expected.stdout);
+    assert_eq!(actual.stderr, expected.stderr);
+    assert_eq!(fs::read_to_string(&path).unwrap(), KEY);
+    assert_eq!(mode(&path), 0o644);
+}
+
+#[test]
+#[should_panic(expected = "writing child stdin failed")]
+fn successful_exit_does_not_hide_incomplete_stdin() {
+    Fixture::new().run_after_exit(&["--version"], KEY.as_bytes(), &[]);
 }
 
 #[test]
