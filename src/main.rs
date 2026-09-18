@@ -840,13 +840,16 @@ fn jev_cmd(args: &[String]) -> Result<bool> {
     let usage = command_usage("jev").expect("known command");
     if args.len() == 2 && matches!(args[1].as_str(), "--help" | "-h") {
         println!(
-            "{usage}\nHost-only credentials. Attach reads one key from bounded stdin, never argv.\nEnvironment overrides attachment. Neither attach nor status enables inference.\nOwner-only plaintext storage is not an encrypted vault. Status never contacts a provider."
+            "{usage}\n{JEV_BATCH_USAGE}\nHost-only credentials. Attach reads one key from bounded stdin, never argv.\nEnvironment overrides attachment. Neither attach nor status enables inference.\nOwner-only plaintext storage is not an encrypted vault. Status never contacts a provider.\nBatch validates the whole JSONL plan offline by default. --execute sends selected state to TypeSafe."
         );
         return Ok(true);
     }
     let Some(action) = args.get(1).map(String::as_str) else {
         return Err(usage_error("jev"));
     };
+    if action == "batch" {
+        return jev_batch_cmd(&args[2..]);
+    }
     if !matches!(action, "attach" | "status" | "detach") {
         return Err(usage_error("jev"));
     }
@@ -921,6 +924,83 @@ fn jev_cmd(args: &[String]) -> Result<bool> {
     Ok(true)
 }
 
+const JEV_BATCH_USAGE: &str = "Usage: az jev batch --input PLAN.jsonl [--execute [--resume] --output DIR --max-requests N --max-input-tokens N --max-seconds N]";
+
+fn jev_batch_cmd(args: &[String]) -> Result<bool> {
+    if args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h") {
+        println!(
+            "{JEV_BATCH_USAGE}\nEach line is {{\"id\":\"stable-id\",\"state\":...,\"questions\":{{...}}}}.\nDefault: validate only, with no credentials, network, or job files.\nExecution requires a typesafe build, [judge].enabled=true and all three explicit job limits.\nResults are saved privately after every request. Resume never repeats completed work.\nAn intent without a durable result is ambiguous and is never retried automatically.\nThe original wall deadline includes downtime. Probabilities are evidence for review, not approval."
+        );
+        return Ok(true);
+    }
+    let mut input = None;
+    let mut output = None;
+    let mut execute = false;
+    let mut resume = false;
+    let mut requests = None;
+    let mut tokens = None;
+    let mut seconds = None;
+    let usage = || anyhow::Error::from(CliUsageError(JEV_BATCH_USAGE));
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--execute" if !execute => execute = true,
+            "--resume" if !resume => resume = true,
+            flag if matches!(
+                flag,
+                "--input" | "--output" | "--max-requests" | "--max-input-tokens" | "--max-seconds"
+            ) =>
+            {
+                index += 1;
+                let value = args.get(index).ok_or_else(usage)?;
+                match flag {
+                    "--input" if input.is_none() => input = Some(PathBuf::from(value)),
+                    "--output" if output.is_none() => output = Some(PathBuf::from(value)),
+                    "--max-requests" if requests.is_none() => {
+                        requests = Some(value.parse::<usize>().map_err(|_| usage())?)
+                    }
+                    "--max-input-tokens" if tokens.is_none() => {
+                        tokens = Some(value.parse::<u64>().map_err(|_| usage())?)
+                    }
+                    "--max-seconds" if seconds.is_none() => {
+                        seconds = Some(value.parse::<u64>().map_err(|_| usage())?)
+                    }
+                    _ => return Err(usage()),
+                }
+            }
+            _ => return Err(usage()),
+        }
+        index += 1;
+    }
+    let input = input.ok_or_else(usage)?;
+    if ((resume || output.is_some()) && !execute)
+        || (execute
+            && (output.is_none() || requests.is_none() || tokens.is_none() || seconds.is_none()))
+    {
+        return Err(usage());
+    }
+    let limits = azdaja::judge_batch::BatchLimits {
+        max_requests: requests.unwrap_or(10_000),
+        max_input_tokens: tokens.unwrap_or(1_000_000),
+        max_seconds: seconds.unwrap_or(600),
+    };
+    let config = Config::load()?;
+    let report = if execute {
+        azdaja::judge_batch::run(
+            &input,
+            &output.expect("checked output"),
+            &config.judge,
+            &limits,
+            resume,
+        )?
+    } else {
+        azdaja::judge_batch::inspect(&input, &config.judge, &limits)?
+    };
+    let success = !execute || report["status"] == "completed";
+    println!("{report}");
+    Ok(success)
+}
+
 fn doctor(args: &[String]) -> Result<bool> {
     if args.get(1).is_some_and(|s| s == "jev") {
         exact(args, 2, "doctor")?;
@@ -943,7 +1023,7 @@ fn doctor(args: &[String]) -> Result<bool> {
                 "dump_version": monty::DUMP_VERSION,
                 "capabilities": [
                     "persistent-repl", "snapshots", "external-functions", "native-sha256",
-                    "native-typed-judgments", "re", "json", "datetime", "monty-os-calls-denied"
+                    "native-typed-judgments", "checkpointed-typed-batches", "re", "json", "datetime", "monty-os-calls-denied"
                 ],
                 // Build-time facts only. This branch must not load user config,
                 // inspect credentials, start a session, or probe any provider.
@@ -955,6 +1035,15 @@ fn doctor(args: &[String]) -> Result<bool> {
                     "runtime_configuration_checked": false,
                     "credentials_checked": false,
                     "cache_and_budget_scope": "cell"
+                },
+                "typed_batches": {
+                    "command": "jev batch",
+                    "default_mode": "offline_validation",
+                    "explicit_execution_required": true,
+                    "durable_completed_request_reuse": true,
+                    "ambiguous_request_automatic_retry": false,
+                    "storage_supported": azdaja::credentials::storage_available(),
+                    "credentials_checked": false
                 }
             })
         );

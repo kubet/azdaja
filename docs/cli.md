@@ -45,6 +45,7 @@ Keys in `az map`: arrows or `j/k` select, Enter inspects, `d` toggles measured d
 | `solo` | `az solo <question> (-f <path> \| --repo <directory>) [--model <model>] [--sub-model <model>]` | Run one question over one UTF-8 file or a deterministic bounded repository bundle. |
 | `doctor` | `az doctor [jcode|claude|codex|gemini|opencode|all|jev|--caps]` | Check configured execution or inspect named integration files. `jev` reports local credential/configuration status without a provider call. |
 | `jev` | `az jev <attach --stdin [--replace]\|status\|detach> [--key-env NAME]` | Explicitly manage a host-private TypeSafe credential. Attachment does not enable inference. |
+| `jev batch` | `az jev batch --input PLAN.jsonl [--execute ...]` | Preflight or run a [checkpointed semantic batch](jev-batch.md), with explicit budgets and source-bound resume. |
 | `install` | `az install [TARGET[,TARGET...]|all]` | Detect supported tools or atomically install a named comma-separated subset. |
 | `uninstall` | `az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]` | Remove detected integrations, one named scope, or everything. |
 

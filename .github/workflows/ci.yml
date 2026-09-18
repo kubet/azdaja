@@ -75,6 +75,7 @@ jobs:
               "src/jcode_config.rs",
               "src/jcode_gate.rs",
               "src/judge.rs",
+              "src/judge_batch.rs",
               "src/lib.rs",
               "src/main.rs",
               "src/memory/project.rs",

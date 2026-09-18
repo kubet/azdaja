@@ -109,7 +109,7 @@ impl JudgeEngine {
         engine.transport_available = cfg!(feature = "typesafe");
         engine
     }
-    fn with_dependencies(
+    pub(crate) fn with_dependencies(
         config: &JudgeConfig,
         credential: Credential,
         transport: Transport,
@@ -185,18 +185,9 @@ impl JudgeEngine {
             !self.poisoned,
             "judge: engine poisoned after provider failure"
         );
-        ensure!(
-            structured(&state),
-            "judge: state must be string, object, or array"
-        );
-        let count = validate_questions(&questions)?;
+        let bytes = prepare_request(&self.config, &state, &questions)?;
+        let count = questions.as_object().expect("validated questions").len();
         let request = json!({"model": self.config.model, "state": state, "questions": questions});
-        let bytes =
-            serde_json::to_vec(&request).map_err(|_| anyhow::anyhow!("judge: invalid request"))?;
-        ensure!(
-            bytes.len() <= self.config.max_request_bytes,
-            "judge: request byte limit exceeded"
-        );
         let digest = crate::sha256_hex(&bytes);
         self.remaining_timeout()?;
         if let Some(body) = self.cache.get(&bytes).cloned() {
@@ -291,6 +282,30 @@ impl JudgeEngine {
     }
 }
 
+/// Pure request validation used by provider-free batch preflight. It never
+/// resolves credentials, enables inference, or consults a transport.
+pub(crate) fn prepare_request(
+    config: &JudgeConfig,
+    state: &Value,
+    questions: &Value,
+) -> Result<Vec<u8>> {
+    config.validate()?;
+    ensure!(
+        structured(state),
+        "judge: state must be string, object, or array"
+    );
+    validate_questions(questions)?;
+    let bytes = serde_json::to_vec(&json!({
+        "model": config.model, "state": state, "questions": questions
+    }))
+    .map_err(|_| anyhow::anyhow!("judge: invalid request"))?;
+    ensure!(
+        bytes.len() <= config.max_request_bytes,
+        "judge: request byte limit exceeded"
+    );
+    Ok(bytes)
+}
+
 #[derive(Debug)]
 struct HttpStatus(u16);
 impl std::fmt::Display for HttpStatus {
@@ -379,7 +394,7 @@ pub fn redact_typesafe_keys(text: &str) -> String {
         .replace_all(text, "[REDACTED_TYPESAFE_KEY]")
         .into_owned()
 }
-fn contains_secret(value: &Value, secret: &str) -> bool {
+pub(crate) fn contains_secret(value: &Value, secret: &str) -> bool {
     match value {
         Value::String(s) => s.contains(secret),
         Value::Array(a) => a.iter().any(|v| contains_secret(v, secret)),
@@ -511,7 +526,11 @@ fn distribution<'a>(
     );
     Ok(p)
 }
-fn validate_response(body: &Value, questions: &Value, config: &JudgeConfig) -> Result<()> {
+pub(crate) fn validate_response(
+    body: &Value,
+    questions: &Value,
+    config: &JudgeConfig,
+) -> Result<()> {
     let response = object(body)?;
     fields(response, &["model", "answers"], &["usage"])?;
     let model = response["model"]

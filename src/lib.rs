@@ -33,6 +33,7 @@ use std::io::{BufRead, BufReader};
 pub mod credentials;
 pub mod jcode_gate;
 pub mod judge;
+pub mod judge_batch;
 pub mod memory;
 pub mod observability;
 pub mod repo_source;

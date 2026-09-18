@@ -12,6 +12,8 @@ The frozen published installer intentionally rejects this unpublished notice.
 See the [final source follow-through](research/jev-final-followthrough-20260917.md)
 for exact build identities, installed acceptance and remaining limits.
 
+For an explicit long-source work list, use [checkpointed semantic batches](jev-batch.md): native execution, per-request durable output and resume without repeating completed requests. This does not rely on a model choosing a typed call or generating finalization code.
+
 ## The useful boundary
 
 ```text
