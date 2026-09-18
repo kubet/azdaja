@@ -1,6 +1,6 @@
 # Checkpointed semantic batches
 
-Development-source feature. From the repository root:
+Available in official v0.1.18 binaries. To build from the repository root:
 
 ```sh
 cargo build --locked --release --features typesafe
@@ -31,15 +31,17 @@ Select files you are authorized to send. `prepare` preserves exact UTF-8 source 
 
 ## Explicit execution
 
-Enable the existing native transport in a host-selected `AZDAJA_CONFIG` file:
+Supply the configured TypeSafe key to opt into automatic mode. Optional settings
+in a host-selected `AZDAJA_CONFIG` file:
 
 ```toml
 [judge]
-enabled = true
+# Omit enabled for automatic activation from the configured key.
+# enabled = false  # Explicitly disable, even with a key.
 model = "jev-latest"
 ```
 
-Supply `TYPESAFE_API_KEY` through your normal secret mechanism or the existing `az jev attach --stdin` flow. Never put the key in the plan or command arguments.
+Supply `TYPESAFE_API_KEY` through your normal secret mechanism or the existing `az jev attach --stdin` flow. Never put the key in the plan or command arguments. Local key syntax is not provider authentication. A key never bypasses the explicit execution flag or budgets below. Existing `enabled = false` settings remain off until you deliberately remove or change them.
 
 ```sh
 "$AZ" jev batch --input ./review-plan/plan.jsonl \

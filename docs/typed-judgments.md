@@ -1,16 +1,9 @@
 # Optional typed judgments inside Azdaja
 
-Development source capability, not a promise that an existing installed release includes it.
-
-**Available in this source tree, not guaranteed in an existing installed release.** The formerly stale
-notice gate has been repaired with a source-backed inventory for both default
-and optional `typesafe` dependencies. The actual
-`python3 release/verify-third-party-notices.py` command passes, while the old
-notice and published installer/assets remain unchanged. This is an engineering
-check, not a legal-completeness determination or publication authorization.
-The frozen published installer intentionally rejects this unpublished notice.
-See the [final source follow-through](research/jev-final-followthrough-20260917.md)
-for exact build identities, installed acceptance and remaining limits.
+Official v0.1.18 binaries include the optional TypeSafe transport. Older releases
+and source builds without `--features typesafe` may not. Check the exact binary
+with `azdaja doctor --caps`. Source-backed notices cover both build modes. They
+are engineering evidence, not a legal-completeness determination.
 
 For an explicit long-source work list, use [checkpointed semantic batches](jev-batch.md): native execution, per-request durable output and resume without repeating completed requests. This does not rely on a model choosing a typed call or generating finalization code.
 
@@ -30,7 +23,7 @@ This is an optional execution leaf beside `llm`, not a mandatory workflow or a r
 
 **Preserve uncertainty:** retain the complete returned distribution, evidence and alternatives. A `choice` winner is not ground truth. Do not multiply correlated probabilities as if independent, treat cache hits as independent confirmation, or let entropy alone choose what matters. A confidently wrong high-impact judgment can be more dangerous than an uncertain low-impact one. Numeric entropy describes the model's distribution, not missing evidence, truth, or task completeness.
 
-## Enable explicitly
+## Optional activation from a configured key
 
 First use `azdaja doctor --caps` for provider-free discovery. Its
 `typed_judgments` object names `judge_many` and `judge_stats`, reports whether
@@ -41,8 +34,8 @@ Use the exact `doctor --caps` form: bare `doctor` is a different diagnostic
 that can make a model canary call.
 `typesafe_compiled: true` does not mean that the host enabled inference or
 supplied a valid key. A default-feature build still exposes the API names but
-reports `typesafe_compiled: false`. The existing opt-in and ordinary-execution
-recovery behavior below is unchanged.
+reports `typesafe_compiled: false`. Supplying a configured key is host opt-in,
+not a provider readiness test or an instruction to start a batch.
 The [discovery acceptance report](research/jev-native-discovery-20260917.md)
 records the before-fix failure, both build modes and the actual installed output.
 
@@ -52,11 +45,16 @@ Build this source tree with Rust 1.95:
 cargo build --locked --features typesafe --bin azdaja
 ```
 
-In a host-selected `AZDAJA_CONFIG` TOML file:
+No `[judge]` configuration is needed for automatic mode. An omitted `enabled`
+field enables the engine on later execution only when the build supports it and
+the exact configured credential is locally usable. No key means off. Optional
+configuration in a host-selected `AZDAJA_CONFIG` TOML file:
 
 ```toml
 [judge]
-enabled = true
+# Omit enabled for automatic key-based activation.
+# enabled = false  # Always off, even when a key is present.
+# enabled = true   # Explicit mode; a usable key is still required to send.
 model = "jev-latest"
 key_env = "TYPESAFE_API_KEY"
 # Optional only if you actually know the provider's returned identifier:
@@ -68,11 +66,18 @@ max_input_tokens_per_cell = 100000
 
 Supply the secret in the named **host environment variable**, using your normal secret management, or attach it once with `az jev attach --stdin` through a private stdin pipe. `az jev status` and `az doctor jev` report local source and syntax status without provider calls. `az jev detach` removes the named attachment. A present environment variable takes precedence, including an invalid value: there is no silent fallback. For a custom `key_env`, pass the same `--key-env NAME` to attachment commands.
 
-Attachment is an owner-only plaintext file under the private host state root, not an encrypted vault or a cross-user secret service. It is supported on macOS/Linux/Android and fails closed elsewhere. It does not enable `[judge]`, change an installed binary, or write to repository memory/configuration. Hard termination can leave a private staging file until the next attachment/replacement or detach recovers it. See [CLI credential boundaries](cli.md) for exact semantics.
+Attachment is an owner-only plaintext file under the private host state root, not an encrypted vault or a cross-user secret service. It is supported on macOS/Linux/Android and fails closed elsewhere. Attachment does not change configuration or start inference, but in automatic mode it enables Jev for later `exec`, `solo` and explicitly executed batches. Detaching disables automatic mode on later invocations if no environment override remains. Hard termination can leave a private staging file until the next attachment/replacement or detach recovers it. See [CLI credential boundaries](cli.md) for exact semantics.
 
 Never put the key in argv, TOML, an RLM prompt, `state`, a question, a note, a committed script, or shell history. The key is not forwarded to custom generative subprocesses. The HTTP destination is fixed, uses TLS, does not follow redirects, use inherited proxies, or automatically retry. Only the explicitly supplied state/questions are sent. TypeSafe-shaped trace redaction is defense in depth, not automatic detection of arbitrary secrets in source data. Selecting evidence for an external service remains the caller's responsibility.
 
-The feature is excluded from default Cargo features. `[judge].enabled` defaults to false even in a feature-enabled build. No fallback from a failed typed request to `llm` happens silently.
+The feature remains excluded from default Cargo features. Official builds opt
+into the transport at build time, not into requests without a key. Explicit
+`enabled = false` is preserved on upgrade, including development installations
+whose old generated config set it. Remove that line only if you want automatic
+activation. A present invalid or empty named environment value disables automatic
+activation and never falls back to an attachment. Local syntax validity does not
+prove provider authentication, credit, model availability or semantic accuracy.
+No fallback from a failed typed request to `llm` happens silently.
 
 ## Ordinary persistent evaluator example
 
@@ -108,12 +113,13 @@ The remaining cell wall deadline caps an HTTP call. Known usage crossing the hos
 
 ## Optional `solo` workflow
 
-With both the `typesafe` build feature and `[judge].enabled = true`, `solo`
+With the `typesafe` build feature and effective activation (automatic with a key,
+or explicit `enabled = true`), `solo`
 advertises `judge_many`, `judge_stats`, `llm` and `llm_batch` to its root model.
 Only successful host-accounted semantic requests satisfy its semantic gate.
 Stats inspection, cache hits and failed preflight are not semantic evidence.
 Typed accounting remains separate in the host-owned `judge_cells` trace.
-Default-disabled and feature-off root prompts and execution retain their prior
+No-key, explicitly disabled and feature-off root prompts and execution retain their prior
 behavior. This does not override an external host skill's mandatory policy.
 
 The native `sha256(text)` helper accepts text and returns hexadecimal text.

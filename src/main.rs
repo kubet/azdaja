@@ -840,7 +840,7 @@ fn jev_cmd(args: &[String]) -> Result<bool> {
     let usage = command_usage("jev").expect("known command");
     if args.len() == 2 && matches!(args[1].as_str(), "--help" | "-h") {
         println!(
-            "{usage}\n{JEV_BATCH_USAGE}\nHost-only credentials. Attach reads one key from bounded stdin, never argv.\nEnvironment overrides attachment. Neither attach nor status enables inference.\nOwner-only plaintext storage is not an encrypted vault. Status never contacts a provider.\nBatch validates the whole JSONL plan offline by default. --execute sends selected state to TypeSafe."
+            "{usage}\n{JEV_BATCH_USAGE}\nHost-only credentials. Attach reads one key from bounded stdin, never argv.\nEnvironment overrides attachment. A valid configured key enables automatic Jev mode on later execution; [judge].enabled=false overrides it.\nAttach and status perform no inference. Owner-only plaintext storage is not an encrypted vault. Status never contacts a provider.\nBatch validates the whole JSONL plan offline by default. --execute sends selected state to TypeSafe."
         );
         return Ok(true);
     }
@@ -900,7 +900,8 @@ fn jev_cmd(args: &[String]) -> Result<bool> {
             println!(
                 "{}",
                 serde_json::json!({"action":"attached", "key_env":name,
-                    "inference_configuration_changed":false})
+                    "inference_configuration_changed":false,
+                    "may_enable_automatic_mode_on_next_execution":true})
             );
         }
         "status" => {
@@ -929,7 +930,7 @@ const JEV_BATCH_USAGE: &str = "Usage: az jev batch --input PLAN.jsonl [--execute
 fn jev_batch_cmd(args: &[String]) -> Result<bool> {
     if args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h") {
         println!(
-            "{JEV_BATCH_USAGE}\nEach line is {{\"id\":\"stable-id\",\"state\":...,\"questions\":{{...}}}}.\nDefault: validate only, with no credentials, network, or job files.\nExecution requires a typesafe build, [judge].enabled=true and all three explicit job limits.\nResults are saved privately after every request. Resume never repeats completed work.\nAn intent without a durable result is ambiguous and is never retried automatically.\nThe original wall deadline includes downtime. Probabilities are evidence for review, not approval."
+            "{JEV_BATCH_USAGE}\nEach line is {{\"id\":\"stable-id\",\"state\":...,\"questions\":{{...}}}}.\nDefault: validate only, with no credentials, network, or job files.\nExecution requires a typesafe build, a valid configured key, enabled automatic or explicit Jev mode, and all three explicit job limits. [judge].enabled=false always disables execution.\nResults are saved privately after every request. Resume never repeats completed work.\nAn intent without a durable result is ambiguous and is never retried automatically.\nThe original wall deadline includes downtime. Probabilities are evidence for review, not approval."
         );
         return Ok(true);
     }
@@ -1008,6 +1009,14 @@ fn doctor(args: &[String]) -> Result<bool> {
         let mut report = azdaja::credentials::status(&config.judge.key_env)?;
         report["typesafe_compiled"] = serde_json::json!(cfg!(feature = "typesafe"));
         report["configured_enabled"] = serde_json::json!(config.judge.enabled);
+        report["activation_mode"] = serde_json::json!(config.judge.activation_mode());
+        report["effective_enabled"] = serde_json::json!(
+            cfg!(feature = "typesafe")
+                && config
+                    .judge
+                    .enabled
+                    .unwrap_or(report["syntax_valid"] == true)
+        );
         report["runtime_configuration_checked"] = serde_json::json!(true);
         report["provider_readiness_checked"] = serde_json::json!(false);
         println!("{report}");
@@ -1031,6 +1040,8 @@ fn doctor(args: &[String]) -> Result<bool> {
                     "functions": ["judge_many", "judge_stats"],
                     "typesafe_compiled": cfg!(feature = "typesafe"),
                     "enabled_by_default": false,
+                    "default_activation_mode": "auto_when_configured_credential_is_valid",
+                    "explicit_disable_supported": true,
                     "host_opt_in_required": true,
                     "runtime_configuration_checked": false,
                     "credentials_checked": false,
@@ -7162,7 +7173,7 @@ mod solo_preflight;
 fn validate_solo_python_for_config(code: &str, cfg: &Config) -> Result<()> {
     validate_solo_python(code)?;
     #[cfg(feature = "typesafe")]
-    if cfg.judge.enabled {
+    if cfg.judge.is_enabled() {
         solo_preflight::validate_native_hash(code)?;
     }
     #[cfg(not(feature = "typesafe"))]
@@ -7577,7 +7588,7 @@ fn unread_label_literal_grep(
     cfg: &Config,
     semantic_evidence_calls: usize,
 ) -> bool {
-    !(cfg.judge.enabled && cfg!(feature = "typesafe") && semantic_evidence_calls > 0)
+    !(cfg.judge.is_enabled() && cfg!(feature = "typesafe") && semantic_evidence_calls > 0)
         && code_greps_label_literals(question, code)
 }
 
@@ -7790,7 +7801,7 @@ fn execute_solo_reply(
     let result = session.exec(&code, cfg);
     let judge_snapshot = session.last_judge_stats().clone();
     let typed_attempts = judge_snapshot["attempts"].as_u64().unwrap_or(0) as usize;
-    if cfg.judge.enabled {
+    if cfg.judge.is_enabled() {
         runtime.judge_cells.push(judge_snapshot.clone());
     }
     runtime.exec_wall_ns = runtime
@@ -7898,16 +7909,15 @@ fn execute_solo_reply(
     }
     // Only host-validated successful physical typed requests satisfy this gate.
     // Cache hits, stats inspection and preflight failures do not add evidence.
-    let semantic_evidence_calls =
-        result
-            .semantic_calls
-            .saturating_add(if cfg.judge.enabled && cfg!(feature = "typesafe") {
-                result.judge_stats["successful_requests"]
-                    .as_u64()
-                    .unwrap_or(0) as usize
-            } else {
-                0
-            });
+    let semantic_evidence_calls = result.semantic_calls.saturating_add(
+        if cfg.judge.is_enabled() && cfg!(feature = "typesafe") {
+            result.judge_stats["successful_requests"]
+                .as_u64()
+                .unwrap_or(0) as usize
+        } else {
+            0
+        },
+    );
     if unread_label_literal_grep(question, &code, cfg, semantic_evidence_calls) {
         return Err(SoloProgramFailure {
             kind: SoloProgramFailureKind::LabelLiteralGrep,
@@ -8128,7 +8138,7 @@ const NATIVE_HASH_CONTRACT: &str = "sha256(text) returns a hexadecimal string. U
 
 fn root_repair_prompt_for_config(failure: &SoloProgramFailure, cfg: &Config) -> String {
     let prompt = root_repair_prompt(failure);
-    if cfg.judge.enabled && cfg!(feature = "typesafe") {
+    if cfg.judge.is_enabled() && cfg!(feature = "typesafe") {
         format!("{prompt} {NATIVE_HASH_CONTRACT}")
     } else {
         prompt
@@ -8366,6 +8376,8 @@ fn parse_solo_args(args: &[String]) -> Result<SoloArgs> {
 }
 
 fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
+    let resolved_config = cfg.with_resolved_judge();
+    let cfg = &resolved_config;
     let SoloArgs {
         question,
         input,
@@ -8524,7 +8536,7 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
     }
 
     let root_model = model.as_deref().unwrap_or(&cfg.default_model);
-    let optional_judge = cfg.judge.enabled && cfg!(feature = "typesafe");
+    let optional_judge = cfg.judge.is_enabled() && cfg!(feature = "typesafe");
     let planner_constraint = if classification_requires_semantic_calls && !optional_judge {
         planner_strategy_constraint(
             &question,
@@ -8603,7 +8615,7 @@ fn solo(args: SoloArgs, cfg: &Config) -> Result<()> {
             cell_timeout = cfg.cell_timeout,
             call_limit = cfg.max_calls_per_cell,
         )
-    } else if cfg.judge.enabled {
+    } else if cfg.judge.is_enabled() {
         format!(
             "{prompt}\nTypeSafe transport is unavailable in this build. judge_many is not ready and must not be called; use the listed generative helpers.\n"
         )
@@ -11083,7 +11095,7 @@ mod native_hash_documentation_tests {
             let mut cfg = Config::default();
             let original = root_repair_prompt(&failure);
             assert_eq!(root_repair_prompt_for_config(&failure, &cfg), original);
-            cfg.judge.enabled = true;
+            cfg.judge.enabled = Some(true);
             let optional = root_repair_prompt_for_config(&failure, &cfg);
             if cfg!(feature = "typesafe") {
                 assert!(optional.contains(NATIVE_HASH_CONTRACT));
@@ -11115,7 +11127,7 @@ mod optional_judge_solo_tests {
         let mut cfg = Config::default();
         // Defaults retain the legacy behavior even if a caller reports a read.
         assert!(unread_label_literal_grep(question, code, &cfg, 1));
-        cfg.judge.enabled = true;
+        cfg.judge.enabled = Some(true);
         // Merely naming llm/judge_many or looking at stats cannot bypass the gate.
         assert!(unread_label_literal_grep(question, code, &cfg, 0));
         assert_eq!(
@@ -11127,7 +11139,7 @@ mod optional_judge_solo_tests {
     #[test]
     fn zero_call_label_reduction_is_still_rejected_by_actual_solo_execution() {
         let mut cfg = Config::default();
-        cfg.judge.enabled = true;
+        cfg.judge.enabled = Some(true);
         let mut session = SoloSession::new(&cfg, None).unwrap();
         session.load_text("risk".into(), "ctx", &cfg).unwrap();
         let mut metrics = SoloRuntimeMetrics::default();
@@ -11172,7 +11184,7 @@ mod optional_judge_solo_tests {
     #[test]
     fn judge_stats_only_cannot_satisfy_semantic_gate_and_trace_is_host_owned() {
         let mut cfg = Config::default();
-        cfg.judge.enabled = true;
+        cfg.judge.enabled = Some(true);
         let mut session = SoloSession::new(&cfg, None).unwrap();
         session.load_text("source".into(), "ctx", &cfg).unwrap();
         let mut metrics = SoloRuntimeMetrics::default();
@@ -11208,7 +11220,7 @@ mod optional_judge_solo_tests {
     #[test]
     fn failed_typed_preflight_retains_host_snapshot_without_a_request() {
         let mut cfg = Config::default();
-        cfg.judge.enabled = true;
+        cfg.judge.enabled = Some(true);
         let mut session = SoloSession::new(&cfg, None).unwrap();
         session.load_text("source".into(), "ctx", &cfg).unwrap();
         let mut metrics = SoloRuntimeMetrics::default();

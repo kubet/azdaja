@@ -13,11 +13,14 @@ idle_timeout = 1800
 max_calls_per_cell = 150
 clean_patterns = []
 
-# Optional native typed judgments in ordinary exec. Requires a build made with
-# `cargo build --features typesafe`. Never put the API key in this file.
+# Optional native typed judgments in exec and solo. Official release builds
+# include the transport; source builds use `cargo build --features typesafe`.
+# A valid configured environment key or attachment enables automatic mode.
+# No key means off. Set enabled = false to force off even with a key.
+# Set enabled = true for explicit mode. Never put the API key in this file.
 # Only explicit state/questions passed to judge_many leave the evaluator.
 [judge]
-enabled = false
+# enabled = false
 model = "jev-latest"
 key_env = "TYPESAFE_API_KEY"
 timeout_secs = 20

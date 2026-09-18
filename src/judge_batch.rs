@@ -512,7 +512,10 @@ pub fn run(
         limits,
         resume,
         |plan| {
-            ensure!(config.enabled, "batch: judge disabled");
+            ensure!(
+                config.resolve_activation().is_enabled(),
+                "batch: judge disabled"
+            );
             ensure!(
                 cfg!(feature = "typesafe"),
                 "batch: typesafe feature is not enabled in this build"
@@ -798,7 +801,7 @@ mod tests {
     }
     fn config() -> JudgeConfig {
         JudgeConfig {
-            enabled: true,
+            enabled: Some(true),
             ..JudgeConfig::default()
         }
     }

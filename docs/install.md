@@ -30,6 +30,15 @@ Standalone configuration uses adjacent `azdaja-config.toml` and `azdaja-config.t
 
 Cargo installs the canonical binary but no short alias or tool integration. Complete setup with `azdaja install` for detection or `azdaja install jcode,codex` for an atomic subset, then run the doctor command that installation prints. Remove managed integrations before `cargo uninstall azdaja`.
 
+Official v0.1.18 binaries include the optional Jev transport. Add `--features
+typesafe` to a Cargo build/install for the same capability, or omit it to exclude
+that transport. Supplying the configured TypeSafe environment key or attaching it
+with `azdaja jev attach --stdin` opts into automatic Jev mode on later execution.
+No key means off, and `[judge] enabled = false` always keeps it off. Setup and
+`doctor --caps` never make provider calls. `doctor jev` checks only local policy
+and credential syntax, not provider authentication. Existing explicit false
+settings are preserved on upgrade. See [typed judgments](typed-judgments.md).
+
 ## Safe removal
 
 `uninstall NAME` removes that tool integration and keeps standalone files. `uninstall standalone` removes only curl-owned standalone surfaces and keeps tool integrations. `uninstall all` removes both.

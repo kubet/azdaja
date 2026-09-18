@@ -12,7 +12,10 @@ use std::{
 #[derive(Clone, Deserialize, Serialize, Debug)]
 #[serde(default, deny_unknown_fields)]
 pub struct JudgeConfig {
-    pub enabled: bool,
+    /// Omitted means automatic activation from the configured credential.
+    /// Explicit false always wins. Parsing and serialization never inspect keys.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
     pub model: String,
     pub key_env: String,
     pub expected_model: Option<String>,
@@ -26,7 +29,7 @@ pub struct JudgeConfig {
 impl Default for JudgeConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: None,
             model: "jev-latest".into(),
             key_env: "TYPESAFE_API_KEY".into(),
             expected_model: None,
@@ -40,6 +43,33 @@ impl Default for JudgeConfig {
     }
 }
 impl JudgeConfig {
+    pub fn activation_mode(&self) -> &'static str {
+        match self.enabled {
+            None => "auto",
+            Some(true) => "enabled",
+            Some(false) => "disabled",
+        }
+    }
+
+    /// Read-only, host-local activation at an execution boundary. An invalid
+    /// named environment value must not fall back to an attached credential.
+    /// Feature-off and explicit Boolean configurations never inspect credentials.
+    pub fn resolve_activation(&self) -> Self {
+        let mut resolved = self.clone();
+        if self.enabled.is_none() {
+            resolved.enabled = Some(
+                cfg!(feature = "typesafe")
+                    && crate::credentials::resolve(&self.key_env).is_ok_and(|key| safe_token(&key)),
+            );
+        }
+        resolved
+    }
+
+    /// Pure query of an explicitly configured or already resolved activation.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled == Some(true)
+    }
+
     pub fn validate(&self) -> Result<()> {
         ensure!(valid_id(&self.model), "judge: invalid configured model");
         ensure!(
@@ -101,8 +131,9 @@ pub struct JudgeEngine {
 }
 impl JudgeEngine {
     pub fn new(config: &JudgeConfig) -> Self {
+        let config = config.resolve_activation();
         let mut engine = Self::with_dependencies(
-            config,
+            &config,
             Box::new(crate::credentials::resolve),
             Box::new(http_request),
         );
@@ -149,7 +180,7 @@ impl JudgeEngine {
         }
     }
     pub fn stats(&self) -> Value {
-        json!({"enabled": self.config.enabled, "poisoned": self.poisoned,
+        json!({"enabled": self.config.is_enabled(), "poisoned": self.poisoned,
             "transport_available": self.transport_available,
             "provider_requests": self.attempts, "attempts": self.attempts,
             "questions": self.questions, "cache_hits": self.cache_hits,
@@ -174,7 +205,7 @@ impl JudgeEngine {
     }
     fn evaluate_inner(&mut self, state: Value, questions: Value) -> Result<Value> {
         let started = Instant::now();
-        ensure!(self.config.enabled, "judge: disabled");
+        ensure!(self.config.is_enabled(), "judge: disabled");
         self.config.validate()?;
         ensure!(
             self.transport_available,
@@ -631,7 +662,7 @@ mod tests {
     }
     fn config() -> JudgeConfig {
         JudgeConfig {
-            enabled: true,
+            enabled: Some(true),
             ..JudgeConfig::default()
         }
     }
@@ -1101,7 +1132,9 @@ mod tests {
             "judge: HTTP status 429"
         );
         let defaults: JudgeConfig = serde_json::from_value(json!({})).unwrap();
-        assert!(!defaults.enabled);
+        assert_eq!(defaults.enabled, None);
+        assert_eq!(defaults.activation_mode(), "auto");
+        assert!(!defaults.is_enabled());
         defaults.validate().unwrap();
         assert!(serde_json::from_value::<JudgeConfig>(json!({"unexpected":true})).is_err());
         for field in [
@@ -1120,6 +1153,32 @@ mod tests {
                     .validate()
                     .is_err()
             );
+        }
+    }
+
+    #[test]
+    fn activation_configuration_roundtrips_without_resolving_credentials() {
+        for (value, mode) in [
+            (None, "auto"),
+            (Some(false), "disabled"),
+            (Some(true), "enabled"),
+        ] {
+            let config = JudgeConfig {
+                enabled: value,
+                ..JudgeConfig::default()
+            };
+            let encoded = serde_json::to_value(&config).unwrap();
+            assert_eq!(encoded.get("enabled").is_some(), value.is_some());
+            let decoded: JudgeConfig = serde_json::from_value(encoded).unwrap();
+            assert_eq!(decoded.enabled, value);
+            assert_eq!(decoded.activation_mode(), mode);
+            assert_eq!(decoded.is_enabled(), value == Some(true));
+            let toml = toml::to_string(&config).unwrap();
+            let decoded: JudgeConfig = toml::from_str(&toml).unwrap();
+            assert_eq!(decoded.enabled, value);
+        }
+        for value in [json!("true"), json!(1), json!([]), json!({})] {
+            assert!(serde_json::from_value::<JudgeConfig>(json!({"enabled": value})).is_err());
         }
     }
 }

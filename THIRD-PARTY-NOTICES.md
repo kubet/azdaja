@@ -1,12 +1,12 @@
 # Azdaja third-party notices
 
-**Candidate:** Azdaja v0.1.17 public content snapshot
+**Candidate:** Azdaja v0.1.18 public content snapshot
 **Supported release targets:** `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-gnu`
 **Feature scope:** `default` and default + `typesafe`, separately qualified below.
 **Engineering status:** deterministic archive-derived corpus; not legal advice or legal-sufficiency approval.
 
-- Bound inputs: `Cargo.lock` SHA-256 `d4ecce8aa1727ebf115fae73914d6dab0ef047fbbf90537bc04e01088e6d92e3`
-- Cargo.toml SHA-256 `af6cd85c0122441a2e59486166302b7bad9d11c6051922c76e7c68d370805f33`
+- Bound inputs: `Cargo.lock` SHA-256 `204f0ad14854e714bea8dc456b1116049226922a3d9bcd0be7f80943cac4a3e5`
+- Cargo.toml SHA-256 `4ecd6a074e3bfe97b801b0b2e879cd32498005e1f615d40c2ecffb223dd3868b`
 
 The root package is excluded. Each feature/target closure is resolved by offline, locked Cargo tree.
 Named legal files and declared license-file paths are inventoried from checksum-verified archives.

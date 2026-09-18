@@ -309,7 +309,7 @@ mod tests {
         let code = "FINAL(sha256(ctx.encode()).hexdigest())";
         let mut cfg = super::super::Config::default();
         super::super::validate_solo_python_for_config(code, &cfg).unwrap();
-        cfg.judge.enabled = true;
+        cfg.judge.enabled = Some(true);
         assert!(super::super::validate_solo_python_for_config(code, &cfg).is_err());
     }
 }

@@ -147,12 +147,14 @@ fn native_judgment_valid_named_arguments_fail_before_network_without_key() {
 #[test]
 fn native_judgment_config_roundtrips_without_a_secret() {
     let mut cfg = azdaja::Config::default();
-    assert!(!cfg.judge.enabled);
-    cfg.judge.enabled = true;
+    assert_eq!(cfg.judge.enabled, None);
+    assert_eq!(cfg.judge.activation_mode(), "auto");
+    cfg.judge.enabled = Some(true);
     cfg.judge.max_requests_per_cell = 2;
     let encoded = toml::to_string(&cfg).unwrap();
     assert!(encoded.contains("[judge]"));
     let decoded: azdaja::Config = toml::from_str(&encoded).unwrap();
+    assert_eq!(decoded.judge.enabled, Some(true));
     assert_eq!(decoded.judge.max_requests_per_cell, 2);
     decoded.validate().unwrap();
     cfg.judge.timeout_secs = 0;
@@ -196,6 +198,8 @@ fn native_judgment_capabilities_are_static_and_distinguish_transport_from_readin
                 "typesafe_compiled": cfg!(feature = "typesafe"),
                 "enabled_by_default": false,
                 "host_opt_in_required": true,
+                "default_activation_mode": "auto_when_configured_credential_is_valid",
+                "explicit_disable_supported": true,
                 "runtime_configuration_checked": false,
                 "credentials_checked": false,
                 "cache_and_budget_scope": "cell"

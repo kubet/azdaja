@@ -697,6 +697,14 @@ impl Default for Config {
     }
 }
 impl Config {
+    /// Freeze optional activation for a cell or solo invocation, never while
+    /// merely loading config, displaying help or validating a batch plan.
+    pub fn with_resolved_judge(&self) -> Self {
+        let mut config = self.clone();
+        config.judge = config.judge.resolve_activation();
+        config
+    }
+
     pub fn load() -> Result<Self> {
         // Validate both authoritative overrides before any configuration can select a provider.
         // This also makes an invalid AZDAJA_HOME fail closed for stdin-based adapters that do not
@@ -5798,7 +5806,7 @@ fn external(
 ) -> Result<MontyObject> {
     match name {
         "judge_many" => {
-            if !cfg.judge.enabled {
+            if !cfg.judge.is_enabled() {
                 bail!("judge_many is disabled; the host must explicitly enable [judge]")
             }
             if provider_interrupted() {
@@ -6069,7 +6077,7 @@ fn external(
             let values = values?;
             if semantic_phase.is_none()
                 && capabilities.allow_relevance
-                && cfg.judge.enabled
+                && cfg.judge.is_enabled()
                 && cfg!(feature = "typesafe")
             {
                 *state.semantic_call_count = state
@@ -6182,6 +6190,8 @@ fn run_cell(
     default_model: &str,
     context: RunCellContext<'_>,
 ) -> RunCellOutcome {
+    let resolved_config = cfg.with_resolved_judge();
+    let cfg = &resolved_config;
     let RunCellContext {
         allow_relevance,
         allow_projection_private,
@@ -8768,7 +8778,7 @@ fn jcode_root_timeout(cfg: &Config) -> Duration {
 }
 #[cfg(unix)]
 fn jcode_root_idle_timeout(cfg: &Config) -> Duration {
-    if cfg.judge.enabled && cfg!(feature = "typesafe") {
+    if cfg.judge.is_enabled() && cfg!(feature = "typesafe") {
         // Optional orchestration can spend the full configured root turn on its
         // first program. This changes only silence allowance, never the hard cap.
         jcode_root_timeout(cfg)
@@ -12110,7 +12120,7 @@ JSONL
             let small_child = jcode_batch_timeout(&cfg, 2_000);
             let large_child = jcode_batch_timeout(&cfg, 20_000);
             assert_eq!(disabled, Duration::from_secs(configured.min(60)));
-            cfg.judge.enabled = true;
+            cfg.judge.enabled = Some(true);
             let cap = if cfg!(feature = "typesafe") { 120 } else { 60 };
             assert_eq!(
                 jcode_root_idle_timeout(&cfg),
@@ -12152,7 +12162,7 @@ JSONL
                 .to_string()
                 .contains("idle deadline timed out")
         );
-        cfg.judge.enabled = true;
+        cfg.judge.enabled = Some(true);
         let mut enabled = TurnDeadline::new(
             started,
             jcode_root_timeout(&cfg),

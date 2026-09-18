@@ -37,10 +37,16 @@ The stable `azdaja.dev/install` URL serves the current published installer. Its 
 Alternatively, install from source with Rust 1.95:
 
 ```bash
-cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.17 --locked
+cargo install --git https://github.com/kubet/azdaja.git --tag v0.1.18 --locked --features typesafe
 ```
 
 `azdaja` is the canonical command. The curl installer adds `az` only when that name is free; Cargo installs `azdaja` only.
+
+Jev is optional. Official v0.1.18 binaries include its transport, and a configured
+TypeSafe key enables it on later execution. Without a key it stays off.
+`[judge] enabled = false` overrides key-based activation. Source builds can omit
+`--features typesafe` to exclude the transport entirely. See
+[typed judgments](docs/typed-judgments.md) for local attachment and request limits.
 
 `az install` finds supported tools automatically. To target one tool, run `az install jcode`; to install every integration, run `az install all`. Then run the exact `az doctor` command printed by install before reloading the tool. See [edge cases and lifecycle details](docs/install.md) for platform checks, registry reloads, configuration paths, Cargo setup, and safe removal.
 

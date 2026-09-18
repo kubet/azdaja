@@ -44,7 +44,7 @@ Keys in `az map`: arrows or `j/k` select, Enter inspects, `d` toggles measured d
 | `kill` | `az kill <session-id>` | Remove a session. |
 | `solo` | `az solo <question> (-f <path> \| --repo <directory>) [--model <model>] [--sub-model <model>]` | Run one question over one UTF-8 file or a deterministic bounded repository bundle. |
 | `doctor` | `az doctor [jcode|claude|codex|gemini|opencode|all|jev|--caps]` | Check configured execution or inspect named integration files. `jev` reports local credential/configuration status without a provider call. |
-| `jev` | `az jev <attach --stdin [--replace]\|status\|detach> [--key-env NAME]` | Explicitly manage a host-private TypeSafe credential. Attachment does not enable inference. |
+| `jev` | `az jev <attach --stdin [--replace]\|status\|detach> [--key-env NAME]` | Manage a host-private TypeSafe credential. Attachment makes no calls and can enable automatic mode on later execution. |
 | `jev batch` | `az jev batch --input PLAN.jsonl [--execute ...]` | Preflight or run a [checkpointed semantic batch](jev-batch.md), with explicit budgets and source-bound resume. |
 | `install` | `az install [TARGET[,TARGET...]|all]` | Detect supported tools or atomically install a named comma-separated subset. |
 | `uninstall` | `az uninstall [jcode|claude|codex|gemini|opencode|standalone|all]` | Remove detected integrations, one named scope, or everything. |
@@ -53,7 +53,7 @@ Use `az help` for the short overview and `az help <command>` for command-specifi
 
 ## Process and signal custody
 
-### Optional TypeSafe attachment (development source)
+### Optional TypeSafe attachment and activation
 
 `az jev attach --stdin` reads one key from a pipe, never from an argument. A trailing
 newline is allowed. Input is bounded to 8192 bytes. An existing attachment requires
@@ -65,7 +65,11 @@ The exact configured environment variable takes precedence over its attachment.
 An invalid environment value fails instead of falling back. The default name is
 `TYPESAFE_API_KEY`; `--key-env NAME` supports separate named attachments. A custom
 name must also be selected in `[judge].key_env` for inference. `az doctor jev`
-reports the configured name and enabled flag. Neither status command authenticates
+reports the configured name, `activation_mode` (`auto`, `enabled`, `disabled`),
+`configured_enabled` (`null`, `true`, `false`) and `effective_enabled`. Automatic
+mode requires a locally valid named credential and a TypeSafe-capable build.
+These are local policy/syntax observations, not proof of remote readiness.
+Neither status command authenticates
 the credential or probes the provider. `az doctor --caps` remains static and does
 not even read credentials or configuration. Bare `az doctor` is different and can
 perform a model canary.
@@ -87,8 +91,12 @@ user. A hard termination during attachment can leave owner-only staging bytes.
 Local status reports `incomplete_attachment`; a subsequent attach/detach for that
 name recovers them under the write lock. `null` means staging was not inspected,
 for example because an environment override won. Attachment and all status paths
-leave `[judge].enabled` unchanged. The optional `typesafe` build feature and an
-explicit host opt-in remain necessary for provider requests.
+leave `[judge].enabled` unchanged and make no inference requests. Starting with
+v0.1.18, an omitted `enabled` field means automatic activation from the configured
+key. Providing a key therefore opts into Jev on later execution. Explicit
+`enabled = false` always wins, and no key means off. Official release binaries
+include the optional transport. Default Cargo builds do not. `jev batch` still
+requires `--execute` and all three job limits, regardless of key presence.
 
 ### Provider processes
 
