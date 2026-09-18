@@ -89,12 +89,13 @@ The [live Fable suite](bench/results/live-fable-suite.md) returned **3/3 exact r
 | `jev batch` | Runs an explicit, budgeted work list with durable checkpoints. Resume reuses completed requests and refuses ambiguous automatic retries. |
 | Source review | Exports JSONL or a read-only HTML queue with full source windows, hashes and byte offsets. No automatic approval. |
 
-Set `TYPESAFE_API_KEY` through your host's secret manager. To save that key locally for later sessions:
+Attach your TypeSafe key once with a hidden prompt, without putting it in shell history:
 
 ```bash
-printf '%s' "$TYPESAFE_API_KEY" | azdaja jev attach --stdin
-azdaja jev status
+bash -c 'read -rsp "TypeSafe API key: " key && echo >&2 && printf %s "$key" | azdaja jev attach --stdin'
 ```
+
+`TYPESAFE_API_KEY` in the host environment also works without attachment. Check local setup with `azdaja jev status`.
 
 A usable key enables `exec` and explicitly executed batches. No key or `[judge] enabled = false` means off. Automatic `solo` use stays off. No automatic compaction or tool suppression is claimed. [Typed API](docs/typed-judgments.md) · [Batch and review commands](docs/jev-batch.md).
 
