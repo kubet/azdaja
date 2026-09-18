@@ -10084,7 +10084,13 @@ mod tests {
             .iter()
             .map(|(harness, _)| {
                 let rendered = render_managed_skill(harness, binary);
-                let digest = sha256_digest(rendered.as_bytes())
+                let heading = format!("\n# Azdaja {VERSION}\n");
+                assert_eq!(rendered.matches(&heading).count(), 1);
+                // These goldens freeze the v0.1.17 instruction bytes. Check the
+                // current heading above and normalize only that line, so patch
+                // version bumps cannot mask changes to the actual contract.
+                let normalized = rendered.replacen(&heading, "\n# Azdaja 0.1.17\n", 1);
+                let digest = sha256_digest(normalized.as_bytes())
                     .iter()
                     .map(|byte| format!("{byte:02x}"))
                     .collect::<String>();
