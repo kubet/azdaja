@@ -1,4 +1,9 @@
 <p align="center"><img src="azdaja-logo.png" alt="Azdaja logo" width="120"></p>
+<p align="center"><img src="docs/demo.gif" alt="The same task run twice: without Azdaja, 205 steps and 39.4M tokens; with Azdaja, 71 steps and 5.7M tokens" width="880"></p>
+
+```bash
+curl -fsSL https://azdaja.dev/install | sh
+```
 
 # Azdaja
 
